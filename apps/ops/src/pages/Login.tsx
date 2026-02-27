@@ -1,4 +1,4 @@
-export default function LoginPage() {
+export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <h1 className="text-2xl font-bold">Ops Console — Login</h1>
