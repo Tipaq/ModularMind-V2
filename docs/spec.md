@@ -82,7 +82,7 @@ Si le webhook echoue (firewall, NAT), l'Engine recupere au prochain poll.
 |----------|-------|---------------|
 | Vector DB | **Qdrant** | Hybrid search (dense + BM25), payload filtering |
 | Task queue | **Redis Streams** | Remplace Celery — un seul systeme de queues, plus leger |
-| Scheduling | **APScheduler** | Remplace Celery Beat — async-native, Redis job store |
+| Scheduling | **APScheduler** | Remplace Celery Beat — async-native, memory jobstore |
 | Memory pipeline | **Redis Streams** | Event-driven, 2 etapes (extract+score → embed) |
 | Abstraction events | **EventBus interface** | Permet swap Redis Streams → Redpanda plus tard |
 | Platform stack | **Next.js full-stack + Prisma** | SSR vitrine, Server Actions CRUD, zero backend separe |
@@ -123,21 +123,21 @@ ModularMind-V2/
 │   │   │   │   ├── graphs/
 │   │   │   │   ├── templates/
 │   │   │   │   └── releases/
-│   │   │   └── (admin)/              # Gestion clients, engines, sync
-│   │   │       ├── clients/
-│   │   │       ├── engines/          # Engines enregistres + health + sync status
-│   │   │       └── settings/
-│   │   ├── app/api/                   # API Routes (Next.js App Router)
-│   │   │   ├── auth/[...nextauth]/   # NextAuth
-│   │   │   ├── sync/
-│   │   │   │   ├── manifest/route.ts # GET — Engine poll ici
-│   │   │   │   └── configs/route.ts  # GET — Engine telecharge configs
-│   │   │   ├── engines/
-│   │   │   │   ├── register/route.ts # POST — Engine s'enregistre
-│   │   │   │   └── report/route.ts   # POST — Engine envoie metriques
-│   │   │   ├── agents/route.ts       # CRUD agents
-│   │   │   ├── graphs/route.ts       # CRUD graphs
-│   │   │   └── webhook/route.ts      # Trigger sync immediat (optionnel)
+│   │   │   ├── (admin)/              # Gestion clients, engines, sync
+│   │   │   │   ├── clients/
+│   │   │   │   ├── engines/          # Engines enregistres + health + sync status
+│   │   │   │   └── settings/
+│   │   │   └── api/                   # API Routes (Next.js App Router)
+│   │   │       ├── auth/[...nextauth]/   # NextAuth
+│   │   │       ├── sync/
+│   │   │       │   ├── manifest/route.ts # GET — Engine poll ici
+│   │   │       │   └── configs/route.ts  # GET — Engine telecharge configs
+│   │   │       ├── engines/
+│   │   │       │   ├── register/route.ts # POST — Engine s'enregistre
+│   │   │       │   └── report/route.ts   # POST — Engine envoie metriques
+│   │   │       ├── agents/route.ts       # CRUD agents
+│   │   │       ├── graphs/route.ts       # CRUD graphs
+│   │   │       └── webhook/route.ts      # Trigger sync immediat (optionnel)
 │   │   ├── components/
 │   │   │   ├── marketing/
 │   │   │   ├── studio/
@@ -575,6 +575,9 @@ class EventBus(ABC):
 
     @abstractmethod
     async def stream_info(self, stream: str) -> dict[str, Any]: ...
+
+    @abstractmethod
+    def stop(self) -> None: ...
 ```
 
 ### 5.3 Redis Streams Implementation
@@ -678,12 +681,14 @@ Le worker est un process Python unique qui :
 # engine/server/src/worker/runner.py
 
 import asyncio
-import signal
 import logging
+import os
+import signal
+
+from src.infra.config import settings
 from src.infra.redis_streams import RedisStreamBus
 from src.worker.tasks import graph_execution_handler, model_pull_handler
-from src.worker.scheduler import start_scheduler
-from src.pipeline.handlers import extractor_handler, embedder_handler
+from src.worker.scheduler import create_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -704,46 +709,60 @@ async def health_server(bus: RedisStreamBus, port: int):
         await server.serve_forever()
 
 async def main():
-    redis = await get_redis()
-    bus = RedisStreamBus(redis)
+    from src.infra.redis import redis_client
 
-    loop = asyncio.get_event_loop()
+    bus = RedisStreamBus(redis_client)
+
+    loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, lambda: bus.stop())
+        loop.add_signal_handler(sig, bus.stop)
 
-    logger.info("worker_starting")
+    logger.info("Worker starting — Redis Streams + APScheduler")
+
+    # Start APScheduler
+    scheduler = create_scheduler()
+    scheduler.start()
+
+    # Pipeline handlers (uncomment once implemented)
+    # from src.pipeline.handlers.extractor import extractor_handler
+    # from src.pipeline.handlers.embedder import embedder_handler
 
     tasks = [
         # Task queues (replaces Celery)
         bus.subscribe("tasks:executions", "workers", "w-1", graph_execution_handler),
         bus.subscribe("tasks:models", "workers", "w-1", model_pull_handler),
-        # Memory pipeline
-        bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
-        bus.subscribe("memory:extracted", "embedders", "emb-1", embedder_handler),
-        # Scheduler (replaces Celery Beat)
-        start_scheduler(bus),
+        # Memory pipeline (uncomment once implemented)
+        # bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
+        # bus.subscribe("memory:extracted", "embedders", "emb-1", embedder_handler),
         # Health
         health_server(bus, HEALTH_PORT),
     ]
+
+    logger.info("Worker ready — consuming streams")
 
     try:
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error("consumer_error", extra={"index": i, "error": str(result)})
+                logger.error("Consumer %d failed: %s", i, result)
     finally:
-        await redis.close()
-        logger.info("worker_stopped")
+        scheduler.shutdown(wait=False)
+        await redis_client.aclose()
+        logger.info("Worker stopped")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO if not settings.DEBUG else logging.DEBUG)
     asyncio.run(main())
 ```
 
 ```python
 # engine/server/src/worker/scheduler.py
 
+import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from src.infra.config import settings
+
+logger = logging.getLogger(__name__)
 
 def create_scheduler() -> AsyncIOScheduler:
     """APScheduler — remplace Celery Beat.
@@ -752,23 +771,27 @@ def create_scheduler() -> AsyncIOScheduler:
     """
     scheduler = AsyncIOScheduler()
 
-    # Memory consolidation every 6 hours
-    scheduler.add_job(
-        memory_consolidation, "interval", hours=6, id="memory-consolidation",
-    )
     # Sync poll (configurable, default 5 min)
     if settings.PLATFORM_URL:
         scheduler.add_job(
-            sync_poll_platform, "interval",
-            seconds=settings.SYNC_INTERVAL_SECONDS, id="sync-poll",
-        )
-    # Report to Platform every 15 minutes
-    if settings.PLATFORM_URL:
-        scheduler.add_job(
-            report_to_platform, "interval", minutes=15, id="report-push",
+            sync_platform, "interval",
+            seconds=settings.SYNC_INTERVAL_SECONDS,
+            id="sync_platform",
+            name="Poll platform for config updates",
         )
 
+    # TODO: Add more periodic jobs:
+    # - Memory consolidation (daily at 3am)
+    # - Metrics flush (every 60s)
+    # - Stale execution cleanup (every 5min)
+    # - MCP sidecar health check (every 2min)
+
     return scheduler
+
+async def sync_platform() -> None:
+    """Poll platform for manifest changes and apply updates."""
+    # TODO: Implement — delegates to src.sync.service
+    logger.debug("Polling platform for config updates")
 ```
 
 ---
