@@ -1,0 +1,794 @@
+"""
+Super Supervisor Service — Core orchestration engine.
+
+Receives all user messages in supervisor mode and decides the routing
+strategy: direct response, agent delegation, graph execution, ephemeral
+agent creation, or multi-action.
+
+The supervisor runs inline in the FastAPI request handler (not worker).
+The actual heavy work (agent/graph execution) is delegated to the
+Redis Streams worker via the router after this service returns.
+"""
+
+import json
+import logging
+from datetime import datetime, timezone
+from typing import Any
+from uuid import uuid4
+
+import redis.asyncio as aioredis
+from langchain_core.messages import HumanMessage, SystemMessage
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.domain_config.provider import ConfigProvider
+from src.executions.schemas import ExecutionCreate
+from src.executions.service import ExecutionService
+from src.infra.constants import OUTPUT_TRUNCATION_LENGTH
+from src.llm.base import LLMProvider
+
+# Supervisor LLM configuration
+ROUTING_TEMPERATURE = 0.1
+TOOL_TEMPERATURE = 0.3
+TOOL_LOOP_MAX_ITERATIONS = 10
+EVENT_BUFFER_TTL_SECONDS = 300
+MAX_TOOLS_IN_EVENT = 20
+
+from .context_manager import get_context_manager
+from .ephemeral_factory import EphemeralAgentFactory
+from .message_parser import MessageParser
+from .prompts import build_routing_task_prompt
+from .schemas import RoutingDecision, RoutingStrategy
+
+logger = logging.getLogger(__name__)
+
+
+class SuperSupervisorService:
+    """Main orchestration service for unified chat routing.
+
+    Coordinates message parsing, LLM routing, context management,
+    and execution dispatch. Does NOT dispatch to the worker — the router
+    handles that (single dispatch point).
+    """
+
+    def __init__(
+        self,
+        db: AsyncSession,
+        config_provider: ConfigProvider,
+        llm_provider: LLMProvider,
+        redis_client: aioredis.Redis,
+    ):
+        self.db = db
+        self.config_provider = config_provider
+        self.llm_provider = llm_provider
+        self.redis = redis_client
+        self.parser = MessageParser(config_provider)
+        self.context_manager = get_context_manager()  # singleton
+        self.ephemeral_factory = EphemeralAgentFactory(
+            config_provider, redis_client,
+        )
+        self.exec_service = ExecutionService(db)
+
+    def _resolve_model_name(self, conv_config: dict[str, Any]) -> tuple[str, str]:
+        """Resolve supervisor model ID and extract model name.
+
+        Returns (model_id, model_name) using per-conversation override
+        or global SUPERVISOR_MODEL_ID.
+        """
+        from src.infra.config import get_settings
+        from src.infra.constants import parse_model_id
+        model_id = conv_config.get("model_id") or get_settings().SUPERVISOR_MODEL_ID
+        _, model_name = parse_model_id(model_id)
+        return model_id, model_name
+
+    async def _publish_event(self, channel: str, event: dict[str, Any]) -> None:
+        """Async Redis PUBLISH for event streaming."""
+        try:
+            await self.redis.publish(channel, json.dumps(event))
+        except Exception as e:
+            logger.warning("Failed to publish event to %s: %s", channel, e)
+
+    # =========================================================================
+    # Main entry point
+    # =========================================================================
+
+    async def process_message(
+        self,
+        conversation_id: str,
+        content: str,
+        user_id: str,
+        messages: list[dict[str, Any]] | None = None,
+        conv_config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Process a user message through the supervisor pipeline.
+
+        Args:
+            conversation_id: The conversation to process in
+            content: Raw user message
+            user_id: The user ID
+            messages: Recent conversation messages (for context building)
+            conv_config: Per-conversation config (enabled_agents, enabled_graphs, etc.)
+
+        Returns:
+            dict with execution_id(s), routing_metadata, and optionally
+            direct_response. The router uses this to dispatch worker tasks
+            and build the HTTP response.
+        """
+        conv_config = conv_config or {}
+        conv_config = self._auto_enable_mcp_servers(conv_config)
+
+        decision = await self._resolve_routing(
+            conversation_id, content, messages, conv_config,
+        )
+
+        routing_metadata = self._build_routing_metadata(decision)
+        logger.info(
+            "Routing decision: strategy=%s confidence=%.2f reasoning='%s'",
+            decision.strategy.value, decision.confidence or 0, decision.reasoning or "",
+        )
+
+        # Parse for effective content (strip @mentions, /commands)
+        parsed, _ = await self.parser.parse_multi(content)
+        effective_content = parsed.clean_content or parsed.create_instructions or content
+
+        result = await self._execute_strategy(
+            decision, conversation_id, effective_content, user_id, conv_config,
+        )
+        result["routing_metadata"] = routing_metadata
+        return result
+
+    # =========================================================================
+    # Routing resolution
+    # =========================================================================
+
+    def _auto_enable_mcp_servers(self, conv_config: dict[str, Any]) -> dict[str, Any]:
+        """Auto-enable all registered MCP servers when none are explicitly set."""
+        if conv_config.get("enabled_mcp_servers"):
+            return conv_config
+        try:
+            from src.infra.config import get_settings
+            if get_settings().MCP_AUTO_ENABLE:
+                from src.mcp.service import get_mcp_registry
+                all_servers = get_mcp_registry().list_servers()
+                auto_ids = [s.id for s in all_servers if s.enabled]
+                if auto_ids:
+                    conv_config = {**conv_config, "enabled_mcp_servers": auto_ids}
+                    logger.debug("MCP auto-enable: %d server(s) for conversation", len(auto_ids))
+        except Exception as e:
+            logger.debug("MCP auto-enable check failed: %s", e)
+        return conv_config
+
+    async def _resolve_routing(
+        self,
+        conversation_id: str,
+        content: str,
+        messages: list[dict[str, Any]] | None,
+        conv_config: dict[str, Any],
+    ) -> RoutingDecision:
+        """Determine routing strategy from message content and context."""
+        parsed, matched_agent_ids = await self.parser.parse_multi(content)
+
+        if parsed.create_directive:
+            return RoutingDecision(
+                strategy=RoutingStrategy.CREATE_AGENT,
+                reasoning="User used @create directive",
+                confidence=1.0,
+                ephemeral_config={
+                    "name": "Ephemeral Agent",
+                    "description": parsed.create_instructions or "",
+                    "system_prompt": (
+                        f"You are a specialized assistant. "
+                        f"User requested: {parsed.create_instructions}"
+                    ),
+                },
+            )
+
+        if parsed.explicit_graph:
+            return RoutingDecision(
+                strategy=RoutingStrategy.EXECUTE_GRAPH,
+                graph_id=parsed.explicit_graph,
+                reasoning="User used /graph: command",
+                confidence=1.0,
+            )
+
+        if len(matched_agent_ids) > 1:
+            sub_decisions = [
+                RoutingDecision(
+                    strategy=RoutingStrategy.DELEGATE_AGENT,
+                    agent_id=aid,
+                    reasoning=f"Explicit @mention (multi-action #{i+1})",
+                    confidence=1.0,
+                )
+                for i, aid in enumerate(matched_agent_ids)
+            ]
+            return RoutingDecision(
+                strategy=RoutingStrategy.MULTI_ACTION,
+                reasoning=f"Multiple @mentions detected ({len(matched_agent_ids)} agents)",
+                confidence=1.0,
+                sub_decisions=sub_decisions,
+            )
+
+        if parsed.explicit_agent:
+            return RoutingDecision(
+                strategy=RoutingStrategy.DELEGATE_AGENT,
+                agent_id=parsed.explicit_agent,
+                reasoning="User used @AgentName mention",
+                confidence=1.0,
+            )
+
+        # No explicit routing — use LLM with session affinity
+        last_agent = await self.context_manager.get_last_agent(conversation_id)
+        decision = await self._route_with_llm(
+            conversation_id, parsed.clean_content,
+            messages=messages, affinity_agent_id=last_agent,
+            conv_config=conv_config,
+        )
+        decision = self._apply_single_selection_override(decision, conv_config)
+        return decision
+
+    def _apply_single_selection_override(
+        self, decision: RoutingDecision, conv_config: dict[str, Any],
+    ) -> RoutingDecision:
+        """Override LLM routing when user pinned a single agent/graph."""
+        enabled_agents = conv_config.get("enabled_agents") or []
+        enabled_graphs = conv_config.get("enabled_graphs") or []
+
+        if decision.strategy == RoutingStrategy.DELEGATE_AGENT:
+            if len(enabled_agents) == 1:
+                decision.agent_id = enabled_agents[0]
+        elif decision.strategy == RoutingStrategy.EXECUTE_GRAPH:
+            if len(enabled_graphs) == 1:
+                decision.graph_id = enabled_graphs[0]
+
+        return decision
+
+    def _build_routing_metadata(self, decision: RoutingDecision) -> dict[str, Any]:
+        """Build metadata dict for trace events."""
+        return {
+            "type": "trace:routing_decision",
+            "strategy": decision.strategy.value,
+            "reasoning": decision.reasoning,
+            "agent_id": decision.agent_id,
+            "graph_id": decision.graph_id,
+            "confidence": decision.confidence,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # =========================================================================
+    # LLM routing
+    # =========================================================================
+
+    async def _route_with_llm(
+        self,
+        conversation_id: str,
+        content: str,
+        messages: list[dict[str, Any]] | None = None,
+        affinity_agent_id: str | None = None,
+        conv_config: dict[str, Any] | None = None,
+    ) -> RoutingDecision:
+        """Call supervisor LLM for routing decision."""
+        conv_config = conv_config or {}
+        try:
+            task_prompt = await self._build_routing_prompt(
+                messages, affinity_agent_id, conv_config,
+            )
+            llm_messages = self._compose_routing_messages(conv_config, task_prompt)
+
+            _, model_name = self._resolve_model_name(conv_config)
+            llm = await self.llm_provider.get_model(
+                model_name, temperature=ROUTING_TEMPERATURE, format="json",
+            )
+            response = await llm.ainvoke(
+                llm_messages + [HumanMessage(content=content)]
+            )
+
+            return self._parse_routing_response(response)
+
+        except Exception as e:
+            logger.error("LLM routing failed: %s", e, exc_info=True)
+            return RoutingDecision(
+                strategy=RoutingStrategy.DIRECT_RESPONSE,
+                reasoning=f"Routing failed: {e}",
+                confidence=0.0,
+                direct_response=(
+                    "I couldn't determine the best routing — could you be "
+                    "more specific or try @mentioning an agent directly?"
+                ),
+            )
+
+    async def _build_routing_prompt(
+        self,
+        messages: list[dict[str, Any]] | None,
+        affinity_agent_id: str | None,
+        conv_config: dict[str, Any],
+    ) -> str:
+        """Build the routing task prompt with agent/graph catalog and MCP tools."""
+        agents = await self.config_provider.list_agents()
+        graphs = await self.config_provider.list_graphs()
+
+        if enabled_agents := conv_config.get("enabled_agents"):
+            agents = [a for a in agents if a.id in enabled_agents]
+        if enabled_graphs := conv_config.get("enabled_graphs"):
+            graphs = [g for g in graphs if g.id in enabled_graphs]
+
+        last_agent_info = None
+        if affinity_agent_id:
+            agent = await self.config_provider.get_agent_config(affinity_agent_id)
+            if agent:
+                last_agent_info = f"{agent.name} (id={agent.id})"
+
+        mcp_tools = await self._discover_mcp_tools_for_routing(conv_config)
+
+        return build_routing_task_prompt(
+            agents=agents,
+            graphs=graphs,
+            history=messages or [],
+            last_agent=last_agent_info,
+            mcp_tools=mcp_tools,
+        )
+
+    async def _discover_mcp_tools_for_routing(
+        self, conv_config: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Discover MCP tools to include in routing context."""
+        enabled_servers = conv_config.get("enabled_mcp_servers", [])
+        if not enabled_servers:
+            return None
+        try:
+            from src.mcp.service import get_mcp_registry
+            registry = get_mcp_registry()
+            tools_map: dict[str, Any] = {}
+            for sid in enabled_servers:
+                server = registry.get_server(sid)
+                server_name = server.name if server else sid[:8]
+                try:
+                    tools = await registry.discover_tools(sid)
+                    if tools:
+                        tools_map[server_name] = tools
+                except Exception:
+                    pass
+            return tools_map or None
+        except Exception as e:
+            logger.debug("MCP tool discovery for routing failed: %s", e)
+            return None
+
+    def _compose_routing_messages(
+        self, conv_config: dict[str, Any], task_prompt: str,
+    ) -> list[Any]:
+        """Compose layered LLM messages for routing (identity + task)."""
+        from src.prompt_layers import (
+            LayerType, PromptComposer, PromptLayer,
+            get_supervisor_identity,
+        )
+        composer = PromptComposer()
+        composer.add(PromptLayer(LayerType.IDENTITY, get_supervisor_identity(), "supervisor_identity"))
+        composer.add(PromptLayer(LayerType.TASK, task_prompt, "routing_task"))
+        return composer.build()
+
+    def _parse_routing_response(self, response) -> RoutingDecision:
+        """Parse LLM response into a RoutingDecision."""
+        response_text = (
+            response.content
+            if isinstance(response.content, str)
+            else str(response.content)
+        )
+        cleaned = response_text.strip()
+        if cleaned.startswith("```"):
+            lines = cleaned.split("\n")
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            cleaned = "\n".join(lines)
+        return RoutingDecision.model_validate_json(cleaned)
+
+    # =========================================================================
+    # Strategy execution
+    # =========================================================================
+
+    async def _execute_strategy(
+        self,
+        decision: RoutingDecision,
+        conv_id: str,
+        content: str,
+        user_id: str,
+        conv_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute the chosen routing strategy."""
+        match decision.strategy:
+            case RoutingStrategy.DIRECT_RESPONSE:
+                return await self._handle_direct_response(decision, conv_id)
+            case RoutingStrategy.TOOL_RESPONSE:
+                return await self._handle_tool_response(
+                    decision, conv_id, content, user_id, conv_config,
+                )
+            case RoutingStrategy.DELEGATE_AGENT:
+                return await self._handle_agent_delegation(
+                    decision, conv_id, content, user_id, conv_config,
+                )
+            case RoutingStrategy.EXECUTE_GRAPH:
+                return await self._handle_graph_execution(
+                    decision, conv_id, content, user_id,
+                )
+            case RoutingStrategy.CREATE_AGENT:
+                return await self._handle_create_agent(
+                    decision, conv_id, content, user_id, conv_config,
+                )
+            case RoutingStrategy.MULTI_ACTION:
+                return await self._handle_multi_action(
+                    decision, conv_id, content, user_id, conv_config,
+                )
+            case _:
+                return {
+                    "direct_response": "Unknown routing strategy",
+                    "execution_id": None,
+                }
+
+    async def _handle_direct_response(
+        self,
+        decision: RoutingDecision,
+        conv_id: str,
+    ) -> dict[str, Any]:
+        """Handle DIRECT_RESPONSE — return supervisor's own answer."""
+        from src.conversations.models import MessageRole
+        from src.conversations.service import ConversationService
+
+        conv_service = ConversationService(self.db)
+        await conv_service.add_message(
+            conversation_id=conv_id,
+            role=MessageRole.ASSISTANT,
+            content=decision.direct_response or "",
+            metadata={"routing": "direct", "strategy": "DIRECT_RESPONSE"},
+        )
+
+        return {
+            "direct_response": decision.direct_response,
+            "execution_id": None,
+        }
+
+    # =========================================================================
+    # TOOL_RESPONSE handler
+    # =========================================================================
+
+    async def _handle_tool_response(
+        self,
+        decision: RoutingDecision,
+        conv_id: str,
+        content: str,
+        user_id: str,
+        conv_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Handle TOOL_RESPONSE — supervisor answers using MCP tools."""
+        from src.graph_engine.tool_loop import run_tool_loop, try_bind_tools
+        from src.mcp.service import get_mcp_registry
+        from src.mcp.tool_adapter import discover_and_convert
+
+        lc_tools, tool_executor = await self._discover_mcp_tools(conv_config)
+        if not lc_tools or not tool_executor:
+            return await self._handle_direct_response(decision, conv_id)
+
+        execution, publish_fn = await self._setup_tool_execution(
+            conv_id, content, user_id,
+        )
+
+        _, model_name = self._resolve_model_name(conv_config)
+
+        try:
+            llm = await self.llm_provider.get_model(model_name, temperature=TOOL_TEMPERATURE)
+            llm_with_tools, tools_bound = try_bind_tools(llm, lc_tools)
+
+            if not tools_bound:
+                logger.info("Model %s doesn't support tools, falling back", model_name)
+                return await self._handle_direct_response(decision, conv_id)
+
+            llm_messages = self._compose_tool_messages(conv_config, content)
+
+            await self._publish_tool_step_started(
+                publish_fn, execution.id, model_name, lc_tools,
+            )
+
+            from src.infra.config import get_settings
+            response_text, _ = await run_tool_loop(
+                llm_with_tools,
+                llm_messages,
+                tool_executor,
+                max_iterations=TOOL_LOOP_MAX_ITERATIONS,
+                tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
+                publish_fn=publish_fn,
+            )
+
+            await self._finalize_tool_response(
+                conv_id, execution, response_text, publish_fn,
+            )
+
+            return {
+                "execution_id": execution.id,
+                "tool_response_inline": True,
+            }
+
+        except Exception as e:
+            logger.error("TOOL_RESPONSE execution failed: %s", e, exc_info=True)
+            await publish_fn({
+                "type": "error", "event": "run_failed",
+                "execution_id": execution.id,
+                "message": str(e),
+            })
+            return await self._handle_direct_response(decision, conv_id)
+
+    async def _discover_mcp_tools(self, conv_config: dict[str, Any]) -> tuple[list | None, Any]:
+        """Discover and convert MCP tools for tool-calling execution."""
+        from src.mcp.service import get_mcp_registry
+        from src.mcp.tool_adapter import discover_and_convert
+
+        enabled_servers = conv_config.get("enabled_mcp_servers", [])
+        if not enabled_servers:
+            logger.info("TOOL_RESPONSE but no enabled MCP servers, falling back")
+            return None, None
+
+        registry = get_mcp_registry()
+        lc_tools, tool_executor = await discover_and_convert(
+            registry, enabled_servers,
+        )
+
+        if not lc_tools or not tool_executor:
+            logger.info("TOOL_RESPONSE but no MCP tools discovered, falling back")
+            return None, None
+
+        return lc_tools, tool_executor
+
+    async def _setup_tool_execution(
+        self, conv_id: str, content: str, user_id: str,
+    ) -> tuple[Any, Any]:
+        """Create execution record and build a publish_fn for streaming."""
+        execution = await self.exec_service.start_supervisor_execution(
+            conversation_id=conv_id,
+            input_prompt=content,
+            user_id=user_id,
+        )
+        await self.db.commit()
+
+        exec_channel = f"execution:{execution.id}"
+        seq = 0
+
+        async def publish_fn(event: dict[str, Any]) -> None:
+            nonlocal seq
+            seq += 1
+            event["seq"] = seq
+            event["execution_id"] = execution.id
+            event_json = json.dumps(event, default=str)
+            await self.redis.publish(exec_channel, event_json)
+            await self.redis.rpush(f"buffer:{execution.id}", event_json)
+            await self.redis.expire(f"buffer:{execution.id}", EVENT_BUFFER_TTL_SECONDS)
+
+        return execution, publish_fn
+
+    def _compose_tool_messages(self, conv_config: dict[str, Any], content: str) -> list[Any]:
+        """Compose layered LLM messages for tool-calling (identity + personality + task)."""
+        from src.prompt_layers import (
+            LayerType, PromptComposer, PromptLayer,
+            get_supervisor_identity, get_supervisor_personality,
+            get_tool_task,
+        )
+        composer = PromptComposer()
+        composer.add(PromptLayer(LayerType.IDENTITY, get_supervisor_identity(), "supervisor_identity"))
+        personality = conv_config.get("supervisor_prompt") or get_supervisor_personality()
+        composer.add(PromptLayer(LayerType.PERSONALITY, personality, "supervisor_personality"))
+        composer.add(PromptLayer(LayerType.TASK, get_tool_task(), "tool_task"))
+        return composer.build() + [HumanMessage(content=content)]
+
+    async def _publish_tool_step_started(
+        self, publish_fn, execution_id: str, model_name: str, lc_tools: list,
+    ) -> None:
+        """Publish step_started event with tool info for UI display."""
+        tool_names = [getattr(t, "name", str(t)) for t in lc_tools]
+        await publish_fn({
+            "type": "step", "event": "step_started",
+            "run_id": execution_id,
+            "node_id": "supervisor_tools",
+            "node_type": "supervisor_tools",
+            "status": "running",
+            "agent_name": "Supervisor (MCP Tools)",
+            "model": model_name,
+            "tools": tool_names[:MAX_TOOLS_IN_EVENT],
+            "is_ephemeral": False,
+        })
+
+    async def _finalize_tool_response(
+        self, conv_id: str, execution, response_text: str, publish_fn,
+    ) -> None:
+        """Save response, update execution status, and publish completion events."""
+        from src.conversations.models import MessageRole
+        from src.conversations.service import ConversationService
+        from src.executions.models import ExecutionStatus
+
+        conv_service = ConversationService(self.db)
+        await conv_service.add_message(
+            conversation_id=conv_id,
+            role=MessageRole.ASSISTANT,
+            content=response_text,
+            metadata={
+                "routing": "tool_response",
+                "strategy": "TOOL_RESPONSE",
+                "execution_id": execution.id,
+            },
+        )
+
+        execution.status = ExecutionStatus.COMPLETED
+        execution.output_data = {"response": response_text}
+        await self.db.commit()
+
+        await publish_fn({
+            "type": "step", "event": "step_completed",
+            "run_id": execution.id,
+            "node_id": "supervisor_tools", "node_type": "agent",
+            "status": "completed",
+            "output_data": {"response": response_text[:OUTPUT_TRUNCATION_LENGTH]},
+        })
+        await publish_fn({
+            "type": "complete", "event": "run_completed",
+            "execution_id": execution.id,
+            "run_id": execution.id,
+            "status": "completed",
+            "output": {"response": response_text},
+            "output_data": {"response": response_text},
+        })
+
+    # =========================================================================
+    # Agent delegation
+    # =========================================================================
+
+    async def _handle_agent_delegation(
+        self,
+        decision: RoutingDecision,
+        conv_id: str,
+        content: str,
+        user_id: str,
+        conv_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Handle DELEGATE_AGENT — create execution record for an agent."""
+        agent_id = decision.agent_id
+        if not agent_id:
+            return {
+                "direct_response": "No agent specified for delegation",
+                "execution_id": None,
+            }
+
+        agent = await self.config_provider.get_agent_config(agent_id)
+        if not agent:
+            return {
+                "direct_response": f"Agent {agent_id} not found",
+                "execution_id": None,
+            }
+
+        # Rebuild sub-context if Redis cache miss
+        sub_ctx = await self.context_manager.get_sub_context(conv_id, agent_id)
+        if not sub_ctx:
+            from src.conversations.service import ConversationService
+            conv_service = ConversationService(self.db)
+            conv = await conv_service.get_conversation(conv_id)
+            if conv and conv.messages:
+                msg_dicts = [
+                    {"role": m.role.value, "content": m.content, "meta": m.meta}
+                    for m in conv.messages
+                ]
+                await self.context_manager.rebuild_from_messages(
+                    conv_id, msg_dicts,
+                )
+
+        mcp_server_ids = conv_config.get("enabled_mcp_servers", [])
+        execution_data = ExecutionCreate(
+            prompt=content,
+            session_id=conv_id,
+            input_data={"mcp_server_ids": mcp_server_ids} if mcp_server_ids else None,
+        )
+        execution = await self.exec_service.start_agent_execution(
+            agent_id=agent_id,
+            data=execution_data,
+            user_id=user_id,
+        )
+
+        await self.context_manager.set_last_agent(conv_id, agent_id)
+
+        return {"execution_id": execution.id}
+
+    async def _handle_graph_execution(
+        self,
+        decision: RoutingDecision,
+        conv_id: str,
+        content: str,
+        user_id: str,
+    ) -> dict[str, Any]:
+        """Handle EXECUTE_GRAPH — create execution record for a graph."""
+        graph_id = decision.graph_id
+        if not graph_id:
+            return {
+                "direct_response": "No graph specified for execution",
+                "execution_id": None,
+            }
+
+        execution_data = ExecutionCreate(
+            prompt=content,
+            session_id=conv_id,
+        )
+        execution = await self.exec_service.start_graph_execution(
+            graph_id=graph_id,
+            data=execution_data,
+            user_id=user_id,
+        )
+
+        return {"execution_id": execution.id}
+
+    async def _handle_create_agent(
+        self,
+        decision: RoutingDecision,
+        conv_id: str,
+        content: str,
+        user_id: str,
+        conv_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Handle CREATE_AGENT — create ephemeral agent, then delegate."""
+        try:
+            ec = decision.ephemeral_config or {}
+            conv_model_id = conv_config.get("model_id")
+            agent = await self.ephemeral_factory.create_agent(
+                name=ec.get("name", "Ephemeral Agent"),
+                description=ec.get("description", ""),
+                system_prompt=ec.get("system_prompt", "You are a helpful assistant."),
+                conversation_id=conv_id,
+                model_id=ec.get("model_id") or conv_model_id,
+                capabilities=ec.get("capabilities"),
+                rag_collections=ec.get("rag_collections"),
+                mcp_server_ids=ec.get("mcp_server_ids"),
+            )
+        except ValueError as e:
+            return {
+                "direct_response": f"Cannot create agent: {e}",
+                "execution_id": None,
+                "error": str(e),
+            }
+
+        delegate_decision = RoutingDecision(
+            strategy=RoutingStrategy.DELEGATE_AGENT,
+            agent_id=str(agent.id),
+            reasoning=f"Delegating to newly created ephemeral agent: {agent.name}",
+            confidence=1.0,
+        )
+        result = await self._handle_agent_delegation(
+            delegate_decision, conv_id, content, user_id, conv_config,
+        )
+
+        result["ephemeral_agent"] = {
+            "id": str(agent.id),
+            "name": agent.name,
+            "description": agent.description,
+        }
+        return result
+
+    async def _handle_multi_action(
+        self,
+        decision: RoutingDecision,
+        conv_id: str,
+        content: str,
+        user_id: str,
+        conv_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Handle MULTI_ACTION — execute multiple sub-decisions sequentially."""
+        results = []
+        execution_ids = []
+        sub_decisions = decision.sub_decisions or []
+
+        for i, sub in enumerate(sub_decisions):
+            try:
+                result = await self._execute_strategy(
+                    sub, conv_id, content, user_id, conv_config,
+                )
+                results.append(result)
+                if result.get("execution_id"):
+                    execution_ids.append(result["execution_id"])
+            except Exception as e:
+                logger.error(
+                    "MULTI_ACTION sub-decision %d/%d failed: %s",
+                    i + 1, len(sub_decisions), e,
+                )
+                results.append({"error": str(e)})
+
+        return {
+            "results": results,
+            "execution_ids": execution_ids,
+        }
