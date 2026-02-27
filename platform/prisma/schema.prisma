@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("admin") // owner | admin
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  engines   Engine[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Engine {
+  id        String    @id @default(cuid())
+  name      String
+  url       String
+  apiKey    String    @unique
+  clientId  String
+  client    Client    @relation(fields: [clientId], references: [id])
+  lastSeen  DateTime?
+  version   Int       @default(0)
+  status    String    @default("registered") // registered | synced | offline
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Agent {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  model       String
+  provider    String
+  config      Json     @default("{}")
+  channel     String   @default("dev") // dev | beta | stable
+  version     Int      @default(1)
+  tags        String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Graph {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  nodes       Json     @default("[]")
+  edges       Json     @default("[]")
+  channel     String   @default("dev") // dev | beta | stable
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
