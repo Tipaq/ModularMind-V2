@@ -1,24 +1,166 @@
-"""ModularMind Engine — Headless AI Agent Execution Runtime."""
+"""ModularMind Engine — Headless AI Agent Execution Runtime.
 
+FastAPI application with lifespan-managed startup/shutdown, CORS middleware,
+structured exception handlers, and router mounting based on RUNTIME_MODE.
+"""
+
+from __future__ import annotations
+
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from src.infra.config import settings
 
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Router imports
+# ---------------------------------------------------------------------------
+
+# Always-on routers
+from src.health.router import router as health_router
+from src.auth.router import router as auth_router
+from src.agents.router import router as agents_router
+from src.graphs.router import router as graphs_router
+from src.executions.router import router as executions_router
+from src.conversations.router import router as conversations_router
+from src.memory.router import router as memory_router
+from src.rag.router import router as rag_router
+from src.models.usage_router import usage_router as models_usage_router
+from src.mcp.usage_router import usage_router as mcp_usage_router
+from src.setup.router import router as setup_router
+from src.connectors.router import router as connectors_router
+from src.connectors.webhook_router import webhook_router
+from src.report.router import router as report_router
+from src.sync.router import router as sync_router
+from src.recall.router import router as recall_router
+from src.supervisor.router import router as supervisor_router
+from src.groups.router import router as groups_router
+
+# Admin-only routers (mounted conditionally on RUNTIME_MODE)
+from src.internal.router import router as internal_router
+from src.fine_tuning.router import router as fine_tuning_router
+from src.mcp.router import router as mcp_admin_router
+from src.models.router import router as models_admin_router
+from src.admin.user_router import admin_user_router
+from src.conversations.router import admin_router as conversations_admin_router
+
+
+# ---------------------------------------------------------------------------
+# Lifespan
+# ---------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    # TODO: Initialize database, Redis, Qdrant connections
-    # TODO: Leader election + singleton tasks
-    # TODO: Load secrets, seed data, start metrics sampler
-    # TODO: Recover MCP sidecars
-    yield
-    # Shutdown
-    # TODO: Close connections, stop samplers
+    """Application lifespan — startup and shutdown hooks."""
 
+    # ── Startup ──────────────────────────────────────────────────────────
+
+    # 1. Verify Redis connectivity
+    from src.infra.redis import check_redis_health
+
+    redis_ok = await check_redis_health()
+    if redis_ok:
+        logger.info("Redis connection verified")
+    else:
+        logger.warning("Redis is unreachable — some features may be degraded")
+
+    # 2. Initialize Qdrant collections (knowledge + memory)
+    from src.infra.qdrant import qdrant_factory
+
+    try:
+        await qdrant_factory.ensure_collections()
+        logger.info("Qdrant collections initialized")
+    except Exception as exc:
+        logger.warning("Qdrant initialization failed (non-fatal): %s", exc)
+
+    # 3. Load seed model catalog
+    from src.models.service import get_model_service
+
+    try:
+        model_svc = get_model_service()
+        seeded = model_svc.load_seed_catalog()
+        if seeded:
+            logger.info("Seeded %d model(s) from catalog", seeded)
+    except Exception as exc:
+        logger.warning("Model catalog seeding failed (non-fatal): %s", exc)
+
+    # 4. Initialize MCP registry + recover sidecars
+    from src.mcp.service import startup_mcp
+
+    try:
+        await startup_mcp()
+        logger.info("MCP registry initialized, sidecars recovered")
+    except Exception as exc:
+        logger.warning("MCP startup failed (non-fatal): %s", exc)
+
+    # 5. Initialize sync service
+    from src.sync.service import SyncService
+
+    sync_service = SyncService()
+    try:
+        await sync_service.initialize()
+    except Exception as exc:
+        logger.warning("Sync service initialization failed (non-fatal): %s", exc)
+
+    # 6. MCP leader-only phase (auto-deploy free catalog entries)
+    try:
+        await startup_mcp(leader_only=True)
+    except Exception as exc:
+        logger.warning("MCP leader-only startup failed (non-fatal): %s", exc)
+
+    logger.info(
+        "ModularMind Engine started (mode=%s, env=%s)",
+        settings.RUNTIME_MODE,
+        settings.ENVIRONMENT,
+    )
+
+    yield
+
+    # ── Shutdown ─────────────────────────────────────────────────────────
+
+    # Close Redis connections
+    from src.infra.redis import close_redis
+
+    try:
+        await close_redis()
+        logger.info("Redis connections closed")
+    except Exception as exc:
+        logger.warning("Error closing Redis: %s", exc)
+
+    # Shutdown MCP registry + sidecars
+    from src.mcp.service import shutdown_mcp
+
+    try:
+        await shutdown_mcp()
+        logger.info("MCP registry shut down")
+    except Exception as exc:
+        logger.warning("Error shutting down MCP: %s", exc)
+
+    # Close sync service
+    try:
+        await sync_service.close()
+        logger.info("Sync service closed")
+    except Exception as exc:
+        logger.warning("Error closing sync service: %s", exc)
+
+    # Close Qdrant client
+    try:
+        await qdrant_factory.close()
+        logger.info("Qdrant client closed")
+    except Exception as exc:
+        logger.warning("Error closing Qdrant client: %s", exc)
+
+    logger.info("ModularMind Engine shut down")
+
+
+# ---------------------------------------------------------------------------
+# Application
+# ---------------------------------------------------------------------------
 
 app = FastAPI(
     title="ModularMind Engine",
@@ -28,16 +170,97 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ---------------------------------------------------------------------------
+# Middleware
+# ---------------------------------------------------------------------------
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# TODO: Mount routers
-# app.include_router(health_router)
-# app.include_router(auth_router, prefix="/api/v1/auth")
-# app.include_router(agents_router, prefix="/api/v1/agents")
-# ... etc.
+# ---------------------------------------------------------------------------
+# Exception handlers
+# ---------------------------------------------------------------------------
+
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content={"detail": "Resource not found"},
+    )
+
+
+@app.exception_handler(409)
+async def conflict_handler(request: Request, exc: Exception) -> JSONResponse:
+    detail = getattr(exc, "detail", "Conflict")
+    return JSONResponse(
+        status_code=409,
+        content={"detail": detail},
+    )
+
+
+@app.exception_handler(422)
+async def validation_handler(request: Request, exc: Exception) -> JSONResponse:
+    detail = getattr(exc, "detail", "Validation error")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": detail},
+    )
+
+
+@app.exception_handler(500)
+async def internal_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled server error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Router mounting
+# ---------------------------------------------------------------------------
+
+API_PREFIX = "/api/v1"
+
+# Health — mounted at root (no /api/v1 prefix)
+app.include_router(health_router)
+
+# ── Always-on API routers ────────────────────────────────────────────────
+# These routers define their own prefix on the APIRouter (e.g. prefix="/agents"),
+# so we only add the /api/v1 namespace prefix here.
+
+app.include_router(auth_router, prefix=API_PREFIX)
+app.include_router(agents_router, prefix=API_PREFIX)
+app.include_router(graphs_router, prefix=API_PREFIX)
+app.include_router(executions_router, prefix=API_PREFIX)
+app.include_router(conversations_router, prefix=API_PREFIX)
+app.include_router(memory_router, prefix=API_PREFIX)
+app.include_router(rag_router, prefix=API_PREFIX)
+app.include_router(models_usage_router, prefix=API_PREFIX)
+app.include_router(mcp_usage_router, prefix=API_PREFIX)
+app.include_router(setup_router, prefix=API_PREFIX)
+app.include_router(connectors_router, prefix=API_PREFIX)
+app.include_router(webhook_router, prefix=f"{API_PREFIX}/webhooks")
+app.include_router(report_router, prefix=API_PREFIX)
+app.include_router(sync_router, prefix=API_PREFIX)
+app.include_router(recall_router, prefix=API_PREFIX)
+app.include_router(supervisor_router, prefix=API_PREFIX)
+app.include_router(groups_router, prefix=API_PREFIX)
+
+# ── Admin / owner-only routers ───────────────────────────────────────────
+# Only mounted when RUNTIME_MODE == "admin" so client-mode deployments
+# return 404 for these paths instead of exposing management endpoints.
+
+if settings.RUNTIME_MODE == "admin":
+    app.include_router(internal_router, prefix=f"{API_PREFIX}/internal")
+    app.include_router(fine_tuning_router, prefix=API_PREFIX)
+    app.include_router(mcp_admin_router, prefix=f"{API_PREFIX}/internal")
+    app.include_router(models_admin_router, prefix=API_PREFIX)
+    app.include_router(admin_user_router, prefix=f"{API_PREFIX}/admin")
+    app.include_router(conversations_admin_router, prefix=f"{API_PREFIX}/admin")

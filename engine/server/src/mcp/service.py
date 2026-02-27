@@ -1,8 +1,8 @@
 """MCP service — registry singleton, sidecar manager, and lifecycle management.
 
-Note: The Celery worker runs in a separate process and will create its own
+Note: The Redis Streams worker runs in a separate process and will create its own
 registry instance. Both API and worker processes load from the same disk storage.
-The sidecar manager is only active in the API process (not Celery workers).
+The sidecar manager is only active in the API process (not worker processes).
 """
 
 import fcntl

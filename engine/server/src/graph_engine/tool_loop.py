@@ -1,7 +1,7 @@
 """Shared tool-calling loop for LLM + MCP tool execution.
 
 Implements a ReAct-style agentic loop used by both the supervisor
-(TOOL_RESPONSE strategy) and agent execution (Celery tasks).
+(TOOL_RESPONSE strategy) and agent execution (worker tasks).
 
 Flow:
   1. Call LLM with messages (tools already bound via ``bind_tools()``)

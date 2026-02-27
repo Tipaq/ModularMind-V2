@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class AgentContextBuilder:
     """Builds context SystemMessages for an agent.
 
-    Must be called **before** graph compilation (in the Celery task or
+    Must be called **before** graph compilation (in the worker task or
     inline handler) because it needs an async DB session and embedding
     provider.
     """
