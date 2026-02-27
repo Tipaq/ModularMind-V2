@@ -19,59 +19,14 @@ x-engine-depends: &engine-depends
   qdrant: { condition: service_healthy }
 
 services:
-  # --- Engine (FastAPI API server) ---
-  engine:
-    image: modularmind/engine:latest
-    build:
-      context: ..
-      dockerfile: engine/server/Dockerfile
-    environment:
-      <<: *engine-env
-    depends_on:
-      <<: *engine-depends
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # --- Worker (Redis Streams consumers + APScheduler) ---
-  worker:
-    image: modularmind/engine:latest
-    command: python -m src.worker.runner
-    environment:
-      <<: *engine-env
-    depends_on:
-      <<: *engine-depends
-      engine: { condition: service_healthy }
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
-  # --- Nginx (reverse proxy + static SPA hosting) ---
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/client.conf:/etc/nginx/conf.d/default.conf:ro
-      - chat-static:/usr/share/nginx/html/chat:ro
-      - ops-static:/usr/share/nginx/html/ops:ro
-    depends_on:
-      - engine
-
   # --- Infrastructure ---
   db:
     image: postgres:16-alpine
+    volumes: [postgres-data:/var/lib/postgresql/data]
     environment:
-      POSTGRES_USER: ${DB_USER:-modularmind}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-modularmind}
       POSTGRES_DB: modularmind
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+      POSTGRES_USER: ${DB_USER:-modularmind}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-modularmind}"]
       interval: 10s
@@ -80,28 +35,62 @@ services:
 
   redis:
     image: redis:7-alpine
-    volumes:
-      - redis-data:/data
+    volumes: [redis-data:/data]
+    command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s
-      retries: 5
 
   qdrant:
     image: qdrant/qdrant:v1.13.0
-    volumes:
-      - qdrant-data:/qdrant/storage
+    volumes: [qdrant-data:/qdrant/storage]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/readyz"]
       interval: 10s
-      timeout: 5s
-      retries: 5
 
   ollama:
     image: ollama/ollama:latest
+    volumes: [ollama-data:/root/.ollama]
+    profiles: [ollama]
+
+  # --- Engine (single image, 2 services) ---
+  engine:
+    build:
+      context: ..
+      dockerfile: engine/server/Dockerfile
+    image: modularmind/engine:latest
+    depends_on: *engine-depends
+    environment:
+      <<: *engine-env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    image: modularmind/engine:latest
+    command: python -m src.worker.runner
+    depends_on: *engine-depends
+    environment:
+      <<: *engine-env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # --- Nginx (serves Chat + Ops static + proxies Engine) ---
+  nginx:
+    image: nginx:alpine
     volumes:
-      - ollama-data:/root/.ollama
+      - ./nginx/client.conf:/etc/nginx/conf.d/default.conf:ro
+      - chat-static:/usr/share/nginx/html/chat:ro
+      - ops-static:/usr/share/nginx/html/ops:ro
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    depends_on: [engine]
 
 volumes:
   postgres-data:
