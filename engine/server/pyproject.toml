@@ -10,7 +10,6 @@ dependencies = [
     "asyncpg>=0.30",
     "alembic>=1.14",
     "redis>=5.2",
-    "celery[redis]>=5.4",
     "qdrant-client>=1.13",
     "langgraph>=0.2",
     "pydantic>=2.10",
@@ -21,6 +20,7 @@ dependencies = [
     "passlib[bcrypt]>=1.7",
     "python-multipart>=0.0.18",
     "cryptography>=44.0",
+    "apscheduler>=3.10",
     "modularmind-shared",
 ]
 

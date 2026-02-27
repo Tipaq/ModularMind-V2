@@ -31,12 +31,12 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "nomic-embed-text"
 
     # --- Execution ---
-    EXECUTION_MODE: str = "celery"  # celery | inline
     MAX_EXECUTION_TIMEOUT: int = 600
 
-    # --- Celery ---
-    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
-    CELERY_WORKER_CONCURRENCY: int = 4
+    # --- Platform Sync ---
+    PLATFORM_URL: str = ""
+    ENGINE_API_KEY: str = ""
+    SYNC_INTERVAL_SECONDS: int = 300
 
     # --- Memory ---
     MAX_MEMORY_ENTRIES: int = 1000

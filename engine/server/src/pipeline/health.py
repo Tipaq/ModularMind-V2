@@ -1,3 +1,9 @@
-"""HTTP health endpoint for pipeline-worker Docker healthcheck."""
+"""Health endpoint for the worker process Docker healthcheck.
 
-# TODO: Minimal HTTP server exposing /health for pipeline consumer
+Exposed by the worker runner at /health on the configured port.
+"""
+
+# TODO: Health check returns status of:
+# - Redis Streams consumers (connected, lag)
+# - APScheduler (running jobs count)
+# - Memory pipeline (processing rate)
