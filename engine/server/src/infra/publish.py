@@ -1,4 +1,4 @@
-"""Task publishing via Redis Streams — replaces all Celery .delay() calls."""
+"""Task publishing via Redis Streams."""
 
 import json
 import logging

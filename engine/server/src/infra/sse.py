@@ -1,6 +1,6 @@
 """SSE (Server-Sent Events) response utility.
 
-Replaces WebSocket streaming from V1. All streaming endpoints use this module:
+All streaming endpoints use this module:
 - GET /api/v1/executions/:id/stream  (tokens, traces, complete/error)
 - GET /api/v1/internal/logs/stream   (log streaming)
 - GET /api/v1/models/pull/:task_id/stream (pull progress)

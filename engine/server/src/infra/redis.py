@@ -1,9 +1,7 @@
 """Redis client — cache, pub/sub, leader election, event bus.
 
 Provides async connection pool, FastAPI dependency, standalone client,
-health check, and graceful shutdown.  Replaces the minimal V2 stub with
-the richer API that copied V1 modules expect (get_redis_pool, get_redis,
-get_redis_client, check_redis_health, close_redis, RedisClient).
+health check, and graceful shutdown.
 """
 
 from __future__ import annotations

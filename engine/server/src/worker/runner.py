@@ -1,6 +1,5 @@
 """Worker process runner — single process for all background tasks.
 
-Replaces Celery worker + Celery beat + pipeline consumer with a single process:
 1. Redis Streams consumers (task queues: executions, models + memory pipeline)
 2. APScheduler (periodic tasks: sync poll, memory consolidation, metrics)
 3. Health endpoint (TCP /health for Docker healthcheck)
@@ -64,7 +63,7 @@ async def main() -> None:
     # from src.pipeline.handlers.embedder import embedder_handler
 
     tasks = [
-        # Task queues (replaces Celery)
+        # Task queues
         bus.subscribe("tasks:executions", "workers", "w-1", graph_execution_handler),
         bus.subscribe("tasks:models", "workers", "w-1", model_pull_handler),
         # Memory pipeline

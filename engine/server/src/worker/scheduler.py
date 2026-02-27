@@ -1,4 +1,4 @@
-"""APScheduler setup — replaces Celery Beat for periodic tasks.
+"""APScheduler setup for periodic tasks.
 
 Configures interval and cron jobs for:
 - Platform sync polling (every SYNC_INTERVAL_SECONDS)
