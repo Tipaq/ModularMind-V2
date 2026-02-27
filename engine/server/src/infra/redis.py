@@ -94,14 +94,19 @@ def get_redis_client() -> RedisClient:
 # ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
-async def check_redis_health() -> bool:
-    """Ping Redis and return ``True`` if healthy."""
+async def check_redis_health() -> tuple[bool, float | None]:
+    """Ping Redis and return ``(True, latency_ms)`` if healthy."""
+    import time
+
     client = get_redis_client()
     try:
-        return await client.ping()
+        start = time.monotonic()
+        ok = await client.ping()
+        latency = (time.monotonic() - start) * 1000
+        return (ok, latency)
     except Exception:
         logger.exception("Redis health check failed")
-        return False
+        return (False, None)
     finally:
         await client.aclose()
 

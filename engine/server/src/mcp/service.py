@@ -5,8 +5,8 @@ registry instance. Both API and worker processes load from the same disk storage
 The sidecar manager is only active in the API process (not worker processes).
 """
 
-import fcntl
 import logging
+import sys
 import uuid
 from pathlib import Path
 
@@ -107,7 +107,12 @@ async def _auto_deploy_free_catalog_entries() -> None:
 
     lock_fd = open(lock_path, "w")
     try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if sys.platform == "win32":
+            import msvcrt
+            msvcrt.locking(lock_fd.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         logger.debug("MCP auto-deploy: another worker holds the lock, skipping")
         lock_fd.close()
@@ -163,7 +168,15 @@ async def _auto_deploy_free_catalog_entries() -> None:
         if deployed:
             logger.info("MCP auto-deploy: %d credential-free server(s) deployed", deployed)
     finally:
-        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        if sys.platform == "win32":
+            import msvcrt
+            try:
+                msvcrt.locking(lock_fd.fileno(), msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
+        else:
+            import fcntl
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
         lock_fd.close()
 
 

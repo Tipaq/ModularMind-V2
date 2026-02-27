@@ -3,6 +3,8 @@
 # =============================================================================
 # In dev: run engine via `make dev-engine`, chat/ops via `make dev-chat`/`make dev-ops`
 
+name: mm-engine
+
 x-engine-env: &engine-env
   DATABASE_URL: postgresql+asyncpg://modularmind:modularmind@db:5432/modularmind
   REDIS_URL: redis://redis:6379/0
@@ -18,6 +20,7 @@ x-engine-depends: &engine-depends
 
 services:
   engine:
+    image: modularmind/engine:dev
     build:
       context: ..
       dockerfile: engine/server/Dockerfile

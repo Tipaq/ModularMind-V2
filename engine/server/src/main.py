@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
     # 1. Verify Redis connectivity
     from src.infra.redis import check_redis_health
 
-    redis_ok = await check_redis_health()
+    redis_ok, _ = await check_redis_health()
     if redis_ok:
         logger.info("Redis connection verified")
     else:

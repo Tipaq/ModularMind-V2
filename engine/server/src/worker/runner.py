@@ -12,6 +12,7 @@ import asyncio
 import logging
 import os
 import signal
+import sys
 
 from src.infra.config import settings
 from src.infra.redis_streams import RedisStreamBus
@@ -45,9 +46,12 @@ async def main() -> None:
 
     bus = RedisStreamBus(redis_client)
 
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, bus.stop)
+    # Register signal handlers for graceful shutdown
+    if sys.platform != "win32":
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, bus.stop)
+    # On Windows, KeyboardInterrupt (Ctrl+C) is caught in the except block below
 
     logger.info("Worker starting — Redis Streams + APScheduler")
 
@@ -77,6 +81,9 @@ async def main() -> None:
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error("Consumer %d failed: %s", i, result)
+    except KeyboardInterrupt:
+        logger.info("Worker interrupted (Ctrl+C)")
+        bus.stop()
     finally:
         scheduler.shutdown(wait=False)
         await redis_client.aclose()
