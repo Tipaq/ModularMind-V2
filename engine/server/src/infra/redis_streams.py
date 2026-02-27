@@ -56,7 +56,7 @@ class RedisStreamBus(EventBus):
 
                 for _stream_name, entries in messages:
                     for msg_id, data in entries:
-                        retry_count = int(data.get(b"_retry_count", 0))
+                        retry_count = int(data.get("_retry_count", 0))
                         try:
                             await handler(data)
                             await self.redis.xack(stream, group, msg_id)
@@ -71,15 +71,15 @@ class RedisStreamBus(EventBus):
                                 await self.redis.xadd(
                                     DLQ_STREAM,
                                     {
-                                        b"original_stream": stream,
-                                        b"original_id": msg_id,
-                                        b"error": f"{retry_count} retries exhausted",
-                                        b"data": str(data),
+                                        "original_stream": stream,
+                                        "original_id": msg_id,
+                                        "error": f"{retry_count} retries exhausted",
+                                        "data": str(data),
                                     },
                                 )
                                 await self.redis.xack(stream, group, msg_id)
                             else:
-                                data[b"_retry_count"] = str(retry_count + 1)
+                                data["_retry_count"] = str(retry_count + 1)
                                 await self.redis.xadd(stream, data)
                                 await self.redis.xack(stream, group, msg_id)
 

@@ -1,25 +1,40 @@
+# =============================================================================
+# Engine Dockerfile — multi-stage build (shared + engine)
+# =============================================================================
+# Used by both `engine` and `worker` services (same image, different CMD)
+
 FROM python:3.12-slim AS base
 
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install shared package first
-COPY shared/ /tmp/shared/
+# --- Dependencies stage ---
+FROM base AS deps
+
+# Install shared package first (rarely changes)
+COPY shared/pyproject.toml /tmp/shared/pyproject.toml
+COPY shared/src /tmp/shared/src
 RUN pip install --no-cache-dir /tmp/shared/ && rm -rf /tmp/shared/
 
-# Install engine dependencies
-COPY engine/server/pyproject.toml .
-RUN pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir .
+# Install engine dependencies (no dev deps in production)
+COPY engine/server/pyproject.toml /tmp/engine/pyproject.toml
+RUN cd /tmp/engine && pip install --no-cache-dir . && rm -rf /tmp/engine/
+
+# --- Runtime stage ---
+FROM base AS runtime
+
+# Copy installed packages from deps stage
+COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=deps /usr/local/bin /usr/local/bin
 
 # Copy engine source
-COPY engine/server/ .
+COPY engine/server/src ./src
+COPY engine/server/seed ./seed
 
 EXPOSE 8000
 
-# Default: run engine server
+# Default: run engine server (worker overrides via docker-compose command)
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

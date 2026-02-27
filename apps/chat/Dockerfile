@@ -19,8 +19,7 @@ FROM installer AS builder
 COPY --from=pruner /app/out/full/ .
 RUN pnpm turbo build --filter=@modularmind/chat
 
-# Serve static files with nginx
+# Output: static files (mounted into client nginx via docker-compose volume)
 FROM nginx:alpine AS runner
 COPY --from=builder /app/apps/chat/dist /usr/share/nginx/html
-COPY apps/chat/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
