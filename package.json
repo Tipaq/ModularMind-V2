@@ -9,7 +9,9 @@
     "dev:chat": "turbo dev --filter=@modularmind/chat",
     "dev:ops": "turbo dev --filter=@modularmind/ops",
     "build:chat": "turbo build --filter=@modularmind/chat",
-    "build:ops": "turbo build --filter=@modularmind/ops"
+    "build:ops": "turbo build --filter=@modularmind/ops",
+    "dev:platform": "turbo dev --filter=@modularmind/platform",
+    "build:platform": "turbo build --filter=@modularmind/platform"
   },
   "devDependencies": {
     "turbo": "^2.3.0"

@@ -2,7 +2,7 @@
 # ModularMind V2 — Development Commands
 # =============================================================================
 
-.PHONY: help setup dev dev-chat dev-ops build test lint clean
+.PHONY: help setup dev dev-chat dev-ops dev-platform dev-engine build test lint clean
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -24,8 +24,11 @@ dev: ## Start all services (Docker)
 dev-chat: ## Start Chat app (Vite dev server)
 	pnpm dev:chat
 
-dev-ops: ## Start Ops Console (Next.js dev server)
+dev-ops: ## Start Ops Console (Vite dev server)
 	pnpm dev:ops
+
+dev-platform: ## Start Platform (Next.js dev server)
+	pnpm dev:platform
 
 dev-engine: ## Start Engine server (uvicorn)
 	cd engine/server && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000

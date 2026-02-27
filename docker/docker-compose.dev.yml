@@ -1,6 +1,7 @@
 # =============================================================================
-# ModularMind V2 — Development (all services together)
+# ModularMind V2 — Development (infra services only, apps run locally)
 # =============================================================================
+# In dev: run engine via `make dev-engine`, chat/ops via `make dev-chat`/`make dev-ops`
 
 x-engine-env: &engine-env
   DATABASE_URL: postgresql+asyncpg://modularmind:modularmind@db:5432/modularmind
@@ -27,7 +28,6 @@ services:
       - ../shared/src:/tmp/shared-src
     environment:
       <<: *engine-env
-      EXECUTION_MODE: inline
     depends_on:
       <<: *engine-depends
     command: uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
