@@ -1,7 +1,7 @@
 [project]
 name = "modularmind-shared"
 version = "2.0.0"
-description = "ModularMind shared schemas and protocols — used by Engine and Studio"
+description = "ModularMind shared schemas and protocols — used by Engine internally"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.10",

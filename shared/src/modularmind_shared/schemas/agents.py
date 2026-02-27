@@ -1,10 +1,10 @@
-"""Shared agent schemas — used by both Studio (push) and Engine (receive)."""
+"""Shared agent schemas — used by Engine for config loading and sync."""
 
 from pydantic import BaseModel
 
 
 class AgentConfig(BaseModel):
-    """Agent configuration pushed from Studio to Engine."""
+    """Agent configuration synced from Platform to Engine."""
 
     id: str
     name: str

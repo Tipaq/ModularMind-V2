@@ -1,4 +1,4 @@
-"""Shared graph schemas — used by both Studio (push) and Engine (receive)."""
+"""Shared graph schemas — used by Engine for config loading and sync."""
 
 from pydantic import BaseModel
 
@@ -18,7 +18,7 @@ class GraphEdgeConfig(BaseModel):
 
 
 class GraphConfig(BaseModel):
-    """Graph configuration pushed from Studio to Engine."""
+    """Graph configuration synced from Platform to Engine."""
 
     id: str
     name: str

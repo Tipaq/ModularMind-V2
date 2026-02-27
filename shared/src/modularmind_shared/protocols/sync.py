@@ -1,10 +1,10 @@
-"""Sync protocol — interface for config synchronization."""
+"""Sync protocol — interface for pull-based config synchronization."""
 
 from typing import Protocol
 
 
 class SyncProtocol(Protocol):
-    """Push-based sync from Studio to Engine."""
+    """Pull-based sync: Engine polls Platform for config updates."""
 
-    async def push(self, payload: dict) -> dict: ...
-    async def verify(self, checksum: str) -> bool: ...
+    async def poll(self) -> bool: ...
+    async def apply_configs(self, configs: dict) -> None: ...

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class CollectionConfig(BaseModel):
-    """Collection configuration synced from Studio."""
+    """Collection configuration synced from Platform."""
 
     id: str
     name: str
