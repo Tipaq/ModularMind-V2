@@ -2,7 +2,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: "OWNER" | "ADMIN" | "USER";
+  role: 'owner' | 'admin' | 'user';
   created_at: string;
 }
 
@@ -12,5 +12,7 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
+  token_type: string;
+  expires_in: number;
   user: User;
 }
