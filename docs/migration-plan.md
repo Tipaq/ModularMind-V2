@@ -2,7 +2,7 @@
 
 > Plan d'execution phase par phase.
 > Reference: [spec.md](spec.md)
-> Revise apres review critique.
+> Revise le 2026-02-27.
 
 ---
 
@@ -15,7 +15,6 @@ production sur le V2.
 - Tag `v1-final` sur l'ancien repo avant de commencer
 - L'ancien repo garde ses Docker images fonctionnelles
 - En cas de probleme critique sur V2 : redeployer V1 en une commande
-- L'archive (Phase 8.4) n'a lieu qu'apres validation complete
 
 ---
 
@@ -33,90 +32,55 @@ git push origin v1-final
 
 ### 0.2 Creer le repo et la structure
 
-```bash
-mkdir ModularMind-V2 && cd ModularMind-V2
-git init
-
-mkdir -p studio/backend studio/frontend
-mkdir -p engine/server engine/mcp-sidecars
-mkdir -p apps/chat apps/ops
-mkdir -p packages/api-client/src packages/ui/src
-mkdir -p shared/src/modularmind_shared/protocols
-mkdir -p shared/src/modularmind_shared/schemas
-mkdir -p docker/nginx
-mkdir -p docs
-```
+Deja fait. Voir `ModularMind-V2/` sur GitHub.
 
 ### 0.3 Initialiser le monorepo TypeScript
 
 ```bash
 pnpm init
 pnpm add -Dw turbo
-
-# Creer turbo.json (voir spec.md section 10)
-# Creer pnpm-workspace.yaml (voir spec.md section 10)
-# Creer package.json root avec scripts (voir spec.md section 10)
+# turbo.json, pnpm-workspace.yaml, package.json root
 ```
 
 ### 0.4 Initialiser chaque package
 
 ```bash
-# packages/ui
-cd packages/ui && pnpm init
-# → name: "@modularmind/ui"
-# → Ajouter: tailwindcss, @radix-ui/*, lucide-react, class-variance-authority
+# apps/chat — Vite + React
+cd apps/chat && pnpm create vite . --template react-ts
+# → @modularmind/chat
 
-# packages/api-client
-cd packages/api-client && pnpm init
-# → name: "@modularmind/api-client"
-# → TypeScript only, zero deps runtime
+# apps/ops — Vite + React
+cd apps/ops && pnpm create vite . --template react-ts
+# → @modularmind/ops, vite.config.ts: base: '/ops'
+# → Ajouter: react-router-dom, @modularmind/ui, @modularmind/api-client
 
-# apps/chat
-cd apps/chat
-pnpm create vite . --template react-ts
-# → name: "@modularmind/chat"
-# → Ajouter deps: @modularmind/ui, @modularmind/api-client
-# → Ajouter deps: tailwindcss, zustand, react-router-dom, framer-motion
-
-# apps/ops
-cd apps/ops
-npx create-next-app@latest . --typescript --tailwind --app --src-dir
-# → name: "@modularmind/ops"
-# → next.config.ts: basePath: '/ops'
-# → Ajouter deps: @modularmind/ui, @modularmind/api-client
-# → Ajouter deps: zustand, recharts, @xyflow/react, framer-motion
+# packages/ui, packages/api-client
+# → Deja scaffolde
 ```
 
 ### 0.5 Initialiser le shared Python package
 
 ```bash
-cd shared
-
-# Creer pyproject.toml (voir spec.md section 7)
-# Creer src/modularmind_shared/__init__.py
-# Creer src/modularmind_shared/protocols/__init__.py
-# Creer src/modularmind_shared/schemas/__init__.py
+cd shared && pip install -e ".[dev]"
 ```
 
 ### 0.6 Setup Docker squelette
 
-- Creer `docker/docker-compose.yml` avec les services infrastructure (db, redis, qdrant)
-- Creer `docker/nginx/client.conf` (voir spec.md section 8)
-- Verifier que `docker compose up db redis qdrant` demarre correctement
+- `docker/docker-compose.dev.yml` avec db, redis, qdrant
+- `docker/nginx/client.conf`
+- Verifier `docker compose up db redis qdrant`
 
-### 0.7 Setup basique CI
+### 0.7 Setup CI
 
-- `.gitignore` (node_modules, dist, .next, __pycache__, .env, *.pyc, etc.)
-- `Makefile` avec commandes de base
-- `.env.example` avec toutes les variables necessaires
+- `.gitignore`, `Makefile`, `.env.example`
 
-**Critere de completion**: `pnpm install && pnpm build` passe (meme si les apps sont vides). Docker infrastructure demarre. `pip install -e shared/` fonctionne.
+**Critere**: `pnpm install && pnpm build` passe. Docker infra demarre. `pip install -e shared/` fonctionne.
 
 ---
 
 ## Phase 1 : Engine (le coeur)
 
-**Objectif**: L'Engine tourne et execute des agents exactement comme le runtime/server actuel.
+**Objectif**: L'Engine tourne et execute des agents.
 
 ### 1.1 Copier le server
 
@@ -125,450 +89,248 @@ cp -r OLD_REPO/runtime/server/* NEW_REPO/engine/server/
 cp -r OLD_REPO/runtime/mcp-sidecars/* NEW_REPO/engine/mcp-sidecars/
 ```
 
-### 1.2 Fusionner et restructurer le shared Python
-
-Fusionner les deux locations existantes dans le nouveau package installable :
+### 1.2 Fusionner le shared Python
 
 ```bash
-# Copier les schemas depuis les deux sources
 cp OLD_REPO/shared/schemas/* NEW_REPO/shared/src/modularmind_shared/schemas/
 cp OLD_REPO/shared/protocols/* NEW_REPO/shared/src/modularmind_shared/protocols/
-
-# Si runtime/shared/ a des fichiers supplementaires, les merger
-cp OLD_REPO/runtime/shared/schemas/* NEW_REPO/shared/src/modularmind_shared/schemas/
-cp OLD_REPO/runtime/shared/protocols/* NEW_REPO/shared/src/modularmind_shared/protocols/
 ```
 
-Mettre a jour tous les imports dans le code Engine :
-
+Mettre a jour les imports :
 ```python
 # Avant:
 from shared.schemas import AgentConfig
-from shared.schemas.sync import SyncManifest
-
 # Apres:
 from modularmind_shared.schemas import AgentConfig
-from modularmind_shared.schemas.sync import SyncManifest
 ```
 
-Installer le shared package dans l'Engine :
+### 1.3 Supprimer Celery, migrer vers Redis Streams
 
-```bash
-cd engine/server
-pip install -e ../../shared/
+C'est le changement le plus important de la Phase 1.
+
+**1.3a Supprimer Celery :**
+- Supprimer `celery[redis]` du `pyproject.toml`
+- Supprimer `engine/server/src/workers/celery_app.py`
+- Supprimer les references a `celery_app` dans tout le code
+- Ajouter `apscheduler[redis]` au `pyproject.toml`
+
+**1.3b Creer le worker Redis Streams :**
+
+Creer `engine/server/src/worker/` :
+```
+worker/
+├── __init__.py
+├── runner.py      # Process principal (voir spec section 5.4)
+├── tasks.py       # Handlers pour les task streams
+└── scheduler.py   # APScheduler (voir spec section 5.4)
 ```
 
-### 1.3 Adapter les Alembic migrations
+**1.3c Migrer chaque task Celery :**
 
-Les migrations de l'ancien runtime/server doivent fonctionner sur une DB vierge :
+| Ancienne task Celery | Nouveau stream Redis | Handler |
+|---------------------|---------------------|---------|
+| `execute_graph` | `tasks:executions` | `graph_execution_handler` |
+| `pull_model` | `tasks:models` | `model_pull_handler` |
+| `process_ended_conversation` | `memory:raw` | `extractor_handler` |
+| Celery Beat `memory.consolidate` | APScheduler job | `memory_consolidation` |
 
-```bash
-cd engine/server
+**1.3d Adapter les publishers :**
 
-# Tester sur une DB vierge
-docker compose up db -d
-alembic upgrade head
-# → doit passer sans erreur
+Partout ou le code fait `celery_task.delay(...)`, remplacer par :
+```python
+# Avant:
+from src.workers.tasks import execute_graph
+execute_graph.delay(execution_id, graph_config)
 
-# Si des revisions ont des conflits, les rebaser
-alembic history --verbose
+# Apres:
+from src.infra.redis_streams import get_event_bus
+bus = await get_event_bus()
+await bus.publish("tasks:executions", {
+    "execution_id": execution_id,
+    "graph_config": json.dumps(graph_config),
+})
 ```
 
-Prefixer les revisions avec `engine_` pour eviter tout conflit futur avec le Studio :
+### 1.4 Migrer WebSocket → SSE
+
+1. Creer `engine/server/src/infra/sse.py` (voir spec section 8)
+2. Supprimer `engine/server/src/executions/websocket.py`
+3. Modifier `executions/router.py` : WebSocket endpoint → `GET /{id}/stream` SSE
+4. Adapter les tests
+
+### 1.5 Consolider le module sync (pull model)
+
+1. Creer `engine/server/src/sync/` avec le pull model :
+   - `service.py` : poll le Platform, compare versions, applique configs
+   - `router.py` : `POST /sync/trigger` (webhook du Platform)
+2. Supprimer l'ancien module `manifest/`
+3. Le scheduler appelle `sync_poll_platform()` toutes les 5 min
+
+```python
+# engine/server/src/sync/service.py
+import httpx
+
+class SyncService:
+    async def poll_platform(self):
+        """Appele par APScheduler toutes les 5 min."""
+        async with httpx.AsyncClient() as client:
+            manifest = await client.get(
+                f"{self.platform_url}/api/sync/manifest",
+                headers={"X-Engine-Key": self.api_key},
+            )
+            remote_version = manifest.json().get("version", 0)
+            if remote_version > self.local_version:
+                configs = await client.get(
+                    f"{self.platform_url}/api/sync/configs",
+                    headers={"X-Engine-Key": self.api_key},
+                )
+                await self.apply_configs(configs.json())
+                self.local_version = remote_version
+```
+
+### 1.6 Ajouter les endpoints report
+
+Creer `engine/server/src/report/` (voir spec section 4.4).
+
+### 1.7 Adapter les Alembic migrations
 
 ```python
 # alembic/env.py
-def run_migrations_online():
-    # ... existing config
-    context.configure(
-        # ...
-        version_table="engine_alembic_version",  # table separee
-    )
+context.configure(version_table="engine_alembic_version")
 ```
 
-Verifier que les tables LangGraph (checkpoints) sont aussi creees.
-
-### 1.4 Adapter les imports et le Dockerfile
-
-- Verifier que tous les imports internes fonctionnent (`src.*` paths)
-- Adapter le Dockerfile : le context est maintenant la racine du monorepo
-
-```dockerfile
-# engine/server/Dockerfile
-FROM python:3.12-slim AS builder
-WORKDIR /app
-
-# Install shared package first
-COPY shared/ /tmp/shared/
-RUN pip install --no-cache-dir /tmp/shared/
-
-# Install engine deps from pyproject.toml (NOT requirements.txt)
-COPY engine/server/pyproject.toml engine/server/
-RUN pip install --no-cache-dir -e engine/server/
-
-# Copy engine code
-COPY engine/server/ engine/server/
-
-WORKDIR /app/engine/server
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### 1.5 Copier les seed data
+### 1.8 Copier les seed data
 
 ```bash
-# Copier les templates agents/graphs
 cp -r OLD_REPO/runtime/server/seed/* NEW_REPO/engine/server/seed/
-# ou si les seeds sont dans un autre path, adapter en consequence
 ```
 
-Verifier que le seeding fonctionne au demarrage (68 agents, 3 graphs).
-
-### 1.6 Verifier le fonctionnement
+### 1.9 Lancer les tests
 
 ```bash
-docker compose up db redis qdrant engine -d
+cd engine/server && pytest tests/ -v
+```
 
-# Health check
+### 1.10 Smoke test
+
+```bash
+docker compose up db redis qdrant engine worker -d
 curl http://localhost:8000/health
 # → {"status": "ok", "redis": true, "database": true, "qdrant": true}
 ```
 
-### 1.7 Lancer les tests existants
-
-```bash
-cd engine/server
-pytest tests/ -v
-# Tous les tests du runtime/server doivent passer
-```
-
-### 1.8 Consolider le module sync
-
-Absorber `manifest/router.py` dans le nouveau module `sync/` :
-
-1. Creer `engine/server/src/sync/`
-2. Deplacer la logique de manifest dans `sync/manifest_router.py`
-3. Creer `sync/router.py` avec les endpoints push (voir spec section 4.3)
-4. Supprimer l'ancien module `manifest/`
-5. Mettre a jour le montage des routes dans `main.py`
-
-```python
-# engine/server/src/sync/router.py
-@router.post("/api/v1/sync/push")
-async def receive_sync_push(
-    payload: SyncPayload,
-    x_sync_signature: str = Header(...),
-    x_sync_timestamp: str = Header(...),
-    x_sync_spec_version: int = Header(default=1),
-):
-    # Verifier la version du format
-    if x_sync_spec_version > SUPPORTED_SPEC_VERSION:
-        raise HTTPException(
-            422,
-            f"Unsupported spec version {x_sync_spec_version}. Max supported: {SUPPORTED_SPEC_VERSION}"
-        )
-    verify_hmac(payload, x_sync_signature, x_sync_timestamp)
-    await sync_service.apply(payload)
-```
-
-### 1.8b Migrer WebSocket → SSE
-
-Remplacer l'ancien streaming WebSocket par SSE (Server-Sent Events) :
-
-1. Creer `engine/server/src/infra/sse.py` (voir spec section 7.1)
-2. Supprimer `engine/server/src/executions/websocket.py`
-3. Modifier `engine/server/src/executions/router.py` :
-   - Remplacer le WebSocket endpoint par un `GET /{execution_id}/stream`
-   - Utiliser `sse_response()` de `infra/sse.py`
-   - Ajouter support `Last-Event-ID` header pour le replay
-4. Supprimer les imports et config lies au WebSocket dans `main.py`
-5. Adapter les tests existants (si `test_websocket.py` existe → `test_sse.py`)
-
-```python
-# engine/server/src/executions/router.py — nouveau endpoint SSE
-from src.infra.sse import sse_response
-
-@router.get("/{execution_id}/stream")
-async def stream_execution(
-    request: Request,
-    execution_id: str,
-    user: User = Depends(get_current_user),
-    last_event_id: str | None = Header(None, alias="Last-Event-ID"),
-):
-    async def event_generator():
-        if last_event_id:
-            missed = await replay_from_buffer(execution_id, after=last_event_id)
-            for event in missed:
-                yield event
-        async for event in redis_pubsub.listen(f"execution:{execution_id}"):
-            yield event
-            if event.get("type") in ("complete", "error"):
-                break
-
-    return await sse_response(event_generator(), request)
-```
-
-### 1.9 Ajouter les endpoints report
-
-Creer `engine/server/src/report/` (voir spec section 4.4).
-
-### 1.10 Smoke test complet
-
-Avant de passer a la phase suivante, valider le flow critique de bout en bout :
-
-```bash
-# 1. Engine tourne
-curl http://localhost:8000/health
-
-# 2. Setup (creer premier user)
-curl -X POST http://localhost:8000/api/v1/setup \
-  -H "Content-Type: application/json" \
-  -d '{"email": "test@test.com", "password": "test123"}'
-
-# 3. Login
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "test@test.com", "password": "test123"}' \
-  -c cookies.txt
-
-# 4. Lister les agents
-curl http://localhost:8000/api/v1/agents -b cookies.txt
-
-# 5. Creer une conversation et envoyer un message
-curl -X POST http://localhost:8000/api/v1/conversations \
-  -b cookies.txt -H "Content-Type: application/json" \
-  -d '{"title": "Test"}'
-
-# 6. Verifier les endpoints sync/report
-curl -X GET http://localhost:8000/api/v1/report/status \
-  -H "X-Sync-Signature: ..." -H "X-Sync-Timestamp: ..."
-```
-
-**Critere de completion**: Engine demarre, health OK, tests passent, smoke test OK, module sync consolide, endpoints report repondent, WebSocket supprime et SSE en place.
+**Critere**: Engine demarre, health OK, tests passent, Celery supprime, Redis Streams fonctionne, SSE en place, sync pull OK.
 
 ---
 
 ## Phase 2 : Packages partages
 
-**Objectif**: Extraire le code partage pour que Chat et Ops puissent l'utiliser.
+**Objectif**: Extraire le code partage pour que Chat et Ops l'utilisent.
 
 ### 2.1 Package @modularmind/ui
-
-Extraire les composants shadcn/ui depuis l'ancien dashboard :
 
 ```bash
 cp OLD_REPO/runtime/dashboard/src/components/ui/* NEW_REPO/packages/ui/src/components/
 cp OLD_REPO/runtime/dashboard/src/lib/utils.ts NEW_REPO/packages/ui/src/lib/utils.ts
 ```
 
-Creer `packages/ui/src/index.ts` :
-
-```typescript
-export { Button } from './components/button';
-export { Card, CardContent, CardHeader, CardTitle } from './components/card';
-export { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/dialog';
-// ... tous les composants
-export { cn } from './lib/utils';
-```
-
-Configurer le `package.json` avec les peer deps Tailwind et React.
-
 ### 2.2 Package @modularmind/api-client
 
-1. Copier les types: `OLD_REPO/runtime/dashboard/src/lib/types/*` → `packages/api-client/src/types/`
-2. Creer le client generique base sur `runtime-client.ts` (voir spec section 6.1)
-   - **HttpOnly cookies** avec `credentials: 'include'`
-   - **Refresh mutex** pour eviter les races sur 401
-   - `basePath: '/api/v1'` (meme origine via nginx)
-3. Extraire chaque module API (auth, conversations, executions, etc.)
-4. Ne PAS copier `platform-client.ts` — il n'est plus utilise
+1. Copier les types depuis l'ancien dashboard
+2. Creer le client base sur `runtime-client.ts` (voir spec section 7.1)
+3. Pas de `platform-client.ts` — il n'est plus utilise
 
 ### 2.3 Verifier
 
 ```bash
 pnpm build --filter=@modularmind/ui
 pnpm build --filter=@modularmind/api-client
-# Les deux buildent sans erreur
 pnpm typecheck
-# Zero erreur de type
 ```
 
-**Critere de completion**: Les deux packages buildent. Les types sont corrects. Le client API couvre auth + conversations + executions + monitoring.
+**Critere**: Les deux packages buildent sans erreur.
 
 ---
 
-## Phase 3 : Ops Console
+## Phase 3 : Ops Console (Vite + React)
 
-**Objectif**: Le dashboard admin fonctionne, connecte a l'Engine via nginx.
+**Objectif**: Le dashboard admin fonctionne.
 
-### 3.1 Copier le dashboard actuel
+### 3.1 Setup Vite + React Router
+
+L'Ops Console est un SPA Vite (plus Next.js). Configurer :
+- `vite.config.ts` avec `base: '/ops'`
+- `react-router-dom` avec `<BrowserRouter basename="/ops">`
+- Toutes les pages en tant que composants React Router
+
+### 3.2 Copier et adapter le dashboard
 
 ```bash
-cp -r OLD_REPO/runtime/dashboard/* NEW_REPO/apps/ops/
+cp OLD_REPO/runtime/dashboard/src/components/* NEW_REPO/apps/ops/src/components/
+# (sauf chat/ et ui/)
 ```
 
-### 3.2 Configurer basePath
-
-```typescript
-// apps/ops/next.config.ts
-const nextConfig = {
-  basePath: '/ops',
-  // Retirer les rewrites — nginx gere le proxy maintenant
-};
-```
+- Convertir les pages Next.js `app/(dashboard)/*/page.tsx` en composants React standard
+- Remplacer `useRouter()` (Next.js) par `useNavigate()` (React Router)
+- Remplacer `<Link>` (Next.js) par `<Link>` (React Router)
+- Supprimer les `"use client"` directives
 
 ### 3.3 Retirer le chat
 
-- Supprimer `apps/ops/src/app/(dashboard)/chat/`
-- Supprimer `apps/ops/src/components/chat/`
-- Retirer les liens vers `/chat` dans le Sidebar
-- Retirer les hooks/stores lies au chat (useChat, etc.)
+- Supprimer tout ce qui est lie au chat (pages, composants, hooks)
+- Garder le Playground (essentiel pour tester apres un push)
 
-### 3.4 Garder le Playground
+### 3.4 Ajouter le monitoring pipeline
 
-Le Playground (`components/playground/`) reste dans l'Ops Console.
-Il est essentiel pour tester les agents et graphs apres un push depuis le Studio.
-
-S'assurer que les 4 hooks (usePlayground, usePlaygroundAgent, usePlaygroundGraph, usePlaygroundModel) fonctionnent.
-
-Ajouter la route `/ops/playground` si elle n'existe pas deja.
-
-### 3.5 Ajouter le monitoring pipeline
-
-Ajouter dans la page monitoring un onglet "Pipeline" qui affiche :
+Page monitoring → onglet "Pipeline" :
 - Etat des streams Redis (pending, lag)
 - Messages en DLQ
 - Health des consumers
 - Via `GET /api/v1/internal/monitoring/pipeline`
 
-### 3.6 Migrer vers les packages partages
+### 3.5 Migrer vers les packages partages
 
 ```
-Remplacer:                          Par:
-@/components/ui/*                   @modularmind/ui
-@/lib/api/runtime-client.ts         @modularmind/api-client
-@/lib/api/*.ts                      @modularmind/api-client
-@/lib/types/*                       @modularmind/api-client/types
+@/components/ui/*          → @modularmind/ui
+@/lib/api/runtime-client   → @modularmind/api-client
 ```
 
-Retirer `platform-client.ts` — il n'est plus utilise (confirme par le codebase actuel).
-
-### 3.7 Adapter l'API client
-
-```typescript
-// apps/ops/src/lib/api.ts
-import { createApiClient } from '@modularmind/api-client';
-
-export const api = createApiClient({
-  basePath: '/api/v1',  // meme origine grace a nginx
-  onUnauthorized: () => {
-    // Event-based — AuthProvider calls router.push('/login')
-    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
-  },
-});
-```
-
-### 3.7b Remplacer tous les window.location.href
-
-**Etape critique.** Chercher et remplacer systematiquement dans tout le code
-copie du dashboard :
-
-```bash
-# Trouver toutes les occurrences
-grep -rn "window.location.href" apps/ops/src/
-grep -rn "window.location.replace" apps/ops/src/
-```
-
-Remplacer chaque occurrence par `router.push()` (Next.js `useRouter`) ou
-`redirect()` (Server Components). Ceci est **obligatoire** car `basePath: '/ops'`
-n'est applique que par le router Next.js — `window.location.href = '/login'`
-irait a `/login` au lieu de `/ops/login`.
-
-Fichiers principaux a verifier :
-- `contexts/AuthContext.tsx` — redirects `/login`, `/setup`
-- `components/dashboard/Sidebar.tsx` — liens de navigation
-- Tout composant utilisant `window.location` pour naviguer
-
-### 3.8 Dockerfile avec turbo prune
-
-```dockerfile
-# apps/ops/Dockerfile
-FROM node:22-alpine AS pruner
-RUN corepack enable
-WORKDIR /app
-COPY . .
-RUN pnpm dlx turbo prune @modularmind/ops --docker
-
-FROM node:22-alpine AS installer
-RUN corepack enable
-WORKDIR /app
-COPY --from=pruner /app/out/json/ .
-RUN pnpm install --frozen-lockfile
-
-FROM installer AS builder
-COPY --from=pruner /app/out/full/ .
-RUN pnpm turbo build --filter=@modularmind/ops
-
-FROM node:22-alpine AS runner
-WORKDIR /app
-COPY --from=builder /app/apps/ops/.next/standalone ./
-COPY --from=builder /app/apps/ops/.next/static .next/static
-COPY --from=builder /app/apps/ops/public public/
-ENV PORT=3000
-CMD ["node", "server.js"]
-```
-
-### 3.9 Verifier
+### 3.6 Verifier
 
 ```bash
 pnpm dev --filter=@modularmind/ops
-# Dashboard s'ouvre sur http://localhost:3001/ops
-# Navigation: monitoring (+ pipeline), agents, models, configuration,
-#             knowledge, users, fine-tuning, playground
-# Pas de /chat
+# → http://localhost:5174/ops/
+# Navigation: monitoring, agents, models, configuration, knowledge, users, playground
 ```
 
-**Critere de completion**: Ops Console demarre, toutes les pages fonctionnent, Playground OK, pipeline monitoring OK, connecte a l'Engine.
+**Critere**: Ops Console demarre, toutes les pages fonctionnent, Playground OK, pipeline monitoring OK.
 
 ---
 
-## Phase 4 : Chat App
+## Phase 4 : Chat App (Vite + React)
 
-**Objectif**: App de chat legere, fonctionnelle, connectee a l'Engine via nginx.
+**Objectif**: App de chat legere, connectee a l'Engine.
 
-### 4.1 Setup Vite + React
+### 4.1 Creer les pages
 
-Deja fait en Phase 0. Ajouter les deps manquantes :
-- `react-router-dom` (navigation login → chat)
-- `framer-motion` (animations du chat, porte depuis l'ancien dashboard)
-- `@modularmind/ui` et `@modularmind/api-client`
+**Login** (`src/pages/Login.tsx`) :
+- Formulaire email + password → `api.auth.login()`
+- Redirect vers `/` apres login
 
-### 4.2 Creer les pages
-
-**Login page** (`src/pages/Login.tsx`):
-- Formulaire email + password
-- Appelle `api.auth.login()` — set le cookie HttpOnly
-- Redirige vers `/` (chat) apres login
-
-**Chat page** (`src/pages/Chat.tsx`):
-- Liste des conversations (sidebar gauche)
+**Chat** (`src/pages/Chat.tsx`) :
+- Liste conversations (sidebar)
 - Zone de chat (centre)
-- Selection d'agent via "+" (panel droit ou modal)
-- Streaming des reponses via SSE (Server-Sent Events)
+- Selection d'agent
+- Streaming SSE
 
-### 4.3 Porter la logique de chat
+### 4.2 Porter la logique de chat
 
 Reprendre depuis l'ancien dashboard :
-- `components/chat/ChatInput.tsx` → adapter (retirer les deps Next.js)
-- `components/chat/ExecutionActivity.tsx` → adapter
-- `components/chat/AgentMention.tsx` → adapter
-- `hooks/useChat.ts` → adapter pour Vite
-- `hooks/useExecution.ts` → adapter
+- `components/chat/ChatInput.tsx` → adapter (retirer deps Next.js)
+- `components/chat/ExecutionActivity.tsx`
+- `hooks/useChat.ts`, `hooks/useExecution.ts`
 
-### 4.4 Streaming SSE
-
-SSE (Server-Sent Events) remplace WebSocket. Le streaming V2 est 100%
-unidirectionnel (server → client) — SSE est plus simple, supporte l'auth
-cookie native, et offre la reconnexion automatique via `Last-Event-ID`.
+### 4.3 Streaming SSE
 
 ```typescript
 // apps/chat/src/hooks/useStreaming.ts
@@ -579,26 +341,15 @@ export function useStreaming(executionId: string | null) {
   useEffect(() => {
     if (!executionId) return;
     setStatus('streaming');
-
-    // SSE — plain HTTP GET, cookies sent automatically, reconnection built-in.
-    // No protocol switch (ws:/wss:), no nginx upgrade config needed.
     const es = new EventSource(`/api/v1/executions/${executionId}/stream`);
 
     es.addEventListener('tokens', (e) => {
-      setEvents(prev => [...prev, JSON.parse(e.data)]);
-    });
-    es.addEventListener('trace', (e) => {
       setEvents(prev => [...prev, JSON.parse(e.data)]);
     });
     es.addEventListener('complete', (e) => {
       setEvents(prev => [...prev, JSON.parse(e.data)]);
       setStatus('done');
       es.close();
-    });
-    es.addEventListener('error', (e) => {
-      if (es.readyState === EventSource.CLOSED) {
-        setStatus('done');
-      }
     });
 
     return () => es.close();
@@ -608,471 +359,254 @@ export function useStreaming(executionId: string | null) {
 }
 ```
 
-Note : SSE utilise le meme prefix `/api/v1/` que le REST, meme domaine.
-Les cookies HttpOnly sont envoyes automatiquement (requete HTTP standard).
-Pas besoin de `map $http_upgrade` nginx, pas de `proxy_read_timeout 86400s`.
-Le `Last-Event-ID` header gere le replay en cas de reconnexion.
-
-### 4.4b Pattern chemins relatifs (Chat)
-
-Le Chat est un SPA Vite qui tourne derriere nginx a la racine `/`.
-Tous les appels API utilisent des chemins relatifs via `@modularmind/api-client`
-avec `basePath: '/api/v1'`. Il n'y a **pas** besoin d'un endpoint `/api/config`
-car la configuration (URL de l'Engine) est implicite — tout passe par nginx
-sur la meme origine.
-
-```
-Chat app                    Nginx                    Engine
- fetch('/api/v1/agents')  ──►  location /api/ { }  ──►  :8000/api/v1/agents
- EventSource('/api/..')   ──►  location /api/ { }  ──►  :8000/api/v1/...  (SSE stream)
-```
-
-Pas de `NEXT_PUBLIC_API_URL`, pas de `.env` cote client, pas de configuration
-runtime. Le SPA n'a besoin de connaitre aucune URL absolue.
-
-### 4.5 Dockerfile avec turbo prune
-
-```dockerfile
-# apps/chat/Dockerfile
-FROM node:22-alpine AS pruner
-RUN corepack enable
-WORKDIR /app
-COPY . .
-RUN pnpm dlx turbo prune @modularmind/chat --docker
-
-FROM node:22-alpine AS installer
-RUN corepack enable
-WORKDIR /app
-COPY --from=pruner /app/out/json/ .
-RUN pnpm install --frozen-lockfile
-
-FROM installer AS builder
-COPY --from=pruner /app/out/full/ .
-RUN pnpm turbo build --filter=@modularmind/chat
-
-FROM nginx:alpine
-COPY --from=builder /app/apps/chat/dist /usr/share/nginx/html
-# SPA fallback
-RUN echo 'server { listen 80; location / { root /usr/share/nginx/html; try_files $uri /index.html; } }' > /etc/nginx/conf.d/default.conf
-EXPOSE 80
-```
-
-### 4.6 Verifier
+### 4.4 Verifier
 
 ```bash
-# Via nginx (integration complete)
-docker compose --profile chat up -d
-
-# http://localhost/ → Chat login
-# Login → chat → envoyer message → reponse streamee
-# Les cookies fonctionnent car meme domaine (via nginx)
+# Build et test derriere nginx
+pnpm build --filter=@modularmind/chat
+# Copier dist/ dans nginx
+# http://localhost/ → login → chat → message → streaming SSE
 ```
 
-**Critere de completion**: Chat app fonctionne derriere nginx, login OK, streaming SSE OK, cookies HttpOnly OK.
+**Critere**: Chat fonctionne, login OK, streaming SSE OK, cookies HttpOnly OK.
 
 ---
 
 ## Phase 5 : Memory Pipeline
 
-**Objectif**: Pipeline event-driven qui traite les memoires en background.
+**Objectif**: Pipeline event-driven a 2 etapes.
 
-### 5.1 Creer le module pipeline
+### 5.1 Implementer les handlers
 
-```
-engine/server/src/pipeline/
-├── __init__.py
-├── bus.py              # EventBus ABC
-├── redis_streams.py    # Redis Streams (backoff, DLQ, retry count)
-├── consumer.py         # Consumer runner (graceful shutdown, signal handling)
-├── health.py           # HTTP health endpoint (port 8001)
-└── handlers/
-    ├── __init__.py
-    ├── extractor.py    # Extraction de faits via LLM
-    ├── scorer.py       # Scoring importance/novelty/relevance
-    └── embedder.py     # Generation embeddings + upsert Qdrant + insert PG
-```
-
-### 5.2 Implementer l'EventBus + Redis Streams
-
-Voir spec.md sections 5.3 et 5.4 pour le code complet.
-
-Points cles implementes :
-- **Exponential backoff** sur perte de connexion Redis (1s → 30s max)
-- **Dead Letter Queue** (`memory:dlq`) apres 3 retries
-- **Graceful shutdown** via signal handlers (SIGTERM, SIGINT)
-- **Health endpoint** HTTP sur port 8001 pour Docker healthcheck
-- **`return_exceptions=True`** dans `asyncio.gather` pour isoler les crashes
-- **`stream_info()`** pour le monitoring depuis l'Ops Console
-
-### 5.3 Implementer les handlers
-
-**Extractor** :
-- Reprendre la logique de `memory/fact_extractor.py` existant
-- Input: messages bruts d'une conversation
-- Process: prompt LLM pour extraire faits, entites, relations
-- Config: respecter `FACT_EXTRACTION_ENABLED` (opt-in)
-
-**Scorer** :
-- Input: faits extraits
-- Process: LLM leger + heuristiques (importance, novelty, relevance)
-- Filter: score < 0.3 → XACK sans emitter (drop silencieux)
+**Extractor** (extract + score en une seule etape) :
+- Reprendre `memory/fact_extractor.py`
+- Le prompt LLM extrait les faits ET score leur importance (0-1)
+- Score < 0.3 → XACK sans emit (drop silencieux)
+- Publier dans `memory:extracted`
 
 **Embedder** :
-- Reprendre la logique de `memory/vector_store.py` existant
-- Input: faits scores
-- Process: embeddings → Qdrant + PostgreSQL (metadata)
-- Necessite: DATABASE_URL, QDRANT_URL, embedding model
+- Reprendre `memory/vector_store.py`
+- Generate embeddings → Qdrant + PostgreSQL
 
-### 5.4 Integrer au flow d'execution
+### 5.2 Integrer au flow d'execution
 
-Dans `workers/tasks.py`, modifier `process_ended_conversation()` :
-
+Dans `worker/tasks.py` :
 ```python
-# Remplacer l'appel direct a fact_extractor.extract_from_conversation()
-# par un publish dans le pipeline
-
 if settings.FACT_EXTRACTION_ENABLED:
-    from src.pipeline.bus import get_event_bus
-    bus = await get_event_bus()
     await bus.publish("memory:raw", {
         "conversation_id": str(conversation_id),
         "agent_id": agent_id,
-        "user_id": str(user_id),
         "messages": json.dumps(serialize_messages(messages)),
-        "timestamp": datetime.now(UTC).isoformat(),
     })
 ```
 
-Supprimer l'ancien appel synchrone a `FactExtractor` dans ce task.
+### 5.3 Consolidation periodique
 
-### 5.5 Consolidation periodique
+APScheduler job (toutes les 6h) :
+- Fusionner faits redondants
+- Appliquer decay temporel
+- Prune score < 0.1
 
-Ajouter dans Celery Beat :
+### 5.4 Tests
 
-```python
-# workers/celery_app.py
-beat_schedule = {
-    "memory-consolidation": {
-        "task": "memory.consolidate",
-        "schedule": crontab(minute=0, hour="*/6"),
-    },
-}
-```
+- Test unitaire de chaque handler (mock LLM, mock Qdrant)
+- Test DLQ : handler crash 3 fois → message dans `memory:dlq`
+- Test async : chat repond AVANT que le pipeline finisse
 
-### 5.6 Tests
-
-- Test unitaire de chaque handler (mock LLM, mock Qdrant, mock DB)
-- Test d'integration : publish dans `memory:raw` → verifier que Qdrant recoit l'embedding
-- Test DLQ : handler qui crash 3 fois → message dans `memory:dlq`
-- Test async : verifier que le chat a repondu AVANT que le pipeline finisse
-
-**Critere de completion**: Pipeline tourne, memoires traitees en background, DLQ fonctionne, consolidation toutes les 6h, monitoring accessible dans l'Ops.
+**Critere**: Pipeline tourne, memoires traitees en background, DLQ fonctionne.
 
 ---
 
-## Phase 6 : Studio
+## Phase 6 : Platform (Next.js full-stack)
 
-**Objectif**: Le Studio fonctionne et push vers l'Engine.
+**Objectif**: Le Platform fonctionne et les Engines peuvent sync.
 
-### 6.1 Copier le platform backend
-
-```bash
-cp -r OLD_REPO/backend/* NEW_REPO/studio/backend/
-```
-
-### 6.2 Adapter le shared Python
-
-Meme traitement qu'en Phase 1.2 : mettre a jour les imports vers `modularmind_shared`.
-
-Installer dans le Studio :
+### 6.1 Setup Next.js + Prisma
 
 ```bash
-cd studio/backend
-pip install -e ../../shared/
+cd platform
+npx create-next-app@latest . --typescript --tailwind --app --src-dir
+npm install prisma @prisma/client next-auth
+npx prisma init
 ```
 
-### 6.3 Adapter les Alembic migrations
+### 6.2 Schema Prisma
 
-```python
-# studio/backend/alembic/env.py
-context.configure(
-    version_table="studio_alembic_version",  # table separee
-)
+```prisma
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  engines   Engine[]
+  createdAt DateTime @default(now())
+}
+
+model Engine {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  apiKey    String   @unique
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  lastSeen  DateTime?
+  version   Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Agent {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  model       String
+  provider    String
+  config      Json
+  channel     String   @default("dev")  // dev | beta | stable
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Graph {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  nodes       Json
+  edges       Json
+  channel     String   @default("dev")
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
 ```
 
-Tester sur une DB vierge : `alembic upgrade head`.
+### 6.3 API Routes sync
 
-### 6.4 Adapter le sync (push au lieu de poll)
+```typescript
+// platform/src/api/sync/manifest/route.ts
+export async function GET(req: NextRequest) {
+  const apiKey = req.headers.get('X-Engine-Key');
+  const engine = await db.engine.findUnique({ where: { apiKey } });
+  if (!engine) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-D'abord, definir le modele `PendingSyncPush` pour la queue offline :
+  const agents = await db.agent.findMany({ where: { channel: 'stable' } });
+  const graphs = await db.graph.findMany({ where: { channel: 'stable' } });
 
-```python
-# studio/backend/src/sync/models.py
-
-from datetime import datetime, UTC
-from sqlalchemy import Column, String, Text, DateTime, Integer, Boolean
-from src.core.database import Base
-
-class PendingSyncPush(Base):
-    """Stores failed sync pushes for retry when an Engine is offline."""
-    __tablename__ = "pending_sync_pushes"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    engine_url = Column(String(512), nullable=False, index=True)
-    payload = Column(Text, nullable=False)  # JSON serialized SyncPayload
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
-    retry_count = Column(Integer, nullable=False, default=0)
-    last_retry_at = Column(DateTime(timezone=True), nullable=True)
-    resolved = Column(Boolean, nullable=False, default=False)
-    error = Column(Text, nullable=True)
+  return NextResponse.json({
+    version: computeVersion(agents, graphs),
+    agent_count: agents.length,
+    graph_count: graphs.length,
+  });
+}
 ```
 
-Ajouter une migration Alembic pour cette table :
+### 6.4 Pages Studio
 
-```bash
-cd studio/backend
-alembic revision --autogenerate -m "add pending_sync_pushes table"
-alembic upgrade head
-```
+Migrer depuis l'ancien `frontend/` :
+- Agent editor
+- Graph editor (React Flow)
+- Templates library
+- Releases (dev/beta/stable channels)
 
-Ensuite, implementer le service de push :
+### 6.5 Pages Admin
 
-```python
-# studio/backend/src/sync/service.py
+Nouvelles pages :
+- `/admin/clients` — gestion clients
+- `/admin/engines` — Engines enregistres, health, sync status
+- `/admin/settings`
 
-class SyncPushService:
-    """Push configs vers un Engine client."""
+### 6.6 Pages Vitrine
 
-    async def push_to_engine(self, engine_url: str, payload: SyncPayload):
-        signature = hmac_sign(payload, self.hmac_secret)
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    f"{engine_url}/api/v1/sync/push",
-                    json=payload.model_dump(),
-                    headers={
-                        "X-Sync-Signature": f"sha256={signature}",
-                        "X-Sync-Timestamp": str(int(time.time())),
-                        "X-Sync-Spec-Version": str(SPEC_VERSION),
-                    },
-                )
-                response.raise_for_status()
-                return SyncResult(success=True)
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            # Engine offline — queue for retry
-            await self._enqueue_retry(engine_url, payload)
-            return SyncResult(success=False, error=str(e), queued=True)
-
-    async def _enqueue_retry(self, engine_url: str, payload: SyncPayload):
-        """Store failed push in DB for retry. UI shows pending syncs."""
-        await self.db.execute(
-            insert(PendingSyncPush).values(
-                engine_url=engine_url,
-                payload=payload.model_dump_json(),
-                created_at=datetime.now(UTC),
-            )
-        )
-```
-
-### 6.5 Ajouter le pull de reports
-
-```python
-# studio/backend/src/sync/service.py
-
-async def pull_engine_report(self, engine_url: str) -> EngineReport:
-    signature = hmac_sign_get(self.hmac_secret)
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        status = await client.get(
-            f"{engine_url}/api/v1/report/status",
-            headers=self._hmac_headers(signature),
-        )
-        metrics = await client.get(
-            f"{engine_url}/api/v1/report/metrics",
-            headers=self._hmac_headers(signature),
-        )
-        pipeline = await client.get(
-            f"{engine_url}/api/v1/report/pipeline",
-            headers=self._hmac_headers(signature),
-        )
-        return EngineReport(
-            status=status.json(),
-            metrics=metrics.json(),
-            pipeline=pipeline.json(),
-        )
-```
-
-### 6.6 Copier le platform frontend
-
-```bash
-cp -r OLD_REPO/frontend/* NEW_REPO/studio/frontend/
-```
-
-Adapter pour utiliser `@modularmind/ui` si possible (optionnel, peut garder ses propres composants).
+Nouvelles pages :
+- `/` — landing page
+- `/features` — liste des features
+- `/pricing` — plans tarifaires
+- `/docs` — documentation
 
 ### 6.7 Verifier
 
-- Studio backend demarre
-- Studio frontend demarre
-- Push d'un agent vers l'Engine → l'Engine le recoit et l'applique
-- Push echoue (Engine offline) → stock en queue, visible dans l'UI
-- Pull de metrics depuis l'Engine → le Studio affiche les donnees
+- Platform demarre
+- Engine s'enregistre au demarrage → visible dans `/admin/engines`
+- Engine poll `/api/sync/manifest` → recoit configs
+- Engine envoie reports → visible dans `/admin/engines`
 
-**Critere de completion**: Studio fonctionnel, push/pull OK, gestion offline OK.
+**Critere**: Platform fonctionnel, sync pull OK, admin OK.
 
 ---
 
 ## Phase 7 : Docker & Deploiement
 
-**Objectif**: Tout fonctionne en Docker, pret pour un deploiement client.
+**Objectif**: Tout fonctionne en Docker.
 
 ### 7.1 Dockerfiles
 
-Tous les Dockerfiles utilisent **multi-stage builds** et le contexte depuis la racine :
-
-| Service | Dockerfile | Build strategy |
-|---------|-----------|---------------|
+| Service | Dockerfile | Strategy |
+|---------|-----------|----------|
 | `engine` | `engine/server/Dockerfile` | Python multi-stage, copie shared/ |
-| `chat` | `apps/chat/Dockerfile` | `turbo prune` → Vite build → nginx |
-| `ops` | `apps/ops/Dockerfile` | `turbo prune` → Next.js standalone |
-| `studio-backend` | `studio/backend/Dockerfile` | Python multi-stage, copie shared/ |
-| `studio-frontend` | `studio/frontend/Dockerfile` | `turbo prune` → Next.js standalone |
+| `worker` | Meme image que engine | `command: python -m src.worker.runner` |
+| `chat` | Build Vite → fichiers statiques | Monte dans nginx |
+| `ops` | Build Vite → fichiers statiques | Monte dans nginx `/ops/` |
+| `platform` | `platform/Dockerfile` | Next.js standalone |
 
-### 7.2 Docker Compose final
+### 7.2 Nginx
 
-Voir spec.md section 9 pour le compose complet.
+Un seul nginx sert tout cote client :
+- Chat static files a `/`
+- Ops static files a `/ops/`
+- Proxy vers Engine a `/api/`
+- Pas de container dedie pour Chat/Ops
 
-Points cles :
-- **YAML anchors** (`x-engine-env: &engine-env`, `x-engine-depends: &engine-depends`) — elimine la duplication d'env vars entre les 4 services Engine
-- **Single image build** — `modularmind/engine:latest` est build une seule fois par le service `engine`, puis reutilise par `celery-worker`, `celery-beat` et `pipeline-worker` via `image:` (pas de `build:` duplique)
-- **Context: `..`** (racine du monorepo) pour les builds apps TS
-- **Nginx single domain** — Chat, Ops et Engine sur la meme origine, SSE streaming sans config speciale
-- **Healthchecks** sur tous les services (Engine, Celery, pipeline-worker)
-- **Profils** : `chat`, `ops`, `ollama` pour le deploiement flexible
+### 7.3 Build des apps statiques
 
-**Pourquoi ces optimisations :**
-- Avant : 4x le meme `build:` dans le compose → Docker buildait 4 images identiques
-- Avant : env vars (DATABASE_URL, REDIS_URL, etc.) copiees dans chaque service → risque de desync
-- Apres : 1 build, 1 image, anchors YAML → compose plus lisible et plus maintenable
+```bash
+# Build Chat et Ops
+pnpm build --filter=@modularmind/chat
+pnpm build --filter=@modularmind/ops
 
-### 7.3 Docker Compose Studio
-
-```yaml
-# docker/docker-compose.studio.yml
-services:
-  studio-db:
-    image: postgres:16-alpine
-    volumes: [studio-postgres-data:/var/lib/postgresql/data]
-    environment:
-      POSTGRES_DB: modularmind_studio
-      POSTGRES_PASSWORD: ${STUDIO_DB_PASSWORD}
-
-  studio-backend:
-    build:
-      context: ..
-      dockerfile: studio/backend/Dockerfile
-    depends_on: [studio-db]
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:${STUDIO_DB_PASSWORD}@studio-db:5432/modularmind_studio
-
-  studio-frontend:
-    build:
-      context: ..
-      dockerfile: studio/frontend/Dockerfile
-
-  nginx:
-    image: nginx:alpine
-    volumes: [./nginx/studio.conf:/etc/nginx/conf.d/default.conf]
-    ports: ["${STUDIO_PORT:-3000}:80"]
-
-volumes:
-  studio-postgres-data:
+# Copier dans un dossier pour nginx
+cp -r apps/chat/dist/ docker/static/chat/
+cp -r apps/ops/dist/ docker/static/ops/
 ```
 
-### 7.4 Makefile
+Alternative : multi-stage Dockerfile nginx qui build et copie.
 
-```makefile
-# ── Dev ──
-dev:              docker compose -f docker/docker-compose.dev.yml up -d
-dev-chat:         pnpm dev --filter=@modularmind/chat
-dev-ops:          pnpm dev --filter=@modularmind/ops
-dev-studio:       pnpm dev --filter=@modularmind/studio-frontend
+### 7.4 Test E2E
 
-# ── Build ──
-build:            pnpm build
-build-images:     docker compose -f docker/docker-compose.yml build
-
-# ── Deploy client ──
-deploy-client:    docker compose -f docker/docker-compose.yml --profile chat --profile ops up -d
-deploy-engine:    docker compose -f docker/docker-compose.yml up -d
-
-# ── Deploy studio ──
-deploy-studio:    docker compose -f docker/docker-compose.studio.yml up -d
-
-# ── Tests ──
-test-engine:      cd engine/server && pytest
-test-shared:      cd shared && pytest
-test-ts:          pnpm test
-test:             make test-shared && make test-engine && make test-ts
-
-# ── DB ──
-migrate-engine:   cd engine/server && alembic upgrade head
-migrate-studio:   cd studio/backend && alembic upgrade head
-
-# ── Utils ──
-logs:             docker compose -f docker/docker-compose.yml logs -f
-health:           curl -sf http://localhost/health | python -m json.tool
-pipeline-status:  curl -sf http://localhost/api/v1/internal/monitoring/pipeline | python -m json.tool
-```
-
-### 7.5 Test E2E
-
-Scenario complet :
-
-1. `make deploy-client` → tout demarre (engine + chat + ops + infra + nginx)
+1. `docker compose up -d` → tout demarre
 2. `curl http://localhost/health` → OK
-3. Aller sur `http://localhost/ops/setup` → creer le premier user
-4. Aller sur `http://localhost/` → login → chat → envoyer message → reponse streamee
-5. Aller sur `http://localhost/ops/monitoring` → verifier metriques + pipeline
-6. Aller sur `http://localhost/ops/playground` → tester un agent
-7. Depuis le Studio, push un agent → verifier qu'il apparait dans le chat et l'ops
+3. `http://localhost/ops/setup` → creer premier user
+4. `http://localhost/` → login → chat → message → streaming
+5. `http://localhost/ops/monitoring` → metriques + pipeline
+6. Depuis le Platform, publier un agent → Engine sync en < 5 min
 
-**Critere de completion**: Deploiement one-command OK. Scenario E2E passe. Cookies fonctionnent (single domain).
+**Critere**: Deploiement one-command OK. 7 containers max. E2E passe.
 
 ---
 
 ## Phase 8 : Nettoyage & Documentation
 
-### 8.1 Mettre a jour CLAUDE.md
+### 8.1 CLAUDE.md
 
-Reecrire completement pour la V2 :
-- Nouvelle structure (studio, engine, apps, packages, shared)
-- Nouveaux patterns (pipeline EventBus, sync push, single domain)
-- Nouvelles commandes (turbo, pnpm, make)
-- Nouvelles conventions (modularmind_shared imports, basePath /ops)
+Reecrire pour V2 (nouvelle structure, nouveaux patterns).
 
 ### 8.2 Supprimer le code mort
 
-- Verifier qu'aucun ancien pattern ne traine (sys.path hacks, platform-client, sync-service refs, WebSocket refs)
-- Supprimer les fichiers non utilises (dont `executions/websocket.py` si pas deja fait en Phase 1.8b)
-- Nettoyer les imports
-- `ruff check` sur tout le Python
-- `pnpm lint` sur tout le TypeScript
+- Aucun Celery ref
+- Aucun WebSocket ref
+- Aucun platform-client ref
+- Aucun sync-service ref
+- `ruff check` + `pnpm lint`
 
 ### 8.3 README
 
-- README principal avec architecture V2
-- README par composant (engine, chat, ops, studio)
-- Guide de deploiement client (voir spec section 13)
-- Guide de deploiement studio
+- README principal
+- Guide deploiement client
+- Guide deploiement Platform
 
-### 8.4 Stabilisation et archive
-
-**NE PAS archiver immediatement.**
+### 8.4 Stabilisation
 
 1. Deployer V2 en production
-2. Garder l'ancien repo deployable pendant **2 semaines minimum**
-3. Valider : zero regression, performances OK, pipeline stable
-4. Seulement apres : tag `v1-archived` et passer en read-only
+2. Garder V1 deployable pendant 2 semaines
+3. Valider zero regression
+4. Archiver V1
 
 ---
 
@@ -1080,26 +614,25 @@ Reecrire completement pour la V2 :
 
 ```
 Phase 0 (Setup)           ██░░░░░░░░  Fondations
-Phase 1 (Engine)          ████████░░  Le plus critique (+ smoke test)
+Phase 1 (Engine)          ████████░░  Le plus critique (Celery→Redis Streams, SSE)
 Phase 2 (Packages)        ██░░░░░░░░  Prerequis pour Phase 3+4
-Phase 3 (Ops)             ████░░░░░░  Copier + adapter + playground + pipeline monitoring
-Phase 4 (Chat)            ████░░░░░░  Nouveau code (Vite), scope limite
-Phase 5 (Memory Pipeline) ████░░░░░░  Nouveau code (Redis Streams), DLQ, health
-Phase 6 (Studio)          ███░░░░░░░  Copier + adapter sync push + offline queue
-Phase 7 (Docker)          ███░░░░░░░  Integration finale (turbo prune, nginx, E2E)
-Phase 8 (Cleanup)         ██░░░░░░░░  Polish + stabilisation 2 semaines
+Phase 3 (Ops)             ███░░░░░░░  Vite + React (plus de Next.js)
+Phase 4 (Chat)            ███░░░░░░░  Vite + React, scope limite
+Phase 5 (Pipeline)        ███░░░░░░░  2 etapes, integre au worker
+Phase 6 (Platform)        ████░░░░░░  Next.js full-stack (vitrine + studio + admin)
+Phase 7 (Docker)          ███░░░░░░░  Integration finale, nginx static
+Phase 8 (Cleanup)         ██░░░░░░░░  Stabilisation 2 semaines
 ```
 
-**Phases parallelisables** :
+**Parallelisable** :
 - Phase 3 (Ops) et Phase 4 (Chat) en parallele apres Phase 2
-- Phase 5 (Pipeline) en parallele avec Phase 3/4/6
-- Phase 6 (Studio) des que Phase 1 est terminee
+- Phase 5 (Pipeline) en parallele avec Phase 3/4
+- Phase 6 (Platform) des que Phase 1 est terminee
 
 ```
 Timeline:
 Phase 0 ──► Phase 1 ──► Phase 2 ──┬──► Phase 3 (Ops)     ──┐
-             (+ smoke)             ├──► Phase 4 (Chat)     ──┤
+             (Engine)              ├──► Phase 4 (Chat)     ──┤
                                    └──► Phase 5 (Pipeline)  ─┤──► Phase 7 ──► Phase 8
-                        Phase 1 ──────► Phase 6 (Studio)  ───┘     (E2E)    (2 semaines
-                                                                              stabilisation)
+                        Phase 1 ──────► Phase 6 (Platform) ──┘     (E2E)    (stabilisation)
 ```
