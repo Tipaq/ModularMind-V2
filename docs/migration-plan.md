@@ -171,21 +171,19 @@ await bus.publish("tasks:executions", {
 import httpx
 
 class SyncService:
-    async def poll_platform(self):
-        """Appele par APScheduler toutes les 5 min."""
-        async with httpx.AsyncClient() as client:
-            manifest = await client.get(
-                f"{self.platform_url}/api/sync/manifest",
-                headers={"X-Engine-Key": self.api_key},
-            )
-            remote_version = manifest.json().get("version", 0)
-            if remote_version > self.local_version:
-                configs = await client.get(
-                    f"{self.platform_url}/api/sync/configs",
-                    headers={"X-Engine-Key": self.api_key},
-                )
-                await self.apply_configs(configs.json())
-                self.local_version = remote_version
+    async def poll(self) -> bool:
+        """Check platform for updates. Returns True if configs were updated."""
+        if not self._client:
+            return False
+        resp = await self._client.get("/api/sync/manifest")
+        resp.raise_for_status()
+        manifest = resp.json()
+        remote_version = manifest.get("version", 0)
+        if remote_version <= self._local_version:
+            return False
+        # TODO: Fetch individual changed configs and apply
+        self._local_version = remote_version
+        return True
 ```
 
 ### 1.6 Ajouter les endpoints report

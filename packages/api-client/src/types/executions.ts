@@ -10,7 +10,7 @@ export interface Execution {
 }
 
 export interface ExecutionStreamEvent {
-  type: "token" | "trace" | "step" | "tokens" | "complete" | "error";
+  type: "tokens" | "trace" | "step" | "complete" | "error";
   id?: string;
   data?: unknown;
 }

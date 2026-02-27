@@ -24,7 +24,7 @@ export function useStreaming(url: string) {
 
     source.onopen = () => setIsConnected(true);
 
-    source.addEventListener("token", (e) => {
+    source.addEventListener("tokens", (e) => {
       setEvents((prev) => [...prev, JSON.parse(e.data)]);
     });
 

@@ -5,11 +5,11 @@ export interface SystemMetrics {
   uptime_seconds: number;
 }
 
-export interface CeleryStatus {
-  workers: number;
-  active_tasks: number;
-  queued_tasks: number;
-  queues: Record<string, number>;
+export interface WorkerStatus {
+  running: boolean;
+  streams: string[];
+  scheduler_jobs: number;
+  uptime_seconds: number;
 }
 
 export interface PipelineHealth {

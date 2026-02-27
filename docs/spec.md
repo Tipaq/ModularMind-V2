@@ -330,9 +330,11 @@ ModularMind-V2/
 │   │       ├── schemas/
 │   │       │   ├── agents.py
 │   │       │   ├── graphs.py
+│   │       │   ├── collections.py
 │   │       │   └── sync.py
 │   │       └── protocols/
-│   │           └── runtime.py
+│   │           ├── runtime.py
+│   │           └── sync.py
 │   └── tests/
 │
 ├── docker/
@@ -847,63 +849,66 @@ Client API TypeScript partage entre Chat et Ops. Auth par HttpOnly cookies.
 ```typescript
 // packages/api-client/src/client.ts
 
-let refreshPromise: Promise<void> | null = null;
+export class ApiClient {
+  private baseUrl: string;
+  private refreshing: Promise<void> | null = null;
 
-export function createApiClient(config: { basePath: string; onUnauthorized?: () => void }) {
-  async function request<T>(method: string, path: string, options?: RequestOptions): Promise<T> {
-    const res = await fetch(`${config.basePath}${path}`, {
-      method,
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: options?.body ? JSON.stringify(options.body) : undefined,
-    });
-
-    if (res.status === 401) {
-      if (!refreshPromise) {
-        refreshPromise = fetch(`${config.basePath}/auth/refresh`, {
-          method: 'POST', credentials: 'include',
-        }).then(r => {
-          if (!r.ok) { config.onUnauthorized?.(); throw new Error('Session expired'); }
-        }).finally(() => { refreshPromise = null; });
-      }
-      await refreshPromise;
-      return request(method, path, options);
-    }
-
-    if (!res.ok) throw new ApiError(res.status, await res.text());
-    return res.json();
+  constructor(baseUrl: string = '/api/v1') {
+    this.baseUrl = baseUrl;
   }
 
-  return {
-    auth: createAuthApi(request),
-    conversations: createConversationsApi(request),
-    executions: createExecutionsApi(request),
-    agents: createAgentsApi(request),
-    models: createModelsApi(request),
-    rag: createRagApi(request),
-    memory: createMemoryApi(request),
-    monitoring: createMonitoringApi(request),
-    settings: createSettingsApi(request),
-    admin: createAdminApi(request),
-    mcp: createMcpApi(request),
-    playground: createPlaygroundApi(request),
-  };
+  async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    const { method = 'GET', body, headers = {}, signal } = options;
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: body ? JSON.stringify(body) : undefined,
+      signal,
+    });
+
+    if (response.status === 401) {
+      await this.refresh();
+      const retry = await fetch(`${this.baseUrl}${path}`, {
+        method, credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: body ? JSON.stringify(body) : undefined, signal,
+      });
+      if (!retry.ok) throw new ApiError(retry.status, await retry.text());
+      return retry.json();
+    }
+
+    if (!response.ok) throw new ApiError(response.status, await response.text());
+    return response.json();
+  }
+
+  private async refresh(): Promise<void> {
+    if (this.refreshing) return this.refreshing;
+    this.refreshing = fetch(`${this.baseUrl}/auth/refresh`, {
+      method: 'POST', credentials: 'include',
+    }).then(r => {
+      if (!r.ok) window.location.href = '/login';
+    }).finally(() => { this.refreshing = null; });
+    return this.refreshing;
+  }
+
+  get<T>(path: string, signal?: AbortSignal) { return this.request<T>(path, { signal }); }
+  post<T>(path: string, body?: unknown) { return this.request<T>(path, { method: 'POST', body }); }
+  patch<T>(path: string, body?: unknown) { return this.request<T>(path, { method: 'PATCH', body }); }
+  delete<T>(path: string) { return this.request<T>(path, { method: 'DELETE' }); }
 }
 ```
 
 Utilisation :
 ```typescript
 // apps/chat/src/lib/api.ts
-export const api = createApiClient({
-  basePath: '/api/v1',
-  onUnauthorized: () => window.dispatchEvent(new CustomEvent('auth:unauthorized')),
-});
+import { ApiClient } from '@modularmind/api-client';
+export const api = new ApiClient('/api/v1');
 
 // apps/ops/src/lib/api.ts  (meme chose, base: '/ops' gere par vite config)
-export const api = createApiClient({
-  basePath: '/api/v1',
-  onUnauthorized: () => window.dispatchEvent(new CustomEvent('auth:unauthorized')),
-});
+import { ApiClient } from '@modularmind/api-client';
+export const api = new ApiClient('/api/v1');
 ```
 
 ### 7.2 @modularmind/ui
