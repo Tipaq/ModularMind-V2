@@ -2,7 +2,7 @@
 Shared Redis utilities.
 
 Centralizes Redis URL construction and provides a shared synchronous
-connection pool for Celery workers and logging handlers.
+connection pool for worker processes and logging handlers.
 """
 
 import redis as sync_redis
@@ -25,7 +25,7 @@ def build_redis_url() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Synchronous connection pool (for Celery workers / logging)
+# Synchronous connection pool (for worker processes / logging)
 # ---------------------------------------------------------------------------
 
 _sync_pool: sync_redis.ConnectionPool | None = None
@@ -34,7 +34,7 @@ _sync_pool: sync_redis.ConnectionPool | None = None
 def get_sync_redis_pool() -> sync_redis.ConnectionPool:
     """Get or create a shared synchronous Redis connection pool.
 
-    Used by Celery tasks and the RedisLogHandler to avoid creating
+    Used by worker tasks and the RedisLogHandler to avoid creating
     a new connection per call.
     """
     global _sync_pool

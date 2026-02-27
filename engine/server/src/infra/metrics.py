@@ -42,12 +42,12 @@ execution_duration_seconds = Histogram(
 )
 
 # ---------------------------------------------------------------------------
-# Celery metrics
+# Stream queue metrics
 # ---------------------------------------------------------------------------
 
-celery_tasks_queued = Gauge(
-    "modularmind_celery_tasks_queued",
-    "Number of tasks in the Celery queue",
+stream_tasks_pending = Gauge(
+    "modularmind_stream_tasks_pending",
+    "Number of pending tasks in Redis Streams",
 )
 
 # ---------------------------------------------------------------------------
@@ -165,11 +165,11 @@ _previous_model_names: set[str] = set()
 
 
 # ---------------------------------------------------------------------------
-# Cross-process LLM metrics recording (called from Celery workers)
+# Cross-process LLM metrics recording (called from worker processes)
 # ---------------------------------------------------------------------------
 
 def record_llm_latency(duration_s: float) -> None:
-    """Record LLM latency from callback (Celery worker process)."""
+    """Record LLM latency from callback (worker process)."""
     try:
         from src.infra.redis_utils import get_sync_redis_client
         r = get_sync_redis_client()
@@ -180,7 +180,7 @@ def record_llm_latency(duration_s: float) -> None:
 
 
 def record_llm_tps(tps: float) -> None:
-    """Record tokens/sec from callback (Celery worker process)."""
+    """Record tokens/sec from callback (worker process)."""
     try:
         from src.infra.redis_utils import get_sync_redis_client
         r = get_sync_redis_client()
@@ -191,7 +191,7 @@ def record_llm_tps(tps: float) -> None:
 
 
 def record_llm_ttft(ttft_s: float) -> None:
-    """Record TTFT from callback (Celery worker process)."""
+    """Record TTFT from callback (worker process)."""
     try:
         from src.infra.redis_utils import get_sync_redis_client
         r = get_sync_redis_client()
@@ -247,9 +247,8 @@ async def snapshot_metrics(r) -> None:
         _last_cpu_percent = cpu
         mem = await asyncio.to_thread(psutil.virtual_memory)
 
-        queued_default = await r.llen(settings.CELERY_DEFAULT_QUEUE)
-        queued_exec = await r.llen(settings.CELERY_EXECUTION_QUEUE)
-        queued_models = await r.llen(settings.CELERY_MODELS_QUEUE)
+        queued_exec = await r.xlen("tasks:executions")
+        queued_models = await r.xlen("tasks:models")
 
         _, latency = await check_redis_health()
         active_slots = await r.scard("scheduler:active_slots")
@@ -259,10 +258,9 @@ async def snapshot_metrics(r) -> None:
         pipe.zadd("metrics:memory", {json.dumps({"v": mem.percent}): now})
         pipe.zadd("metrics:tasks", {json.dumps({
             "active": active_slots,
-            "queued": queued_default + queued_exec + queued_models,
+            "queued": queued_exec + queued_models,
         }): now})
         pipe.zadd("metrics:queue", {json.dumps({
-            "default": queued_default,
             "executions": queued_exec,
             "models": queued_models,
         }): now})
@@ -327,7 +325,7 @@ async def snapshot_metrics(r) -> None:
         except Exception as e:
             logger.debug("VRAM/Ollama polling failed: %s", e)
 
-        # --- Drain LLM metrics from Celery workers ---
+        # --- Drain LLM metrics from workers ---
         try:
             latencies, tps_vals, ttft_vals = await _drain_llm_metrics(r)
             if latencies:
@@ -411,13 +409,11 @@ async def evaluate_alerts(r) -> None:
                 })
                 await r.setex(akey, ALERT_COOLDOWN_SECONDS, "1")
 
-        # Workers
+        # Workers — check Redis Streams consumer groups
         workers_count = 0
         try:
-            from src.workers.celery_app import celery_app
-            inspect = celery_app.control.inspect(timeout=2.0)
-            ping_result = await asyncio.to_thread(inspect.ping)
-            workers_count = len(ping_result) if isinstance(ping_result, dict) else 0
+            groups = await r.xinfo_groups("tasks:executions")
+            workers_count = sum(g.get("consumers", 0) for g in groups) if groups else 0
         except Exception:
             pass
 
@@ -428,7 +424,7 @@ async def evaluate_alerts(r) -> None:
                 alerts.append({
                     "id": str(uuid.uuid4()), "metric": "workers_min",
                     "threshold": min_workers, "actual": workers_count,
-                    "message": f"Only {workers_count} Celery worker(s) online (minimum: {min_workers})",
+                    "message": f"Only {workers_count} stream consumer(s) online (minimum: {min_workers})",
                     "severity": "critical", "triggered_at": now,
                 })
                 await r.setex(akey, ALERT_COOLDOWN_SECONDS, "1")
@@ -447,12 +443,13 @@ async def evaluate_alerts(r) -> None:
                 })
                 await r.setex(akey, ALERT_COOLDOWN_SECONDS, "1")
 
-        # Queue depth
-        from src.infra.config import get_settings
-        settings = get_settings()
+        # Queue depth from Redis Streams
         total_queued = 0
-        for q in [settings.CELERY_DEFAULT_QUEUE, settings.CELERY_EXECUTION_QUEUE, settings.CELERY_MODELS_QUEUE]:
-            total_queued += await r.llen(q)
+        for stream_name in ["tasks:executions", "tasks:models"]:
+            try:
+                total_queued += await r.xlen(stream_name)
+            except Exception:
+                pass
         q_max = thresholds.get("queue_depth_max", 50)
         if total_queued > q_max:
             akey = "monitoring:alert_active:queue_depth_max"
