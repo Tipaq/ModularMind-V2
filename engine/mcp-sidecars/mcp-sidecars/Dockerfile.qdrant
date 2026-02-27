@@ -1,0 +1,13 @@
+# MCP Qdrant Sidecar
+# Extends mcp-proxy with mcp-server-qdrant (Python).
+# Connects to existing Qdrant instance — no separate vector DB needed.
+# Includes fastembed for local embeddings (no external API key required).
+
+FROM ghcr.io/sparfenyuk/mcp-proxy:latest
+
+USER root
+RUN /app/.venv/bin/python -m ensurepip && \
+    /app/.venv/bin/python -m pip install --no-cache-dir mcp-server-qdrant fastembed
+
+# Reset to non-root user for security
+USER nobody

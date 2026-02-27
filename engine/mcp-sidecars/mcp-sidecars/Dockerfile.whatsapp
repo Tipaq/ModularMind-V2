@@ -1,0 +1,28 @@
+# MCP WhatsApp Sidecar
+# Extends node-proxy with git (required by @mseep/whatsapp-mcp-ts dependencies)
+# and pre-installs the WhatsApp MCP package for faster container startup.
+#
+# The package has no `bin` field, so npx can't run it directly.
+# Node.js --experimental-strip-types doesn't work inside node_modules,
+# so we use `tsx` to run the TypeScript entry point.
+
+FROM modularmind/mcp-node-proxy:latest
+
+USER root
+
+# git is required by npm dependencies of @mseep/whatsapp-mcp-ts
+RUN apk add --no-cache git
+
+# Pre-install the package + tsx (TypeScript executor)
+# --ignore-scripts avoids postinstall issues in constrained environments
+RUN mkdir -p /app/whatsapp && cd /app/whatsapp \
+    && npm init -y > /dev/null 2>&1 \
+    && npm install @mseep/whatsapp-mcp-ts tsx --ignore-scripts 2>&1 \
+    && chown -R 65534:65534 /app/whatsapp
+
+# Create writable directories for WhatsApp auth data and SQLite DB
+RUN mkdir -p /app/whatsapp/auth_info /app/whatsapp/data \
+    && chown -R 65534:65534 /app/whatsapp/auth_info /app/whatsapp/data
+
+USER nobody
+WORKDIR /app/whatsapp

@@ -1,0 +1,16 @@
+# MCP Proxy + Node.js
+# Extends mcp-proxy with Node.js for npm-based MCP servers (Filesystem, Puppeteer, etc.).
+# Used as the default image for all npm catalog entries.
+
+FROM ghcr.io/sparfenyuk/mcp-proxy:latest
+
+USER root
+
+# Install Node.js and npm (required for npx to run npm-based MCP servers)
+RUN apk add --no-cache nodejs npm
+
+# Create writable npm cache directory for the nobody user (uid 65534)
+RUN mkdir -p /.npm && chown 65534:65534 /.npm
+
+# Reset to non-root user for security
+USER nobody

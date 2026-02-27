@@ -1,0 +1,24 @@
+# MCP Puppeteer Sidecar
+# Extends mcp-node-proxy with Chromium for browser automation.
+# Note: @modelcontextprotocol/server-puppeteer is deprecated upstream
+# but still functional — no maintained replacement exists yet.
+
+FROM modularmind/mcp-node-proxy:latest
+
+USER root
+
+# Install Chromium and required dependencies for headless browser
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Tell Puppeteer to use the system-installed Chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
+# Reset to non-root user for security
+USER nobody
