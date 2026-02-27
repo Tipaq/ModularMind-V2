@@ -8,6 +8,7 @@ const navItems = [
   { to: "/models", label: "Models" },
   { to: "/knowledge", label: "Knowledge" },
   { to: "/users", label: "Users" },
+  { to: "/playground", label: "Playground" },
   { to: "/configuration", label: "Configuration" },
 ];
 

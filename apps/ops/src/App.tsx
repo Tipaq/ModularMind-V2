@@ -11,6 +11,7 @@ import Graphs from "./pages/Graphs";
 import Models from "./pages/Models";
 import Knowledge from "./pages/Knowledge";
 import Users from "./pages/Users";
+import Playground from "./pages/Playground";
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/models" element={<Models />} />
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/playground" element={<Playground />} />
         </Route>
       </Routes>
     </BrowserRouter>

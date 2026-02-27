@@ -622,7 +622,7 @@ class RedisStreamBus(EventBus):
 
                 for stream_name, entries in messages:
                     for msg_id, data in entries:
-                        retry_count = int(data.get(b"_retry_count", 0))
+                        retry_count = int(data.get("_retry_count", 0))
                         try:
                             await handler(data)
                             await self.redis.xack(stream, group, msg_id)
@@ -632,14 +632,14 @@ class RedisStreamBus(EventBus):
                             })
                             if retry_count >= max_retries:
                                 await self.redis.xadd(DLQ_STREAM, {
-                                    b"original_stream": stream,
-                                    b"original_id": msg_id,
-                                    b"error": f"{retry_count} retries exhausted",
-                                    b"data": str(data),
+                                    "original_stream": stream,
+                                    "original_id": msg_id,
+                                    "error": f"{retry_count} retries exhausted",
+                                    "data": str(data),
                                 })
                                 await self.redis.xack(stream, group, msg_id)
                             else:
-                                data[b"_retry_count"] = str(retry_count + 1)
+                                data["_retry_count"] = str(retry_count + 1)
                                 await self.redis.xadd(stream, data)
                                 await self.redis.xack(stream, group, msg_id)
 
@@ -972,13 +972,17 @@ Pas de containers dedies — un seul nginx sert tout.
 ```nginx
 # docker/nginx/client.conf
 
+upstream engine {
+    server engine:8000;
+}
+
 server {
     listen 80;
     server_name _;
 
     # ── Engine API (REST + SSE) ──
     location /api/ {
-        proxy_pass http://engine:8000;
+        proxy_pass http://engine;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -990,11 +994,11 @@ server {
     }
 
     location /health {
-        proxy_pass http://engine:8000;
+        proxy_pass http://engine;
     }
 
     location /webhooks/ {
-        proxy_pass http://engine:8000;
+        proxy_pass http://engine;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
@@ -1031,8 +1035,8 @@ x-engine-env: &engine-env
   QDRANT_URL: http://qdrant:6333
   OLLAMA_BASE_URL: http://ollama:11434
   SECRET_KEY: ${SECRET_KEY}
-  PLATFORM_URL: ${PLATFORM_URL}
-  ENGINE_API_KEY: ${ENGINE_API_KEY}
+  PLATFORM_URL: ${PLATFORM_URL:-}
+  ENGINE_API_KEY: ${ENGINE_API_KEY:-}
 
 x-engine-depends: &engine-depends
   db: { condition: service_healthy }
@@ -1140,9 +1144,16 @@ services:
     environment:
       DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@db:5432/modularmind_platform
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      NEXTAUTH_URL: ${PLATFORM_URL}
+      NEXTAUTH_URL: ${PLATFORM_URL:-http://localhost:3000}
     depends_on:
       db: { condition: service_healthy }
+
+  nginx:
+    image: nginx:alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./nginx/platform.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [platform]
 
   db:
     image: postgres:16-alpine
@@ -1150,7 +1161,7 @@ services:
     environment:
       POSTGRES_DB: modularmind_platform
       POSTGRES_USER: ${DB_USER:-modularmind}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-modularmind}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-modularmind}"]
       interval: 10s

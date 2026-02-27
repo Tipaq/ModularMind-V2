@@ -164,7 +164,7 @@ await bus.publish("tasks:executions", {
    - `service.py` : poll le Platform, compare versions, applique configs
    - `router.py` : `POST /sync/trigger` (webhook du Platform)
 2. Supprimer l'ancien module `manifest/`
-3. Le scheduler appelle `sync_poll_platform()` toutes les 5 min
+3. Le scheduler appelle `sync_platform()` toutes les 5 min
 
 ```python
 # engine/server/src/sync/service.py
