@@ -112,7 +112,7 @@ C'est le changement le plus important de la Phase 1.
 - Supprimer `celery[redis]` du `pyproject.toml`
 - Supprimer `engine/server/src/workers/celery_app.py`
 - Supprimer les references a `celery_app` dans tout le code
-- Ajouter `apscheduler[redis]` au `pyproject.toml`
+- Ajouter `apscheduler>=3.10` au `pyproject.toml`
 
 **1.3b Creer le worker Redis Streams :**
 
@@ -190,7 +190,17 @@ class SyncService:
 
 ### 1.6 Ajouter les endpoints report
 
-Creer `engine/server/src/report/` (voir spec section 4.4).
+Creer `engine/server/src/report/` (voir spec section 4.4) :
+
+```
+report/
+├── __init__.py
+├── router.py    # GET /report/{status,metrics,models,pipeline}
+└── service.py   # Collecte les metriques depuis infra (Redis, DB, Qdrant, models)
+```
+
+Le scheduler APScheduler appelle `report_to_platform()` toutes les 15 min
+pour POST les metriques vers `{PLATFORM_URL}/api/reports`.
 
 ### 1.7 Adapter les Alembic migrations
 
@@ -481,7 +491,7 @@ model Graph {
 ### 6.3 API Routes sync
 
 ```typescript
-// platform/src/api/sync/manifest/route.ts
+// platform/src/app/api/sync/manifest/route.ts
 export async function GET(req: NextRequest) {
   const apiKey = req.headers.get('X-Engine-Key');
   const engine = await db.engine.findUnique({ where: { apiKey } });

@@ -127,7 +127,7 @@ ModularMind-V2/
 │   │   │       ├── clients/
 │   │   │       ├── engines/          # Engines enregistres + health + sync status
 │   │   │       └── settings/
-│   │   ├── api/                      # API Routes (Next.js)
+│   │   ├── app/api/                   # API Routes (Next.js App Router)
 │   │   │   ├── auth/[...nextauth]/   # NextAuth
 │   │   │   ├── sync/
 │   │   │   │   ├── manifest/route.ts # GET — Engine poll ici
@@ -168,7 +168,8 @@ ModularMind-V2/
 │   │   │   │   ├── rate_limit.py
 │   │   │   │   ├── sse.py            # SSE response utility
 │   │   │   │   ├── url_validation.py
-│   │   │   │   └── event_bus.py      # EventBus ABC + Redis Streams impl
+│   │   │   │   ├── event_bus.py      # EventBus ABC
+│   │   │   │   └── redis_streams.py  # Redis Streams impl (backoff, DLQ)
 │   │   │   │
 │   │   │   ├── auth/                 # JWT auth, user roles
 │   │   │   ├── setup/               # First-run setup wizard
@@ -331,7 +332,7 @@ ModularMind-V2/
 │   │       │   ├── graphs.py
 │   │       │   └── sync.py
 │   │       └── protocols/
-│   │           └── event_bus.py
+│   │           └── runtime.py
 │   └── tests/
 │
 ├── docker/
@@ -742,31 +743,32 @@ if __name__ == "__main__":
 # engine/server/src/worker/scheduler.py
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.jobstores.redis import RedisJobStore
+from src.infra.config import settings
 
-async def start_scheduler(bus):
-    """APScheduler — remplace Celery Beat."""
-    scheduler = AsyncIOScheduler(
-        jobstores={"default": RedisJobStore(host="redis", port=6379)},
-    )
+def create_scheduler() -> AsyncIOScheduler:
+    """APScheduler — remplace Celery Beat.
+
+    Utilise le memory jobstore par defaut (suffisant avec un seul worker).
+    """
+    scheduler = AsyncIOScheduler()
 
     # Memory consolidation every 6 hours
     scheduler.add_job(
         memory_consolidation, "interval", hours=6, id="memory-consolidation",
     )
-    # Sync poll every 5 minutes
-    scheduler.add_job(
-        sync_poll_platform, "interval", minutes=5, id="sync-poll",
-    )
+    # Sync poll (configurable, default 5 min)
+    if settings.PLATFORM_URL:
+        scheduler.add_job(
+            sync_poll_platform, "interval",
+            seconds=settings.SYNC_INTERVAL_SECONDS, id="sync-poll",
+        )
     # Report to Platform every 15 minutes
-    scheduler.add_job(
-        report_to_platform, "interval", minutes=15, id="report-push",
-    )
+    if settings.PLATFORM_URL:
+        scheduler.add_job(
+            report_to_platform, "interval", minutes=15, id="report-push",
+        )
 
-    scheduler.start()
-    # Keep alive
-    while True:
-        await asyncio.sleep(3600)
+    return scheduler
 ```
 
 ---
@@ -1155,7 +1157,7 @@ packages:
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", ".next/standalone/**"]
     },
     "dev": { "persistent": true, "cache": false },
     "lint": { "dependsOn": ["^build"] },
