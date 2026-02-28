@@ -6,7 +6,7 @@ startup then cached in memory.  Restart the process to pick up edits.
 """
 
 import logging
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 _LAYERS_DIR = Path(__file__).parent / "layers"
 
 
-@lru_cache(maxsize=None)
+@cache
 def load_layer(filename: str) -> str:
     """Load a layer file by name (relative to ``layers/`` dir).
 

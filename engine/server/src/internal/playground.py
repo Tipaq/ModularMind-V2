@@ -66,8 +66,9 @@ async def playground_completion(
             detail=f"Unknown provider: {body.provider}",
         )
 
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
     from src.llm import get_llm_provider
-    from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
     # Get API key from secrets store
     kwargs: dict = {}

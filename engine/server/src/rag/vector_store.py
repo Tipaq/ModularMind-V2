@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 from qdrant_client import models
 
 from src.infra.qdrant import (
-    qdrant_factory,
     qdrant_errors_total,
     qdrant_search_duration,
     qdrant_upsert_duration,

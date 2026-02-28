@@ -39,6 +39,7 @@ async def health_check() -> dict[str, Any]:
     # Check database
     try:
         from sqlalchemy import text
+
         from src.infra.database import async_session_maker
 
         start = time.monotonic()
@@ -143,6 +144,7 @@ async def readiness_probe() -> dict[str, Any]:
     # Check database connection
     try:
         from sqlalchemy import text
+
         from src.infra.database import async_session_maker
 
         async with async_session_maker() as session:

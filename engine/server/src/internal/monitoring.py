@@ -5,11 +5,10 @@ System metrics, worker status, streaming state,
 scheduler status, infrastructure health, and metrics history.
 """
 
-import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import psutil
@@ -201,9 +200,9 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
     Aggregates system metrics, worker status, streaming state,
     scheduler status, and infrastructure health into a single response.
     """
+    from src.executions.scheduler import fair_scheduler
     from src.infra.gpu import detect_gpu
     from src.infra.redis import check_redis_health, get_redis_client
-    from src.executions.scheduler import fair_scheduler
 
     # === System ===
     cpu_percent = psutil.cpu_percent(interval=None)
@@ -233,9 +232,10 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
 
     # === Worker ===
     try:
-        from src.infra.redis_streams import RedisStreamBus
-        from src.infra.redis import get_redis_pool
         import redis.asyncio as aioredis
+
+        from src.infra.redis import get_redis_pool
+        from src.infra.redis_streams import RedisStreamBus
         bus = RedisStreamBus(aioredis.Redis(connection_pool=get_redis_pool()))
         exec_info = await bus.stream_info("tasks:executions")
         model_info = await bus.stream_info("tasks:models")
@@ -255,8 +255,8 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
         r = await _get_rc()
         if r:
             try:
-                exec_depth = await r.xlen("tasks:executions")
-                model_depth = await r.xlen("tasks:models")
+                _exec_depth = await r.xlen("tasks:executions")  # noqa: F841
+                _model_depth = await r.xlen("tasks:models")  # noqa: F841
             finally:
                 await r.aclose()
     except Exception:
@@ -331,7 +331,7 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
         logger.debug("Alert summary fetch failed: %s", e)
 
     return MonitoringResponse(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         uptime_seconds=int(time.time() - get_start_time()),
         system=system,
         worker=worker_data,
@@ -538,7 +538,7 @@ async def get_agent_metrics(user: CurrentUser) -> list[AgentMetricsItem]:
                 ).label("error_count"),
             )
             .where(
-                ExecutionRun.started_at >= datetime.now(timezone.utc) - timedelta(hours=24),
+                ExecutionRun.started_at >= datetime.now(UTC) - timedelta(hours=24),
                 ExecutionRun.agent_id.isnot(None),
                 ExecutionRun.completed_at.isnot(None),
             )

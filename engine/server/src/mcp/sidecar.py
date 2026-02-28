@@ -21,7 +21,7 @@ import logging
 import uuid
 from typing import Any
 
-from src.mcp.catalog import MCPCatalogEntry, get_catalog_entry
+from src.mcp.catalog import get_catalog_entry
 
 logger = logging.getLogger(__name__)
 

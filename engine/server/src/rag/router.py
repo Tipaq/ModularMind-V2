@@ -5,22 +5,20 @@ API endpoints for RAG operations including collection management,
 document upload with processing, and semantic search.
 """
 
-import base64
 import logging
 import os
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Response, UploadFile, File
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile
 from sqlalchemy import update
 
-from src.embedding import get_embedding_provider
-
 from src.auth import CurrentUser, CurrentUserGroups, UserRole
+from src.embedding import get_embedding_provider
 from src.infra.config import get_settings
 from src.infra.database import DbSession
 
 from .models import DocumentStatus, RAGCollection, RAGDocument, RAGScope
-from .processor import SUPPORTED_EXTENSIONS, MAX_FILE_SIZE
+from .processor import MAX_FILE_SIZE, SUPPORTED_EXTENSIONS
 from .repository import RAGRepository
 from .schemas import (
     ChunkResponse,

@@ -8,11 +8,10 @@ tables with row-level locking to prevent race conditions.
 import logging
 from typing import Any
 
+from modularmind_shared.utils import compute_config_hash
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from modularmind_shared.utils import compute_config_hash
 
 from .models import AgentConfigVersion, GraphConfigVersion
 

@@ -7,7 +7,7 @@ Rate-limited per conversation and globally via Redis INCR.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import redis.asyncio as aioredis
@@ -74,7 +74,7 @@ class EphemeralAgentFactory:
         if mcp_server_ids:
             routing_metadata["mcp_server_ids"] = mcp_server_ids
         routing_metadata["ephemeral"] = True
-        routing_metadata["created_at"] = datetime.now(timezone.utc).isoformat()
+        routing_metadata["created_at"] = datetime.now(UTC).isoformat()
         routing_metadata["conversation_id"] = conversation_id
 
         config = AgentConfig(

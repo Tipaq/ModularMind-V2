@@ -10,9 +10,8 @@ import sys
 import uuid
 from pathlib import Path
 
-from src.mcp import MCPRegistry
-
 from src.infra.config import get_settings
+from src.mcp import MCPRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +231,7 @@ async def _warm_mcp_clients() -> None:
     reconnect lazily when actually used.
     """
     import asyncio
+
     from src.mcp.client import MCPClientError
 
     registry = get_mcp_registry()

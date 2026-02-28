@@ -248,8 +248,9 @@ class FactExtractor:
 
                 if not is_duplicate:
                     # Create new memory entry via repository
-                    from .repository import MemoryRepository
                     from src.infra.database import async_session_maker
+
+                    from .repository import MemoryRepository
 
                     async with async_session_maker() as db:
                         repo = MemoryRepository(db)
@@ -280,9 +281,10 @@ class FactExtractor:
 
         Returns total facts processed.
         """
+        from sqlalchemy import select
+
         from src.conversations.models import Conversation, ConversationMessage
         from src.infra.database import async_session_maker
-        from sqlalchemy import select
 
         async with async_session_maker() as db:
             # Load conversation

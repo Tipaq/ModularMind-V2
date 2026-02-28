@@ -69,9 +69,9 @@ class AgentContextBuilder:
     ) -> str:
         """Retrieve memory context for the agent."""
         try:
+            from src.memory.manager import MemoryManager
             from src.memory.models import MemoryScope
             from src.memory.repository import MemoryRepository
-            from src.memory.manager import MemoryManager
 
             embedding_provider = self._get_embedding_provider()
             if embedding_provider is None:
@@ -136,8 +136,8 @@ class AgentContextBuilder:
     def _get_embedding_provider():
         """Get the embedding provider (reuses tasks.py singleton pattern)."""
         try:
-            from src.infra.config import get_settings
             from src.embedding import get_embedding_provider
+            from src.infra.config import get_settings
 
             settings = get_settings()
             return get_embedding_provider(

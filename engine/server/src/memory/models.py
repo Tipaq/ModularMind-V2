@@ -4,12 +4,12 @@ Memory models.
 SQLAlchemy models for agent memory storage.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -58,7 +58,7 @@ class MemoryEntry(Base):
     last_accessed: Mapped[datetime | None] = mapped_column(nullable=True)
 
     meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC).replace(tzinfo=None))
 
     __table_args__ = (
         Index("ix_memory_scope_tier", "scope", "scope_id", "tier"),

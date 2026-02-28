@@ -9,8 +9,8 @@ from datetime import UTC, datetime
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy import Enum as _SQLEnum
+from sqlalchemy import ForeignKey, Index, String, Text
 
 
 def SQLEnum(enum_class, **kwargs):

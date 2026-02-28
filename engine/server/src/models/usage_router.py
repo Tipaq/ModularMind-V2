@@ -6,7 +6,7 @@ Available to all authenticated users.
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from src.auth import CurrentUser

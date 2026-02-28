@@ -16,7 +16,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.executions.models import ExecutionRun
-from src.fine_tuning.models import ABTestExperiment, ExperimentStatus, utcnow
+from src.fine_tuning.models import ABTestExperiment, ExperimentStatus
 
 logger = logging.getLogger(__name__)
 

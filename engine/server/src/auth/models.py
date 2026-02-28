@@ -6,16 +6,16 @@ SQLAlchemy models for authentication and authorization.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 if TYPE_CHECKING:
     from src.groups.models import UserGroupMember
 
-from sqlalchemy import String
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infra.database import Base
@@ -63,16 +63,16 @@ class User(Base):
         SQLEnum(UserSource, values_callable=lambda x: [e.value for e in x]),
         default=UserSource.LOCAL,
     )
-    platform_user_id: Mapped[Optional[str]] = mapped_column(
+    platform_user_id: Mapped[str | None] = mapped_column(
         String(36), unique=True, nullable=True, index=True
     )
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC).replace(tzinfo=None))
     updated_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
-        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
     )
 
-    group_memberships: Mapped[list["UserGroupMember"]] = relationship(
+    group_memberships: Mapped[list[UserGroupMember]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 

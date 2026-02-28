@@ -16,7 +16,7 @@ from src.domain_config import get_config_provider
 from src.infra.database import DbSession
 from src.infra.schemas import PaginatedResponse
 
-from .models import Connector, ConnectorType
+from .models import Connector
 
 logger = logging.getLogger(__name__)
 

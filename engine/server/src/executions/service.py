@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -17,14 +17,13 @@ from langchain_core.messages import HumanMessage
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.graph_engine import GraphCompiler, create_initial_state
-from src.llm import get_llm_provider
-
-from src.mcp.service import get_mcp_registry
-
 from src.domain_config import get_config_provider
+from src.graph_engine import GraphCompiler, create_initial_state
 from src.infra.config import get_settings
-from src.infra.constants import KNOWN_PROVIDERS as _KNOWN_PROVIDERS, OUTPUT_TRUNCATION_LENGTH
+from src.infra.constants import KNOWN_PROVIDERS as _KNOWN_PROVIDERS
+from src.infra.constants import OUTPUT_TRUNCATION_LENGTH
+from src.llm import get_llm_provider
+from src.mcp.service import get_mcp_registry
 
 from .models import ExecutionRun, ExecutionStatus, ExecutionStep, ExecutionType
 from .schemas import ExecutionCreate
@@ -235,7 +234,6 @@ class ExecutionService:
         )
 
         # Store stream task ID for tracking
-        from sqlalchemy import update
         await self.db.execute(
             update(ExecutionRun)
             .where(ExecutionRun.id == execution.id)
@@ -379,7 +377,7 @@ class ExecutionService:
 
         # Update status
         execution.status = ExecutionStatus.RUNNING
-        execution.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        execution.started_at = datetime.now(UTC).replace(tzinfo=None)
         await self.db.flush()
 
         try:
@@ -393,7 +391,7 @@ class ExecutionService:
 
             # Mark complete
             execution.status = ExecutionStatus.COMPLETED
-            execution.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            execution.completed_at = datetime.now(UTC).replace(tzinfo=None)
 
             yield {
                 "type": "complete",
@@ -410,7 +408,7 @@ class ExecutionService:
             logger.error("Execution %s timed out after %ds", execution_id, settings.MAX_EXECUTION_TIMEOUT)
             execution.status = ExecutionStatus.FAILED
             execution.error_message = f"Execution timed out after {settings.MAX_EXECUTION_TIMEOUT}s"
-            execution.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            execution.completed_at = datetime.now(UTC).replace(tzinfo=None)
 
             yield {
                 "type": "complete",
@@ -427,7 +425,7 @@ class ExecutionService:
             logger.exception("Execution %s failed: %s", execution_id, e)
             execution.status = ExecutionStatus.FAILED
             execution.error_message = str(e)
-            execution.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            execution.completed_at = datetime.now(UTC).replace(tzinfo=None)
 
             yield {
                 "type": "complete",
@@ -466,7 +464,7 @@ class ExecutionService:
             _prefix, _rest = agent.model_id.split(":", 1)
             provider_name, model_name = (_prefix.lower(), _rest) if _prefix.lower() in _KNOWN_PROVIDERS else ("ollama", agent.model_id)
         else:
-            provider_name, model_name = "ollama", agent.model_id
+            provider_name, _ = "ollama", agent.model_id
         llm_provider = get_llm_provider(provider_name)
 
         # Create compiler and compile agent graph
@@ -489,7 +487,7 @@ class ExecutionService:
             node_type="agent",
             status=ExecutionStatus.RUNNING,
             input_data={"prompt": execution.input_prompt},
-            started_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            started_at=datetime.now(UTC).replace(tzinfo=None),
         )
         self.db.add(step)
         await self.db.flush()
@@ -502,7 +500,7 @@ class ExecutionService:
             "node_type": "agent",
             "status": "running",
             "output": None,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Execute
@@ -516,7 +514,7 @@ class ExecutionService:
 
         # Update step
         step.status = ExecutionStatus.COMPLETED
-        step.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        step.completed_at = datetime.now(UTC).replace(tzinfo=None)
         step.duration_ms = int((step.completed_at - step.started_at).total_seconds() * 1000)
         step.output_data = {"response": response}
 
@@ -531,7 +529,7 @@ class ExecutionService:
             "node_type": "agent",
             "status": "completed",
             "output": {"response": response[:OUTPUT_TRUNCATION_LENGTH]},
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     async def execute_graph(
@@ -573,8 +571,8 @@ class ExecutionService:
                     node_type="node",
                     status=ExecutionStatus.COMPLETED,
                     output_data=output if isinstance(output, dict) else {"value": str(output)},
-                    started_at=datetime.now(timezone.utc).replace(tzinfo=None),
-                    completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    started_at=datetime.now(UTC).replace(tzinfo=None),
+                    completed_at=datetime.now(UTC).replace(tzinfo=None),
                 )
                 self.db.add(step)
 
@@ -586,7 +584,7 @@ class ExecutionService:
                     "node_type": "node",
                     "status": "completed",
                     "output": output if isinstance(output, dict) else {"value": str(output)[:OUTPUT_TRUNCATION_LENGTH]},
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
 
         # Get final state

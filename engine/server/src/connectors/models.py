@@ -9,8 +9,7 @@ from enum import Enum
 from secrets import token_urlsafe
 from uuid import uuid4
 
-from sqlalchemy import String, Text
-from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 

@@ -145,8 +145,8 @@ async def deploy_from_catalog(body: MCPDeployFromCatalogRequest, user: CurrentUs
     This spins up a mcp-proxy container that wraps the stdio-based MCP server
     as a Streamable HTTP endpoint, then registers it in the MCPRegistry.
     """
-    from src.mcp import MCPServerConfig, MCPTransport, get_catalog_entry
     from src.infra.secrets import secrets_store
+    from src.mcp import MCPServerConfig, MCPTransport, get_catalog_entry
 
     entry = get_catalog_entry(body.catalog_id)
     if not entry:
@@ -317,8 +317,8 @@ async def create_mcp_server(body: MCPServerCreateRequest, user: CurrentUser) -> 
             detail=f"Invalid MCP server URL: {url_error}",
         )
 
-    from src.mcp import MCPServerConfig, MCPTransport
     from src.infra.secrets import secrets_store
+    from src.mcp import MCPServerConfig, MCPTransport
 
     server_id = str(uuid.uuid4())
 

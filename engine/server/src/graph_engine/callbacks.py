@@ -8,9 +8,10 @@ import logging
 import re
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -19,8 +20,8 @@ from langchain_core.outputs import LLMResult
 
 from src.infra.metrics import (
     llm_request_duration_seconds,
-    llm_ttft_seconds,
     llm_tokens_per_second,
+    llm_ttft_seconds,
     record_llm_latency,
     record_llm_tps,
     record_llm_ttft,
@@ -239,7 +240,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     def _publish(self, event: dict[str, Any]) -> None:
         """Publish a trace event, never raising."""
         try:
-            event.setdefault("timestamp", datetime.now(timezone.utc).isoformat())
+            event.setdefault("timestamp", datetime.now(UTC).isoformat())
             event.setdefault("execution_id", self.execution_id)
             self.publish_fn(event)
         except Exception:

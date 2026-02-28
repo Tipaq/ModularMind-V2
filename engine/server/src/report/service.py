@@ -4,8 +4,6 @@ import logging
 import time
 from typing import Any
 
-import httpx
-
 from src.infra.config import settings
 
 logger = logging.getLogger(__name__)
@@ -70,9 +68,10 @@ class ReportService:
 
     async def get_pipeline(self) -> dict[str, Any]:
         """Memory pipeline stream info (pending, lag, DLQ)."""
-        from src.infra.redis_streams import RedisStreamBus
-        from src.infra.redis import get_redis_pool
         import redis.asyncio as aioredis
+
+        from src.infra.redis import get_redis_pool
+        from src.infra.redis_streams import RedisStreamBus
 
         bus = RedisStreamBus(aioredis.Redis(connection_pool=get_redis_pool()))
         return {

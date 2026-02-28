@@ -11,7 +11,6 @@ import logging
 from dataclasses import dataclass
 
 from qdrant_client import models
-from qdrant_client.models import UpdateStatus
 
 from src.infra.tokenizer import tokenize_bm25
 from src.infra.vector_store import BaseHybridVectorStore

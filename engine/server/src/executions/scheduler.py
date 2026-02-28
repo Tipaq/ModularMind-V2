@@ -11,7 +11,6 @@ Key layout:
 """
 
 import logging
-from typing import Literal
 
 import redis.asyncio as redis
 
@@ -123,8 +122,8 @@ class FairScheduler:
         """
         from sqlalchemy import select as sa_select
 
-        from src.infra.database import async_session_maker
         from src.executions.models import ExecutionRun, ExecutionStatus
+        from src.infra.database import async_session_maker
 
         terminal_statuses = {
             ExecutionStatus.COMPLETED,

@@ -6,7 +6,7 @@ Provider testing and model pull endpoints.
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from src.auth import CurrentUser, RequireOwner

@@ -1,6 +1,6 @@
 """User group database models."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func

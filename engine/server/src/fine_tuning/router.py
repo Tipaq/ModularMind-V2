@@ -35,7 +35,6 @@ from .schemas import (
     ExperimentResponse,
     JobCreate,
     JobListResponse,
-    JobProgress,
     JobResponse,
 )
 from .service import FineTuningService

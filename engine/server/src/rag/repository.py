@@ -15,7 +15,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import RAGChunk, RAGCollection, RAGDocument, RAGScope
-from .vector_store import QdrantRAGVectorStore, RAGSearchResult as QdrantSearchResult
+from .vector_store import QdrantRAGVectorStore
 
 if TYPE_CHECKING:
     from src.rag.reranker import BaseReranker

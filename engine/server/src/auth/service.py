@@ -6,8 +6,7 @@ Handles user authentication, token generation, and password hashing.
 
 import asyncio
 import logging
-import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import bcrypt
@@ -15,10 +14,10 @@ import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.groups.models import UserGroup, UserGroupMember
 from src.infra.config import get_settings
 from src.infra.query_utils import escape_like
 
-from src.groups.models import UserGroup, UserGroupMember
 from .models import User, UserRole
 from .schemas import RefreshTokenData, TokenData, UserCreate
 
@@ -185,7 +184,7 @@ class AuthService:
         Returns:
             JWT token string
         """
-        expire = datetime.now(timezone.utc) + timedelta(
+        expire = datetime.now(UTC) + timedelta(
             seconds=settings.JWT_EXPIRE_SECONDS
         )
         payload: dict[str, Any] = {
@@ -221,7 +220,7 @@ class AuthService:
                 email=payload["email"],
                 role=UserRole(payload["role"]),
                 groups=payload.get("groups", []),
-                exp=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
+                exp=datetime.fromtimestamp(payload["exp"], tz=UTC),
             )
         except (jwt.InvalidTokenError, KeyError) as e:
             logger.warning("Token verification failed: %s", e)
@@ -236,7 +235,7 @@ class AuthService:
         """
         from uuid import uuid4
 
-        expire = datetime.now(timezone.utc) + timedelta(
+        expire = datetime.now(UTC) + timedelta(
             seconds=settings.REFRESH_TOKEN_EXPIRE_SECONDS
         )
         payload: dict[str, Any] = {
@@ -272,7 +271,7 @@ class AuthService:
                 email=payload["email"],
                 jti=payload["jti"],
                 token_type=payload["type"],
-                exp=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
+                exp=datetime.fromtimestamp(payload["exp"], tz=UTC),
             )
         except (jwt.InvalidTokenError, KeyError) as e:
             logger.warning("Refresh token verification failed: %s", e)

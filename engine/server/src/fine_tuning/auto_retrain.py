@@ -121,9 +121,9 @@ class AutoRetrainChecker:
     async def _trigger_retrain(self, agent_info: dict) -> str | None:
         """Create dataset and trigger fine-tuning job for an agent."""
         # Lazy import to avoid circular dependency
+        from src.fine_tuning.models import JobProvider
         from src.fine_tuning.schemas import DatasetCreate, DatasetFilters, JobCreate
         from src.fine_tuning.service import FineTuningService
-        from src.fine_tuning.models import JobProvider
 
         service = FineTuningService(self.db)
         agent_id = agent_info["agent_id"]

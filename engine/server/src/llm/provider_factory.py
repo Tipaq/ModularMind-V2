@@ -9,12 +9,12 @@ so we reuse OpenAIProvider with a custom base_url.
 
 import logging
 
-from .base import LLMProvider
+from src.infra.config import get_settings
+
 from .anthropic import AnthropicProvider
+from .base import LLMProvider
 from .ollama import OllamaProvider
 from .openai import OpenAIProvider
-
-from src.infra.config import get_settings
 
 logger = logging.getLogger(__name__)
 

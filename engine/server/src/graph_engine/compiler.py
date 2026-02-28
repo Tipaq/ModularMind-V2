@@ -9,7 +9,8 @@ import asyncio
 import json as json_module
 import logging
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -166,7 +167,7 @@ class GraphCompiler:
                 non_loop_sources = [
                     e for e in graph.edges
                     if e.target == node.id
-                    and nodes_by_id.get(e.source, None) is not None
+                    and nodes_by_id.get(e.source) is not None
                     and nodes_by_id[e.source].type != "loop"
                     and e.source not in branch_node_ids
                 ]
@@ -301,6 +302,7 @@ class GraphCompiler:
 
                 if _lc_tools and _tool_executor:
                     from src.infra.config import get_settings
+
                     from .tool_loop import run_tool_loop, try_bind_tools
                     llm_with_tools, tools_bound = try_bind_tools(llm, _lc_tools)
                     if tools_bound:

@@ -9,7 +9,7 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -20,6 +20,7 @@ from src.infra.rate_limit import RateLimitDependency
 
 from .feedback import FeedbackCreate, FeedbackResponse
 from .models import ExecutionRun
+from .scheduler import fair_scheduler
 from .schemas import (
     ExecutionCreate,
     ExecutionCreatedResponse,
@@ -27,7 +28,6 @@ from .schemas import (
     ExecutionResponse,
     ExecutionStatus,
 )
-from .scheduler import fair_scheduler
 from .service import ExecutionService
 
 logger = logging.getLogger(__name__)
@@ -168,8 +168,8 @@ async def create_agent_execution(
         ab_model_override: str | None = None
         if settings.AB_TESTING_ENABLED:
             try:
-                from src.fine_tuning.ab_testing import ABTestRouter
                 from src.domain_config.provider import get_config_provider
+                from src.fine_tuning.ab_testing import ABTestRouter
 
                 config = get_config_provider()
                 agent_config = await config.get_agent_config(agent_id)

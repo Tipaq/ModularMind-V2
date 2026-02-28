@@ -6,7 +6,7 @@ Delegates vector search to QdrantMemoryVectorStore.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import func, select, update
@@ -150,7 +150,7 @@ class MemoryRepository:
             .where(MemoryEntry.id == entry_id)
             .values(
                 access_count=MemoryEntry.access_count + 1,
-                last_accessed=datetime.now(timezone.utc),
+                last_accessed=datetime.now(UTC),
             )
         )
         await self.db.flush()

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from src.auth import CurrentUser, RequireAdmin
 from src.infra.config import get_settings
-from src.infra.secrets import secrets_store, PROVIDER_KEY_MAP
+from src.infra.secrets import PROVIDER_KEY_MAP, secrets_store
 
 logger = logging.getLogger(__name__)
 settings = get_settings()

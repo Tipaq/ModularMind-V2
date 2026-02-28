@@ -6,9 +6,8 @@ Manages global conversation context and per-agent sub-contexts with
 session affinity for follow-up routing.
 """
 
-import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 
@@ -61,11 +60,11 @@ class HierarchicalContextManager:
         ctx = existing or SubContext(
             agent_id=agent_id,
             messages=[],
-            last_interaction=datetime.now(timezone.utc),
+            last_interaction=datetime.now(UTC),
             execution_count=0,
         )
         ctx.messages.extend(messages)
-        ctx.last_interaction = datetime.now(timezone.utc)
+        ctx.last_interaction = datetime.now(UTC)
         ctx.execution_count += 1
 
         pipe = self._redis.pipeline()

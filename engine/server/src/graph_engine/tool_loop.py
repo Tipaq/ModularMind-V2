@@ -15,7 +15,7 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
@@ -80,7 +80,7 @@ async def run_tool_loop(
                     "input_preview": _truncate(
                         json.dumps(tool_args, default=str, ensure_ascii=False), 200,
                     ),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 })
 
             logger.info("Tool call [%d]: %s(%s)", iteration + 1, tool_name, _truncate(json.dumps(tool_args, default=str), 100))
@@ -90,7 +90,7 @@ async def run_tool_loop(
                     tool_executor.execute(tool_name, tool_args),
                     timeout=tool_call_timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Tool '%s' timed out after %.1fs", tool_name, tool_call_timeout)
                 result_text = f"Tool error: '{tool_name}' timed out after {tool_call_timeout:.0f}s"
             except Exception as e:
@@ -107,7 +107,7 @@ async def run_tool_loop(
                     "tool_name": tool_name,
                     "output_preview": _truncate(result_text, 300),
                     "duration_ms": duration_ms,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 })
 
             msgs.append(ToolMessage(content=result_text, tool_call_id=call_id))

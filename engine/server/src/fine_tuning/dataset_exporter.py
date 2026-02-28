@@ -18,11 +18,11 @@ import tiktoken
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain_config.provider import get_config_provider
-from src.infra.config import get_settings
 from src.conversations.models import Conversation, ConversationMessage, MessageRole
+from src.domain_config.provider import get_config_provider
 from src.executions.feedback import ExecutionFeedback
 from src.executions.models import ExecutionRun, ExecutionStatus
+from src.infra.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()

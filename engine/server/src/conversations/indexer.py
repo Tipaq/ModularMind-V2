@@ -8,7 +8,7 @@ collection for cross-conversation search (à la Claude).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from src.embedding import get_embedding_provider
@@ -73,7 +73,7 @@ class ConversationIndexer:
                 "timestamp": (
                     message.created_at.isoformat()
                     if hasattr(message, "created_at") and message.created_at
-                    else datetime.now(timezone.utc).isoformat()
+                    else datetime.now(UTC).isoformat()
                 ),
             },
         )
@@ -87,9 +87,10 @@ class ConversationIndexer:
 
         Uses scope=CROSS_CONVERSATION so it's searchable across conversations.
         """
+        from sqlalchemy import select
+
         from src.conversations.models import Conversation, ConversationMessage
         from src.infra.database import async_session_maker
-        from sqlalchemy import select
 
         async with async_session_maker() as db:
             # Load conversation
@@ -147,9 +148,10 @@ class ConversationIndexer:
 
     async def reindex_conversation(self, conversation_id: str) -> int:
         """Bulk reindex all messages for a conversation. Returns count indexed."""
+        from sqlalchemy import select
+
         from src.conversations.models import Conversation, ConversationMessage
         from src.infra.database import async_session_maker
-        from sqlalchemy import select
 
         count = 0
         async with async_session_maker() as db:
@@ -179,8 +181,9 @@ class ConversationIndexer:
     async def _generate_summary(self, messages) -> str | None:
         """Generate a conversation summary via LLM."""
         try:
-            from src.llm.provider_factory import LLMProviderFactory
             from langchain_core.messages import HumanMessage
+
+            from src.llm.provider_factory import LLMProviderFactory
 
             formatted = []
             for msg in messages:

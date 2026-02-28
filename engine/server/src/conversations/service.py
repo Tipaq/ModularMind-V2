@@ -5,7 +5,7 @@ Business logic for conversation management and message handling.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -245,7 +245,7 @@ class ConversationService:
         await self.db.execute(
             update(Conversation)
             .where(Conversation.id == conversation_id)
-            .values(updated_at=datetime.now(timezone.utc).replace(tzinfo=None))
+            .values(updated_at=datetime.now(UTC).replace(tzinfo=None))
         )
 
         await self.db.flush()

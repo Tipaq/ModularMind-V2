@@ -1,6 +1,13 @@
 """MCP (Model Context Protocol) integration."""
 
-from .catalog import CatalogSecret, MCPCatalogEntry, MCPCategory, get_catalog, get_catalog_entry, get_free_catalog_entries
+from .catalog import (
+    CatalogSecret,
+    MCPCatalogEntry,
+    MCPCategory,
+    get_catalog,
+    get_catalog_entry,
+    get_free_catalog_entries,
+)
 from .client import MCPClient, MCPClientError, MCPConnectionError, MCPToolError
 from .registry import MCPRegistry
 from .schemas import (

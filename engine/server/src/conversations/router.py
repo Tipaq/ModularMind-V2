@@ -10,10 +10,10 @@ from fastapi import APIRouter, HTTPException, Query
 
 from src.auth import CurrentUser
 from src.domain_config import get_config_provider
-from src.infra.config import get_settings
-from src.infra.database import DbSession
 from src.executions.schemas import ExecutionCreate
 from src.executions.service import ExecutionService
+from src.infra.config import get_settings
+from src.infra.database import DbSession
 
 from .models import MessageRole
 from .schemas import (
@@ -50,8 +50,9 @@ async def search_conversations(
 
     allowed_group_user_ids: list[str] = []
     if request.include_group:
-        from src.groups.models import UserGroup, UserGroupMember
         from sqlalchemy import select
+
+        from src.groups.models import UserGroup, UserGroupMember
 
         # Find groups where user is a member
         group_query = (
@@ -551,8 +552,9 @@ async def admin_list_conversations(
     search: str | None = None,
 ) -> ConversationListResponse:
     """List ALL conversations (admin moderation view)."""
-    from src.auth.models import User
     from sqlalchemy import select as sa_select
+
+    from src.auth.models import User
 
     service = ConversationService(db)
     conversations_with_counts, total = await service.list_all_conversations(

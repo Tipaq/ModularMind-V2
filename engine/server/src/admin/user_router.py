@@ -6,7 +6,7 @@ All endpoints require admin (level 1+) role.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
@@ -23,7 +23,7 @@ from src.infra.database import DbSession
 from src.infra.token_pricing import estimate_cost, get_provider, parse_model_name
 from src.memory.models import MemoryEntry, MemoryScope, MemoryTier
 from src.memory.vector_store import QdrantMemoryVectorStore
-from src.rag.models import RAGCollection, RAGScope
+from src.rag.models import RAGScope
 from src.rag.repository import RAGRepository
 
 logger = logging.getLogger(__name__)
@@ -208,7 +208,7 @@ async def _get_user_or_404(db: AsyncSession, user_id: str) -> User:
 
 def _get_range_start(range_param: str) -> datetime | None:
     """Convert range string to start datetime."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     if range_param == "24h":
         return now - timedelta(hours=24)
     elif range_param == "7d":
@@ -593,7 +593,7 @@ async def get_user_token_usage(
     daily_filter = list(base_filter)
     # For "all" range, cap daily data to 90 days
     if range == "all":
-        ninety_days_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=90)
+        ninety_days_ago = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=90)
         daily_filter.append(ExecutionRun.completed_at >= ninety_days_ago)
 
     daily_rows = await db.execute(

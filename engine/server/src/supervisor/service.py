@@ -12,12 +12,11 @@ Redis Streams worker via the router after this service returns.
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
 
 import redis.asyncio as aioredis
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain_config.provider import ConfigProvider
@@ -250,7 +249,7 @@ class SuperSupervisorService:
             "agent_id": decision.agent_id,
             "graph_id": decision.graph_id,
             "confidence": decision.confidence,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     # =========================================================================
@@ -356,7 +355,9 @@ class SuperSupervisorService:
     ) -> list[Any]:
         """Compose layered LLM messages for routing (identity + task)."""
         from src.prompt_layers import (
-            LayerType, PromptComposer, PromptLayer,
+            LayerType,
+            PromptComposer,
+            PromptLayer,
             get_supervisor_identity,
         )
         composer = PromptComposer()
@@ -456,8 +457,6 @@ class SuperSupervisorService:
     ) -> dict[str, Any]:
         """Handle TOOL_RESPONSE — supervisor answers using MCP tools."""
         from src.graph_engine.tool_loop import run_tool_loop, try_bind_tools
-        from src.mcp.service import get_mcp_registry
-        from src.mcp.tool_adapter import discover_and_convert
 
         lc_tools, tool_executor = await self._discover_mcp_tools(conv_config)
         if not lc_tools or not tool_executor:
@@ -561,8 +560,11 @@ class SuperSupervisorService:
     def _compose_tool_messages(self, conv_config: dict[str, Any], content: str) -> list[Any]:
         """Compose layered LLM messages for tool-calling (identity + personality + task)."""
         from src.prompt_layers import (
-            LayerType, PromptComposer, PromptLayer,
-            get_supervisor_identity, get_supervisor_personality,
+            LayerType,
+            PromptComposer,
+            PromptLayer,
+            get_supervisor_identity,
+            get_supervisor_personality,
             get_tool_task,
         )
         composer = PromptComposer()

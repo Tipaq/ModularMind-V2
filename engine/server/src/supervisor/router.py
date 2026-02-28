@@ -11,7 +11,6 @@ from fastapi import APIRouter, HTTPException
 
 from src.auth import CurrentUser, RequireOwner
 from src.domain_config import get_config_provider
-from src.infra.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
 

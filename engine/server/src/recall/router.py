@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -17,7 +16,7 @@ from src.infra.schemas import PaginatedResponse
 
 from .models import RecallTestRun
 from .runner import RecallTestRunner
-from .schemas import RecallTestCase, RecallTestSuite, RecallTestSuiteResult
+from .schemas import RecallTestSuite, RecallTestSuiteResult
 
 logger = logging.getLogger(__name__)
 

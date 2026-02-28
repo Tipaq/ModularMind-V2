@@ -6,18 +6,16 @@ API endpoints for memory operations.
 
 import logging
 from datetime import datetime
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from src.embedding import get_embedding_provider
-
 from src.auth import CurrentUser
+from src.embedding import get_embedding_provider
 from src.infra.config import get_settings
 from src.infra.constants import OUTPUT_TRUNCATION_LENGTH
-from src.infra.schemas import PaginatedResponse
 from src.infra.database import DbSession
+from src.infra.schemas import PaginatedResponse
 
 from .models import MemoryScope, MemoryTier
 from .repository import MemoryRepository

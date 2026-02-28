@@ -16,12 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
+from src.executions.scheduler import fair_scheduler
+from src.executions.schemas import ExecutionCreate
+from src.executions.service import ExecutionService
 from src.infra.constants import DISCORD_MAX_CONCURRENT, RATE_LIMIT_WEBHOOK
 from src.infra.database import DbSession, async_session_maker
 from src.infra.rate_limit import RateLimitDependency
-from src.executions.schemas import ExecutionCreate
-from src.executions.scheduler import fair_scheduler
-from src.executions.service import ExecutionService
 
 from .models import Connector
 
@@ -74,8 +74,8 @@ def verify_discord_signature(
     See: https://discord.com/developers/docs/interactions/receiving-and-responding
     """
     try:
-        from nacl.signing import VerifyKey
         from nacl.exceptions import BadSignatureError
+        from nacl.signing import VerifyKey
     except ImportError:
         logger.error("PyNaCl not installed — cannot verify Discord signatures")
         return False
@@ -193,51 +193,50 @@ async def _run_discord_agent(
 
     Runs under a semaphore to cap concurrent background tasks.
     """
-    async with _discord_semaphore:
-      async with async_session_maker() as db:
-        try:
-            exec_service = ExecutionService(db)
+    async with _discord_semaphore, async_session_maker() as db:
+      try:
+          exec_service = ExecutionService(db)
 
-            execution = await exec_service.start_agent_execution(
-                agent_id=connector_agent_id,
-                data=ExecutionCreate(prompt=message),
-                user_id=f"system:webhook:{connector_id}",
-            )
-            await db.commit()
+          execution = await exec_service.start_agent_execution(
+              agent_id=connector_agent_id,
+              data=ExecutionCreate(prompt=message),
+              user_id=f"system:webhook:{connector_id}",
+          )
+          await db.commit()
 
-            # Dispatch to Redis Streams worker
-            acquired = await fair_scheduler.acquire("webhook", execution.id)
-            if not acquired:
-                await send_discord_followup(
-                    application_id,
-                    interaction_token,
-                    "Too many requests — please try again later.",
-                )
-                return
-            await exec_service.dispatch_execution(execution)
-            await db.commit()
+          # Dispatch to Redis Streams worker
+          acquired = await fair_scheduler.acquire("webhook", execution.id)
+          if not acquired:
+              await send_discord_followup(
+                  application_id,
+                  interaction_token,
+                  "Too many requests — please try again later.",
+              )
+              return
+          await exec_service.dispatch_execution(execution)
+          await db.commit()
 
-            # Wait for result via inline execution streaming
-            response_text = ""
-            async for event in exec_service.execute(execution.id):
-                if event.get("type") == "complete":
-                    output = event.get("output", {})
-                    response_text = output.get("response", str(output))
-                    break
+          # Wait for result via inline execution streaming
+          response_text = ""
+          async for event in exec_service.execute(execution.id):
+              if event.get("type") == "complete":
+                  output = event.get("output", {})
+                  response_text = output.get("response", str(output))
+                  break
 
-            await db.commit()
-            await send_discord_followup(
-                application_id,
-                interaction_token,
-                response_text or "No response generated.",
-            )
-        except Exception:
-            logger.exception("Discord background agent execution failed")
-            await send_discord_followup(
-                application_id,
-                interaction_token,
-                "An error occurred while processing your request.",
-            )
+          await db.commit()
+          await send_discord_followup(
+              application_id,
+              interaction_token,
+              response_text or "No response generated.",
+          )
+      except Exception:
+          logger.exception("Discord background agent execution failed")
+          await send_discord_followup(
+              application_id,
+              interaction_token,
+              "An error occurred while processing your request.",
+          )
 
 
 # ─── Webhook endpoint ────────────────────────────────────────────────────────
@@ -403,6 +402,6 @@ async def receive_webhook(
             "response": response_text,
         }
 
-    except Exception as e:
+    except Exception:
         logger.exception("Webhook execution failed")
         raise HTTPException(status_code=500, detail="Execution failed")

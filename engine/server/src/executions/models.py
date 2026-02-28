@@ -8,8 +8,8 @@ from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

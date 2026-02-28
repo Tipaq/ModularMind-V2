@@ -15,7 +15,7 @@ import asyncio
 import json
 import secrets
 import string
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -255,6 +255,7 @@ def add_user(email: str, role: str, groups: str) -> None:
             # Add group memberships
             if group_slugs:
                 from sqlalchemy import select
+
                 from src.groups.models import UserGroup, UserGroupMember
 
                 for slug in group_slugs:
@@ -303,6 +304,7 @@ def add_group(name: str, description: str) -> None:
 
     async def _create() -> None:
         from sqlalchemy import select
+
         from src.groups.models import UserGroup
 
         async with async_session_maker() as session:
@@ -406,12 +408,12 @@ def seed_configs(seed_dir: str, config_dir: str | None, force: bool) -> None:
         if not manifest_dst.exists() or force:
             # Add created timestamp
             manifest_data = yaml.safe_load(manifest_src.read_text())
-            manifest_data["created"] = datetime.now(timezone.utc).isoformat()
+            manifest_data["created"] = datetime.now(UTC).isoformat()
             target.mkdir(parents=True, exist_ok=True)
             manifest_dst.write_text(
                 yaml.dump(manifest_data, default_flow_style=False, allow_unicode=True, sort_keys=False)
             )
-            click.echo(f"  Seeded manifest.yaml")
+            click.echo("  Seeded manifest.yaml")
             copied += 1
         else:
             skipped += 1
@@ -453,8 +455,8 @@ def qdrant_snapshot(collection: str) -> None:
     """Create Qdrant collection snapshot(s) for backup."""
 
     async def _run() -> None:
-        from src.infra.qdrant import qdrant_factory
         from src.infra.config import get_settings
+        from src.infra.qdrant import qdrant_factory
 
         settings = get_settings()
         collections: list[str] = []
@@ -494,7 +496,6 @@ def backfill_qdrant(batch_size: int, collection: str) -> None:
 
         from src.infra.config import get_settings
         from src.infra.database import async_session_maker
-        from src.infra.tokenizer import tokenize_bm25
         from src.rag.vector_store import ChunkData, QdrantRAGVectorStore
 
         settings = get_settings()

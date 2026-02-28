@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import time
+from datetime import UTC
 from pathlib import Path
 
 from src.embedding import get_embedding_provider
@@ -35,7 +36,7 @@ class RecallTestRunner:
         search_params: dict | None = None,
     ) -> RecallTestSuiteResult:
         """Run all test cases in a suite and aggregate metrics."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         params = search_params or {}
         k = params.get("limit", 5)
@@ -96,7 +97,7 @@ class RecallTestRunner:
             avg_mrr=sum(r.mrr for r in results) / n,
             avg_ndcg=sum(r.ndcg for r in results) / n,
             avg_latency_ms=sum(r.latency_ms for r in results) / n,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     @staticmethod

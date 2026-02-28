@@ -12,7 +12,6 @@ from src.infra.schemas import PaginatedResponse
 
 from .models import RAGScope
 
-
 # ─── Collection Schemas ──────────────────────────────────────────────────────
 
 

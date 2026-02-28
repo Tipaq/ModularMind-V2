@@ -22,7 +22,6 @@ from src.infra.config import get_settings
 from .models import (
     ABTestExperiment,
     AgentFineTuningConfig,
-    CurationStatus,
     DatasetExample,
     DatasetStatus,
     ExperimentStatus,
@@ -33,16 +32,13 @@ from .models import (
     utcnow,
 )
 from .schemas import (
-    AgentFineTuningConfigResponse,
     AgentFineTuningConfigUpdate,
     BulkCurationUpdate,
     DatasetCreate,
     DatasetListResponse,
     DatasetResponse,
-    EstimateCostRequest,
     EstimateCostResponse,
     ExampleCurationUpdate,
-    ExampleResponse,
     ExperimentCreate,
     ExperimentListResponse,
     ExperimentResponse,
@@ -391,7 +387,7 @@ class FineTuningService:
             raise ValueError(f"Agent config file not found: {config_path}")
 
         # Read, modify, write atomically
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             config_data = json.load(f)
 
         config_data[key] = value

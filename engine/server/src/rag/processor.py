@@ -6,16 +6,13 @@ Ported from backend/src/rag/processor/ for local runtime use.
 """
 
 import asyncio
-import hashlib
 import logging
 import re
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
 from src.embedding import get_embedding_provider
-
 from src.infra.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -237,7 +234,7 @@ async def process_document(
         raise ValueError("No text content could be extracted from the document")
 
     # 2. Chunk text — use strategy from collection metadata if available
-    from .chunker import ChunkerFactory, Chunk as AdvancedChunk
+    from .chunker import ChunkerFactory
 
     # Determine chunking strategy from collection metadata
     coll_meta_result = await db_session.execute(

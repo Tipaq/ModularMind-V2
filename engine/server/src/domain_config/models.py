@@ -14,7 +14,6 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    Text,
     func,
     text,
 )
