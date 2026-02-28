@@ -11,6 +11,13 @@ interface UserInfo {
   created_at: string;
 }
 
+interface UserListResponse {
+  items: UserInfo[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 const roleConfig = {
   owner: { icon: Shield, color: ROLE_COLORS.owner },
   admin: { icon: UserCheck, color: ROLE_COLORS.admin },
@@ -18,12 +25,12 @@ const roleConfig = {
 };
 
 export default function Users() {
-  const { data, isLoading, refetch } = useApi<UserInfo[]>(
+  const { data, isLoading, refetch } = useApi<UserListResponse>(
     () => api.get("/admin/users"),
     [],
   );
 
-  const users = data ?? [];
+  const users = data?.items ?? [];
 
   return (
     <div className="space-y-8">

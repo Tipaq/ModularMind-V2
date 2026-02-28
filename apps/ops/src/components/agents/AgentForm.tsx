@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Button, Input, Textarea, Select } from "@modularmind/ui";
+import { Button, Input, Textarea, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
 import type { Agent, AgentCreate, AgentUpdate } from "@modularmind/api-client";
 import { useModelsStore } from "../../stores/models";
 
@@ -128,15 +128,24 @@ export function AgentForm({ agent, onSubmit, onCancel, loading }: AgentFormProps
       />
 
       {modelOptions.length > 0 ? (
-        <Select
-          id="model_id"
-          label="Model"
-          value={formData.model_id}
-          onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
-          options={[{ value: "", label: "Select a model..." }, ...modelOptions]}
-          error={errors.model_id}
-          required
-        />
+        <div className="w-full">
+          <label htmlFor="model_id" className="block text-sm font-medium text-foreground mb-1.5">
+            Model
+          </label>
+          <Select value={formData.model_id} onValueChange={(v) => setFormData({ ...formData, model_id: v })} required>
+            <SelectTrigger id="model_id" className={errors.model_id ? "border-destructive" : ""}>
+              <SelectValue placeholder="Select a model..." />
+            </SelectTrigger>
+            <SelectContent>
+              {modelOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.model_id && <p className="mt-1.5 text-sm text-destructive">{errors.model_id}</p>}
+        </div>
       ) : (
         <div>
           <Input

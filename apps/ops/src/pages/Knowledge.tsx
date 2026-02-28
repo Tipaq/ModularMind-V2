@@ -4,13 +4,20 @@ import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
 import { relativeTime, PageHeader } from "@modularmind/ui";
 
+interface CollectionListResponse {
+  items: Collection[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export default function Knowledge() {
-  const { data, isLoading, refetch } = useApi<Collection[]>(
+  const { data, isLoading, refetch } = useApi<CollectionListResponse>(
     () => api.get("/rag/collections"),
     [],
   );
 
-  const collections = data ?? [];
+  const collections = data?.items ?? [];
 
   return (
     <div className="space-y-8">

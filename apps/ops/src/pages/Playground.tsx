@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FlaskConical, Play, Loader2 } from "lucide-react";
 import type { Agent, ExecutionRun } from "@modularmind/api-client";
-import { PageHeader } from "@modularmind/ui";
+import { PageHeader, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
 
@@ -52,18 +52,18 @@ export default function Playground() {
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Agent</label>
-            <select
-              value={selectedAgent}
-              onChange={(e) => setSelectedAgent(e.target.value)}
-              className="flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-            >
-              <option value="">Select an agent...</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select an agent..." />
+              </SelectTrigger>
+              <SelectContent>
+                {agents.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
