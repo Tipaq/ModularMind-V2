@@ -1,8 +1,7 @@
 import { Settings2, RefreshCw, Key, Check, X } from "lucide-react";
-import { cn } from "@modularmind/ui";
+import { cn, PageHeader } from "@modularmind/ui";
 import type { ProviderConfig } from "@modularmind/api-client";
 import { getProviderInfo } from "@modularmind/api-client";
-import { PageHeader } from "../components/shared/PageHeader";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
 
@@ -16,7 +15,7 @@ export default function Configuration() {
     <div className="space-y-8">
       <PageHeader
         icon={Settings2}
-        gradient="from-gray-500 to-zinc-600"
+        gradient="from-muted-foreground to-muted-foreground/70"
         title="Configuration"
         description="LLM providers, API keys, and system settings"
         actions={
@@ -56,11 +55,11 @@ export default function Configuration() {
                       <h3 className="font-medium">{p.name}</h3>
                     </div>
                     {p.is_connected ? (
-                      <span className="flex items-center gap-1 text-xs text-green-500">
+                      <span className="flex items-center gap-1 text-xs text-success">
                         <Check className="h-3 w-3" /> Connected
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1 text-xs text-red-500">
+                      <span className="flex items-center gap-1 text-xs text-destructive">
                         <X className="h-3 w-3" /> Disconnected
                       </span>
                     )}

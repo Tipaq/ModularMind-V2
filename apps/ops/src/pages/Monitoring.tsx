@@ -1,7 +1,6 @@
 import { Activity, Cpu, HardDrive, MemoryStick, Clock, RefreshCw } from "lucide-react";
-import { cn, formatDuration } from "@modularmind/ui";
+import { cn, formatDuration, PageHeader } from "@modularmind/ui";
 import type { SystemMetrics, WorkerStatus, PipelineHealth } from "@modularmind/api-client";
-import { PageHeader } from "../components/shared/PageHeader";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
 
@@ -35,7 +34,7 @@ export default function Monitoring() {
     <div className="space-y-8">
       <PageHeader
         icon={Activity}
-        gradient="from-emerald-500 to-green-500"
+        gradient="from-success to-success/70"
         title="Monitoring"
         description="System health, resources, and pipeline status"
         actions={
@@ -55,31 +54,31 @@ export default function Monitoring() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
             <div className="flex items-center gap-2">
-              <Cpu className="h-4 w-4 text-blue-500" />
+              <Cpu className="h-4 w-4 text-info" />
               <span className="text-sm font-medium">CPU</span>
             </div>
             <p className="text-2xl font-bold">{metrics ? `${metrics.cpu_percent.toFixed(1)}%` : "--"}</p>
-            {metrics && <ProgressBar value={metrics.cpu_percent} color="bg-blue-500" />}
+            {metrics && <ProgressBar value={metrics.cpu_percent} color="bg-info" />}
           </div>
           <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
             <div className="flex items-center gap-2">
-              <MemoryStick className="h-4 w-4 text-purple-500" />
+              <MemoryStick className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium">Memory</span>
             </div>
             <p className="text-2xl font-bold">{metrics ? `${metrics.memory_percent.toFixed(1)}%` : "--"}</p>
-            {metrics && <ProgressBar value={metrics.memory_percent} color="bg-purple-500" />}
+            {metrics && <ProgressBar value={metrics.memory_percent} color="bg-primary" />}
           </div>
           <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
             <div className="flex items-center gap-2">
-              <HardDrive className="h-4 w-4 text-orange-500" />
+              <HardDrive className="h-4 w-4 text-warning" />
               <span className="text-sm font-medium">Disk</span>
             </div>
             <p className="text-2xl font-bold">{metrics ? `${metrics.disk_percent.toFixed(1)}%` : "--"}</p>
-            {metrics && <ProgressBar value={metrics.disk_percent} color="bg-orange-500" />}
+            {metrics && <ProgressBar value={metrics.disk_percent} color="bg-warning" />}
           </div>
           <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-green-500" />
+              <Clock className="h-4 w-4 text-success" />
               <span className="text-sm font-medium">Uptime</span>
             </div>
             <p className="text-2xl font-bold">{metrics ? formatDuration(metrics.uptime_seconds) : "--"}</p>
@@ -93,7 +92,7 @@ export default function Monitoring() {
         {worker ? (
           <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-4">
             <div className="flex items-center gap-3">
-              <span className={cn("h-3 w-3 rounded-full", worker.running ? "bg-green-500" : "bg-red-500")} />
+              <span className={cn("h-3 w-3 rounded-full", worker.running ? "bg-success" : "bg-destructive")} />
               <span className="font-medium">{worker.running ? "Running" : "Stopped"}</span>
               <span className="text-sm text-muted-foreground ml-auto">
                 Uptime: {formatDuration(worker.uptime_seconds)}

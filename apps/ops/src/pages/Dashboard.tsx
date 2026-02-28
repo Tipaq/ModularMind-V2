@@ -10,9 +10,8 @@ import {
   MemoryStick,
   Clock,
 } from "lucide-react";
-import { cn, formatDuration } from "@modularmind/ui";
+import { cn, formatDuration, PageHeader } from "@modularmind/ui";
 import type { SystemMetrics, WorkerStatus, PipelineHealth } from "@modularmind/api-client";
-import { PageHeader } from "../components/shared/PageHeader";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
 
@@ -45,7 +44,7 @@ function MetricCard({
 
 function StatusDot({ ok }: { ok: boolean }) {
   return (
-    <span className={cn("inline-block h-2 w-2 rounded-full", ok ? "bg-green-500" : "bg-red-500")} />
+    <span className={cn("inline-block h-2 w-2 rounded-full", ok ? "bg-success" : "bg-destructive")} />
   );
 }
 
@@ -71,7 +70,7 @@ export default function Dashboard() {
     <div className="space-y-8">
       <PageHeader
         icon={LayoutDashboard}
-        gradient="from-blue-500 to-cyan-500"
+        gradient="from-info to-info/70"
         title="Dashboard"
         description="System overview and quick status"
       />
@@ -102,25 +101,25 @@ export default function Dashboard() {
           label="CPU"
           value={metrics ? `${metrics.cpu_percent.toFixed(1)}%` : "--"}
           icon={Cpu}
-          color="bg-blue-500"
+          color="bg-info"
         />
         <MetricCard
           label="Memory"
           value={metrics ? `${metrics.memory_percent.toFixed(1)}%` : "--"}
           icon={MemoryStick}
-          color="bg-purple-500"
+          color="bg-primary"
         />
         <MetricCard
           label="Disk"
           value={metrics ? `${metrics.disk_percent.toFixed(1)}%` : "--"}
           icon={HardDrive}
-          color="bg-orange-500"
+          color="bg-warning"
         />
         <MetricCard
           label="Uptime"
           value={metrics ? formatDuration(metrics.uptime_seconds) : "--"}
           icon={Clock}
-          color="bg-green-500"
+          color="bg-success"
         />
       </div>
 
@@ -129,10 +128,10 @@ export default function Dashboard() {
         <h2 className="mb-3 text-lg font-semibold">Quick Access</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: "Agents", to: "/agents", icon: Bot, color: "from-violet-500 to-purple-500" },
-            { label: "Models", to: "/models", icon: Layers, color: "from-emerald-500 to-green-500" },
-            { label: "Graphs", to: "/graphs", icon: GitFork, color: "from-amber-500 to-orange-500" },
-            { label: "Knowledge", to: "/knowledge", icon: BookOpen, color: "from-blue-500 to-indigo-500" },
+            { label: "Agents", to: "/agents", icon: Bot, color: "from-primary to-primary/70" },
+            { label: "Models", to: "/models", icon: Layers, color: "from-success to-success/70" },
+            { label: "Graphs", to: "/graphs", icon: GitFork, color: "from-warning to-warning/70" },
+            { label: "Knowledge", to: "/knowledge", icon: BookOpen, color: "from-info to-info/70" },
           ].map((item) => (
             <a
               key={item.to}

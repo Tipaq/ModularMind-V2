@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FlaskConical, Play, Loader2 } from "lucide-react";
 import type { Agent, ExecutionRun } from "@modularmind/api-client";
-import { PageHeader } from "../components/shared/PageHeader";
+import { PageHeader } from "@modularmind/ui";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
 
@@ -42,7 +42,7 @@ export default function Playground() {
     <div className="space-y-8">
       <PageHeader
         icon={FlaskConical}
-        gradient="from-fuchsia-500 to-pink-500"
+        gradient="from-primary to-primary/70"
         title="Playground"
         description="Test agents with live execution"
       />

@@ -17,7 +17,7 @@ import {
   FlaskConical,
   type LucideIcon,
 } from "lucide-react";
-import { cn } from "@modularmind/ui";
+import { cn, ThemeToggle } from "@modularmind/ui";
 import { useAuthStore } from "../stores/auth";
 
 interface NavItem {
@@ -87,13 +87,13 @@ export function Sidebar() {
         <AnimatePresence mode="wait">
           {collapsed ? (
             <motion.div key="collapsed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-purple-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/60">
                 <Bot className="h-5 w-5 text-white" />
               </div>
             </motion.div>
           ) : (
             <motion.div key="expanded" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-purple-600">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/60">
                 <Bot className="h-5 w-5 text-white" />
               </div>
               <span className="text-lg font-semibold">ModularMind</span>
@@ -172,8 +172,11 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* User */}
+      {/* Theme + User */}
       <div className="border-t border-border/50 p-3">
+        <div className={cn("mb-2", collapsed && "flex justify-center")}>
+          <ThemeToggle variant={collapsed ? "icon" : "segmented"} />
+        </div>
         {user && (
           <div className={cn("mb-2 flex items-center gap-3", collapsed && "justify-center")}>
             <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">

@@ -1,6 +1,5 @@
 import { Users as UsersIcon, RefreshCw, Shield, UserCheck, User } from "lucide-react";
-import { cn } from "@modularmind/ui";
-import { PageHeader } from "../components/shared/PageHeader";
+import { cn, ROLE_COLORS, PageHeader } from "@modularmind/ui";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
 
@@ -13,9 +12,9 @@ interface UserInfo {
 }
 
 const roleConfig = {
-  owner: { icon: Shield, color: "text-amber-500 bg-amber-500/10" },
-  admin: { icon: UserCheck, color: "text-blue-500 bg-blue-500/10" },
-  user: { icon: User, color: "text-muted-foreground bg-muted" },
+  owner: { icon: Shield, color: ROLE_COLORS.owner },
+  admin: { icon: UserCheck, color: ROLE_COLORS.admin },
+  user: { icon: User, color: ROLE_COLORS.member },
 };
 
 export default function Users() {
@@ -30,7 +29,7 @@ export default function Users() {
     <div className="space-y-8">
       <PageHeader
         icon={UsersIcon}
-        gradient="from-pink-500 to-rose-500"
+        gradient="from-primary to-primary/70"
         title="Users"
         description="User management and roles"
         actions={
@@ -82,7 +81,7 @@ export default function Users() {
                     <td className="px-4 py-3">
                       <span className={cn(
                         "inline-block h-2 w-2 rounded-full",
-                        u.is_active ? "bg-green-500" : "bg-red-500",
+                        u.is_active ? "bg-success" : "bg-destructive",
                       )} />
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">

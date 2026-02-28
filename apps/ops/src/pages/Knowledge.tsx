@@ -1,9 +1,8 @@
 import { BookOpen, RefreshCw, FileText } from "lucide-react";
 import type { Collection } from "@modularmind/api-client";
-import { PageHeader } from "../components/shared/PageHeader";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
-import { relativeTime } from "@modularmind/ui";
+import { relativeTime, PageHeader } from "@modularmind/ui";
 
 export default function Knowledge() {
   const { data, isLoading, refetch } = useApi<Collection[]>(
@@ -17,7 +16,7 @@ export default function Knowledge() {
     <div className="space-y-8">
       <PageHeader
         icon={BookOpen}
-        gradient="from-blue-500 to-indigo-500"
+        gradient="from-info to-info/70"
         title="Knowledge"
         description="RAG collections, documents, and memory"
         actions={
