@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "@modularmind/ui/styles/theme.css";
 
+/* Scan shared UI package so Tailwind generates classes used in @modularmind/ui components */
+@source "../../../packages/ui/src";
+
 @theme {
   /* Surfaces */
   --color-background: hsl(var(--background));
