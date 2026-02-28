@@ -217,9 +217,7 @@ export default function ModelDetail() {
   const tokenStep =
     maxOutputTokens <= 8192 ? 100 : maxOutputTokens <= 32768 ? 256 : 512;
 
-  const pullProgress = model.pull_progress
-    ? Math.round(model.pull_progress * 100)
-    : 0;
+  const pullProgress = model.pull_progress ?? 0;
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)]">

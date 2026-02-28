@@ -33,11 +33,17 @@ export function ModelStatusBadge({ model, configured }: ModelStatusBadgeProps) {
     );
   }
   if (model.pull_status === "downloading") {
-    const pct = model.pull_progress ? Math.round(model.pull_progress * 100) : 0;
+    const pct = model.pull_progress ?? 0;
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-info">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" /> {pct}%
-      </span>
+      <div className="flex items-center gap-2 min-w-[100px]">
+        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full bg-info rounded-full transition-all duration-500"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className="text-xs text-info tabular-nums shrink-0">{pct}%</span>
+      </div>
     );
   }
   if (model.pull_status === "error") {
