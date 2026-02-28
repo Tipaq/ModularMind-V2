@@ -117,15 +117,16 @@ function ColorPickerModal({ hue, saturation, onAccentChange, onClose }: ColorPic
 
     ctx.clearRect(0, 0, size, size);
 
-    // Draw hue ring
-    for (let angle = 0; angle < 360; angle++) {
-      const startAngle = ((angle - 1) * Math.PI) / 180;
-      const endAngle = ((angle + 1) * Math.PI) / 180;
+    // Draw hue ring (red at top, clockwise)
+    for (let hue = 0; hue < 360; hue++) {
+      const canvasAngle = hue - 90; // offset so hue 0 (red) is at 12 o'clock
+      const startAngle = ((canvasAngle - 1) * Math.PI) / 180;
+      const endAngle = ((canvasAngle + 1) * Math.PI) / 180;
       ctx.beginPath();
       ctx.arc(center, center, radius, startAngle, endAngle);
       ctx.arc(center, center, radius - 28, endAngle, startAngle, true);
       ctx.closePath();
-      ctx.fillStyle = `hsl(${angle} ${localSat}% 55%)`;
+      ctx.fillStyle = `hsl(${hue} ${localSat}% 55%)`;
       ctx.fill();
     }
 
@@ -205,26 +206,6 @@ function ColorPickerModal({ hue, saturation, onAccentChange, onClose }: ColorPic
             onMouseLeave={() => setIsDragging(false)}
             onMouseMove={(e) => {
               if (isDragging) handleCanvasInteraction(e);
-            }}
-          />
-        </div>
-
-        {/* Hue slider */}
-        <div className="mb-3">
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Hue: {localHue}°
-          </label>
-          <input
-            type="range"
-            min={0}
-            max={360}
-            value={localHue}
-            onChange={(e) => setLocalHue(Number(e.target.value))}
-            className="w-full h-2 rounded-full appearance-none cursor-pointer"
-            style={{
-              background: `linear-gradient(to right,
-                hsl(0 ${localSat}% 55%), hsl(60 ${localSat}% 55%), hsl(120 ${localSat}% 55%),
-                hsl(180 ${localSat}% 55%), hsl(240 ${localSat}% 55%), hsl(300 ${localSat}% 55%), hsl(360 ${localSat}% 55%))`,
             }}
           />
         </div>
