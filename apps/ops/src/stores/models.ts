@@ -144,7 +144,9 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       });
 
       // Build unified catalog from catalog models
-      const catalogNames = new Set(catalogRes.models.map((m) => m.model_name));
+      // Normalize names (strip ":latest") so "nomic-embed-text" matches "nomic-embed-text:latest"
+      const normalize = (n: string) => n.replace(/:latest$/, "");
+      const catalogNames = new Set(catalogRes.models.map((m) => normalize(m.model_name)));
 
       const unified: UnifiedCatalogModel[] = catalogRes.models.map((m): CatalogEntry => {
         let unifiedStatus: CatalogEntry["unifiedStatus"] = "ready";
@@ -177,7 +179,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       // Merge browsable models not already in catalog
       for (const models of Object.values(browsable)) {
         for (const bm of models) {
-          if (catalogNames.has(bm.model_name)) continue;
+          if (catalogNames.has(normalize(bm.model_name))) continue;
 
           let unifiedStatus: BrowsableEntry["unifiedStatus"] = "not_pulled";
           if (bm.model_type === "remote") {
