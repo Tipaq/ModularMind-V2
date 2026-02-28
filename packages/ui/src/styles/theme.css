@@ -1,0 +1,128 @@
+/*
+ * ModularMind — Shared theme tokens
+ *
+ * All color values are in "H S% L%" format (space-separated HSL)
+ * so they can be used as hsl(var(--token)) in Tailwind v4 @theme.
+ *
+ * The --primary / --ring values are overridden at runtime by ThemeProvider
+ * when the user picks a custom accent color or preset.
+ */
+
+@layer base {
+  :root {
+    /* Surfaces */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+
+    /* Brand / accent (default: violet) */
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 98%;
+
+    /* Neutral surfaces */
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+
+    /* Semantic statuses */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 9%;
+
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 98%;
+
+    /* Borders & inputs */
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 262 83% 58%;
+
+    /* Radius */
+    --radius: 0.5rem;
+
+    /* Sidebar (used by ops/platform sidebars) */
+    --sidebar: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-border: 240 5.9% 90%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-ring: 262 83% 58%;
+  }
+
+  .dark {
+    /* Surfaces */
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 7%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 7%;
+    --popover-foreground: 0 0% 98%;
+
+    /* Brand / accent */
+    --primary: 262 83% 65%;
+    --primary-foreground: 0 0% 9%;
+
+    /* Neutral surfaces */
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+
+    /* Semantic statuses */
+    --destructive: 0 62.8% 50.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 142 76% 46%;
+    --success-foreground: 0 0% 9%;
+
+    --warning: 38 92% 60%;
+    --warning-foreground: 0 0% 9%;
+
+    --info: 199 89% 58%;
+    --info-foreground: 0 0% 9%;
+
+    /* Borders & inputs */
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 262 83% 65%;
+
+    /* Sidebar */
+    --sidebar: 240 10% 5.9%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-ring: 262 83% 65%;
+  }
+
+  /* Base styles */
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
