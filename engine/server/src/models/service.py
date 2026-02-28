@@ -11,7 +11,6 @@ from typing import Any
 
 import httpx
 import redis.asyncio as aioredis
-import yaml
 
 from src.infra.config import get_settings
 from src.infra.redis import get_redis_pool
@@ -33,62 +32,83 @@ class RuntimeModelService:
     # ------------------------------------------------------------------
 
     def load_seed_catalog(self) -> int:
-        """Load models from catalog.yaml and write individual JSON files.
+        """Seed the runtime catalog from curated model lists.
 
-        Reads the seed catalog.yaml (containing a `models:` list) and
-        creates one JSON file per model entry. Skips models that already
-        have an individual file to avoid overwriting runtime changes.
+        Creates one JSON file per curated model entry. Skips models that
+        already have an individual file to avoid overwriting runtime changes.
 
         Returns the number of models seeded.
         """
-        catalog_path = self._models_dir / "catalog.yaml"
-        if not catalog_path.exists():
-            return 0
-
-        try:
-            data = yaml.safe_load(catalog_path.read_text())
-        except Exception as e:
-            logger.error("Failed to parse catalog.yaml: %s", e)
-            return 0
-
-        if not data or not isinstance(data.get("models"), list):
-            return 0
+        from src.models.curated import CURATED_CLOUD_MODELS, CURATED_OLLAMA_MODELS
 
         seeded = 0
-        for entry in data["models"]:
-            model_id = entry.get("id", "")
+
+        # Seed Ollama models
+        for entry in CURATED_OLLAMA_MODELS:
+            model_name = entry.get("model_name", "")
+            model_id = model_name.replace(":", "-")
             if not model_id:
                 continue
 
-            # Skip if individual file already exists
             target = self._models_dir / f"{model_id}.json"
             if target.exists():
                 continue
 
-            # Map seed YAML fields to the runtime JSON schema
+            is_embedding = bool(entry.get("capabilities", {}).get("embedding"))
             model_data = {
                 "id": model_id,
-                "name": entry.get("display_name", model_id),
-                "provider": entry.get("provider", ""),
-                "model_id": entry.get("model_name", ""),  # model_name → model_id
+                "name": entry.get("display_name", model_name),
+                "provider": "ollama",
+                "model_id": model_name,
                 "display_name": entry.get("display_name"),
-                "model_type": entry.get("model_type", "local"),
+                "model_type": "local",
                 "context_window": entry.get("context_window"),
                 "max_output_tokens": entry.get("max_output_tokens"),
-                "parameter_size": entry.get("parameter_size"),
+                "parameter_size": entry.get("size"),
                 "disk_size": entry.get("disk_size"),
-                "is_required": entry.get("is_required", False),
-                "is_active": entry.get("is_enabled", True),  # is_enabled → is_active
-                "is_embedding": entry.get("is_embedding", False),
+                "is_required": False,
+                "is_active": True,
+                "is_embedding": is_embedding,
                 "model_metadata": {},
             }
 
             target.write_text(json.dumps(model_data, indent=2))
-            logger.info("Seeded model from catalog: %s (%s)", model_id, model_data["model_id"])
+            logger.info("Seeded model: %s (%s)", model_id, model_name)
             seeded += 1
 
+        # Seed cloud provider models
+        for provider, models in CURATED_CLOUD_MODELS.items():
+            for entry in models:
+                model_name = entry.get("model_name", "")
+                model_id = f"{provider}-{model_name}".replace(":", "-").replace(".", "-")
+                if not model_id:
+                    continue
+
+                target = self._models_dir / f"{model_id}.json"
+                if target.exists():
+                    continue
+
+                model_data = {
+                    "id": model_id,
+                    "name": entry.get("display_name", model_name),
+                    "provider": provider,
+                    "model_id": model_name,
+                    "display_name": entry.get("display_name"),
+                    "model_type": "remote",
+                    "context_window": entry.get("context_window"),
+                    "max_output_tokens": entry.get("max_output_tokens"),
+                    "is_required": False,
+                    "is_active": True,
+                    "is_embedding": False,
+                    "model_metadata": {},
+                }
+
+                target.write_text(json.dumps(model_data, indent=2))
+                logger.info("Seeded model: %s (%s)", model_id, model_name)
+                seeded += 1
+
         if seeded:
-            logger.info("Seeded %d models from catalog.yaml", seeded)
+            logger.info("Seeded %d models from curated catalog", seeded)
         return seeded
 
     # ------------------------------------------------------------------
