@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Bot, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
 
 type Agent = {
   id: string;
@@ -86,15 +87,16 @@ export default function AgentsPage() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">Provider</label>
-              <select
-                value={form.provider}
-                onChange={(e) => setForm({ ...form, provider: e.target.value })}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              >
-                <option value="ollama">Ollama</option>
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic</option>
-              </select>
+              <Select value={form.provider} onValueChange={(v) => setForm({ ...form, provider: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ollama">Ollama</SelectItem>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="anthropic">Anthropic</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">Model</label>

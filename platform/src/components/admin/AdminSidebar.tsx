@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Building2, Server, Settings, Bot, GitFork, Layout, ArrowLeft } from "lucide-react";
-import { ThemeToggle } from "@modularmind/ui";
+import { usePathname, useRouter } from "next/navigation";
+import { Building2, Server, Settings, Bot, GitFork, Layout } from "lucide-react";
+import { UserButton } from "@modularmind/ui";
+import { useSession, signOut } from "next-auth/react";
 
 const NAV = [
   { href: "/clients", label: "Clients", icon: Building2 },
@@ -19,6 +20,8 @@ const STUDIO_NAV = [
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session } = useSession();
 
   return (
     <aside className="flex w-64 flex-col border-r bg-muted/30">
@@ -71,16 +74,19 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      <div className="space-y-2 border-t p-3">
-        <ThemeToggle variant="segmented" />
-        <Link
-          href="/"
-          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to site
-        </Link>
-      </div>
+      {session?.user && (
+        <div className="border-t p-3">
+          <UserButton
+            user={{
+              name: session.user.name ?? undefined,
+              email: session.user.email ?? "",
+              role: (session.user as { role?: string }).role,
+            }}
+            onSignOut={() => signOut({ callbackUrl: "/login" })}
+            onNavigate={(path) => router.push(`/${path}`)}
+          />
+        </div>
+      )}
     </aside>
   );
 }

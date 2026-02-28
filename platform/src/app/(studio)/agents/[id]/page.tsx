@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
 
 type Agent = {
   id: string;
@@ -99,15 +100,16 @@ export default function AgentEditPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Provider</label>
-            <select
-              value={agent.provider}
-              onChange={(e) => setAgent({ ...agent, provider: e.target.value })}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            >
-              <option value="ollama">Ollama</option>
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic</option>
-            </select>
+            <Select value={agent.provider} onValueChange={(v) => setAgent({ ...agent, provider: v })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ollama">Ollama</SelectItem>
+                <SelectItem value="openai">OpenAI</SelectItem>
+                <SelectItem value="anthropic">Anthropic</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Model</label>

@@ -1,11 +1,9 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { Settings, User, Shield } from "lucide-react";
+import { Settings, Shield } from "lucide-react";
+import { AppearanceCard } from "@modularmind/ui";
 
 export default function SettingsPage() {
-  const { data: session } = useSession();
-
   return (
     <div>
       <div className="mb-6">
@@ -13,28 +11,8 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground">Platform configuration</p>
       </div>
 
-      <div className="space-y-6">
-        {/* Profile */}
-        <section className="rounded-lg border bg-card p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <User className="h-5 w-5 text-primary" />
-            <h2 className="font-medium">Profile</h2>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Name</label>
-              <p className="text-sm">{session?.user?.name ?? "—"}</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Email</label>
-              <p className="text-sm">{session?.user?.email ?? "—"}</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Role</label>
-              <p className="text-sm capitalize">{(session?.user as { role?: string })?.role ?? "—"}</p>
-            </div>
-          </div>
-        </section>
+      <div className="max-w-2xl space-y-6">
+        <AppearanceCard />
 
         {/* Security */}
         <section className="rounded-lg border bg-card p-4">
