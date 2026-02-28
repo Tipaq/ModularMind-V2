@@ -8,7 +8,7 @@ Import from here instead of hard-coding values in business logic.
 # Known LLM providers — used to parse "provider:model" IDs correctly.
 # Without this, Ollama tags like "llama3.2:latest" get incorrectly split.
 KNOWN_PROVIDERS: frozenset[str] = frozenset({
-    "ollama", "openai", "anthropic", "google", "mistral", "cohere",
+    "ollama", "openai", "anthropic", "google", "mistral", "cohere", "groq",
 })
 
 
