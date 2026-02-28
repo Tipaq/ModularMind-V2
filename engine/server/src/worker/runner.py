@@ -15,8 +15,8 @@ import sys
 
 from src.infra.config import settings
 from src.infra.redis_streams import RedisStreamBus
-from src.worker.tasks import graph_execution_handler, model_pull_handler
 from src.worker.scheduler import create_scheduler
+from src.worker.tasks import graph_execution_handler, model_pull_handler
 
 logger = logging.getLogger(__name__)
 
@@ -58,17 +58,16 @@ async def main() -> None:
     scheduler = create_scheduler()
     scheduler.start()
 
-    # TODO: Import pipeline handlers once implemented
-    # from src.pipeline.handlers.extractor import extractor_handler
-    # from src.pipeline.handlers.embedder import embedder_handler
+    from src.pipeline.handlers.embedder import embedder_handler
+    from src.pipeline.handlers.extractor import extractor_handler
 
     tasks = [
         # Task queues
         bus.subscribe("tasks:executions", "workers", "w-1", graph_execution_handler),
         bus.subscribe("tasks:models", "workers", "w-1", model_pull_handler),
         # Memory pipeline
-        # bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
-        # bus.subscribe("memory:extracted", "embedders", "emb-1", embedder_handler),
+        bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
+        bus.subscribe("memory:extracted", "embedders", "emb-1", embedder_handler),
         # Health
         health_server(bus, HEALTH_PORT),
     ]

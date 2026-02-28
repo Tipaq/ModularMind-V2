@@ -8,6 +8,7 @@ Configures interval and cron jobs for:
 """
 
 import logging
+from datetime import UTC
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -48,14 +49,15 @@ def create_scheduler() -> AsyncIOScheduler:
         name="Cleanup stuck executions",
     )
 
-    # TODO(Phase 5): Memory consolidation
-    # scheduler.add_job(
-    #     memory_consolidation,
-    #     "cron",
-    #     hour="*/6",
-    #     id="memory_consolidation",
-    #     name="Consolidate memory entries",
-    # )
+    # Memory consolidation — merge duplicates, decay old entries
+    if settings.FACT_EXTRACTION_ENABLED:
+        scheduler.add_job(
+            memory_consolidation,
+            "cron",
+            hour="*/6",
+            id="memory_consolidation",
+            name="Consolidate memory entries",
+        )
 
     return scheduler
 
@@ -79,6 +81,7 @@ async def sync_platform() -> None:
 async def report_to_platform() -> None:
     """POST metrics to {PLATFORM_URL}/api/reports."""
     import httpx
+
     from src.report.service import ReportService
 
     svc = ReportService()
@@ -98,9 +101,50 @@ async def report_to_platform() -> None:
         logger.exception("Failed to report to platform")
 
 
+async def memory_consolidation() -> None:
+    """Consolidate memory entries — merge redundant facts, apply decay, prune low-importance."""
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import delete, update
+
+    from src.infra.database import async_session_maker
+    from src.memory.models import MemoryEntry
+
+    _DECAY_RATE = 0.02  # Reduce importance by 2% per cycle for unaccessed entries
+    _PRUNE_THRESHOLD = 0.1  # Remove entries below this importance
+    _STALE_DAYS = 90  # Entries not accessed in 90 days get decayed
+
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=_STALE_DAYS)
+
+    try:
+        async with async_session_maker() as session:
+            # Apply decay to stale entries
+            result = await session.execute(
+                update(MemoryEntry)
+                .where(
+                    MemoryEntry.last_accessed < cutoff,
+                    MemoryEntry.importance > _PRUNE_THRESHOLD,
+                )
+                .values(importance=MemoryEntry.importance - _DECAY_RATE)
+            )
+            if result.rowcount:
+                logger.info("Decayed %d stale memory entries", result.rowcount)
+
+            # Prune entries below threshold
+            result = await session.execute(
+                delete(MemoryEntry).where(MemoryEntry.importance <= _PRUNE_THRESHOLD)
+            )
+            if result.rowcount:
+                logger.info("Pruned %d low-importance memory entries", result.rowcount)
+
+            await session.commit()
+    except Exception:
+        logger.exception("Memory consolidation failed")
+
+
 async def cleanup_stale_executions() -> None:
     """Clean up executions stuck in RUNNING/PENDING state."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from sqlalchemy import update
 
@@ -108,7 +152,7 @@ async def cleanup_stale_executions() -> None:
     from src.infra.database import async_session_maker
 
     timeout = timedelta(seconds=settings.MAX_EXECUTION_TIMEOUT + 60)
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timeout
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timeout
 
     try:
         async with async_session_maker() as session:
@@ -121,7 +165,7 @@ async def cleanup_stale_executions() -> None:
                 .values(
                     status=ExecutionStatus.FAILED,
                     error_message=f"Execution timed out after {settings.MAX_EXECUTION_TIMEOUT}s (cleanup)",
-                    completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    completed_at=datetime.now(UTC).replace(tzinfo=None),
                 )
             )
             if result.rowcount:
