@@ -11,8 +11,6 @@ type Graph = {
   description: string;
   nodes: unknown[];
   edges: unknown[];
-  channel: string;
-  version: number;
 };
 
 export default function GraphEditPage() {
@@ -83,7 +81,7 @@ export default function GraphEditPage() {
         </Link>
         <h1 className="text-2xl font-bold">{graph.name}</h1>
         <p className="text-sm text-muted-foreground">
-          {graph.channel} / v{graph.version}
+          {Array.isArray(graph.nodes) ? graph.nodes.length : 0} nodes
         </p>
       </div>
 

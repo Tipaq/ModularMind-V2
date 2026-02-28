@@ -45,7 +45,6 @@ model Agent {
   model       String
   provider    String
   config      Json     @default("{}")
-  channel     String   @default("dev") // dev | beta | stable
   version     Int      @default(1)
   tags        String[] @default([])
   createdAt   DateTime @default(now())
@@ -58,7 +57,6 @@ model Graph {
   description String
   nodes       Json     @default("[]")
   edges       Json     @default("[]")
-  channel     String   @default("dev") // dev | beta | stable
   version     Int      @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

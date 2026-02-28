@@ -41,7 +41,7 @@ export default function HomePage() {
               { title: "Built-in Memory", desc: "Fact extraction, vector embeddings, and memory consolidation. Agents that remember." },
               { title: "RAG Pipeline", desc: "Upload documents, auto-chunk, embed, and retrieve. Hybrid search with reranking." },
               { title: "MCP Tool Integration", desc: "Connect external tools via Model Context Protocol sidecars. Sandboxed execution." },
-              { title: "Release Channels", desc: "dev → beta → stable. Promote agents and graphs through deployment channels." },
+              { title: "Multi-Engine Sync", desc: "Register engines, auto-sync configs. Centralized management with ops console." },
             ].map((f) => (
               <div key={f.title} className="rounded-lg border bg-card p-5">
                 <h3 className="font-medium">{f.title}</h3>

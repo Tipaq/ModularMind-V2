@@ -24,7 +24,6 @@ export async function POST(req: NextRequest) {
       model: body.model,
       provider: body.provider,
       config: body.config ?? {},
-      channel: body.channel ?? "dev",
       tags: body.tags ?? [],
     },
   });

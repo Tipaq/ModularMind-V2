@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Server, Settings, Bot, GitFork, Rocket, Layout, ArrowLeft } from "lucide-react";
+import { Building2, Server, Settings, Bot, GitFork, Layout, ArrowLeft } from "lucide-react";
+import { ThemeToggle } from "@modularmind/ui";
 
 const NAV = [
   { href: "/clients", label: "Clients", icon: Building2 },
@@ -13,7 +14,6 @@ const NAV = [
 const STUDIO_NAV = [
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/graphs", label: "Graphs", icon: GitFork },
-  { href: "/releases", label: "Releases", icon: Rocket },
   { href: "/templates", label: "Templates", icon: Layout },
 ] as const;
 
@@ -71,7 +71,8 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      <div className="border-t p-3">
+      <div className="space-y-2 border-t p-3">
+        <ThemeToggle variant="segmented" />
         <Link
           href="/"
           className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"

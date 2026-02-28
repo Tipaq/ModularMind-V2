@@ -30,9 +30,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(body.model !== undefined && { model: body.model }),
       ...(body.provider !== undefined && { provider: body.provider }),
       ...(body.config !== undefined && { config: body.config }),
-      ...(body.channel !== undefined && { channel: body.channel }),
       ...(body.tags !== undefined && { tags: body.tags }),
-      ...(body.channel !== undefined && { version: { increment: 1 } }),
+      version: { increment: 1 },
     },
   });
 

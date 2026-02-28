@@ -23,7 +23,6 @@ export async function POST(req: NextRequest) {
       description: body.description ?? "",
       nodes: body.nodes ?? [],
       edges: body.edges ?? [],
-      channel: body.channel ?? "dev",
     },
   });
 

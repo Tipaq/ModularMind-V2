@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GitFork, Plus, Trash2, ArrowUpCircle } from "lucide-react";
+import { GitFork, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 type Graph = {
@@ -10,16 +10,8 @@ type Graph = {
   description: string;
   nodes: unknown[];
   edges: unknown[];
-  channel: string;
-  version: number;
   createdAt: string;
   updatedAt: string;
-};
-
-const CHANNEL_COLORS: Record<string, string> = {
-  dev: "bg-yellow-100 text-yellow-700",
-  beta: "bg-blue-100 text-blue-700",
-  stable: "bg-green-100 text-green-700",
 };
 
 export default function GraphsPage() {
@@ -56,18 +48,6 @@ export default function GraphsPage() {
   async function handleDelete(id: string) {
     if (!confirm("Delete this graph?")) return;
     await fetch(`/api/graphs/${id}`, { method: "DELETE" });
-    load();
-  }
-
-  async function handlePromote(id: string, channel: string) {
-    const next = channel === "dev" ? "beta" : channel === "beta" ? "stable" : null;
-    if (!next) return;
-    if (!confirm(`Promote to ${next}?`)) return;
-    await fetch(`/api/graphs/${id}/promote`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channel: next }),
-    });
     load();
   }
 
@@ -141,34 +121,20 @@ export default function GraphsPage() {
                   <GitFork className="h-5 w-5 text-primary" />
                   <h3 className="font-medium">{graph.name}</h3>
                 </Link>
-                <div className="flex gap-1">
-                  {graph.channel !== "stable" && (
-                    <button
-                      onClick={() => handlePromote(graph.id, graph.channel)}
-                      className="rounded p-1 text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                    >
-                      <ArrowUpCircle className="h-4 w-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(graph.id)}
-                    className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => handleDelete(graph.id)}
+                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
               {graph.description && (
                 <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{graph.description}</p>
               )}
               <div className="mt-3 flex items-center gap-2">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${CHANNEL_COLORS[graph.channel] ?? ""}`}>
-                  {graph.channel}
-                </span>
                 <span className="text-xs text-muted-foreground">
                   {Array.isArray(graph.nodes) ? graph.nodes.length : 0} nodes
                 </span>
-                <span className="text-xs text-muted-foreground">v{graph.version}</span>
               </div>
             </div>
           ))}

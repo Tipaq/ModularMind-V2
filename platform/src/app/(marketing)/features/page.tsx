@@ -31,7 +31,7 @@ export default function FeaturesPage() {
       title: "Platform Operations",
       features: [
         "Centralized agent and graph management",
-        "Release channels: dev → beta → stable",
+        "Multi-engine sync with automatic config polling",
         "Engine registration and sync polling",
         "Ops console for monitoring and diagnostics",
       ],

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, Plus, Trash2, ArrowUpCircle } from "lucide-react";
+import { Bot, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 type Agent = {
@@ -10,17 +10,9 @@ type Agent = {
   description: string;
   model: string;
   provider: string;
-  channel: string;
-  version: number;
   tags: string[];
   createdAt: string;
   updatedAt: string;
-};
-
-const CHANNEL_COLORS: Record<string, string> = {
-  dev: "bg-yellow-100 text-yellow-700",
-  beta: "bg-blue-100 text-blue-700",
-  stable: "bg-green-100 text-green-700",
 };
 
 export default function AgentsPage() {
@@ -57,18 +49,6 @@ export default function AgentsPage() {
   async function handleDelete(id: string) {
     if (!confirm("Delete this agent?")) return;
     await fetch(`/api/agents/${id}`, { method: "DELETE" });
-    load();
-  }
-
-  async function handlePromote(id: string, channel: string) {
-    const next = channel === "dev" ? "beta" : channel === "beta" ? "stable" : null;
-    if (!next) return;
-    if (!confirm(`Promote to ${next}?`)) return;
-    await fetch(`/api/agents/${id}/promote`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channel: next }),
-    });
     load();
   }
 
@@ -164,35 +144,20 @@ export default function AgentsPage() {
                   <Bot className="h-5 w-5 text-primary" />
                   <h3 className="font-medium">{agent.name}</h3>
                 </Link>
-                <div className="flex gap-1">
-                  {agent.channel !== "stable" && (
-                    <button
-                      onClick={() => handlePromote(agent.id, agent.channel)}
-                      className="rounded p-1 text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                      title={`Promote to ${agent.channel === "dev" ? "beta" : "stable"}`}
-                    >
-                      <ArrowUpCircle className="h-4 w-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(agent.id)}
-                    className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => handleDelete(agent.id)}
+                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
               {agent.description && (
                 <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{agent.description}</p>
               )}
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${CHANNEL_COLORS[agent.channel] ?? ""}`}>
-                  {agent.channel}
-                </span>
                 <span className="text-xs text-muted-foreground">
                   {agent.provider}/{agent.model}
                 </span>
-                <span className="text-xs text-muted-foreground">v{agent.version}</span>
               </div>
               {agent.tags.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">

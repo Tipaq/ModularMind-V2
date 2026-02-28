@@ -12,8 +12,6 @@ type Agent = {
   model: string;
   provider: string;
   config: Record<string, unknown>;
-  channel: string;
-  version: number;
   tags: string[];
 };
 
@@ -84,7 +82,7 @@ export default function AgentEditPage() {
         </Link>
         <h1 className="text-2xl font-bold">{agent.name}</h1>
         <p className="text-sm text-muted-foreground">
-          {agent.channel} / v{agent.version}
+          {agent.provider}/{agent.model}
         </p>
       </div>
 

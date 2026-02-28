@@ -14,12 +14,10 @@ export async function GET(req: NextRequest) {
   });
 
   const agents = await db.agent.findMany({
-    where: { channel: "stable" },
     orderBy: { updatedAt: "desc" },
   });
 
   const graphs = await db.graph.findMany({
-    where: { channel: "stable" },
     orderBy: { updatedAt: "desc" },
   });
 

@@ -29,8 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(body.description !== undefined && { description: body.description }),
       ...(body.nodes !== undefined && { nodes: body.nodes }),
       ...(body.edges !== undefined && { edges: body.edges }),
-      ...(body.channel !== undefined && { channel: body.channel }),
-      ...(body.channel !== undefined && { version: { increment: 1 } }),
+      version: { increment: 1 },
     },
   });
 
