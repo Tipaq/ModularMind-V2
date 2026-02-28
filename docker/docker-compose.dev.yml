@@ -30,6 +30,7 @@ services:
       - "8000:8000"
     volumes:
       - ../engine/server/src:/app/src
+      - ../engine/server/seeds:/app/seeds
       - ../engine/server/alembic:/app/alembic
       - ../engine/server/alembic.ini:/app/alembic.ini
       - ../shared/src:/tmp/shared-src
@@ -43,6 +44,7 @@ services:
     image: modularmind/engine:dev
     volumes:
       - ../engine/server/src:/app/src
+      - ../engine/server/seeds:/app/seeds
       - ../shared/src:/tmp/shared-src
     environment:
       <<: *engine-env
