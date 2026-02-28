@@ -3,9 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
-  LogOut,
   Layers,
-  User,
   Users,
   Bot,
   GitFork,
@@ -17,8 +15,9 @@ import {
   FlaskConical,
   type LucideIcon,
 } from "lucide-react";
-import { cn, ThemeToggle } from "@modularmind/ui";
+import { cn, UserButton } from "@modularmind/ui";
 import { useAuthStore } from "../stores/auth";
+import { useNavigate } from "react-router-dom";
 
 interface NavItem {
   name: string;
@@ -68,6 +67,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const { pathname } = useLocation();
   const { user, logout } = useAuthStore();
+  const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
@@ -172,35 +172,17 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Theme + User */}
-      <div className="border-t border-border/50 p-3">
-        <div className={cn("mb-2", collapsed && "flex justify-center")}>
-          <ThemeToggle variant={collapsed ? "icon" : "segmented"} />
+      {/* User */}
+      {user && (
+        <div className="border-t border-border/50 p-3">
+          <UserButton
+            user={{ email: user.email, role: user.role }}
+            collapsed={collapsed}
+            onSignOut={handleLogout}
+            onNavigate={(path) => navigate(`/${path}`)}
+          />
         </div>
-        {user && (
-          <div className={cn("mb-2 flex items-center gap-3", collapsed && "justify-center")}>
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
-              <User className="h-4 w-4 text-primary" />
-            </div>
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium">{user.email}</p>
-                <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
-              </div>
-            )}
-          </div>
-        )}
-        <button
-          onClick={handleLogout}
-          className={cn(
-            "flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all w-full",
-            collapsed && "justify-center px-0",
-          )}
-        >
-          <LogOut className="h-4 w-4 flex-shrink-0" />
-          {!collapsed && <span className="text-sm">Sign out</span>}
-        </button>
-      </div>
+      )}
     </motion.aside>
   );
 }

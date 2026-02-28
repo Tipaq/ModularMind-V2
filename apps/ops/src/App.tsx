@@ -16,6 +16,8 @@ import ModelDetail from "./pages/ModelDetail";
 import Knowledge from "./pages/Knowledge";
 import Users from "./pages/Users";
 import Playground from "./pages/Playground";
+import Settings from "./pages/Settings";
+import Profile from "./pages/Profile";
 
 export default function App() {
   return (
@@ -37,6 +39,8 @@ export default function App() {
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/users" element={<Users />} />
           <Route path="/playground" element={<Playground />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/profile" element={<Profile />} />
         </Route>
       </Routes>
     </BrowserRouter>
