@@ -227,11 +227,15 @@ class RuntimeModelService:
 
         msg_id = await enqueue_model_pull(model_name)
 
-        # Store task_id for cancellation
+        # Set initial progress so the frontend sees "downloading" immediately
         from src.infra.redis import get_redis_client
         r = await get_redis_client()
         if r:
             try:
+                await r.hset(
+                    f"runtime:model_pull_progress:{model_name}",
+                    mapping={"status": "downloading", "progress": "0"},
+                )
                 await r.set(f"runtime:model_pull_task:{model_name}", msg_id, ex=7200)
             finally:
                 await r.aclose()

@@ -115,7 +115,7 @@ async def pull_model(body: PullRequest, user: CurrentUser) -> PullResponse:
         })
         logger.info("Auto-created catalog entry for pull: %s", body.model_name)
 
-    task_id = svc.trigger_pull(body.model_name)
+    task_id = await svc.trigger_pull(body.model_name)
     return PullResponse(
         task_id=task_id,
         model_name=body.model_name,

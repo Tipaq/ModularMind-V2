@@ -192,6 +192,13 @@ def _decode_progress(raw: dict) -> tuple[str | None, int | None, str | None]:
         pull_status = "error"
     elif status == "cancelled":
         pull_status = None
+    elif status:
+        # Catch-all for unknown active statuses (e.g. Ollama "verifying sha256")
+        pull_status = "downloading"
+        try:
+            pull_progress = int(progress_str) if progress_str else 0
+        except ValueError:
+            pull_progress = 0
 
     return pull_status, pull_progress, error
 

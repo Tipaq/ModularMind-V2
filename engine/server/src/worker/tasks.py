@@ -109,6 +109,7 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
 
     try:
         await r.hset(progress_key, mapping={"status": "downloading", "progress": "0"})
+        max_pct = 0
 
         async with httpx.AsyncClient(
             base_url=settings.OLLAMA_BASE_URL, timeout=None
@@ -124,14 +125,16 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
                 except json.JSONDecodeError:
                     continue
 
-                status = chunk.get("status", "")
                 total = chunk.get("total", 0)
                 completed = chunk.get("completed", 0)
                 pct = int((completed / total * 100) if total else 0)
 
+                # Never let progress go backwards
+                max_pct = max(max_pct, pct)
+
                 await r.hset(progress_key, mapping={
-                    "status": status,
-                    "progress": str(pct),
+                    "status": "downloading",
+                    "progress": str(max_pct),
                 })
 
                 # Check for cancellation
