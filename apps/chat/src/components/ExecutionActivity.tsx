@@ -11,7 +11,7 @@ import {
   Check,
   Loader2,
 } from "lucide-react";
-import { cn, formatDurationMs } from "@modularmind/ui";
+import { cn, formatDurationMs, ACTIVITY_COLORS } from "@modularmind/ui";
 import type { ExecutionActivity as Activity, ActivityType, ActivityStatus } from "../hooks/useExecutionActivities";
 
 const ICONS: Record<ActivityType, typeof Bot> = {
@@ -28,24 +28,10 @@ const ICONS: Record<ActivityType, typeof Bot> = {
   agent_created: Sparkles,
 };
 
-const COLORS: Record<ActivityType, string> = {
-  step: "text-blue-500",
-  llm: "text-purple-500",
-  tool: "text-orange-500",
-  retrieval: "text-cyan-500",
-  parallel: "text-indigo-500",
-  loop: "text-teal-500",
-  error: "text-red-500",
-  routing: "text-amber-500",
-  delegation: "text-amber-500",
-  direct_response: "text-green-500",
-  agent_created: "text-violet-500",
-};
-
 function StatusIcon({ status }: { status: ActivityStatus }) {
   if (status === "running") return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
-  if (status === "failed") return <AlertCircle className="h-3 w-3 text-red-500" />;
-  return <Check className="h-3 w-3 text-green-500" />;
+  if (status === "failed") return <AlertCircle className="h-3 w-3 text-destructive" />;
+  return <Check className="h-3 w-3 text-success" />;
 }
 
 interface Props {
@@ -80,7 +66,7 @@ export function ExecutionActivity({ activities, isStreaming, hasContent }: Props
     <div className="space-y-1.5">
       {activities.map((a) => {
         const Icon = ICONS[a.type];
-        const color = COLORS[a.type];
+        const color = ACTIVITY_COLORS[a.type] ?? "text-muted-foreground";
         return (
           <div key={a.id} className="flex items-center gap-2 text-xs">
             <Icon className={cn("h-3.5 w-3.5 shrink-0", color)} />
