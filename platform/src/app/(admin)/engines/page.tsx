@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Server, Wifi, WifiOff, Clock, Key } from "lucide-react";
+import { STATUS_COLORS } from "@modularmind/ui";
 
 type Engine = {
   id: string;
@@ -16,14 +17,8 @@ type Engine = {
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    synced: "bg-green-100 text-green-700",
-    registered: "bg-blue-100 text-blue-700",
-    offline: "bg-gray-100 text-gray-600",
-  };
-
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${colors[status] ?? colors.offline}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? STATUS_COLORS.offline}`}>
       {status === "synced" ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
       {status}
     </span>
