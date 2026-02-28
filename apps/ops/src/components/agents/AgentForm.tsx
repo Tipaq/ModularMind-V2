@@ -1,77 +1,165 @@
-import { useState } from "react";
-import { Button, Input, Textarea, Label } from "@modularmind/ui";
+import { useState, useEffect } from "react";
+import { Button, Input, Textarea, Select } from "@modularmind/ui";
+import type { Agent, AgentCreate, AgentUpdate } from "@modularmind/api-client";
+import { useModelsStore } from "../../stores/models";
 
 interface AgentFormProps {
-  onSubmit: (data: { name: string; system_prompt: string; model_id: string; description?: string }) => void;
+  agent?: Agent;
+  onSubmit: (data: AgentCreate | AgentUpdate) => Promise<void>;
   onCancel: () => void;
   loading?: boolean;
 }
 
-export function AgentForm({ onSubmit, onCancel, loading }: AgentFormProps) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState("");
-  const [modelId, setModelId] = useState("ollama:llama3.2");
+export function AgentForm({ agent, onSubmit, onCancel, loading }: AgentFormProps) {
+  const isEditing = !!agent;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [formData, setFormData] = useState({
+    name: agent?.name || "",
+    description: agent?.description || "",
+    system_prompt: agent?.system_prompt || "",
+    model_id: agent?.model_id || "",
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  // Get available models from the models store — only show accessible models
+  const { catalogModels, fetchCatalog, isProviderConfigured } = useModelsStore();
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (catalogModels.length === 0 && !modelsLoaded) {
+      fetchCatalog().finally(() => setModelsLoaded(true));
+    } else {
+      setModelsLoaded(true);
+    }
+  }, [catalogModels.length, fetchCatalog, modelsLoaded]);
+
+  const modelOptions = catalogModels
+    .filter(
+      (m) =>
+        (m.provider === "ollama" && m.pull_status === "ready") ||
+        (m.provider !== "ollama" && isProviderConfigured(m.provider)),
+    )
+    .map((m) => ({
+      value: m.model_name,
+      label: `${m.display_name || m.model_name} (${m.provider})`,
+    }));
+
+  // Add current model_id as option if not in catalog (e.g. synced but not in platform)
+  if (formData.model_id && !modelOptions.find((o) => o.value === formData.model_id)) {
+    modelOptions.unshift({ value: formData.model_id, label: formData.model_id });
+  }
+
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (!formData.name.trim()) newErrors.name = "Name is required";
+    if (!formData.system_prompt.trim()) newErrors.system_prompt = "System prompt is required";
+    if (!formData.model_id) newErrors.model_id = "Model selection is required";
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !systemPrompt.trim()) return;
-    onSubmit({
-      name: name.trim(),
-      system_prompt: systemPrompt.trim(),
-      model_id: modelId,
-      description: description.trim() || undefined,
-    });
+    setApiError(null);
+
+    if (!validate()) return;
+
+    try {
+      if (isEditing && agent) {
+        const updateData: AgentUpdate = {
+          name: formData.name,
+          description: formData.description || null,
+          system_prompt: formData.system_prompt,
+          model_id: formData.model_id,
+          version: agent.version,
+        };
+        await onSubmit(updateData);
+      } else {
+        const createData: AgentCreate = {
+          name: formData.name,
+          description: formData.description || null,
+          system_prompt: formData.system_prompt,
+          model_id: formData.model_id,
+        };
+        await onSubmit(createData);
+      }
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "An unexpected error occurred");
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label>Name</Label>
-        <Input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="My Agent"
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {apiError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {apiError}
+        </div>
+      )}
+
+      <Input
+        id="name"
+        label="Name"
+        placeholder="My Agent"
+        value={formData.name}
+        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+        error={errors.name}
+        required
+      />
+
+      <Input
+        id="description"
+        label="Description"
+        placeholder="A brief description of what this agent does"
+        value={formData.description || ""}
+        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+      />
+
+      <Textarea
+        id="system_prompt"
+        label="System Prompt"
+        placeholder="You are a helpful assistant..."
+        value={formData.system_prompt}
+        onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
+        error={errors.system_prompt}
+        rows={6}
+        required
+      />
+
+      {modelOptions.length > 0 ? (
+        <Select
+          id="model_id"
+          label="Model"
+          value={formData.model_id}
+          onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
+          options={[{ value: "", label: "Select a model..." }, ...modelOptions]}
+          error={errors.model_id}
           required
         />
-      </div>
+      ) : (
+        <div>
+          <Input
+            id="model_id"
+            label="Model ID"
+            placeholder="e.g. mistral:latest, gpt-4o, claude-3-haiku"
+            value={formData.model_id}
+            onChange={(e) => setFormData({ ...formData, model_id: e.target.value })}
+            error={errors.model_id}
+            required
+          />
+          {!modelsLoaded && (
+            <p className="mt-1 text-xs text-muted-foreground">Loading models catalog...</p>
+          )}
+        </div>
+      )}
 
-      <div className="space-y-2">
-        <Label>Description</Label>
-        <Input
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="What does this agent do?"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Model</Label>
-        <Input
-          value={modelId}
-          onChange={(e) => setModelId(e.target.value)}
-          placeholder="ollama:llama3.2"
-        />
-        <p className="text-xs text-muted-foreground">Format: provider:model (e.g. ollama:llama3.2)</p>
-      </div>
-
-      <div className="space-y-2">
-        <Label>System Prompt</Label>
-        <Textarea
-          value={systemPrompt}
-          onChange={(e) => setSystemPrompt(e.target.value)}
-          placeholder="You are a helpful assistant..."
-          rows={6}
-          required
-        />
-      </div>
-
-      <div className="flex justify-end gap-2 pt-2">
+      <div className="flex gap-3 pt-2">
+        <Button type="submit" disabled={loading}>
+          {isEditing ? "Save Changes" : "Create Agent"}
+        </Button>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
-        </Button>
-        <Button type="submit" disabled={loading || !name.trim() || !systemPrompt.trim()}>
-          {loading ? "Creating..." : "Create Agent"}
         </Button>
       </div>
     </form>

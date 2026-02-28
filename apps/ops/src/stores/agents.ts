@@ -1,26 +1,36 @@
 import { create } from "zustand";
-import type { Agent, AgentCreate, AgentListResponse } from "@modularmind/api-client";
+import type { Agent, AgentCreate, AgentUpdate, AgentListResponse } from "@modularmind/api-client";
 import { api } from "../lib/api";
 
 interface AgentsState {
+  // Data
   agents: Agent[];
+  selectedAgent: Agent | null;
   total: number;
   page: number;
   totalPages: number;
+
+  // Loading / error
   loading: boolean;
   error: string | null;
+
+  // Filters
   search: string;
 
+  // Actions
   fetchAgents: (page?: number) => Promise<void>;
+  fetchAgent: (id: string) => Promise<void>;
   createAgent: (data: AgentCreate) => Promise<Agent>;
+  updateAgent: (id: string, data: AgentUpdate) => Promise<Agent>;
   deleteAgent: (id: string) => Promise<void>;
-  duplicateAgent: (id: string) => Promise<Agent>;
+  duplicateAgent: (id: string) => Promise<void>;
   setSearch: (search: string) => void;
   clearError: () => void;
 }
 
 export const useAgentsStore = create<AgentsState>((set, get) => ({
   agents: [],
+  selectedAgent: null,
   total: 0,
   page: 1,
   totalPages: 1,
@@ -50,27 +60,76 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     }
   },
 
+  fetchAgent: async (id: string) => {
+    set({ loading: true, error: null });
+    try {
+      const agent = await api.get<Agent>(`/agents/${id}`);
+      set({ selectedAgent: agent, loading: false });
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : "Failed to load agent",
+        loading: false,
+      });
+    }
+  },
+
   createAgent: async (data: AgentCreate) => {
-    const agent = await api.post<Agent>("/agents", data);
-    get().fetchAgents(get().page);
-    return agent;
+    set({ error: null });
+    try {
+      const agent = await api.post<Agent>("/agents", data);
+      const { page } = get();
+      get().fetchAgents(page);
+      return agent;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create agent";
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  updateAgent: async (id: string, data: AgentUpdate) => {
+    set({ error: null });
+    try {
+      const agent = await api.patch<Agent>(`/agents/${id}`, data);
+      set({ selectedAgent: agent });
+      const { page } = get();
+      get().fetchAgents(page);
+      return agent;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update agent";
+      set({ error: message });
+      throw err;
+    }
   },
 
   deleteAgent: async (id: string) => {
-    await api.delete(`/agents/${id}`);
-    get().fetchAgents(get().page);
+    set({ error: null });
+    try {
+      await api.delete(`/agents/${id}`);
+      const { page } = get();
+      get().fetchAgents(page);
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : "Failed to delete agent",
+      });
+      throw err;
+    }
   },
 
   duplicateAgent: async (id: string) => {
-    const agent = await api.post<Agent>(`/agents/${id}/duplicate`);
-    get().fetchAgents(get().page);
-    return agent;
+    set({ error: null });
+    try {
+      await api.post(`/agents/${id}/duplicate`);
+      const { page } = get();
+      get().fetchAgents(page);
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : "Failed to duplicate agent",
+      });
+      throw err;
+    }
   },
 
-  setSearch: (search: string) => {
-    set({ search });
-    get().fetchAgents(1);
-  },
-
+  setSearch: (search: string) => set({ search }),
   clearError: () => set({ error: null }),
 }));

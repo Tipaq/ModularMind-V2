@@ -1,85 +1,309 @@
-import { Bot, RefreshCw } from "lucide-react";
-import { cn, stripProvider } from "@modularmind/ui";
-import type { Agent } from "@modularmind/api-client";
-import { getProviderInfo } from "@modularmind/api-client";
-import { PageHeader } from "../components/shared/PageHeader";
-import { useApi } from "../hooks/useApi";
-import { api } from "../lib/api";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { Bot, Plus, Copy, Trash2 } from "lucide-react";
+import {
+  Button,
+  Badge,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  stripProvider,
+  isLocalModel,
+  PageHeader,
+} from "@modularmind/ui";
+import type { Agent, AgentCreate, AgentUpdate } from "@modularmind/api-client";
+import { EmptyState } from "../components/shared/EmptyState";
+import { ResourceTable } from "../components/shared/ResourceTable";
+import { ResourceFilters } from "../components/shared/ResourceFilters";
+import { AgentForm } from "../components/agents/AgentForm";
+import { useAgentsStore } from "../stores/agents";
+import type { ResourceColumn, ResourceFilterConfig, SortState } from "../lib/types";
+
+const filterConfigs: ResourceFilterConfig[] = [
+  { key: "search", label: "Search", type: "search", placeholder: "Search agents..." },
+  {
+    key: "template",
+    label: "Template",
+    type: "select",
+    placeholder: "All",
+    options: [
+      { value: "agent", label: "Agents only" },
+      { value: "template", label: "Templates only" },
+    ],
+  },
+];
 
 export default function Agents() {
-  const { data, isLoading, refetch } = useApi<{ items: Agent[] }>(
-    () => api.get("/agents"),
-    [],
+  const navigate = useNavigate();
+  const {
+    agents,
+    loading,
+    page,
+    totalPages,
+    total,
+    fetchAgents,
+    createAgent,
+    deleteAgent,
+    duplicateAgent,
+  } = useAgentsStore();
+
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    fetchAgents(1);
+  }, [fetchAgents]);
+
+  // Client-side filtering + sorting
+  const filtered = useMemo(() => {
+    let result = agents;
+
+    if (filterValues.search) {
+      const s = filterValues.search.toLowerCase();
+      result = result.filter(
+        (a) =>
+          a.name.toLowerCase().includes(s) ||
+          (a.description?.toLowerCase().includes(s) ?? false) ||
+          a.model_id.toLowerCase().includes(s),
+      );
+    }
+
+    if (filterValues.template) {
+      result = result.filter((a) =>
+        filterValues.template === "template" ? a.is_template : !a.is_template,
+      );
+    }
+
+    if (filterValues.sort) {
+      result = [...result].sort((a, b) => {
+        switch (filterValues.sort) {
+          case "name_asc":
+            return a.name.localeCompare(b.name);
+          case "name_desc":
+            return b.name.localeCompare(a.name);
+          case "model_asc":
+            return a.model_id.localeCompare(b.model_id);
+          case "model_desc":
+            return b.model_id.localeCompare(a.model_id);
+          default:
+            return 0;
+        }
+      });
+    }
+
+    return result;
+  }, [agents, filterValues]);
+
+  const handleFilterChange = useCallback((key: string, value: string) => {
+    setFilterValues((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const sortState = useMemo((): SortState | null => {
+    const s = filterValues.sort;
+    if (!s) return null;
+    if (s.endsWith("_asc")) return { key: s.replace(/_asc$/, ""), direction: "asc" };
+    if (s.endsWith("_desc")) return { key: s.replace(/_desc$/, ""), direction: "desc" };
+    return { key: s, direction: "asc" };
+  }, [filterValues.sort]);
+
+  const handleColumnSort = useCallback((sortKey: string) => {
+    setFilterValues((prev) => {
+      const current = prev.sort || "";
+      if (current === `${sortKey}_asc` || current === sortKey) {
+        return { ...prev, sort: `${sortKey}_desc` };
+      }
+      if (current === `${sortKey}_desc`) {
+        return { ...prev, sort: "" };
+      }
+      return { ...prev, sort: `${sortKey}_asc` };
+    });
+  }, []);
+
+  const handleRowClick = useCallback(
+    (agent: Agent) => {
+      navigate(`/agents/${agent.id}`);
+    },
+    [navigate],
   );
 
-  const agents = data?.items ?? [];
+  const handleCreate = async (data: AgentCreate | AgentUpdate) => {
+    setCreating(true);
+    try {
+      const agent = await createAgent(data as AgentCreate);
+      setShowCreateDialog(false);
+      navigate(`/agents/${agent.id}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDelete = useCallback(
+    async (agent: Agent) => {
+      if (!confirm(`Are you sure you want to delete "${agent.name}"?`)) return;
+      try {
+        await deleteAgent(agent.id);
+      } catch {
+        // Error is set in store
+      }
+    },
+    [deleteAgent],
+  );
+
+  const handleDuplicate = useCallback(
+    async (agent: Agent) => {
+      try {
+        await duplicateAgent(agent.id);
+      } catch {
+        // Error is set in store
+      }
+    },
+    [duplicateAgent],
+  );
+
+  const columns: ResourceColumn<Agent>[] = [
+    {
+      key: "name",
+      header: "Agent",
+      sortKey: "name",
+      render: (a) => (
+        <div>
+          <p className="font-medium text-sm">{a.name}</p>
+          <p className="text-xs text-muted-foreground line-clamp-1">
+            {a.description || "No description"}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "model",
+      header: "Model",
+      sortKey: "model",
+      className: "hidden md:table-cell",
+      render: (a) => (
+        <span className="text-sm text-muted-foreground font-mono">
+          {a.model_id ? stripProvider(a.model_id) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "type",
+      header: "Type",
+      className: "hidden md:table-cell",
+      render: (a) =>
+        a.model_id ? (
+          <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+            {isLocalModel(a.model_id) ? "Local" : "Cloud"}
+          </Badge>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        ),
+    },
+    {
+      key: "version",
+      header: "Version",
+      className: "hidden lg:table-cell",
+      render: (a) => (
+        <Badge variant="outline" className="text-xs font-mono">
+          v{a.version}
+        </Badge>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         icon={Bot}
-        gradient="from-violet-500 to-purple-500"
+        gradient="from-success to-success/70"
         title="Agents"
-        description="View and manage deployed agents"
+        description="Manage and test AI agents"
         actions={
-          <button
-            onClick={refetch}
-            className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm hover:bg-muted/80 transition-colors"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </button>
+          <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Agent
+          </Button>
         }
       />
 
-      {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-40 animate-pulse rounded-xl bg-muted/50" />
-          ))}
-        </div>
-      ) : agents.length === 0 ? (
-        <div className="rounded-xl border border-border/50 bg-card/50 p-12 text-center">
-          <Bot className="mx-auto h-12 w-12 text-muted-foreground/30" />
-          <p className="mt-4 text-muted-foreground">No agents deployed yet</p>
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {agents.map((agent) => {
-            const provider = getProviderInfo(agent.model_id.split("/")[0] ?? "");
-            return (
-              <div
-                key={agent.id}
-                className="rounded-xl border border-border/50 bg-card/50 p-5 hover:bg-muted/30 transition-colors"
+      <ResourceFilters
+        filters={filterConfigs}
+        values={filterValues}
+        onChange={handleFilterChange}
+      />
+
+      <ResourceTable<Agent>
+        items={filtered}
+        columns={columns}
+        pagination={{
+          page,
+          totalPages,
+          totalItems: total,
+        }}
+        onPageChange={(p) => fetchAgents(p)}
+        onRowClick={handleRowClick}
+        isLoading={loading}
+        emptyState={
+          <EmptyState
+            icon={Bot}
+            title="No agents yet"
+            description="Create your first AI agent to get started."
+            action={
+              <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Create Agent
+              </Button>
+            }
+          />
+        }
+        keyExtractor={(a) => a.id}
+        sortState={sortState}
+        onSort={handleColumnSort}
+        rowActions={(a) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                ...
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleDuplicate(a)}>
+                <Copy className="mr-2 h-3.5 w-3.5" />
+                Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleDelete(a)}
+                className="text-destructive"
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-500">
-                      <Bot className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">{agent.name}</h3>
-                      <p className="text-xs text-muted-foreground">v{agent.version}</p>
-                    </div>
-                  </div>
-                  {agent.is_template && (
-                    <span className="rounded-md bg-blue-500/10 px-2 py-0.5 text-xs text-blue-500">Template</span>
-                  )}
-                </div>
-                {agent.description && (
-                  <p className="mt-3 text-sm text-muted-foreground line-clamp-2">{agent.description}</p>
-                )}
-                <div className="mt-4 flex items-center gap-2">
-                  <span className={cn("h-2 w-2 rounded-full", provider.color)} />
-                  <span className="text-xs text-muted-foreground">
-                    {provider.name} / {stripProvider(agent.model_id)}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      />
+
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Agent</DialogTitle>
+            <DialogDescription>
+              Configure a new AI agent with a system prompt and model.
+            </DialogDescription>
+          </DialogHeader>
+          <AgentForm
+            onSubmit={handleCreate}
+            onCancel={() => setShowCreateDialog(false)}
+            loading={creating}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
