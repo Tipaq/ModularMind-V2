@@ -8,10 +8,10 @@ import logging
 import math
 
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.auth import CurrentUser
+from src.auth import CurrentUser, RequireOwner
 from src.infra.config import get_settings
 from src.models.service import get_model_service
 
@@ -340,6 +340,81 @@ async def list_catalog(
         page_size=page_size,
         total_pages=total_pages,
     )
+
+
+@usage_router.get("/catalog/{model_id}")
+async def get_catalog_model(model_id: str, user: CurrentUser) -> CatalogModelResponse:
+    """Get a single model from the catalog by ID."""
+    svc = get_model_service()
+    m = svc.get_model(model_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    provider = m.get("provider", "")
+    model_id_raw = m.get("model_id", "")
+    is_embedding = m.get("is_embedding", False)
+
+    size = m.get("parameter_size")
+    disk_size = m.get("disk_size")
+    quantization = m.get("quantization")
+    family = m.get("family")
+
+    pull_status: str | None = None
+    pull_progress: int | None = None
+    pull_error: str | None = None
+
+    if provider == "ollama":
+        ollama_details = await svc.get_ollama_model_details()
+        if model_id_raw in ollama_details:
+            info = ollama_details[model_id_raw]
+            size = info.get("parameter_size") or size
+            disk_size = _format_bytes(info.get("size_bytes")) or disk_size
+            quantization = info.get("quantization") or quantization
+            family = info.get("family") or family
+            pull_status = "ready"
+            pull_progress = 100
+        else:
+            raw_progress = await svc.get_pull_progress(model_id_raw)
+            pull_status, pull_progress, pull_error = _decode_progress(raw_progress)
+    else:
+        from src.infra.secrets import secrets_store
+        configured_providers = secrets_store.get_configured_providers()
+        pull_status = "ready" if configured_providers.get(provider) else None
+
+    return CatalogModelResponse(
+        id=m.get("id", ""),
+        provider=provider,
+        model_name=model_id_raw,
+        display_name=m.get("display_name") or m.get("name", model_id_raw),
+        model_type=m.get("model_type", "local"),
+        context_window=m.get("context_window"),
+        max_output_tokens=m.get("max_output_tokens"),
+        family=family,
+        size=size,
+        disk_size=disk_size,
+        quantization=quantization,
+        capabilities=_derive_capabilities(model_id_raw, provider, is_embedding),
+        is_required=m.get("is_required", False),
+        is_enabled=m.get("is_active", True),
+        is_global=True,
+        pull_status=pull_status,
+        pull_progress=pull_progress,
+        pull_error=pull_error,
+        model_metadata=m.get("model_metadata", {}),
+    )
+
+
+@usage_router.delete("/catalog/{model_id}", dependencies=[RequireOwner])
+async def remove_catalog_model(model_id: str, user: CurrentUser) -> dict:
+    """Remove a model from the catalog."""
+    svc = get_model_service()
+    m = svc.get_model(model_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if m.get("is_required"):
+        raise HTTPException(status_code=400, detail="Cannot remove a required model")
+    svc.delete_model(model_id)
+    return {"id": model_id, "status": "removed"}
 
 
 @usage_router.get("/providers")
