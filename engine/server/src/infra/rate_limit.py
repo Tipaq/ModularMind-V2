@@ -9,13 +9,12 @@ Uses a pure ASGI middleware (not BaseHTTPMiddleware) for better performance.
 
 import logging
 import time
-from collections import defaultdict
 from threading import Lock
 from typing import Any
 
 from fastapi import HTTPException, Request
 from starlette.requests import Request as StarletteRequest
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from src.infra.config import get_settings
@@ -172,7 +171,6 @@ class RateLimitMiddleware:
         # Inject rate limit headers into the response
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
-                headers = dict(message.get("headers", []))
                 extra = [
                     (b"x-ratelimit-limit", str(self.requests_per_minute).encode()),
                     (b"x-ratelimit-remaining", str(remaining).encode()),

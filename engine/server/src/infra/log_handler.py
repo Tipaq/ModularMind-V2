@@ -8,7 +8,7 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import redis as sync_redis
 
@@ -49,7 +49,7 @@ class RedisLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             entry = json.dumps({
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
                 "level": record.levelname,
                 "logger": record.name,
                 "message": self.format(record),

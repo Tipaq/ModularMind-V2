@@ -15,8 +15,9 @@ async def get_event_bus() -> RedisStreamBus:
     """Get or create the global RedisStreamBus singleton."""
     global _bus
     if _bus is None:
-        from src.infra.redis import get_redis_pool
         import redis.asyncio as aioredis
+
+        from src.infra.redis import get_redis_pool
         client = aioredis.Redis(connection_pool=get_redis_pool())
         _bus = RedisStreamBus(client)
     return _bus

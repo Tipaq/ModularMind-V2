@@ -7,7 +7,7 @@ health check, and graceful shutdown.
 from __future__ import annotations
 
 import logging
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import redis.asyncio as aioredis
 

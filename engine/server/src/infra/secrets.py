@@ -29,7 +29,7 @@ import os
 import platform
 import stat
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
 
@@ -129,7 +129,7 @@ class SecretsStore:
         try:
             data = {
                 "secrets": self._secrets,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }
             plaintext = json.dumps(data).encode()
             encrypted = self._fernet.encrypt(plaintext)
@@ -212,7 +212,7 @@ class SecretsStore:
         """
         with self._lock:
             self._secrets[key] = value
-            self._last_update = datetime.now(timezone.utc)
+            self._last_update = datetime.now(UTC)
             self.persist()
         logger.info("Secret updated (key length: %d)", len(key))
 
@@ -226,7 +226,7 @@ class SecretsStore:
             if key not in self._secrets:
                 return False
             del self._secrets[key]
-            self._last_update = datetime.now(timezone.utc)
+            self._last_update = datetime.now(UTC)
             self.persist()
         logger.info("Secret deleted (key length: %d)", len(key))
         return True

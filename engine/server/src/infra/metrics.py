@@ -12,7 +12,7 @@ import json
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import psutil
@@ -305,7 +305,7 @@ async def snapshot_metrics(r) -> None:
             current_names = {m.get("name", "") for m in ollama_models}
             loaded = current_names - _previous_model_names
             unloaded = _previous_model_names - current_names
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
 
             if loaded or unloaded:
                 event_pipe = r.pipeline(transaction=False)
@@ -380,7 +380,7 @@ async def evaluate_alerts(r) -> None:
         if not thresholds.get("enabled", True):
             return
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         alerts: list[dict] = []
 
         # CPU — use cached value from snapshot_metrics() (accurate, thread-based)
