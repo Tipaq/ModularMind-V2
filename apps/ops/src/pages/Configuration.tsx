@@ -1,84 +1,61 @@
-import { Settings2, RefreshCw, Key, Check, X } from "lucide-react";
-import { cn, PageHeader } from "@modularmind/ui";
-import type { ProviderConfig } from "@modularmind/api-client";
-import { getProviderInfo } from "@modularmind/api-client";
-import { useApi } from "../hooks/useApi";
-import { api } from "../lib/api";
+import { useSearchParams } from "react-router-dom";
+import { Settings2, Key, Plug, Webhook, Cog } from "lucide-react";
+import { PageHeader } from "@modularmind/ui";
+import ProvidersTab from "../components/configuration/ProvidersTab";
+import McpServersTab from "../components/configuration/McpServersTab";
+import IntegrationsTab from "../components/configuration/IntegrationsTab";
+import SystemTab from "../components/configuration/SystemTab";
+
+type TabId = "providers" | "mcp" | "integrations" | "system";
+
+const tabs: { id: TabId; label: string; icon: typeof Key }[] = [
+  { id: "providers", label: "Providers", icon: Key },
+  { id: "mcp", label: "MCP Servers", icon: Plug },
+  { id: "integrations", label: "Integrations", icon: Webhook },
+  { id: "system", label: "System", icon: Cog },
+];
 
 export default function Configuration() {
-  const { data: providers, isLoading, refetch } = useApi<ProviderConfig[]>(
-    () => api.get("/models/providers"),
-    [],
-  );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get("tab") as TabId) || "providers";
+
+  const setActiveTab = (tab: TabId) => {
+    setSearchParams({ tab }, { replace: true });
+  };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         icon={Settings2}
-        gradient="from-muted-foreground to-muted-foreground/70"
+        gradient="from-primary to-primary/70"
         title="Configuration"
-        description="LLM providers, API keys, and system settings"
-        actions={
-          <button
-            onClick={refetch}
-            className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm hover:bg-muted/80 transition-colors"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </button>
-        }
+        description="Manage providers, integrations, and system settings"
       />
 
-      {/* LLM Providers */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">LLM Providers</h2>
-        {isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-28 animate-pulse rounded-xl bg-muted/50" />
-            ))}
-          </div>
-        ) : !providers || providers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No providers configured</p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {providers.map((p) => {
-              const info = getProviderInfo(p.provider);
-              return (
-                <div
-                  key={p.provider}
-                  className="rounded-xl border border-border/50 bg-card/50 p-5 hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className={cn("h-3 w-3 rounded-full", info.color)} />
-                      <h3 className="font-medium">{p.name}</h3>
-                    </div>
-                    {p.is_connected ? (
-                      <span className="flex items-center gap-1 text-xs text-success">
-                        <Check className="h-3 w-3" /> Connected
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-xs text-destructive">
-                        <X className="h-3 w-3" /> Disconnected
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                    <Key className="h-3 w-3" />
-                    {p.is_configured ? "API key configured" : "No API key"}
-                  </div>
-                  {p.base_url && (
-                    <p className="mt-1 text-xs text-muted-foreground font-mono truncate">
-                      {p.base_url}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      <div className="flex border-b border-border">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === "providers" && <ProvidersTab />}
+      {activeTab === "mcp" && <McpServersTab />}
+      {activeTab === "integrations" && <IntegrationsTab />}
+      {activeTab === "system" && <SystemTab />}
     </div>
   );
 }

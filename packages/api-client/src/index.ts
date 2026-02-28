@@ -8,6 +8,7 @@ export type * from "./types/conversations";
 export type * from "./types/rag";
 export type * from "./types/monitoring";
 export type * from "./types/auth";
+export type * from "./types/settings";
 
 // Models (includes runtime values: PROVIDER_INFO, getProviderInfo)
 export { PROVIDER_INFO, getProviderInfo } from "./types/models";
