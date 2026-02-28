@@ -6,8 +6,7 @@ API endpoints for authentication.
 
 import logging
 import secrets
-from datetime import datetime, timezone
-
+from datetime import UTC, datetime
 from typing import Annotated
 
 import jwt as pyjwt
@@ -98,7 +97,6 @@ async def login(
     logger.info("User logged in: user_id=%s", user.id)
 
     user_response = UserResponse.model_validate(user)
-    user_response.runtime_mode = settings.RUNTIME_MODE
 
     return LoginResponse(
         expires_in=settings.JWT_EXPIRE_SECONDS,
@@ -126,8 +124,8 @@ async def logout(request: Request, response: Response) -> dict[str, str]:
                 redis_client = await get_redis_client()
                 if redis_client:
                     try:
-                        exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
-                        remaining = int((exp - datetime.now(timezone.utc)).total_seconds())
+                        exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
+                        remaining = int((exp - datetime.now(UTC)).total_seconds())
                         if remaining > 0:
                             await redis_client.set(
                                 f"refresh_blacklist:{jti}", "1", ex=remaining
@@ -202,7 +200,7 @@ async def refresh_tokens(
     if redis_client:
         try:
             remaining_ttl = int(
-                (token_data.exp - datetime.now(timezone.utc)).total_seconds()
+                (token_data.exp - datetime.now(UTC)).total_seconds()
             )
             if remaining_ttl > 0:
                 await redis_client.set(
@@ -266,10 +264,8 @@ async def create_ws_ticket(user: CurrentUser) -> dict[str, str]:
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(user: CurrentUser) -> UserResponse:
-    """Get current user information including runtime mode."""
-    response = UserResponse.model_validate(user)
-    response.runtime_mode = settings.RUNTIME_MODE
-    return response
+    """Get current user information."""
+    return UserResponse.model_validate(user)
 
 
 

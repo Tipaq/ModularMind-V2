@@ -11,7 +11,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.auth import CurrentUser, RequireAdmin
-from src.internal.auth import get_internal_bearer_token
 
 logger = logging.getLogger(__name__)
 
@@ -132,8 +131,8 @@ async def action_stop_execution(
     execution_id: str, user: CurrentUser
 ) -> ActionResponse:
     """Stop a running execution."""
-    from src.infra.database import async_session_maker
     from src.executions.service import ExecutionService
+    from src.infra.database import async_session_maker
 
     try:
         async with async_session_maker() as session:
@@ -148,7 +147,7 @@ async def action_stop_execution(
                 status="error",
                 message=f"Could not stop execution {execution_id}",
             )
-    except Exception as e:
+    except Exception:
         logger.exception("Stop execution failed")
         return ActionResponse(status="error", message="Failed to stop execution")
 
@@ -165,30 +164,30 @@ async def action_scheduler_cleanup(user: CurrentUser) -> ActionResponse:
             message=f"Cleaned up {cleaned} stale slot(s)",
             details={"cleaned": cleaned},
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Scheduler cleanup failed")
         return ActionResponse(status="error", message="Scheduler cleanup failed")
 
 
 @router.post("/actions/sync/reload", dependencies=[RequireAdmin])
 async def action_sync_reload(user: CurrentUser) -> ActionResponse:
-    """Trigger a config reload from the sync service."""
-    import httpx
-
+    """Trigger a config reload from the platform."""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                f"http://sync-service:8000/api/v1/sync/trigger",
-                headers={"Authorization": get_internal_bearer_token()},
-            )
-            if resp.status_code == 200:
+        from src.sync.service import SyncService
+
+        svc = SyncService()
+        await svc.initialize()
+        try:
+            updated = await svc.poll()
+            if updated:
                 return ActionResponse(
-                    status="ok", message="Sync reload triggered"
+                    status="ok", message="Config updated from platform"
                 )
             return ActionResponse(
-                status="error",
-                message=f"Sync service returned {resp.status_code}",
+                status="ok", message="Already up to date"
             )
-    except Exception as e:
+        finally:
+            await svc.close()
+    except Exception:
         logger.exception("Sync reload failed")
         return ActionResponse(status="error", message="Sync reload failed")

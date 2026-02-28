@@ -1,8 +1,8 @@
 """
 Configuration Provider.
 
-Loads agent and graph configurations from YAML and JSON files.
-YAML files take precedence when both formats exist for the same config.
+Loads agent and graph configurations from database (synced from Platform).
+Model configs are loaded from YAML/JSON files on the filesystem.
 
 Also supports Redis-backed ephemeral agents that are visible across
 both FastAPI and worker processes.
@@ -11,21 +11,16 @@ both FastAPI and worker processes.
 import asyncio
 import json
 import logging
-import os
-import tempfile
 import threading
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 import redis.asyncio as aioredis
+import yaml
+from modularmind_shared.utils import compute_config_hash
 
 from src.graph_engine import AgentConfig, ConfigVersion, GraphConfig
-
-from modularmind_shared.utils import compute_config_hash
 from src.infra.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -47,75 +42,22 @@ def read_yaml_file(path: Path) -> dict[str, Any]:
     return data
 
 
-_ATOMIC_WRITE_RETRIES = 3
-_ATOMIC_WRITE_RETRY_DELAY = 0.05
-
-
-def write_yaml_file(path: Path, data: dict[str, Any]) -> None:
-    """Atomic write: write to temp file then rename to avoid partial reads."""
-    tmp_fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-    try:
-        with os.fdopen(tmp_fd, "w") as f:
-            yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        # Atomic on POSIX; on Windows, retry on PermissionError from concurrent readers
-        for attempt in range(_ATOMIC_WRITE_RETRIES):
-            try:
-                os.replace(tmp_path, path)
-                break
-            except PermissionError:
-                if attempt == _ATOMIC_WRITE_RETRIES - 1:
-                    raise
-                time.sleep(_ATOMIC_WRITE_RETRY_DELAY)
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        raise
-
-
-def read_config_file(path: Path) -> dict[str, Any] | None:
-    """Read a config file.
-
-    If *path* has a recognised extension (.yaml/.yml/.json), read directly.
-    If *path* has no extension (stem lookup), try YAML first, then JSON.
-    Returns ``None`` when the file doesn't exist.
-    """
-    if path.suffix in (".yaml", ".yml"):
-        return read_yaml_file(path)
-    if path.suffix == ".json":
-        return read_json_file(path)
-    # Stem lookup — YAML takes precedence
-    yaml_path = path.with_suffix(".yaml")
-    if yaml_path.exists():
-        return read_yaml_file(yaml_path)
-    json_path = path.with_suffix(".json")
-    if json_path.exists():
-        return read_json_file(json_path)
-    return None
-
-
 class ConfigProvider:
     """Provides agent, graph, and model configurations.
 
     Provides config for GraphCompiler dependency injection.
 
-    Dual-mode operation:
-    - admin: agents/graphs from DB (via ConfigRepository), models from filesystem
-    - client: all configs from filesystem (YAML/JSON)
+    Agents and graphs are always loaded from the database (synced from Platform).
+    Model configs are loaded from the filesystem (YAML/JSON).
     """
 
-    def __init__(
-        self,
-        config_dir: str | None = None,
-        mode: str = "client",
-    ):
+    def __init__(self, config_dir: str | None = None):
         """Initialize config provider.
 
         Args:
-            config_dir: Directory containing config files
-            mode: "admin" (DB-backed agents/graphs) or "client" (filesystem only)
+            config_dir: Directory containing model config files
         """
         self.config_dir = Path(config_dir or settings.CONFIG_DIR)
-        self._mode = mode
         self._agents: dict[str, AgentConfig] = {}
         self._graphs: dict[str, GraphConfig] = {}
         self._models: dict[str, dict[str, Any]] = {}
@@ -146,7 +88,7 @@ class ConfigProvider:
                 await self._load_configs_locked()
 
     async def load_configs(self) -> None:
-        """Load all configurations from disk (public API)."""
+        """Load all configurations (public API)."""
         async with self._lock:
             await self._load_configs_locked()
 
@@ -155,14 +97,10 @@ class ConfigProvider:
 
         Uses atomic dict swap to avoid partial state visible to concurrent readers.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         new_versions: dict[str, ConfigVersion] = {}
 
-        if self._mode == "admin":
-            new_agents, new_graphs = await self._load_agents_graphs_from_db(now, new_versions)
-        else:
-            new_agents, new_graphs = await self._load_agents_graphs_from_fs(now, new_versions)
-
+        new_agents, new_graphs = await self._load_agents_graphs_from_db(now, new_versions)
         new_models = await self._load_models_from_fs(now, new_versions)
 
         # Atomic swap: replace all dicts at once
@@ -173,9 +111,8 @@ class ConfigProvider:
 
         self._loaded = True
         logger.info(
-            "Loaded %d agents, %d graphs, %d models (mode=%s)",
-            len(self._agents), len(self._graphs),
-            len(self._models), self._mode,
+            "Loaded %d agents, %d graphs, %d models",
+            len(self._agents), len(self._graphs), len(self._models),
         )
 
     async def _load_agents_graphs_from_db(
@@ -183,12 +120,12 @@ class ConfigProvider:
         now: datetime,
         versions: dict[str, ConfigVersion],
     ) -> tuple[dict[str, AgentConfig], dict[str, GraphConfig]]:
-        """Load agents and graphs from database (admin mode)."""
+        """Load agents and graphs from database."""
         new_agents: dict[str, AgentConfig] = {}
         new_graphs: dict[str, GraphConfig] = {}
         try:
-            from src.infra.database import async_session_maker
             from src.domain_config.repository import ConfigRepository
+            from src.infra.database import async_session_maker
 
             async with async_session_maker() as session:
                 repo = ConfigRepository(session)
@@ -231,51 +168,16 @@ class ConfigProvider:
                     versions[k] = v
         return new_agents, new_graphs
 
-    async def _load_agents_graphs_from_fs(
-        self,
-        now: datetime,
-        versions: dict[str, ConfigVersion],
-    ) -> tuple[dict[str, AgentConfig], dict[str, GraphConfig]]:
-        """Load agents and graphs from filesystem (client mode)."""
-        new_agents: dict[str, AgentConfig] = {}
-        new_graphs: dict[str, GraphConfig] = {}
-
-        for file in self._scan_config_files(self.config_dir / "agents"):
-            try:
-                data = await asyncio.to_thread(read_config_file, file)
-                config = AgentConfig.model_validate(data)
-                config_id = str(config.id)
-                new_agents[config_id] = config
-                versions[f"agent:{config_id}"] = ConfigVersion(
-                    config_hash=compute_config_hash(data), loaded_at=now,
-                )
-            except Exception as e:
-                logger.error("Failed to load agent config %s: %s", file, e)
-
-        for file in self._scan_config_files(self.config_dir / "graphs"):
-            try:
-                data = await asyncio.to_thread(read_config_file, file)
-                config = GraphConfig.model_validate(data)
-                config_id = str(config.id)
-                new_graphs[config_id] = config
-                versions[f"graph:{config_id}"] = ConfigVersion(
-                    config_hash=compute_config_hash(data), loaded_at=now,
-                )
-            except Exception as e:
-                logger.error("Failed to load graph config %s: %s", file, e)
-
-        return new_agents, new_graphs
-
     async def _load_models_from_fs(
         self,
         now: datetime,
         versions: dict[str, ConfigVersion],
     ) -> dict[str, dict[str, Any]]:
-        """Load model configs from filesystem (always, regardless of mode)."""
+        """Load model configs from filesystem."""
         new_models: dict[str, dict[str, Any]] = {}
         for file in self._scan_config_files(self.config_dir / "models"):
             try:
-                data = await asyncio.to_thread(read_config_file, file)
+                data = await asyncio.to_thread(read_json_file if file.suffix == ".json" else read_yaml_file, file)
                 model_id = data.get("model_id") or data.get("id", file.stem)
                 new_models[str(model_id)] = data
                 versions[f"model:{model_id}"] = ConfigVersion(
@@ -366,29 +268,20 @@ class ConfigProvider:
         return bool(await self._redis.exists(f"{self.EPHEMERAL_PREFIX}{agent_id}"))
 
     async def save_ephemeral_agent(self, agent_id: str) -> bool:
-        """Persist ephemeral agent to storage and remove from Redis.
-
-        Admin mode: saves to DB via ConfigRepository as version 1.
-        Client mode: saves to YAML on disk.
-        """
+        """Persist ephemeral agent to DB and remove from Redis."""
         config = await self.get_ephemeral_agent(agent_id)
         if not config:
             return False
 
-        if self._mode == "admin":
-            from src.infra.database import async_session_maker
-            from src.domain_config.repository import ConfigRepository
+        from src.domain_config.repository import ConfigRepository
+        from src.infra.database import async_session_maker
 
-            async with async_session_maker() as session:
-                repo = ConfigRepository(session)
-                config_dict = config.model_dump(mode="json")
-                config_dict.pop("version", None)
-                await repo.create_agent_version(str(config.id), config_dict)
-                await session.commit()
-        else:
-            file_path = self.config_dir / "agents" / f"{agent_id}.yaml"
-            data = config.model_dump(mode="json")
-            await asyncio.to_thread(write_yaml_file, file_path, data)
+        async with async_session_maker() as session:
+            repo = ConfigRepository(session)
+            config_dict = config.model_dump(mode="json")
+            config_dict.pop("version", None)
+            await repo.create_agent_version(str(config.id), config_dict)
+            await session.commit()
 
         self._agents[agent_id] = config
         await self.unregister_ephemeral_agent(agent_id)
@@ -401,7 +294,7 @@ class ConfigProvider:
     async def get_agent_config(self, agent_id: str) -> AgentConfig | None:
         """Get agent configuration by ID.
 
-        Checks Redis ephemeral agents first, then disk-loaded agents.
+        Checks Redis ephemeral agents first, then DB-loaded agents.
         """
         await self.ensure_loaded()
         if self._redis:
@@ -416,15 +309,15 @@ class ConfigProvider:
         return self._graphs.get(graph_id)
 
     async def list_agents(self) -> list[AgentConfig]:
-        """List all available agents (disk + ephemeral).
+        """List all available agents (DB + ephemeral).
 
-        Ephemeral agents overwrite disk agents with the same ID.
+        Ephemeral agents overwrite DB agents with the same ID.
         """
         await self.ensure_loaded()
-        all_agents = dict(self._agents)  # start with disk agents
+        all_agents = dict(self._agents)  # start with DB agents
         if self._redis:
             for a in await self.list_ephemeral_agents():
-                all_agents[str(a.id)] = a  # ephemeral overwrites disk
+                all_agents[str(a.id)] = a  # ephemeral overwrites DB
         return list(all_agents.values())
 
     async def list_graphs(self) -> list[GraphConfig]:
@@ -436,7 +329,7 @@ class ConfigProvider:
         self, capabilities: list[str], match_all: bool = False,
         exclude_ids: list[str] | None = None,
     ) -> list[AgentConfig]:
-        """Find agents matching one or more capabilities (disk + ephemeral)."""
+        """Find agents matching one or more capabilities (DB + ephemeral)."""
         await self.ensure_loaded()
         exclude = set(exclude_ids or [])
         all_agents = list(self._agents.values())
@@ -448,9 +341,7 @@ class ConfigProvider:
                 continue
             agent_caps = set(agent.capabilities)
             required = set(capabilities)
-            if match_all and required.issubset(agent_caps):
-                results.append(agent)
-            elif not match_all and required & agent_caps:
+            if match_all and required.issubset(agent_caps) or not match_all and required & agent_caps:
                 results.append(agent)
         return results
 
@@ -516,8 +407,5 @@ def get_config_provider() -> ConfigProvider:
     if _provider is None:
         with _provider_lock:
             if _provider is None:
-                _provider = ConfigProvider(
-                    config_dir=settings.CONFIG_DIR,
-                    mode=settings.RUNTIME_MODE,
-                )
+                _provider = ConfigProvider(config_dir=settings.CONFIG_DIR)
     return _provider

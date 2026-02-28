@@ -31,7 +31,6 @@ async def get_setup_status(db: DbSession) -> SetupStatus:
     initialized = await is_initialized(db)
     return SetupStatus(
         initialized=initialized,
-        runtime_mode=settings.RUNTIME_MODE,
         version=settings.APP_VERSION,
     )
 

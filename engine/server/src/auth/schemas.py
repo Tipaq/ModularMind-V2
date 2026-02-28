@@ -46,8 +46,6 @@ class UserResponse(BaseModel):
     role: UserRole
     is_active: bool
     created_at: datetime
-    runtime_mode: str | None = None
-
     model_config = {"from_attributes": True}
 
 

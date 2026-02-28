@@ -1,7 +1,7 @@
 """ModularMind Engine — Headless AI Agent Execution Runtime.
 
 FastAPI application with lifespan-managed startup/shutdown, CORS middleware,
-structured exception handlers, and router mounting based on RUNTIME_MODE.
+and structured exception handlers.
 """
 
 from __future__ import annotations
@@ -22,33 +22,31 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Always-on routers
-from src.health.router import router as health_router
-from src.auth.router import router as auth_router
+from src.admin.user_router import admin_user_router
 from src.agents.router import router as agents_router
-from src.graphs.router import router as graphs_router
-from src.executions.router import router as executions_router
-from src.conversations.router import router as conversations_router
-from src.memory.router import router as memory_router
-from src.rag.router import router as rag_router
-from src.models.usage_router import usage_router as models_usage_router
-from src.mcp.usage_router import usage_router as mcp_usage_router
-from src.setup.router import router as setup_router
+from src.auth.router import router as auth_router
 from src.connectors.router import router as connectors_router
 from src.connectors.webhook_router import webhook_router
-from src.report.router import router as report_router
-from src.sync.router import router as sync_router
-from src.recall.router import router as recall_router
-from src.supervisor.router import router as supervisor_router
-from src.groups.router import router as groups_router
-
-# Admin-only routers (mounted conditionally on RUNTIME_MODE)
-from src.internal.router import router as internal_router
-from src.fine_tuning.router import router as fine_tuning_router
-from src.mcp.router import router as mcp_admin_router
-from src.models.router import router as models_admin_router
-from src.admin.user_router import admin_user_router
 from src.conversations.router import admin_router as conversations_admin_router
+from src.conversations.router import router as conversations_router
+from src.executions.router import router as executions_router
+from src.fine_tuning.router import router as fine_tuning_router
+from src.graphs.router import router as graphs_router
+from src.groups.router import router as groups_router
+from src.health.router import router as health_router
 
+from src.internal.router import router as internal_router
+from src.mcp.router import router as mcp_admin_router
+from src.mcp.usage_router import usage_router as mcp_usage_router
+from src.memory.router import router as memory_router
+from src.models.router import router as models_admin_router
+from src.models.usage_router import usage_router as models_usage_router
+from src.rag.router import router as rag_router
+from src.recall.router import router as recall_router
+from src.report.router import router as report_router
+from src.setup.router import router as setup_router
+from src.supervisor.router import router as supervisor_router
+from src.sync.router import router as sync_router
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -114,8 +112,7 @@ async def lifespan(app: FastAPI):
         logger.warning("MCP leader-only startup failed (non-fatal): %s", exc)
 
     logger.info(
-        "ModularMind Engine started (mode=%s, env=%s)",
-        settings.RUNTIME_MODE,
+        "ModularMind Engine started (env=%s)",
         settings.ENVIRONMENT,
     )
 
@@ -253,14 +250,10 @@ app.include_router(recall_router, prefix=API_PREFIX)
 app.include_router(supervisor_router, prefix=API_PREFIX)
 app.include_router(groups_router, prefix=API_PREFIX)
 
-# ── Admin / owner-only routers ───────────────────────────────────────────
-# Only mounted when RUNTIME_MODE == "admin" so client-mode deployments
-# return 404 for these paths instead of exposing management endpoints.
-
-if settings.RUNTIME_MODE == "admin":
-    app.include_router(internal_router, prefix=f"{API_PREFIX}/internal")
-    app.include_router(fine_tuning_router, prefix=API_PREFIX)
-    app.include_router(mcp_admin_router, prefix=f"{API_PREFIX}/internal")
-    app.include_router(models_admin_router, prefix=API_PREFIX)
-    app.include_router(admin_user_router, prefix=f"{API_PREFIX}/admin")
-    app.include_router(conversations_admin_router, prefix=f"{API_PREFIX}/admin")
+# ── Admin routers ────────────────────────────────────────────────────────
+app.include_router(internal_router, prefix=f"{API_PREFIX}/internal")
+app.include_router(fine_tuning_router, prefix=API_PREFIX)
+app.include_router(mcp_admin_router, prefix=f"{API_PREFIX}/internal")
+app.include_router(models_admin_router, prefix=API_PREFIX)
+app.include_router(admin_user_router, prefix=f"{API_PREFIX}/admin")
+app.include_router(conversations_admin_router, prefix=f"{API_PREFIX}/admin")

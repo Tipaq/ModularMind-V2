@@ -43,7 +43,9 @@ __all__ = [
     "AuthService",
     # Dependencies
     "get_current_user",
+    "get_current_user_groups",
     "CurrentUser",
+    "CurrentUserGroups",
     "require_min_role",
     "RequireOwner",
     "RequireAdmin",

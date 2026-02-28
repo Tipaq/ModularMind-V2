@@ -1,7 +1,7 @@
 """Setup wizard service."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -70,7 +70,7 @@ async def initialize_runtime(
     manifest = {
         "name": runtime_name,
         "version": "1.0.0",
-        "created": datetime.now(timezone.utc).isoformat(),
+        "created": datetime.now(UTC).isoformat(),
         "description": f"ModularMind runtime for {runtime_name}",
         "default_model": _PROVIDER_DEFAULT_MODEL.get(
             default_provider, f"{default_provider}:default"

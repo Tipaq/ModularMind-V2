@@ -107,17 +107,13 @@ class Settings(BaseSettings):
         description="Model ID for the Super Supervisor routing LLM (format: provider:model)",
     )
 
-    # ---- Runtime Mode -------------------------------------------------------
-    RUNTIME_MODE: Literal["admin", "client"] = Field(
-        default="client",
-        description="admin=all routers mounted (owner features), client=owner-only routers excluded (404)",
-    )
+    # ---- Runtime Mode (removed — Engine always mounts all routers) ---------
 
     # ---- Sync API Keys (admin-side) -----------------------------------------
     SYNC_API_KEYS: str = Field(
         default="",
         description=(
-            "Comma-separated API keys that client sync-services use to pull manifests. "
+            "Comma-separated API keys for sync manifest authentication. "
             "Generate with: openssl rand -hex 32"
         ),
     )

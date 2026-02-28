@@ -7,7 +7,6 @@ class SetupStatus(BaseModel):
     """Response for GET /setup/status."""
 
     initialized: bool
-    runtime_mode: str
     version: str
 
 

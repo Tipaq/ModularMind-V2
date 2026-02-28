@@ -11,19 +11,27 @@ import time
 import psutil
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
-
 from sqlalchemy import select
 
 from src.auth import CurrentUser, RequireAdmin
 from src.auth.models import User, UserRole, UserSource
 from src.domain_config import get_config_provider
-from src.infra.database import DbSession
 from src.infra.constants import RATE_LIMIT_INTERNAL
+from src.infra.database import DbSession
 from src.infra.rate_limit import RateLimitDependency
-from src.internal.auth import verify_internal_token
 
 # Sub-routers
-from src.internal import actions, alerts, logs, monitoring, playground, providers, settings, supervisor_layers
+from src.internal import (
+    actions,
+    alerts,
+    logs,
+    monitoring,
+    playground,
+    providers,
+    settings,
+    supervisor_layers,
+)
+from src.internal.auth import verify_internal_token
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +183,7 @@ class UserSyncItem(BaseModel):
 
 
 class UserSyncRequest(BaseModel):
-    """Request body for user sync from sync-service."""
+    """Request body for user sync from platform."""
 
     users: list[UserSyncItem]
 
@@ -185,7 +193,7 @@ async def sync_users(request: Request, body: UserSyncRequest, db: DbSession) -> 
     """Upsert users from platform sync.
 
     Protected by HMAC-derived internal token (same as /reload).
-    Called by sync-service after fetching config from platform.
+    Called by platform sync after fetching config.
     """
     verify_internal_token(request)
 
