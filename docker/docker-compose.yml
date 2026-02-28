@@ -2,7 +2,7 @@
 # ModularMind V2 — Client Deployment (Engine + Worker + Nginx + Infra)
 # =============================================================================
 # 7 containers: nginx, engine, worker, db, redis, qdrant, ollama
-# Chat + Ops are static SPAs served directly by nginx (no dedicated containers)
+# Chat + Ops are static SPAs baked into the nginx image (no dedicated containers)
 
 x-engine-env: &engine-env
   DATABASE_URL: postgresql+asyncpg://${DB_USER:-modularmind}:${DB_PASSWORD}@db:5432/modularmind
@@ -45,7 +45,7 @@ services:
     image: qdrant/qdrant:v1.13.0
     volumes: [qdrant-data:/qdrant/storage]
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/readyz"]
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333' || exit 1"]
       interval: 10s
 
   ollama:
@@ -80,13 +80,14 @@ services:
       timeout: 5s
       retries: 3
 
-  # --- Nginx (serves Chat + Ops static + proxies Engine) ---
+  # --- Nginx (Chat + Ops static baked in, proxies Engine API) ---
   nginx:
-    image: nginx:alpine
+    build:
+      context: ..
+      dockerfile: docker/nginx/Dockerfile
+    image: modularmind/nginx:latest
     volumes:
       - ./nginx/client.conf:/etc/nginx/conf.d/default.conf:ro
-      - chat-static:/usr/share/nginx/html/chat:ro
-      - ops-static:/usr/share/nginx/html/ops:ro
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
@@ -97,5 +98,3 @@ volumes:
   redis-data:
   qdrant-data:
   ollama-data:
-  chat-static:
-  ops-static:

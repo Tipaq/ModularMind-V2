@@ -2,7 +2,7 @@
 # ModularMind V2 — Development Commands
 # =============================================================================
 
-.PHONY: help setup dev dev-chat dev-ops dev-platform dev-engine build test lint clean
+.PHONY: help setup dev dev-chat dev-ops dev-platform dev-engine dev-worker dev-infra build build-docker build-platform deploy deploy-platform test test-cov lint lint-fix migrate migrate-new db-push db-studio clean
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -33,13 +33,28 @@ dev-platform: ## Start Platform (Next.js dev server)
 dev-engine: ## Start Engine server (uvicorn)
 	cd engine/server && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
+dev-worker: ## Start Worker process
+	cd engine/server && python -m src.worker.runner
+
+dev-infra: ## Start infra only (db, redis, qdrant, ollama)
+	docker compose -f docker/docker-compose.dev.yml up db redis qdrant ollama
+
 # --- Build ---
 
 build: ## Build all apps
 	pnpm build
 
-build-docker: ## Build Docker images
+build-docker: ## Build Docker images (client deployment)
 	docker compose -f docker/docker-compose.yml build
+
+build-platform: ## Build Platform Docker image
+	docker compose -f docker/docker-compose.platform.yml build
+
+deploy: ## Deploy client stack
+	docker compose -f docker/docker-compose.yml up -d
+
+deploy-platform: ## Deploy platform stack
+	docker compose -f docker/docker-compose.platform.yml up -d
 
 # --- Test ---
 
@@ -68,6 +83,12 @@ migrate: ## Run Engine DB migrations
 
 migrate-new: ## Create new Engine migration
 	@read -p "Migration message: " msg; cd engine/server && alembic revision --autogenerate -m "$$msg"
+
+db-push: ## Push Platform Prisma schema to DB
+	cd platform && npx prisma db push
+
+db-studio: ## Open Platform Prisma Studio
+	cd platform && npx prisma studio
 
 # --- Clean ---
 

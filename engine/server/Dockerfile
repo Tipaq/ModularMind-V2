@@ -30,9 +30,11 @@ FROM base AS runtime
 COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=deps /usr/local/bin /usr/local/bin
 
-# Copy engine source
+# Copy engine source + Alembic
 COPY engine/server/src ./src
 COPY engine/server/seed ./seed
+COPY engine/server/alembic.ini ./alembic.ini
+COPY engine/server/alembic ./alembic
 
 EXPOSE 8000
 

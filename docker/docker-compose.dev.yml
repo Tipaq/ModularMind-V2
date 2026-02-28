@@ -11,6 +11,8 @@ x-engine-env: &engine-env
   QDRANT_URL: http://qdrant:6333
   OLLAMA_BASE_URL: http://ollama:11434
   SECRET_KEY: dev-secret-key
+  PLATFORM_URL: http://host.docker.internal:3000
+  ENGINE_API_KEY: mmk_dev-engine-api-key-2024
   DEBUG: "true"
 
 x-engine-depends: &engine-depends
@@ -28,12 +30,25 @@ services:
       - "8000:8000"
     volumes:
       - ../engine/server/src:/app/src
+      - ../engine/server/alembic:/app/alembic
+      - ../engine/server/alembic.ini:/app/alembic.ini
       - ../shared/src:/tmp/shared-src
     environment:
       <<: *engine-env
     depends_on:
       <<: *engine-depends
     command: uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+  worker:
+    image: modularmind/engine:dev
+    volumes:
+      - ../engine/server/src:/app/src
+      - ../shared/src:/tmp/shared-src
+    environment:
+      <<: *engine-env
+    depends_on:
+      <<: *engine-depends
+    command: python -m src.worker.runner
 
   db:
     image: postgres:16-alpine
@@ -64,7 +79,7 @@ services:
     ports:
       - "6333:6333"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/readyz"]
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333' || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 5
