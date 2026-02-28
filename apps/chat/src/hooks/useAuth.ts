@@ -1,16 +1,20 @@
-/**
- * Auth hook — JWT login/logout with HttpOnly cookies.
- */
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../stores/auth";
 
-// TODO: Implement auth state management
-// - POST /api/v1/auth/login
-// - POST /api/v1/auth/refresh
-// - POST /api/v1/auth/logout
-export function useAuth() {
-  return {
-    user: null,
-    isAuthenticated: false,
-    login: async (_email: string, _password: string) => {},
-    logout: async () => {},
-  };
+export function useAuth({ requireAuth = true } = {}) {
+  const { user, isLoading, loadFromSession } = useAuthStore();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    loadFromSession();
+  }, [loadFromSession]);
+
+  useEffect(() => {
+    if (requireAuth && !isLoading && !user) {
+      navigate("/login", { replace: true });
+    }
+  }, [requireAuth, isLoading, user, navigate]);
+
+  return { user, isLoading };
 }
