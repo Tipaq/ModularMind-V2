@@ -31,11 +31,11 @@ def _coerce_version(v: Any) -> int:
 class AgentConfig(BaseModel):
     """Agent configuration model."""
 
-    id: UUID
+    id: str  # UUID or CUID (platform-synced agents use CUIDs)
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=500)
-    system_prompt: str = Field(min_length=1, max_length=10000)
-    model_id: str  # Format: provider:model (e.g., ollama:llama3.2)
+    system_prompt: str = Field(default="", max_length=10000)
+    model_id: str = ""  # Format: provider:model (e.g., ollama:llama3.2)
     version: int = Field(default=1)
     timeout_seconds: int = Field(default=120, ge=10, le=600)
     memory_enabled: bool = True
@@ -69,7 +69,7 @@ class EdgeConfig(BaseModel):
 class GraphConfig(BaseModel):
     """Graph configuration model."""
 
-    id: UUID
+    id: str  # UUID or CUID (platform-synced graphs use CUIDs)
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=500)
     version: int = Field(default=1)

@@ -6,6 +6,7 @@ and returns when done (or raises to trigger retry/DLQ).
 
 import json
 import logging
+from datetime import UTC
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,8 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
     - user_id: str
     - ab_model_override: str (optional)
     """
-    from src.infra.database import async_session_maker
     from src.executions.service import ExecutionService
+    from src.infra.database import async_session_maker
 
     execution_id = data.get("execution_id", "")
     if not execution_id:
@@ -60,9 +61,11 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
         except Exception:
             logger.exception("Execution %s failed", execution_id)
             # Update status to FAILED
-            from src.executions.models import ExecutionRun, ExecutionStatus
+            from datetime import datetime
+
             from sqlalchemy import update
-            from datetime import datetime, timezone
+
+            from src.executions.models import ExecutionRun, ExecutionStatus
 
             await session.execute(
                 update(ExecutionRun)
@@ -70,7 +73,7 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 .values(
                     status=ExecutionStatus.FAILED,
                     error_message="Worker task failed unexpectedly",
-                    completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    completed_at=datetime.now(UTC).replace(tzinfo=None),
                 )
             )
             await session.commit()
@@ -87,8 +90,9 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
     - model_name: str
     """
     import httpx
-    from src.infra.redis import get_redis_client
+
     from src.infra.config import settings
+    from src.infra.redis import get_redis_client
 
     model_name = data.get("model_name", "")
     if not model_name:
@@ -108,35 +112,34 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
 
         async with httpx.AsyncClient(
             base_url=settings.OLLAMA_BASE_URL, timeout=None
-        ) as client:
-            async with client.stream(
-                "POST", "/api/pull", json={"name": model_name, "stream": True}
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line:
-                        continue
-                    try:
-                        chunk = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
+        ) as client, client.stream(
+            "POST", "/api/pull", json={"name": model_name, "stream": True}
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+                try:
+                    chunk = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
 
-                    status = chunk.get("status", "")
-                    total = chunk.get("total", 0)
-                    completed = chunk.get("completed", 0)
-                    pct = int((completed / total * 100) if total else 0)
+                status = chunk.get("status", "")
+                total = chunk.get("total", 0)
+                completed = chunk.get("completed", 0)
+                pct = int((completed / total * 100) if total else 0)
 
-                    await r.hset(progress_key, mapping={
-                        "status": status,
-                        "progress": str(pct),
-                    })
+                await r.hset(progress_key, mapping={
+                    "status": status,
+                    "progress": str(pct),
+                })
 
-                    # Check for cancellation
-                    cancel_key = f"runtime:model_pull_cancel:{model_name}"
-                    if await r.exists(cancel_key):
-                        logger.info("Model pull cancelled: %s", model_name)
-                        await r.hset(progress_key, mapping={"status": "cancelled", "progress": "0"})
-                        return
+                # Check for cancellation
+                cancel_key = f"runtime:model_pull_cancel:{model_name}"
+                if await r.exists(cancel_key):
+                    logger.info("Model pull cancelled: %s", model_name)
+                    await r.hset(progress_key, mapping={"status": "cancelled", "progress": "0"})
+                    return
 
         await r.hset(progress_key, mapping={"status": "completed", "progress": "100"})
         # Expire progress key after 1 hour

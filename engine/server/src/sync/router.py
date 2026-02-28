@@ -28,7 +28,7 @@ async def trigger_sync() -> dict:
     try:
         updated = await svc.poll()
         return {"updated": updated}
-    except Exception as e:
+    except Exception:
         logger.exception("Sync trigger failed")
         raise HTTPException(status_code=500, detail="Sync failed")
     finally:
