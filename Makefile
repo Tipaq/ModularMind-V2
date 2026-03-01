@@ -33,8 +33,8 @@ dev-platform: ## Start Platform (Next.js dev server)
 dev-engine: ## Start Engine server (uvicorn)
 	cd engine/server && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
-dev-worker: ## Start Worker process
-	cd engine/server && python -m src.worker.runner
+dev-worker: ## Start Worker process (auto-reload)
+	cd engine/server && watchfiles "python -m src.worker.runner" src/
 
 dev-infra: ## Start infra only (db, redis, qdrant, ollama)
 	docker compose -f docker/docker-compose.dev.yml up db redis qdrant ollama
