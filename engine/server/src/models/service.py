@@ -143,6 +143,48 @@ class RuntimeModelService:
         if path.exists():
             path.unlink()
 
+    async def uninstall_model(self, model_id: str) -> None:
+        """Remove a model from catalog, Ollama (if local), and Redis progress."""
+        model_data = self.get_model(model_id)
+        if not model_data:
+            return
+
+        model_name = model_data.get("model_id", "")
+        provider = model_data.get("provider", "")
+
+        # Delete from Ollama if it's a local model
+        if provider == "ollama" and model_name:
+            try:
+                async with httpx.AsyncClient(
+                    base_url=settings.OLLAMA_BASE_URL, timeout=30.0,
+                ) as client:
+                    resp = await client.request(
+                        "DELETE", "/api/delete", json={"model": model_name},
+                    )
+                    if resp.status_code == 200:
+                        logger.info("Deleted model from Ollama: %s", model_name)
+                    else:
+                        logger.warning(
+                            "Ollama delete returned %d for %s", resp.status_code, model_name,
+                        )
+            except Exception as e:
+                logger.warning("Failed to delete model from Ollama: %s", e)
+
+            # Clean up Redis progress keys
+            pool = get_redis_pool()
+            r = aioredis.Redis(connection_pool=pool)
+            try:
+                await r.delete(
+                    f"runtime:model_pull_progress:{model_name}",
+                    f"runtime:model_pull_task:{model_name}",
+                    f"runtime:model_pull_cancel:{model_name}",
+                )
+            finally:
+                await r.aclose()
+
+        # Remove catalog file
+        self.delete_model(model_id)
+
     # ------------------------------------------------------------------
     # Ollama availability
     # ------------------------------------------------------------------
@@ -229,16 +271,15 @@ class RuntimeModelService:
 
         # Set initial progress so the frontend sees "downloading" immediately
         from src.infra.redis import get_redis_client
-        r = await get_redis_client()
-        if r:
-            try:
-                await r.hset(
-                    f"runtime:model_pull_progress:{model_name}",
-                    mapping={"status": "downloading", "progress": "0"},
-                )
-                await r.set(f"runtime:model_pull_task:{model_name}", msg_id, ex=7200)
-            finally:
-                await r.aclose()
+        r = get_redis_client()
+        try:
+            await r.hset(
+                f"runtime:model_pull_progress:{model_name}",
+                mapping={"status": "downloading", "progress": "0"},
+            )
+            await r.set(f"runtime:model_pull_task:{model_name}", msg_id, ex=7200)
+        finally:
+            await r.aclose()
 
         logger.info("Dispatched pull task for %s: %s", model_name, msg_id)
         return msg_id

@@ -44,13 +44,12 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
             async for event in service.execute(execution_id):
                 # Publish events to Redis pub/sub for SSE relay
                 from src.infra.redis import get_redis_client
-                r = await get_redis_client()
-                if r:
-                    try:
-                        channel = f"execution:{execution_id}"
-                        await r.publish(channel, json.dumps(event, default=str))
-                    finally:
-                        await r.aclose()
+                r = get_redis_client()
+                try:
+                    channel = f"execution:{execution_id}"
+                    await r.publish(channel, json.dumps(event, default=str))
+                finally:
+                    await r.aclose()
 
                 if event.get("type") == "complete":
                     break
@@ -102,10 +101,7 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
     logger.info("Pulling model: %s", model_name)
     progress_key = f"runtime:model_pull_progress:{model_name}"
 
-    r = await get_redis_client()
-    if not r:
-        logger.error("Redis unavailable for model pull progress tracking")
-        return
+    r = get_redis_client()
 
     try:
         await r.hset(progress_key, mapping={"status": "downloading", "progress": "0"})

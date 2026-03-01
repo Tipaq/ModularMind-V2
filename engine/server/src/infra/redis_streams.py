@@ -87,6 +87,10 @@ class RedisStreamBus(EventBus):
                 logger.warning("Redis connection lost, backoff=%.1fs", backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, MAX_BACKOFF)
+            except Exception:
+                logger.exception("Unexpected error in consumer %s/%s", stream, consumer)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, MAX_BACKOFF)
 
     async def ensure_group(self, stream: str, group: str) -> None:
         try:

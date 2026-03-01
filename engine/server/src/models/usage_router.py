@@ -413,14 +413,12 @@ async def get_catalog_model(model_id: str, user: CurrentUser) -> CatalogModelRes
 
 @usage_router.delete("/catalog/{model_id}", dependencies=[RequireOwner])
 async def remove_catalog_model(model_id: str, user: CurrentUser) -> dict:
-    """Remove a model from the catalog."""
+    """Remove a model from the catalog, Ollama, and Redis."""
     svc = get_model_service()
     m = svc.get_model(model_id)
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
-    if m.get("is_required"):
-        raise HTTPException(status_code=400, detail="Cannot remove a required model")
-    svc.delete_model(model_id)
+    await svc.uninstall_model(model_id)
     return {"id": model_id, "status": "removed"}
 
 
