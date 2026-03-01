@@ -1,92 +1,307 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Bot, Plus, Trash2 } from "lucide-react";
-import Link from "next/link";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { Bot, Plus, Copy, Trash2 } from "lucide-react";
+import {
+  Button,
+  Badge,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  Input,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+  PageHeader,
+} from "@modularmind/ui";
+import { EmptyState } from "@/components/studio/shared/EmptyState";
+import { ResourceTable } from "@/components/studio/shared/ResourceTable";
+import { ResourceFilters } from "@/components/studio/shared/ResourceFilters";
+import { useAgentsStore, type PlatformAgent } from "@/stores/agents";
+import type { ResourceColumn, ResourceFilterConfig, SortState } from "@/lib/types";
 
-type Agent = {
-  id: string;
-  name: string;
-  description: string;
-  model: string;
-  provider: string;
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-};
+const filterConfigs: ResourceFilterConfig[] = [
+  { key: "search", label: "Search", type: "search", placeholder: "Search agents..." },
+];
 
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", model: "", provider: "ollama" });
+  const router = useRouter();
+  const {
+    agents,
+    loading,
+    page,
+    totalPages,
+    total,
+    fetchAgents,
+    createAgent,
+    deleteAgent,
+    duplicateAgent,
+  } = useAgentsStore();
+
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ name: "", description: "", model: "", provider: "ollama" });
 
-  async function load() {
-    const res = await fetch("/api/agents");
-    if (res.ok) setAgents(await res.json());
-    setLoading(false);
-  }
+  useEffect(() => {
+    fetchAgents(1);
+  }, [fetchAgents]);
 
-  useEffect(() => { load(); }, []);
+  // Client-side filtering + sorting
+  const filtered = useMemo(() => {
+    let result = agents;
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setCreating(true);
-    const res = await fetch("/api/agents", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    if (res.ok) {
-      setForm({ name: "", description: "", model: "", provider: "ollama" });
-      setShowCreate(false);
-      load();
+    if (filterValues.search) {
+      const s = filterValues.search.toLowerCase();
+      result = result.filter(
+        (a) =>
+          a.name.toLowerCase().includes(s) ||
+          (a.description?.toLowerCase().includes(s) ?? false) ||
+          a.model.toLowerCase().includes(s),
+      );
     }
-    setCreating(false);
-  }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this agent?")) return;
-    await fetch(`/api/agents/${id}`, { method: "DELETE" });
-    load();
-  }
+    if (filterValues.sort) {
+      result = [...result].sort((a, b) => {
+        switch (filterValues.sort) {
+          case "name_asc":
+            return a.name.localeCompare(b.name);
+          case "name_desc":
+            return b.name.localeCompare(a.name);
+          case "model_asc":
+            return a.model.localeCompare(b.model);
+          case "model_desc":
+            return b.model.localeCompare(a.model);
+          default:
+            return 0;
+        }
+      });
+    }
 
-  if (loading) {
-    return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading...</div>;
-  }
+    return result;
+  }, [agents, filterValues]);
+
+  const handleFilterChange = useCallback((key: string, value: string) => {
+    setFilterValues((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const sortState = useMemo((): SortState | null => {
+    const s = filterValues.sort;
+    if (!s) return null;
+    if (s.endsWith("_asc")) return { key: s.replace(/_asc$/, ""), direction: "asc" };
+    if (s.endsWith("_desc")) return { key: s.replace(/_desc$/, ""), direction: "desc" };
+    return { key: s, direction: "asc" };
+  }, [filterValues.sort]);
+
+  const handleColumnSort = useCallback((sortKey: string) => {
+    setFilterValues((prev) => {
+      const current = prev.sort || "";
+      if (current === `${sortKey}_asc` || current === sortKey) {
+        return { ...prev, sort: `${sortKey}_desc` };
+      }
+      if (current === `${sortKey}_desc`) {
+        return { ...prev, sort: "" };
+      }
+      return { ...prev, sort: `${sortKey}_asc` };
+    });
+  }, []);
+
+  const handleRowClick = useCallback(
+    (agent: PlatformAgent) => {
+      router.push(`/agents/${agent.id}`);
+    },
+    [router],
+  );
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.model.trim()) return;
+    setCreating(true);
+    try {
+      const agent = await createAgent(form);
+      setShowCreateDialog(false);
+      setForm({ name: "", description: "", model: "", provider: "ollama" });
+      router.push(`/agents/${agent.id}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDelete = useCallback(
+    async (agent: PlatformAgent) => {
+      if (!confirm(`Are you sure you want to delete "${agent.name}"?`)) return;
+      try {
+        await deleteAgent(agent.id);
+      } catch {
+        // Error is set in store
+      }
+    },
+    [deleteAgent],
+  );
+
+  const handleDuplicate = useCallback(
+    async (agent: PlatformAgent) => {
+      try {
+        await duplicateAgent(agent.id);
+      } catch {
+        // Error is set in store
+      }
+    },
+    [duplicateAgent],
+  );
+
+  const columns: ResourceColumn<PlatformAgent>[] = [
+    {
+      key: "name",
+      header: "Agent",
+      sortKey: "name",
+      render: (a) => (
+        <div>
+          <p className="font-medium text-sm">{a.name}</p>
+          <p className="text-xs text-muted-foreground line-clamp-1">
+            {a.description || "No description"}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "model",
+      header: "Model",
+      sortKey: "model",
+      className: "hidden md:table-cell",
+      render: (a) => (
+        <span className="text-sm text-muted-foreground font-mono">
+          {a.model || "—"}
+        </span>
+      ),
+    },
+    {
+      key: "provider",
+      header: "Provider",
+      className: "hidden md:table-cell",
+      render: (a) => (
+        <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+          {a.provider}
+        </Badge>
+      ),
+    },
+    {
+      key: "version",
+      header: "Version",
+      className: "hidden lg:table-cell",
+      render: (a) => (
+        <Badge variant="outline" className="text-xs font-mono">
+          v{a.version}
+        </Badge>
+      ),
+    },
+  ];
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Agents</h1>
-          <p className="text-sm text-muted-foreground">Create and manage AI agents</p>
-        </div>
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          New Agent
-        </button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        icon={Bot}
+        gradient="from-success to-success/70"
+        title="Agents"
+        description="Manage and configure AI agents"
+        actions={
+          <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Agent
+          </Button>
+        }
+      />
 
-      {showCreate && (
-        <form onSubmit={handleCreate} className="mb-6 rounded-lg border bg-card p-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+      <ResourceFilters
+        filters={filterConfigs}
+        values={filterValues}
+        onChange={handleFilterChange}
+      />
+
+      <ResourceTable<PlatformAgent>
+        items={filtered}
+        columns={columns}
+        pagination={{
+          page,
+          totalPages,
+          totalItems: total,
+        }}
+        onPageChange={(p) => fetchAgents(p)}
+        onRowClick={handleRowClick}
+        isLoading={loading}
+        emptyState={
+          <EmptyState
+            icon={Bot}
+            title="No agents yet"
+            description="Create your first AI agent to get started."
+            action={
+              <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Create Agent
+              </Button>
+            }
+          />
+        }
+        keyExtractor={(a) => a.id}
+        sortState={sortState}
+        onSort={handleColumnSort}
+        rowActions={(a) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                ...
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleDuplicate(a)}>
+                <Copy className="mr-2 h-3.5 w-3.5" />
+                Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleDelete(a)}
+                className="text-destructive"
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      />
+
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create Agent</DialogTitle>
+            <DialogDescription>
+              Configure a new AI agent with a model and provider.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4 py-2">
+            <Input
+              label="Name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="My Agent"
+              required
+            />
+            <Input
+              label="Description"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="A brief description..."
+            />
             <div>
-              <label className="mb-1 block text-sm font-medium">Name</label>
-              <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Provider</label>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Provider</label>
               <Select value={form.provider} onValueChange={(v) => setForm({ ...form, provider: v })}>
                 <SelectTrigger>
                   <SelectValue />
@@ -98,80 +313,24 @@ export default function AgentsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Model</label>
-              <input
-                value={form.model}
-                onChange={(e) => setForm({ ...form, model: e.target.value })}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                placeholder="llama3.2"
-                required
-              />
+            <Input
+              label="Model"
+              value={form.model}
+              onChange={(e) => setForm({ ...form, model: e.target.value })}
+              placeholder="e.g. llama3.2, gpt-4o, claude-3-haiku"
+              required
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" onClick={() => setShowCreateDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating || !form.name.trim() || !form.model.trim()}>
+                {creating ? "Creating..." : "Create"}
+              </Button>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Description</label>
-              <input
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <button
-              type="submit"
-              disabled={creating}
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {creating ? "Creating..." : "Create Agent"}
-            </button>
-            <button type="button" onClick={() => setShowCreate(false)} className="rounded-md border px-4 py-2 text-sm hover:bg-muted">
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-
-      {agents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-muted-foreground">
-          <Bot className="mb-2 h-10 w-10" />
-          <p>No agents yet</p>
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {agents.map((agent) => (
-            <div key={agent.id} className="rounded-lg border bg-card p-4">
-              <div className="flex items-start justify-between">
-                <Link href={`/agents/${agent.id}`} className="flex items-center gap-2 hover:underline">
-                  <Bot className="h-5 w-5 text-primary" />
-                  <h3 className="font-medium">{agent.name}</h3>
-                </Link>
-                <button
-                  onClick={() => handleDelete(agent.id)}
-                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-              {agent.description && (
-                <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{agent.description}</p>
-              )}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  {agent.provider}/{agent.model}
-                </span>
-              </div>
-              {agent.tags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {agent.tags.map((tag) => (
-                    <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-xs">{tag}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
