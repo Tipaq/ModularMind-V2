@@ -6,7 +6,6 @@ import {
   Layers,
   Users,
   Bot,
-  GitFork,
   Settings2,
   BookOpen,
   ChevronLeft,
@@ -43,8 +42,6 @@ const sections: NavSection[] = [
     label: "Platform",
     items: [
       { name: "Models", to: "/models", icon: Layers },
-      { name: "Agents", to: "/agents", icon: Bot },
-      { name: "Graphs", to: "/graphs", icon: GitFork },
     ],
   },
   {

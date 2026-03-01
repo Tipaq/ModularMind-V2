@@ -7,10 +7,6 @@ import Login from "./pages/Login";
 import Setup from "./pages/Setup";
 import Monitoring from "./pages/Monitoring";
 import Configuration from "./pages/Configuration";
-import Agents from "./pages/Agents";
-import AgentDetail from "./pages/AgentDetail";
-import Graphs from "./pages/Graphs";
-import GraphDetail from "./pages/GraphDetail";
 import Models from "./pages/Models";
 import ModelDetail from "./pages/ModelDetail";
 import Knowledge from "./pages/Knowledge";
@@ -30,10 +26,6 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/configuration" element={<Configuration />} />
-          <Route path="/agents" element={<Agents />} />
-          <Route path="/agents/:id" element={<AgentDetail />} />
-          <Route path="/graphs" element={<Graphs />} />
-          <Route path="/graphs/:id" element={<GraphDetail />} />
           <Route path="/models" element={<Models />} />
           <Route path="/models/:id" element={<ModelDetail />} />
           <Route path="/knowledge" element={<Knowledge />} />
