@@ -1,0 +1,32 @@
+# BMAD Method Configuration
+# Separate from speckit - used for BMAD workflows
+
+# Project Information
+project_name: ModularMind-V2
+user_name: Tim
+
+# Language Settings
+communication_language: french  # Agent communication language
+document_output_language: english  # Documentation language
+
+# User Settings
+user_skill_level: intermediate  # beginner | intermediate | advanced
+
+# Output Directories (separate from speckit specs/)
+output_folder: docs/bmad
+planning_artifacts: docs/bmad/planning
+implementation_artifacts: docs/bmad/implementation
+
+# BMAD Module Paths
+bmad_root: .bmad
+agents_folder: .bmad/agents
+workflows_folder: .bmad/workflows
+templates_folder: .bmad/templates
+teams_folder: .bmad/teams
+
+# Default Team
+default_team: team-fullstack
+
+# Workflow Settings
+auto_save_checkpoints: true
+max_iterations: 10
