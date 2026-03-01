@@ -1,140 +1,153 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Save } from "lucide-react";
-import Link from "next/link";
+import dynamic from "next/dynamic";
+import { GitFork, Save, Trash2 } from "lucide-react";
+import { Button, Badge } from "@modularmind/ui";
+import type { Node, Edge } from "@xyflow/react";
+import { DetailHeader } from "@/components/studio/shared/DetailHeader";
+import type { PlatformGraph } from "@/stores/graphs";
 
-type Graph = {
-  id: string;
-  name: string;
-  description: string;
-  nodes: unknown[];
-  edges: unknown[];
-};
+// Dynamic import to avoid SSR issues with ReactFlow
+const GraphCanvas = dynamic(
+  () => import("@/components/studio/graphs/GraphCanvas").then((m) => ({ default: m.GraphCanvas })),
+  { ssr: false, loading: () => <div className="flex-1 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div> },
+);
 
-export default function GraphEditPage() {
+export default function GraphDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [graph, setGraph] = useState<Graph | null>(null);
+
+  const [graph, setGraph] = useState<PlatformGraph | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [nodesJson, setNodesJson] = useState("[]");
-  const [edgesJson, setEdgesJson] = useState("[]");
 
   useEffect(() => {
-    async function load() {
-      const res = await fetch(`/api/graphs/${id}`);
-      if (!res.ok) { router.push("/graphs"); return; }
-      const data = await res.json();
-      setGraph(data);
-      setNodesJson(JSON.stringify(data.nodes, null, 2));
-      setEdgesJson(JSON.stringify(data.edges, null, 2));
-      setLoading(false);
-    }
-    load();
-  }, [id, router]);
+    if (!id) return;
+    setLoading(true);
+    fetch(`/api/graphs/${id}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Graph not found");
+        return res.json();
+      })
+      .then(setGraph)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [id]);
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    if (!graph) return;
-    setSaving(true);
+  const handleSave = useCallback(
+    async (nodes: Node[], edges: Edge[]) => {
+      if (!graph) return;
+      setSaving(true);
+      try {
+        const graphNodes = nodes.map((n) => ({
+          id: n.id,
+          type: (n.data?.type as string) || "agent",
+          position: n.position,
+          data: { ...(n.data as Record<string, unknown>) },
+        }));
+        for (const node of graphNodes) {
+          delete node.data.isEntryNode;
+          delete node.data.executionStatus;
+          delete node.data.executionDurationMs;
+        }
 
-    let nodes: unknown[], edges: unknown[];
+        const graphEdges = edges.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          source_handle: e.sourceHandle || null,
+          target_handle: e.targetHandle || null,
+          data: (e.data as Record<string, unknown>) || {},
+        }));
+
+        const res = await fetch(`/api/graphs/${graph.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nodes: graphNodes,
+            edges: graphEdges,
+          }),
+        });
+        if (!res.ok) throw new Error("Failed to save");
+        const updated = await res.json();
+        setGraph(updated);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [graph],
+  );
+
+  const handleDelete = async () => {
+    if (!graph || !confirm("Delete this graph? This action cannot be undone.")) return;
     try {
-      nodes = JSON.parse(nodesJson);
-      edges = JSON.parse(edgesJson);
-    } catch {
-      alert("Invalid JSON in nodes or edges");
-      setSaving(false);
-      return;
+      const res = await fetch(`/api/graphs/${graph.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      router.push("/graphs");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete");
     }
+  };
 
-    const res = await fetch(`/api/graphs/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: graph.name,
-        description: graph.description,
-        nodes,
-        edges,
-      }),
-    });
-
-    if (res.ok) {
-      const updated = await res.json();
-      setGraph(updated);
-    }
-    setSaving(false);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
   }
 
-  if (loading || !graph) {
-    return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading...</div>;
+  if (error || !graph) {
+    return (
+      <div className="p-6">
+        <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
+          {error || "Graph not found"}
+        </div>
+      </div>
+    );
   }
+
+  const nodeCount = Array.isArray(graph.nodes) ? graph.nodes.length : 0;
 
   return (
-    <div>
-      <div className="mb-6">
-        <Link href="/graphs" className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" />
-          Back to graphs
-        </Link>
-        <h1 className="text-2xl font-bold">{graph.name}</h1>
-        <p className="text-sm text-muted-foreground">
-          {Array.isArray(graph.nodes) ? graph.nodes.length : 0} nodes
-        </p>
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      <DetailHeader
+        backHref="/graphs"
+        backLabel="Graphs"
+        title={graph.name}
+        badges={
+          <>
+            <Badge variant="secondary">v{graph.version}</Badge>
+            <Badge variant="secondary">{nodeCount} nodes</Badge>
+          </>
+        }
+        actions={
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDelete}
+              className="text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
+            <Button size="sm" onClick={() => handleSave([], [])} disabled={saving}>
+              <Save className="h-4 w-4 mr-1" />
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          </>
+        }
+      />
+
+      <div className="flex-1 min-h-0">
+        <GraphCanvas graph={graph} onSave={handleSave} saving={saving} />
       </div>
-
-      <form onSubmit={handleSave} className="max-w-3xl space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium">Name</label>
-            <input
-              value={graph.name}
-              onChange={(e) => setGraph({ ...graph, name: e.target.value })}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Description</label>
-            <input
-              value={graph.description}
-              onChange={(e) => setGraph({ ...graph, description: e.target.value })}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Nodes (JSON)</label>
-          <textarea
-            value={nodesJson}
-            onChange={(e) => setNodesJson(e.target.value)}
-            className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm"
-            rows={10}
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Edges (JSON)</label>
-          <textarea
-            value={edgesJson}
-            onChange={(e) => setEdgesJson(e.target.value)}
-            className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm"
-            rows={8}
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={saving}
-          className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          <Save className="h-4 w-4" />
-          {saving ? "Saving..." : "Save Changes"}
-        </button>
-      </form>
     </div>
   );
 }
