@@ -11,6 +11,7 @@ import {
   Bot,
   GitFork,
   Layout,
+  MessageSquare,
   ChevronLeft,
   ChevronRight,
   type LucideIcon,
@@ -42,6 +43,7 @@ const sections: NavSection[] = [
   {
     label: "Studio",
     items: [
+      { name: "Chat", href: "/chat", icon: MessageSquare },
       { name: "Agents", href: "/agents", icon: Bot },
       { name: "Graphs", href: "/graphs", icon: GitFork },
       { name: "Templates", href: "/templates", icon: Layout },
