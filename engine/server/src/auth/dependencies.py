@@ -4,9 +4,15 @@ Auth dependencies.
 FastAPI dependencies for authentication and authorization.
 """
 
+from __future__ import annotations
+
+import hashlib
 import hmac
 from collections.abc import Callable
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -14,11 +20,66 @@ from fastapi.security import OAuth2PasswordBearer
 from src.infra.config import get_settings
 from src.infra.database import DbSession
 
-from .models import User, UserRole
+from .models import User, UserRole, UserSource
 from .service import AuthService
 
 # auto_error=False so missing Bearer header doesn't 401 before we check cookies
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+# Sentinel ID for Platform service account (not persisted in DB)
+_PLATFORM_SERVICE_USER_ID = "platform-service"
+
+
+def _derive_internal_token(secret_key: str) -> str:
+    """Derive the HMAC-SHA256 internal service token from SECRET_KEY.
+
+    Uses the same derivation as ``internal.auth.derive_internal_token``.
+    """
+    return hmac.new(
+        secret_key.encode(),
+        b"internal-service-token",
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _is_internal_service_token(token: str) -> bool:
+    """Check if a Bearer token is the HMAC-derived internal service token.
+
+    Uses constant-time comparison to prevent timing attacks.
+    """
+    settings = get_settings()
+    expected = _derive_internal_token(settings.SECRET_KEY)
+    return hmac.compare_digest(token, expected)
+
+
+async def _get_or_create_platform_service_user(db: "AsyncSession") -> User:
+    """Get (or create on first use) the Platform service user in the database.
+
+    Ensures the user exists in the ``users`` table so that foreign-key
+    constraints on user-scoped tables (conversations, etc.) are satisfied.
+    """
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(User).where(User.id == _PLATFORM_SERVICE_USER_ID)
+    )
+    user = result.scalar_one_or_none()
+    if user:
+        return user
+
+    user = User(
+        id=_PLATFORM_SERVICE_USER_ID,
+        email="platform@service.internal",
+        hashed_password="!service-account",
+        role=UserRole.OWNER,
+        is_active=True,
+        source=UserSource.PLATFORM,
+        platform_user_id=None,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 async def get_current_user(
@@ -28,20 +89,25 @@ async def get_current_user(
 ) -> User:
     """Get the current authenticated user.
 
-    Resolves the JWT from (in priority order):
-    1. Authorization: Bearer header
-    2. HttpOnly ``access_token`` cookie
+    Resolves the identity from (in priority order):
+    1. HMAC-derived internal service token (Platform proxy → Engine)
+    2. JWT from Authorization: Bearer header
+    3. JWT from HttpOnly ``access_token`` cookie
 
-    Then verifies the user's current role from the database (not just
-    the JWT claim) to handle role changes after token issuance.
+    If the Bearer token matches the HMAC-derived internal service token,
+    the Platform service user is returned from the database (created on
+    first use to satisfy FK constraints).
+
+    For JWT tokens, verifies the user's current role from the database
+    (not just the JWT claim) to handle role changes after token issuance.
 
     Args:
         request: FastAPI request (for cookie access)
-        token: JWT token from Authorization header (may be None)
+        token: Bearer token from Authorization header (may be None)
         db: Database session
 
     Returns:
-        Authenticated user
+        Authenticated user (real or Platform service user)
 
     Raises:
         HTTPException: If token is invalid or user not found
@@ -57,6 +123,11 @@ async def get_current_user(
     if not resolved_token:
         raise credentials_exception
 
+    # Check internal service token (Platform proxy → Engine)
+    if _is_internal_service_token(resolved_token):
+        return await _get_or_create_platform_service_user(db)
+
+    # Standard JWT path
     auth_service = AuthService(db)
     token_data = auth_service.verify_token(resolved_token)
 

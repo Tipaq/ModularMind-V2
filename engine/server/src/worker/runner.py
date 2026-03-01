@@ -65,12 +65,29 @@ async def main() -> None:
         # Task queues
         bus.subscribe("tasks:executions", "workers", "w-1", graph_execution_handler),
         bus.subscribe("tasks:models", "workers", "w-1", model_pull_handler),
-        # Memory pipeline
+        # Memory pipeline: raw -> extractor -> [scorer ->] embedder
         bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
-        bus.subscribe("memory:extracted", "embedders", "emb-1", embedder_handler),
+    ]
+
+    # Conditional scorer wiring based on settings
+    if settings.MEMORY_SCORER_ENABLED:
+        from src.pipeline.handlers.scorer import scorer_handler
+
+        tasks.extend([
+            bus.subscribe("memory:extracted", "scorers", "scr-1", scorer_handler),
+            bus.subscribe("memory:scored", "embedders", "emb-1", embedder_handler),
+        ])
+        logger.info("Memory scorer enabled: extracted -> scorer -> scored -> embedder")
+    else:
+        tasks.append(
+            bus.subscribe("memory:extracted", "embedders", "emb-1", embedder_handler),
+        )
+        logger.info("Memory scorer disabled: extracted -> embedder (direct)")
+
+    tasks.append(
         # Health
         health_server(bus, HEALTH_PORT),
-    ]
+    )
 
     logger.info("Worker ready — consuming streams")
 

@@ -322,7 +322,12 @@ async def send_message(
 
             # Per-conversation model override or global default
             conv_config = getattr(conversation, "config", None) or {}
-            model_id = conv_config.get("model_id") or settings.SUPERVISOR_MODEL_ID
+            model_id = conv_config.get("model_id")
+            if not model_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No model selected — choose a model before sending a message",
+                )
             provider_name, _ = parse_model_id(model_id)
             llm_provider = LLMProviderFactory.get_provider(provider_name)
 

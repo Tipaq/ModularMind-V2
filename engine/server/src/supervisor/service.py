@@ -70,12 +70,11 @@ class SuperSupervisorService:
     def _resolve_model_name(self, conv_config: dict[str, Any]) -> tuple[str, str]:
         """Resolve supervisor model ID and extract model name.
 
-        Returns (model_id, model_name) using per-conversation override
-        or global SUPERVISOR_MODEL_ID.
+        Returns (model_id, model_name) from conversation config.
+        The router validates that model_id is set before reaching here.
         """
-        from src.infra.config import get_settings
         from src.infra.constants import parse_model_id
-        model_id = conv_config.get("model_id") or get_settings().SUPERVISOR_MODEL_ID
+        model_id = conv_config["model_id"]
         _, model_name = parse_model_id(model_id)
         return model_id, model_name
 

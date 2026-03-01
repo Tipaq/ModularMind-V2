@@ -67,7 +67,15 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Redis is unreachable — some features may be degraded")
 
-    # 2. Initialize Qdrant collections (knowledge + memory)
+    # 2. Initialize HierarchicalContextManager (supervisor routing)
+    if redis_ok:
+        from src.infra.redis import get_redis_client
+        from src.supervisor.context_manager import init_context_manager
+
+        init_context_manager(get_redis_client())
+        logger.info("HierarchicalContextManager initialized")
+
+    # 3. Initialize Qdrant collections (knowledge + memory)
     from src.infra.qdrant import qdrant_factory
 
     try:
@@ -76,7 +84,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("Qdrant initialization failed (non-fatal): %s", exc)
 
-    # 3. Load seed model catalog
+    # 4. Load seed model catalog
     from src.models.service import get_model_service
 
     try:
@@ -87,7 +95,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("Model catalog seeding failed (non-fatal): %s", exc)
 
-    # 4. Initialize MCP registry + recover sidecars
+    # 5. Initialize MCP registry + recover sidecars
     from src.mcp.service import startup_mcp
 
     try:
@@ -96,7 +104,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("MCP startup failed (non-fatal): %s", exc)
 
-    # 5. Initialize sync service
+    # 6. Initialize sync service
     from src.sync.service import SyncService
 
     sync_service = SyncService()
@@ -105,7 +113,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("Sync service initialization failed (non-fatal): %s", exc)
 
-    # 6. MCP leader-only phase (auto-deploy free catalog entries)
+    # 7. MCP leader-only phase (auto-deploy free catalog entries)
     try:
         await startup_mcp(leader_only=True)
     except Exception as exc:
