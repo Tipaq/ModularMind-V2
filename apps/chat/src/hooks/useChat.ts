@@ -68,8 +68,9 @@ export function useChat(conversationId: string | null) {
   }, []);
 
   const sendMessage = useCallback(
-    async (content: string) => {
-      if (!conversationId || isStreaming) return;
+    async (content: string, overrideConversationId?: string) => {
+      const targetConvId = overrideConversationId || conversationId;
+      if (!targetConvId || isStreaming) return;
 
       setError(null);
       setIsStreaming(true);
@@ -95,10 +96,12 @@ export function useChat(conversationId: string | null) {
 
       handleTraceEvent({ type: "trace:supervisor_routing" });
 
+      const sendStartMs = Date.now();
+
       // Send message to backend
       let res: SendMessageResponse;
       try {
-        res = await api.post<SendMessageResponse>(`/conversations/${conversationId}/messages`, { content });
+        res = await api.post<SendMessageResponse>(`/conversations/${targetConvId}/messages`, { content });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to send message");
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));
@@ -115,9 +118,10 @@ export function useChat(conversationId: string | null) {
       if (!execution_id && direct_response) {
         handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy || "DIRECT_RESPONSE" });
         handleTraceEvent({ type: "trace:supervisor_direct", preview: direct_response.slice(0, 150) });
+        const durationMs = Date.now() - sendStartMs;
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantId ? { ...m, content: direct_response, metadata: { routing_strategy, delegated_to } } : m,
+            m.id === assistantId ? { ...m, content: direct_response, metadata: { routing_strategy, delegated_to, duration_ms: durationMs } } : m,
           ),
         );
         finalizeActivities();

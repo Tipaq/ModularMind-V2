@@ -1,40 +1,37 @@
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams, useOutletContext } from "react-router-dom";
-import {
-  Bot,
-  MessageCircle,
-  Plus,
-  User,
-  Zap,
-  Loader2,
-} from "lucide-react";
-import { cn } from "@modularmind/ui";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { Bot, Zap } from "lucide-react";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
 import { useChat, type Message } from "../hooks/useChat";
-import { ExecutionActivity } from "../components/ExecutionActivity";
+import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
+import { ChatSidebar, type Conversation } from "../components/ChatSidebar";
+import { ChatMessages } from "../components/ChatMessages";
 import { ChatInput } from "../components/ChatInput";
+import { useAuthStore } from "../stores/auth";
 import { api } from "../lib/api";
-import type { Conversation } from "../components/ChatSidebar";
 
-interface ChatLayoutContext {
-  conversations: Conversation[];
-  setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
-  refreshConversations: () => Promise<void>;
-  handleNewConversation: () => Promise<void>;
+interface ChatConfig {
+  supervisorMode: boolean;
+  modelId: string | null;
+  modelOverride: boolean;
 }
 
+const DEFAULT_CONFIG: ChatConfig = {
+  supervisorMode: true,
+  modelId: null,
+  modelOverride: false,
+};
+
 export default function Chat() {
-  const {
-    conversations,
-    setConversations,
-    refreshConversations,
-    handleNewConversation,
-  } = useOutletContext<ChatLayoutContext>();
-  const [searchParams] = useSearchParams();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [enabledAgentIds, setEnabledAgentIds] = useState<string[]>([]);
+  const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
+  const [, setLoadingConvs] = useState(true);
+  const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CONFIG);
 
-  const activeConversation = searchParams.get("id");
-
+  const user = useAuthStore((s) => s.user);
+  const { agents, graphs, models, load: loadConfig } = useChatConfig();
   const {
     messages,
     isStreaming,
@@ -44,196 +41,314 @@ export default function Chat() {
     sendMessage,
     setInitialMessages,
     cancelStream,
-  } = useChat(activeConversation);
+  } = useChat(activeConversationId);
 
-  // Load messages when conversation changes
+  // Determine if sending is blocked
+  const sendDisabledReason = useMemo(() => {
+    if (!chatConfig.modelId) return "Select a model before sending";
+    return null;
+  }, [chatConfig.modelId]);
+
+  // Debounce config persistence
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Build the full model identifier the Engine expects: "provider:model_id"
+  const toEngineModelId = useCallback((m: EngineModel) => `${m.provider}:${m.model_id}`, []);
+
+  const availableModels = useMemo(
+    () => models.filter((m) => m.is_active && m.is_available && !m.is_embedding),
+    [models],
+  );
+
+  // Auto-select first available model when none is selected
   useEffect(() => {
-    if (!activeConversation) {
-      setInitialMessages([]);
-      return;
+    if (!chatConfig.modelId && availableModels.length > 0) {
+      setChatConfig((prev) => ({ ...prev, modelId: toEngineModelId(availableModels[0]) }));
     }
-    async function loadMessages() {
+  }, [chatConfig.modelId, availableModels, toEngineModelId]);
+
+  const fetchConversations = useCallback(async () => {
+    setLoadingConvs(true);
+    try {
+      const data = await api.get<{ items: Conversation[] }>("/conversations?page_size=50");
+      setConversations(data.items || []);
+    } catch {
+      // Silent fail
+    } finally {
+      setLoadingConvs(false);
+    }
+  }, []);
+
+  // Load data once user is authenticated
+  useEffect(() => {
+    if (!user) return;
+    loadConfig();
+    fetchConversations();
+  }, [user, loadConfig, fetchConversations]);
+
+  // Load messages when selecting a conversation
+  const handleSelectConversation = useCallback(
+    async (id: string) => {
+      setActiveConversationId(id);
       try {
-        const data = await api.get<Conversation & { messages?: Message[] }>(
-          `/conversations/${activeConversation}`,
-        );
-        setInitialMessages(data.messages || []);
+        const data = await api.get<{ messages?: Array<{ id: string; role: string; content: string; created_at: string; metadata?: Record<string, unknown> }>; config?: Record<string, unknown>; supervisor_mode?: boolean }>(`/conversations/${id}`);
+        const msgs: Message[] = (data.messages || []).map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant" | "system",
+          content: m.content,
+          created_at: m.created_at,
+          metadata: m.metadata || {},
+        }));
+        setInitialMessages(msgs);
+
+        // Apply conversation config
+        const convConfig = (data.config || {}) as Record<string, unknown>;
+        setEnabledAgentIds((convConfig.enabled_agent_ids as string[]) || []);
+        setEnabledGraphIds((convConfig.enabled_graph_ids as string[]) || []);
+        setChatConfig({
+          supervisorMode: data.supervisor_mode ?? true,
+          modelId: (convConfig.model_id as string) || null,
+          modelOverride: (convConfig.model_override as boolean) || false,
+        });
       } catch {
-        setInitialMessages([]);
+        // Silent fail
       }
+    },
+    [setInitialMessages],
+  );
+
+  const createConversation = useCallback(async (): Promise<string | null> => {
+    try {
+      const body: Record<string, unknown> = {
+        title: "New Chat",
+        supervisor_mode: chatConfig.supervisorMode,
+      };
+      // If a single agent is selected, use direct mode
+      if (enabledAgentIds.length === 1 && enabledGraphIds.length === 0) {
+        body.agent_id = enabledAgentIds[0];
+        body.supervisor_mode = false;
+      }
+
+      const conv = await api.post<Conversation>("/conversations", body);
+      setConversations((prev) => [conv, ...prev]);
+      setActiveConversationId(conv.id);
+      setInitialMessages([]);
+      setChatConfig({ ...DEFAULT_CONFIG, supervisorMode: chatConfig.supervisorMode });
+      return conv.id;
+    } catch {
+      return null;
     }
-    loadMessages();
-  }, [activeConversation, setInitialMessages]);
+  }, [enabledAgentIds, enabledGraphIds, chatConfig.supervisorMode, setInitialMessages]);
 
-  // Auto-scroll
-  const messageCount = messages.length;
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messageCount]);
+  const handleCreateConversation = useCallback(async () => {
+    await createConversation();
+  }, [createConversation]);
 
-  const handleSend = async () => {
-    if (!inputValue.trim() || isStreaming) return;
-    const content = inputValue.trim();
-    setInputValue("");
+  const handleDeleteConversation = useCallback(
+    async (id: string) => {
+      try {
+        await api.delete(`/conversations/${id}`);
+        setConversations((prev) => prev.filter((c) => c.id !== id));
+        if (activeConversationId === id) {
+          setActiveConversationId(null);
+          setInitialMessages([]);
+          setChatConfig(DEFAULT_CONFIG);
+        }
+      } catch {
+        // Silent fail
+      }
+    },
+    [activeConversationId, setInitialMessages],
+  );
+
+  const handleRenameConversation = useCallback(
+    async (id: string, title: string) => {
+      try {
+        await api.patch(`/conversations/${id}`, { title });
+        setConversations((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, title } : c)),
+        );
+      } catch {
+        // Silent fail
+      }
+    },
+    [],
+  );
+
+  // Persist config changes to conversation (debounced)
+  const persistConfig = useCallback(
+    (newConfig: ChatConfig) => {
+      if (!activeConversationId) return;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        api.patch(`/conversations/${activeConversationId}`, {
+          supervisor_mode: newConfig.supervisorMode,
+          config: {
+            enabled_agent_ids: enabledAgentIds,
+            enabled_graph_ids: enabledGraphIds,
+            model_id: newConfig.modelId,
+            model_override: newConfig.modelOverride,
+          },
+        }).catch(() => {});
+      }, 500);
+    },
+    [activeConversationId, enabledAgentIds, enabledGraphIds],
+  );
+
+  const handleSend = useCallback(async () => {
+    if (!inputValue.trim() || isStreaming || !chatConfig.modelId) return;
+
+    let convId = activeConversationId;
+
+    // Auto-create conversation if none is active
+    if (!convId) {
+      convId = await createConversation();
+      if (!convId) return;
+    }
 
     // Auto-title on first message
-    const conv = conversations.find((c) => c.id === activeConversation);
+    const conv = conversations.find((c) => c.id === convId);
     if (conv && (conv.title === "New Chat" || !conv.title) && messages.length === 0) {
-      const title = content.length > 50 ? content.slice(0, 50) + "\u2026" : content;
+      const title = inputValue.trim().length > 50 ? inputValue.trim().slice(0, 50) + "\u2026" : inputValue.trim();
       setConversations((prev) =>
-        prev.map((c) => (c.id === activeConversation ? { ...c, title } : c)),
+        prev.map((c) => (c.id === convId ? { ...c, title } : c)),
       );
-      api.patch(`/conversations/${activeConversation}`, { title }).catch(() => {});
+      api.patch(`/conversations/${convId}`, { title }).catch(() => {});
     }
 
-    await sendMessage(content);
-    await refreshConversations();
-  };
+    // Cancel any pending debounced PATCH
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
 
-  const activeConv = conversations.find((c) => c.id === activeConversation);
+    // Persist config before sending
+    await api.patch(`/conversations/${convId}`, {
+      config: {
+        enabled_agent_ids: enabledAgentIds,
+        enabled_graph_ids: enabledGraphIds,
+        model_id: chatConfig.modelId,
+        model_override: chatConfig.modelOverride,
+      },
+    }).catch(() => {});
+
+    sendMessage(inputValue, convId ?? undefined);
+    setInputValue("");
+  }, [inputValue, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, sendMessage, conversations, messages.length]);
+
+  const handleToggleAgent = useCallback((agentId: string) => {
+    setEnabledAgentIds((prev) =>
+      prev.includes(agentId) ? prev.filter((id) => id !== agentId) : [...prev, agentId],
+    );
+  }, []);
+
+  const handleToggleGraph = useCallback((graphId: string) => {
+    setEnabledGraphIds((prev) =>
+      prev.includes(graphId) ? prev.filter((id) => id !== graphId) : [...prev, graphId],
+    );
+  }, []);
+
+  const handleModelChange = useCallback(
+    (modelId: string | null) => {
+      setChatConfig((prev) => {
+        const next = { ...prev, modelId };
+        persistConfig(next);
+        return next;
+      });
+    },
+    [persistConfig],
+  );
+
+  const activeConv = conversations.find((c) => c.id === activeConversationId);
   const activeTitle = activeConv?.title || "Chat";
 
-  if (!activeConversation) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-        <Bot className="h-16 w-16 text-muted-foreground/30 mb-4" />
-        <h2 className="text-xl font-semibold">Start a conversation</h2>
-        <p className="text-muted-foreground mt-2 max-w-sm">
-          Ask anything. The supervisor will route your message to the right agent.
-        </p>
-        <button
-          onClick={handleNewConversation}
-          className="mt-6 flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          New Chat
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <>
-      {/* Header */}
-      <div className="h-14 border-b flex items-center justify-between px-4 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-            <Bot className="h-4 w-4 text-primary" />
+    <div className="flex h-full w-full">
+      {/* Left: Conversation sidebar */}
+      <ChatSidebar
+        conversations={conversations}
+        activeId={activeConversationId}
+        onSelect={handleSelectConversation}
+        onCreate={handleCreateConversation}
+        onDelete={handleDeleteConversation}
+        onRename={handleRenameConversation}
+      />
+
+      {/* Center: Header + Messages + Input */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header */}
+        <div className="h-14 border-b flex items-center justify-between px-4 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 shrink-0">
+              <Bot className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{activeTitle}</p>
+              {isStreaming && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {activities.find((a) => a.status === "running")?.label || "Thinking..."}
+                </p>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium">{activeTitle}</p>
-            {isStreaming && (
-              <p className="text-xs text-muted-foreground">
-                {activities.find((a) => a.status === "running")?.label || "Thinking..."}
-              </p>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Model dropdown */}
+            {availableModels.length > 0 && (
+              <Select
+                value={chatConfig.modelId || undefined}
+                onValueChange={(v) => handleModelChange(v)}
+              >
+                <SelectTrigger className="w-[200px] h-8 text-xs">
+                  <SelectValue placeholder="Select a model..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableModels.map((m) => (
+                    <SelectItem key={m.id} value={toEngineModelId(m)}>
+                      {m.display_name || m.name} ({m.provider})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            {/* Token usage */}
+            {tokenUsage && (
+              <span className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground">
+                <Zap className="h-3 w-3" />
+                {tokenUsage.total}
+              </span>
             )}
           </div>
         </div>
-        {tokenUsage && (
-          <span className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground">
-            <Zap className="h-3 w-3" />
-            {tokenUsage.total} tokens
-          </span>
-        )}
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <MessageCircle className="h-10 w-10 text-muted-foreground/30" />
-            <p className="mt-3 text-muted-foreground">Send a message to start</p>
-          </div>
-        )}
-
-        {messages.map((msg) => {
-          const isLastAssistant =
-            msg.role === "assistant" && msg.id === messages[messages.length - 1]?.id;
-          const showActivities =
-            isLastAssistant && (isStreaming || activities.length > 0);
-
-          return (
-            <div
-              key={msg.id}
-              className={cn(
-                "flex gap-3",
-                msg.role === "user" ? "justify-end" : "justify-start",
-              )}
-            >
-              {msg.role !== "user" && (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                  <Bot className="h-4 w-4 text-primary" />
-                </div>
-              )}
-              <div className="max-w-[70%] min-w-0">
-                {showActivities && (
-                  <div className="mb-2">
-                    <ExecutionActivity
-                      activities={activities}
-                      isStreaming={isStreaming}
-                      hasContent={!!msg.content}
-                    />
-                  </div>
-                )}
-                {(msg.content || !isLastAssistant) && (
-                  <div
-                    className={cn(
-                      "rounded-2xl px-4 py-2.5",
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted",
-                    )}
-                  >
-                    <div className="text-sm whitespace-pre-wrap break-words">
-                      {msg.content || (
-                        <span className="inline-flex items-center gap-1 text-muted-foreground">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Thinking...
-                        </span>
-                      )}
-                    </div>
-                    {msg.metadata?.routing_strategy ? (
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        {String(msg.metadata.routing_strategy)}
-                        {msg.metadata.delegated_to ? ` \u2192 ${String(msg.metadata.delegated_to)}` : ""}
-                      </p>
-                    ) : null}
-                    {msg.metadata?.duration_ms != null && (
-                      <p className="text-xs opacity-60 mt-1">
-                        {Math.round(Number(msg.metadata.duration_ms) / 1000)}s
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-              {msg.role === "user" && (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
-                  <User className="h-4 w-4 text-primary-foreground" />
-                </div>
-              )}
-            </div>
-          );
-        })}
 
         {error && (
-          <div className="flex justify-center">
-            <div className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
-              {error}
-            </div>
+          <div className="px-4 py-2 bg-destructive/10 text-destructive text-sm border-b border-destructive/20 shrink-0">
+            {error}
           </div>
         )}
 
-        {messages.length > 0 && <div ref={messagesEndRef} />}
-      </div>
+        <ChatMessages
+          messages={messages}
+          isStreaming={isStreaming}
+          activities={activities}
+        />
 
-      {/* Input */}
-      <ChatInput
-        value={inputValue}
-        onChange={setInputValue}
-        onSend={handleSend}
-        isStreaming={isStreaming}
-        onCancel={cancelStream}
-      />
-    </>
+        <ChatInput
+          value={inputValue}
+          onChange={setInputValue}
+          onSend={handleSend}
+          isStreaming={isStreaming}
+          onCancel={cancelStream}
+          agents={agents}
+          graphs={graphs}
+          enabledAgentIds={enabledAgentIds}
+          enabledGraphIds={enabledGraphIds}
+          onToggleAgent={handleToggleAgent}
+          onToggleGraph={handleToggleGraph}
+          disabledReason={sendDisabledReason}
+        />
+      </div>
+    </div>
   );
 }
