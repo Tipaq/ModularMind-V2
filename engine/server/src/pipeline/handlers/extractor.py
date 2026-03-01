@@ -22,6 +22,7 @@ async def extractor_handler(data: dict[str, Any]) -> None:
     """Extract facts from a conversation and publish to memory:extracted."""
     conversation_id = data.get("conversation_id", "")
     agent_id = data.get("agent_id", "")
+    user_id = data.get("user_id", "")
     messages_raw = data.get("messages", "[]")
 
     if not conversation_id:
@@ -49,7 +50,7 @@ async def extractor_handler(data: dict[str, Any]) -> None:
     logger.info("Extracting facts from conversation %s (%d messages)", conversation_id, len(messages))
 
     extractor = FactExtractor()
-    facts = await extractor.extract_facts(messages, user_id="", agent_id=agent_id)
+    facts = await extractor.extract_facts(messages, user_id=user_id, agent_id=agent_id)
 
     # Filter out low-confidence facts
     facts = [f for f in facts if f.confidence >= _MIN_CONFIDENCE]
@@ -63,6 +64,7 @@ async def extractor_handler(data: dict[str, Any]) -> None:
     payload = {
         "conversation_id": conversation_id,
         "agent_id": agent_id,
+        "user_id": user_id,
         "facts": json.dumps([
             {
                 "text": f.content,

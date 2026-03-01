@@ -1,8 +1,11 @@
-"""Embedder handler — memory:extracted -> Qdrant + PostgreSQL.
+"""Embedder handler — memory:scored (or memory:extracted) -> Qdrant + PostgreSQL.
 
 Generates embeddings for extracted facts and stores them:
 - PostgreSQL: MemoryEntry row (metadata, content, importance)
 - Qdrant: dense + sparse vectors (hybrid search)
+
+Accepts input from either memory:scored (when scorer is enabled)
+or memory:extracted (when scorer is bypassed).
 """
 
 import json
@@ -12,7 +15,7 @@ from typing import Any
 from src.embedding import get_embedding_provider
 from src.infra.config import get_settings
 from src.infra.database import async_session_maker
-from src.memory.models import MemoryScope, MemoryTier
+from src.memory.models import MemoryScope, MemoryTier, MemoryType
 from src.memory.repository import MemoryRepository
 
 logger = logging.getLogger(__name__)
@@ -22,6 +25,7 @@ async def embedder_handler(data: dict[str, Any]) -> None:
     """Generate embeddings for extracted facts and store in PG + Qdrant."""
     conversation_id = data.get("conversation_id", "")
     agent_id = data.get("agent_id", "")
+    user_id = data.get("user_id", "")
     facts_raw = data.get("facts", "[]")
 
     if not conversation_id:
@@ -31,7 +35,10 @@ async def embedder_handler(data: dict[str, Any]) -> None:
     try:
         facts = json.loads(facts_raw) if isinstance(facts_raw, str) else facts_raw
     except json.JSONDecodeError:
-        logger.error("embedder_handler: invalid JSON in facts for conversation %s", conversation_id)
+        logger.error(
+            "embedder_handler: invalid JSON in facts for conversation %s",
+            conversation_id,
+        )
         return
 
     if not facts:
@@ -42,9 +49,12 @@ async def embedder_handler(data: dict[str, Any]) -> None:
     provider = get_embedding_provider(
         settings.EMBEDDING_PROVIDER,
         model=settings.EMBEDDING_MODEL,
+        base_url=settings.OLLAMA_BASE_URL,
     )
 
-    logger.info("Embedding %d facts from conversation %s", len(facts), conversation_id)
+    logger.info(
+        "Embedding %d facts from conversation %s", len(facts), conversation_id
+    )
 
     stored = 0
     async with async_session_maker() as session:
@@ -56,8 +66,17 @@ async def embedder_handler(data: dict[str, Any]) -> None:
                 continue
 
             category = fact.get("category", "context")
-            importance = float(fact.get("importance", 0.5))
+            # Use scored_importance if present (from scorer), fallback to raw
+            importance = float(
+                fact.get("scored_importance", fact.get("importance", 0.5))
+            )
             entities = fact.get("entities", [])
+            # Use memory_type if present (from scorer), default to EPISODIC
+            memory_type_str = fact.get("memory_type", "episodic")
+            try:
+                memory_type = MemoryType(memory_type_str)
+            except ValueError:
+                memory_type = MemoryType.EPISODIC
 
             try:
                 embedding = await provider.embed_text(text)
@@ -72,7 +91,9 @@ async def embedder_handler(data: dict[str, Any]) -> None:
                 "agent_id": agent_id,
             }
 
-            scope = MemoryScope.AGENT if agent_id else MemoryScope.CROSS_CONVERSATION
+            scope = (
+                MemoryScope.AGENT if agent_id else MemoryScope.CROSS_CONVERSATION
+            )
             scope_id = agent_id or "global"
 
             try:
@@ -84,15 +105,21 @@ async def embedder_handler(data: dict[str, Any]) -> None:
                     tier=MemoryTier.VECTOR,
                     metadata=metadata,
                     importance=importance,
+                    user_id=user_id or None,
+                    memory_type=memory_type,
                 )
                 stored += 1
             except Exception:
-                logger.exception("Failed to store memory entry for fact: %s", text[:80])
+                logger.exception(
+                    "Failed to store memory entry for fact: %s", text[:80]
+                )
                 continue
 
         await session.commit()
 
     logger.info(
         "Stored %d/%d facts from conversation %s",
-        stored, len(facts), conversation_id,
+        stored,
+        len(facts),
+        conversation_id,
     )

@@ -29,6 +29,7 @@ class MemorySearchResult:
     conversation_id: str | None
     agent_id: str | None
     importance: float
+    memory_type: str
     metadata: dict
     score: float
 
@@ -50,6 +51,7 @@ class QdrantMemoryVectorStore(BaseHybridVectorStore):
         conversation_id: str | None = None,
         importance: float = 0.5,
         metadata: dict | None = None,
+        memory_type: str = "episodic",
     ) -> None:
         """Upsert a single memory point to the memory collection."""
         client = await self._get_client()
@@ -81,6 +83,8 @@ class QdrantMemoryVectorStore(BaseHybridVectorStore):
                 "agent_id": agent_id,
                 "conversation_id": conv_id,
                 "importance": importance,
+                "memory_type": memory_type,
+                "is_expired": False,
                 "metadata": metadata or {},
             },
         )
@@ -110,7 +114,12 @@ class QdrantMemoryVectorStore(BaseHybridVectorStore):
             models.FieldCondition(
                 key="user_id",
                 match=models.MatchValue(value=user_id),
-            )
+            ),
+            # Exclude expired entries
+            models.FieldCondition(
+                key="is_expired",
+                match=models.MatchValue(value=False),
+            ),
         ]
 
         if scope:
@@ -156,11 +165,21 @@ class QdrantMemoryVectorStore(BaseHybridVectorStore):
                 conversation_id=hit.payload.get("conversation_id"),
                 agent_id=hit.payload.get("agent_id"),
                 importance=hit.payload.get("importance", 0.5),
+                memory_type=hit.payload.get("memory_type", "episodic"),
                 metadata=hit.payload.get("metadata", {}),
                 score=hit.score,
             )
             for hit in hits
         ]
+
+    async def set_expired(self, entry_id: str) -> None:
+        """Mark a memory point as expired in Qdrant payload."""
+        client = await self._get_client()
+        await client.set_payload(
+            collection_name=self._collection,
+            payload={"is_expired": True},
+            points=[entry_id],
+        )
 
     async def delete_entry(self, entry_id: str) -> None:
         """Delete a single memory point."""

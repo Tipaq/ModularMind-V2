@@ -6,12 +6,15 @@ and context formatting.
 """
 
 import logging
+import math
+from datetime import UTC, datetime
 from uuid import UUID
 
 from src.embedding.base import IEmbeddingProvider
+from src.infra.config import get_settings
 
-from .interfaces import IMemoryRepository, MemoryEntrySchema, MemoryStats
-from .models import MemoryScope, MemoryTier
+from .interfaces import IMemoryRepository, MemoryStats
+from .models import MemoryEntry, MemoryScope, MemoryTier
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +74,7 @@ class MemoryManager:
         scope_id: UUID,
         user_id: UUID | str | None = None,
         limit: int | None = None,
-    ) -> list[MemoryEntrySchema]:
+    ) -> list[MemoryEntry]:
         """Get relevant memory context for a query.
 
         Args:
@@ -104,12 +107,50 @@ class MemoryManager:
                 threshold=self.similarity_threshold,
             )
 
-            # Extract entries and update access
+            # Multi-factor scoring (Stanford formula)
+            settings = get_settings()
+            alpha = settings.MEMORY_SCORE_WEIGHT_RECENCY
+            beta = settings.MEMORY_SCORE_WEIGHT_IMPORTANCE
+            gamma = settings.MEMORY_SCORE_WEIGHT_RELEVANCE
+            delta = settings.MEMORY_SCORE_WEIGHT_FREQUENCY
+            now = datetime.now(UTC).replace(tzinfo=None)
+
+            scored_entries: list[tuple[MemoryEntry, float]] = []
+            for entry, qdrant_score in results:
+                # Recency: 0.995 ^ hours_since_access
+                ref_time = entry.last_accessed or entry.created_at
+                hours_since = (now - ref_time).total_seconds() / 3600
+                recency = 0.995 ** max(0, hours_since)
+
+                # Frequency: log-scaled access count
+                frequency = min(1.0, math.log(1 + entry.access_count) / math.log(51))
+
+                # Relevance: Qdrant hybrid score (already 0-1 from RRF)
+                relevance = qdrant_score
+
+                # Importance: stored importance
+                importance = entry.importance
+
+                # Final score
+                final_score = (
+                    alpha * recency
+                    + beta * importance
+                    + gamma * relevance
+                    + delta * frequency
+                )
+
+                scored_entries.append((entry, final_score))
+
+            # Re-sort by final score descending, take top-K
+            scored_entries.sort(key=lambda x: x[1], reverse=True)
+            scored_entries = scored_entries[:limit]
+
+            # Update access for returned entries
             entries = []
-            for entry, score in results:
+            for entry, score in scored_entries:
                 await self.repository.update_access(entry.id)
                 entries.append(entry)
-                logger.debug(f"Memory match: {entry.id} (score: {score:.3f})")
+                logger.debug("Memory match: %s (score: %.3f)", entry.id, score)
 
             return entries
 
@@ -125,7 +166,7 @@ class MemoryManager:
         tier: MemoryTier = MemoryTier.BUFFER,
         importance: float = 0.5,
         metadata: dict | None = None,
-    ) -> MemoryEntrySchema | None:
+    ) -> MemoryEntry | None:
         """Store a new memory entry.
 
         Args:
@@ -162,7 +203,7 @@ class MemoryManager:
 
     def format_context_for_prompt(
         self,
-        entries: list[MemoryEntrySchema],
+        entries: list[MemoryEntry],
         max_tokens: int | None = None,
     ) -> str:
         """Format memory entries for inclusion in a prompt.
@@ -200,7 +241,7 @@ class MemoryManager:
         scope: MemoryScope,
         scope_id: UUID,
         user_prompt: str | None = None,
-    ) -> MemoryEntrySchema | None:
+    ) -> MemoryEntry | None:
         """Extract and store relevant memory from a response.
 
         Analyzes the response for information worth remembering

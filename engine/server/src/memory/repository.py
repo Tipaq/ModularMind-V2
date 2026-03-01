@@ -6,6 +6,7 @@ Delegates vector search to QdrantMemoryVectorStore.
 """
 
 import logging
+import math
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -14,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.memory import MemoryStats
 
-from .models import MemoryEntry, MemoryScope, MemoryTier
+from .models import MemoryEntry, MemoryScope, MemoryTier, MemoryType
 from .vector_store import QdrantMemoryVectorStore
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ class MemoryRepository:
         metadata: dict | None = None,
         user_id: str | None = None,
         importance: float = 0.5,
+        memory_type: MemoryType = MemoryType.EPISODIC,
     ) -> MemoryEntry:
         """Create a new memory entry in PG and upsert to Qdrant."""
         entry_id = str(uuid4())
@@ -48,6 +50,7 @@ class MemoryRepository:
             content=content,
             tier=tier,
             importance=importance,
+            memory_type=memory_type,
             meta=metadata or {},
         )
         self.db.add(entry)
@@ -66,6 +69,7 @@ class MemoryRepository:
                     user_id=user_id or "",
                     importance=importance,
                     metadata=metadata or {},
+                    memory_type=memory_type.value,
                 )
             except Exception as e:
                 logger.error("Qdrant upsert failed for memory %s: %s", entry_id, e)
@@ -91,6 +95,7 @@ class MemoryRepository:
         query = select(MemoryEntry).where(
             MemoryEntry.scope == scope,
             MemoryEntry.scope_id == scope_id,
+            MemoryEntry.expired_at.is_(None),
         )
 
         if tier:
@@ -128,10 +133,13 @@ class MemoryRepository:
         if not qdrant_results:
             return []
 
-        # Enrich with PG metadata (tier, access_count, last_accessed)
+        # Enrich with PG metadata, exclude expired entries
         point_ids = [r.point_id for r in qdrant_results]
         result = await self.db.execute(
-            select(MemoryEntry).where(MemoryEntry.id.in_(point_ids))
+            select(MemoryEntry).where(
+                MemoryEntry.id.in_(point_ids),
+                MemoryEntry.expired_at.is_(None),
+            )
         )
         entries_by_id = {e.id: e for e in result.scalars().all()}
 
@@ -144,16 +152,45 @@ class MemoryRepository:
         return enriched
 
     async def update_access(self, entry_id: str) -> None:
-        """Atomically increment access count and update timestamp."""
+        """Increment access count, update timestamp, apply diminishing reinforcement.
+
+        Reinforcement boost: 0.01 / (1 + log(1 + access_count))
+        Decreases with each access to prevent positive feedback loops.
+        """
+        entry = await self.get_entry(entry_id)
+        if not entry:
+            return
+
+        # Diminishing importance boost
+        boost = 0.01 / (1 + math.log(1 + entry.access_count))
+        new_importance = min(1.0, entry.importance + boost)
+
         await self.db.execute(
             update(MemoryEntry)
             .where(MemoryEntry.id == entry_id)
             .values(
                 access_count=MemoryEntry.access_count + 1,
                 last_accessed=datetime.now(UTC),
+                importance=new_importance,
             )
         )
         await self.db.flush()
+
+    async def invalidate_entry(self, entry_id: str) -> None:
+        """Soft-delete a memory entry by setting expired_at."""
+        now = datetime.now(UTC).replace(tzinfo=None)
+        await self.db.execute(
+            update(MemoryEntry)
+            .where(MemoryEntry.id == entry_id)
+            .values(expired_at=now)
+        )
+        await self.db.flush()
+
+        # Best-effort Qdrant update
+        try:
+            await self._vector_store.set_expired(entry_id)
+        except Exception as e:
+            logger.error("Qdrant invalidation failed for %s: %s", entry_id, e)
 
     async def delete_entry(self, entry_id: str) -> bool:
         """Delete a memory entry from PG."""
@@ -165,34 +202,88 @@ class MemoryRepository:
         await self.db.flush()
         return True
 
+    async def get_entries_for_consolidation(
+        self,
+        scope: MemoryScope,
+        scope_id: str,
+        limit: int = 50,
+        older_than: datetime | None = None,
+    ) -> list[MemoryEntry]:
+        """Get active entries for consolidation processing."""
+        query = select(MemoryEntry).where(
+            MemoryEntry.scope == scope,
+            MemoryEntry.scope_id == scope_id,
+            MemoryEntry.expired_at.is_(None),
+        )
+
+        if older_than:
+            query = query.where(MemoryEntry.created_at < older_than)
+
+        query = query.order_by(MemoryEntry.importance.desc()).limit(limit)
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_distinct_scopes(self) -> list[tuple[MemoryScope, str]]:
+        """Get all active (scope, scope_id) pairs with non-expired entries."""
+        result = await self.db.execute(
+            select(MemoryEntry.scope, MemoryEntry.scope_id)
+            .where(MemoryEntry.expired_at.is_(None))
+            .distinct()
+        )
+        return [(row[0], row[1]) for row in result.all()]
+
     async def get_stats(self, scope: MemoryScope, scope_id: str) -> MemoryStats:
         """Get memory statistics for a scope in a single query."""
-        base_filter = [MemoryEntry.scope == scope, MemoryEntry.scope_id == scope_id]
+        base_filter = [
+            MemoryEntry.scope == scope,
+            MemoryEntry.scope_id == scope_id,
+            MemoryEntry.expired_at.is_(None),
+        ]
 
-        stats_query = select(
-            MemoryEntry.tier,
-            func.count(MemoryEntry.id).label("cnt"),
-            func.min(MemoryEntry.created_at).label("oldest"),
-            func.max(MemoryEntry.created_at).label("newest"),
-        ).where(*base_filter).group_by(MemoryEntry.tier)
-
-        result = await self.db.execute(stats_query)
-        rows = result.all()
+        # Stats by tier
+        tier_query = (
+            select(
+                MemoryEntry.tier,
+                func.count(MemoryEntry.id).label("cnt"),
+                func.min(MemoryEntry.created_at).label("oldest"),
+                func.max(MemoryEntry.created_at).label("newest"),
+            )
+            .where(*base_filter)
+            .group_by(MemoryEntry.tier)
+        )
+        tier_result = await self.db.execute(tier_query)
+        tier_rows = tier_result.all()
 
         tier_counts = {tier.value: 0 for tier in MemoryTier}
         oldest = None
         newest = None
 
-        for row in rows:
+        for row in tier_rows:
             tier_counts[row.tier.value] = row.cnt
             if oldest is None or (row.oldest and row.oldest < oldest):
                 oldest = row.oldest
             if newest is None or (row.newest and row.newest > newest):
                 newest = row.newest
 
+        # Stats by type
+        type_query = (
+            select(
+                MemoryEntry.memory_type,
+                func.count(MemoryEntry.id).label("cnt"),
+            )
+            .where(*base_filter)
+            .group_by(MemoryEntry.memory_type)
+        )
+        type_result = await self.db.execute(type_query)
+        type_counts = {mt.value: 0 for mt in MemoryType}
+        for row in type_result.all():
+            type_counts[row.memory_type.value] = row.cnt
+
         return MemoryStats(
             total_entries=sum(tier_counts.values()),
             entries_by_tier=tier_counts,
+            entries_by_type=type_counts,
             oldest_entry=oldest,
             newest_entry=newest,
         )

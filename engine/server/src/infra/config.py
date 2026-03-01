@@ -142,6 +142,26 @@ class Settings(BaseSettings):
     )
     FACT_EXTRACTION_MIN_MESSAGES: int = Field(default=5, ge=1, le=100)
 
+    # ---- Memory Scorer -------------------------------------------------------
+    MEMORY_SCORER_ENABLED: bool = True
+    MEMORY_SCORER_MODEL: str = Field(
+        default="",
+        description="LLM model for memory scoring. Empty = use runtime default.",
+    )
+    MEMORY_SCORER_MIN_IMPORTANCE: float = Field(default=0.2, ge=0.0, le=1.0)
+
+    # ---- Memory Decay --------------------------------------------------------
+    MEMORY_DECAY_EPISODIC_HALF_LIFE: int = Field(default=30, ge=1)
+    MEMORY_DECAY_SEMANTIC_HALF_LIFE: int = Field(default=365, ge=1)
+    MEMORY_DECAY_PROCEDURAL_HALF_LIFE: int = Field(default=730, ge=1)
+    MEMORY_DECAY_PRUNE_THRESHOLD: float = Field(default=0.05, ge=0.0, le=1.0)
+
+    # ---- Memory Retrieval Scoring --------------------------------------------
+    MEMORY_SCORE_WEIGHT_RECENCY: float = Field(default=0.15, ge=0.0, le=1.0)
+    MEMORY_SCORE_WEIGHT_IMPORTANCE: float = Field(default=0.25, ge=0.0, le=1.0)
+    MEMORY_SCORE_WEIGHT_RELEVANCE: float = Field(default=0.45, ge=0.0, le=1.0)
+    MEMORY_SCORE_WEIGHT_FREQUENCY: float = Field(default=0.15, ge=0.0, le=1.0)
+
     # ---- Conversation Indexing ----------------------------------------------
     CONVERSATION_INDEX_MODE: str = Field(
         default="summary",

@@ -65,6 +65,7 @@ async def enqueue_memory_raw(
     conversation_id: str,
     agent_id: str,
     messages: str,
+    user_id: str = "",
 ) -> str:
     """Publish conversation data for fact extraction to memory:raw stream."""
     bus = await get_event_bus()
@@ -72,6 +73,7 @@ async def enqueue_memory_raw(
         "conversation_id": conversation_id,
         "agent_id": agent_id,
         "messages": messages,
+        "user_id": user_id,
     })
     logger.info("Enqueued memory extraction for conversation %s (msg=%s)", conversation_id, msg_id)
     return msg_id
