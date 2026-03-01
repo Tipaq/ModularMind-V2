@@ -14,6 +14,7 @@ import Users from "./pages/Users";
 import Playground from "./pages/Playground";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
+import Memory from "./pages/Memory";
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/models" element={<Models />} />
           <Route path="/models/:id" element={<ModelDetail />} />
           <Route path="/knowledge" element={<Knowledge />} />
+          <Route path="/memory" element={<Memory />} />
           <Route path="/users" element={<Users />} />
           <Route path="/playground" element={<Playground />} />
           <Route path="/settings" element={<Settings />} />

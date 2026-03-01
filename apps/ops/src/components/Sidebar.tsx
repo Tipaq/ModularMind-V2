@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
+  Brain,
   Layers,
   Users,
   Bot,
@@ -42,6 +43,7 @@ const sections: NavSection[] = [
     label: "Platform",
     items: [
       { name: "Models", to: "/models", icon: Layers },
+      { name: "Memory", to: "/memory", icon: Brain },
     ],
   },
   {

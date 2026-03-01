@@ -142,6 +142,7 @@ export default function Models() {
     loading,
     providerConfigs,
     fetchUnifiedCatalog,
+    pollDownloadProgress,
     isProviderConfigured,
     triggerPull,
     cancelPull,
@@ -155,18 +156,18 @@ export default function Models() {
     fetchUnifiedCatalog();
   }, [fetchUnifiedCatalog]);
 
-  // Poll for downloading models
+  // Poll only download progress (lightweight — no full catalog refetch)
   useEffect(() => {
-    const downloading = unifiedCatalog.filter(
+    const hasDownloading = unifiedCatalog.some(
       (m) => m.source === "catalog" && m.data.pull_status === "downloading",
     );
-    if (downloading.length === 0) return;
+    if (!hasDownloading) return;
 
     const interval = setInterval(() => {
-      fetchUnifiedCatalog();
+      pollDownloadProgress();
     }, 3000);
     return () => clearInterval(interval);
-  }, [unifiedCatalog, fetchUnifiedCatalog]);
+  }, [unifiedCatalog, pollDownloadProgress]);
 
   // Client-side filtering + sorting
   const filtered = useMemo(() => {

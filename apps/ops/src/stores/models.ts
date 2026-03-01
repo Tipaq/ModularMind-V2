@@ -51,6 +51,7 @@ interface ModelsState {
   }) => Promise<void>;
   cancelPull: (modelName: string) => Promise<void>;
   removeFromCatalog: (id: string) => Promise<void>;
+  pollDownloadProgress: () => Promise<void>;
   isProviderConfigured: (provider: ModelProvider) => boolean;
   setFilters: (filters: Partial<ModelFilters>) => void;
 }
@@ -237,6 +238,60 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       await get().fetchUnifiedCatalog();
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to remove model" });
+    }
+  },
+
+  pollDownloadProgress: async () => {
+    const { unifiedCatalog } = get();
+    const downloading = unifiedCatalog.filter(
+      (m) => m.source === "catalog" && m.data.pull_status === "downloading",
+    );
+    if (downloading.length === 0) return;
+
+    const results = await Promise.all(
+      downloading.map(async (m) => {
+        try {
+          const data = await api.get<{ status: string; progress?: string; error?: string }>(
+            `/models/pull/${encodeURIComponent(m.model_name)}/status`,
+          );
+          return { model_name: m.model_name, data };
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    const progressMap = new Map<string, { status: string; progress?: string; error?: string }>();
+    for (const r of results) {
+      if (r) progressMap.set(r.model_name, r.data);
+    }
+    if (progressMap.size === 0) return;
+
+    let needsFullRefresh = false;
+    const updated = unifiedCatalog.map((m) => {
+      if (m.source !== "catalog") return m;
+      const prog = progressMap.get(m.model_name);
+      if (!prog) return m;
+
+      const newStatus = prog.status;
+      // If download finished or errored, flag for a full refresh to get final state
+      if (newStatus !== "downloading" && newStatus !== m.data.pull_status) {
+        needsFullRefresh = true;
+        return m;
+      }
+
+      const newProgress = prog.progress ? parseInt(prog.progress, 10) : 0;
+      // Skip update if nothing changed
+      if (m.data.pull_progress === newProgress && m.data.pull_status === newStatus) return m;
+
+      const updatedData = { ...m.data, pull_status: newStatus as CatalogModel["pull_status"], pull_progress: newProgress };
+      return { ...m, data: updatedData } as UnifiedCatalogModel;
+    });
+
+    if (needsFullRefresh) {
+      await get().fetchUnifiedCatalog();
+    } else {
+      set({ unifiedCatalog: updated });
     }
   },
 
