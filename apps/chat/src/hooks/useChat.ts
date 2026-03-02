@@ -114,10 +114,12 @@ export function useChat(conversationId: string | null) {
       // Replace temp user message with real one
       setMessages((prev) => prev.map((m) => (m.id === tempUserMsg.id ? user_message : m)));
 
+      const routingDurationMs = Date.now() - sendStartMs;
+
       // Direct response (no execution needed)
       if (!execution_id && direct_response) {
-        handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy || "DIRECT_RESPONSE" });
-        handleTraceEvent({ type: "trace:supervisor_direct", preview: direct_response.slice(0, 150) });
+        handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy || "DIRECT_RESPONSE", duration_ms: routingDurationMs });
+        handleTraceEvent({ type: "trace:supervisor_direct", preview: direct_response.slice(0, 150), duration_ms: routingDurationMs });
         const durationMs = Date.now() - sendStartMs;
         setMessages((prev) =>
           prev.map((m) =>
@@ -138,7 +140,7 @@ export function useChat(conversationId: string | null) {
 
       // Emit routing traces
       if (routing_strategy) {
-        handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy });
+        handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy, duration_ms: routingDurationMs });
         if (ephemeral_agent) {
           handleTraceEvent({ type: "trace:agent_created", agent_name: ephemeral_agent.name });
         }

@@ -1,7 +1,18 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Trash2, MessageSquare, Check, X } from "lucide-react";
-import { Button, Input, cn, UserButton } from "@modularmind/ui";
+import {
+  Button,
+  Input,
+  cn,
+  UserButton,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@modularmind/ui";
 import { useAuthStore } from "../stores/auth";
 
 export interface Conversation {
@@ -47,6 +58,7 @@ export function ChatSidebar({
   const { user, logout } = useAuthStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [deletingConv, setDeletingConv] = useState<Conversation | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -137,7 +149,7 @@ export function ChatSidebar({
                   className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm("Delete this conversation?")) onDelete(conv.id);
+                    setDeletingConv(conv);
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -160,6 +172,33 @@ export function ChatSidebar({
           />
         )}
       </div>
+
+      {/* Delete confirmation modal */}
+      <Dialog open={!!deletingConv} onOpenChange={(open) => { if (!open) setDeletingConv(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete conversation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &ldquo;{deletingConv?.title || "this conversation"}&rdquo;? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setDeletingConv(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (deletingConv) onDelete(deletingConv.id);
+                setDeletingConv(null);
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

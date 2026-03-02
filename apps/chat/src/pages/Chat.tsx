@@ -120,7 +120,6 @@ export default function Chat() {
   const createConversation = useCallback(async (): Promise<string | null> => {
     try {
       const body: Record<string, unknown> = {
-        title: "New Chat",
         supervisor_mode: chatConfig.supervisorMode,
       };
       // If a single agent is selected, use direct mode
@@ -296,7 +295,7 @@ export default function Chat() {
             {/* Model dropdown */}
             {availableModels.length > 0 && (
               <Select
-                value={chatConfig.modelId || undefined}
+                value={chatConfig.modelId ?? ""}
                 onValueChange={(v) => handleModelChange(v)}
               >
                 <SelectTrigger className="w-[200px] h-8 text-xs">
@@ -304,7 +303,7 @@ export default function Chat() {
                 </SelectTrigger>
                 <SelectContent>
                   {availableModels.map((m) => (
-                    <SelectItem key={m.id} value={toEngineModelId(m)}>
+                    <SelectItem key={m.id} value={toEngineModelId(m)} className="text-xs">
                       {m.display_name || m.name} ({m.provider})
                     </SelectItem>
                   ))}
