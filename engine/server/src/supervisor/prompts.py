@@ -43,6 +43,7 @@ Recent conversation context:
 
 Last routed agent: {last_agent_info}
 
+{memory_section}
 Respond with a JSON object matching this schema:
 {{
   "strategy": "DIRECT_RESPONSE|TOOL_RESPONSE|DELEGATE_AGENT|EXECUTE_GRAPH|CREATE_AGENT|MULTI_ACTION",
@@ -164,6 +165,7 @@ def build_routing_task_prompt(
     history: list[dict],
     last_agent: str | None = None,
     mcp_tools: dict[str, list[MCPToolDefinition]] | None = None,
+    memory_context: str = "",
 ) -> str:
     """Build the complete routing prompt with size enforcement.
 
@@ -173,6 +175,7 @@ def build_routing_task_prompt(
         history: Recent conversation messages
         last_agent: Last routed agent name/id (for affinity hint)
         mcp_tools: Optional mapping of server_name → list of tool definitions
+        memory_context: Pre-formatted memory context string
 
     Returns:
         Complete prompt string, guaranteed under MAX_ROUTING_PROMPT_CHARS
@@ -182,46 +185,37 @@ def build_routing_task_prompt(
     mcp_tool_catalog = build_mcp_tool_catalog(mcp_tools or {})
     conversation_summary = build_conversation_summary(history)
     last_agent_info = last_agent or "(none — new conversation or topic change)"
+    memory_section = (
+        f"Known facts about the user:\n{memory_context}" if memory_context else ""
+    )
 
-    prompt = ROUTING_TASK_TEMPLATE.format(
+    fmt_kwargs = dict(
         agent_catalog=agent_catalog,
         graph_catalog=graph_catalog,
         mcp_tool_catalog=mcp_tool_catalog,
         conversation_summary=conversation_summary,
         last_agent_info=last_agent_info,
+        memory_section=memory_section,
     )
+
+    prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
 
     # Enforce hard limit — drop context progressively
     if len(prompt) > MAX_ROUTING_PROMPT_CHARS:
         # First: drop conversation summary
-        prompt = ROUTING_TASK_TEMPLATE.format(
-            agent_catalog=agent_catalog,
-            graph_catalog=graph_catalog,
-            mcp_tool_catalog=mcp_tool_catalog,
-            conversation_summary="(trimmed for size)",
-            last_agent_info=last_agent_info,
-        )
+        fmt_kwargs["conversation_summary"] = "(trimmed for size)"
+        prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
 
     if len(prompt) > MAX_ROUTING_PROMPT_CHARS:
         # Second: truncate agent descriptions
-        short_catalog = build_agent_catalog(agents[:10])
-        prompt = ROUTING_TASK_TEMPLATE.format(
-            agent_catalog=short_catalog,
-            graph_catalog=graph_catalog,
-            mcp_tool_catalog=mcp_tool_catalog,
-            conversation_summary="(trimmed for size)",
-            last_agent_info=last_agent_info,
-        )
+        fmt_kwargs["agent_catalog"] = build_agent_catalog(agents[:10])
+        prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
 
     if len(prompt) > MAX_ROUTING_PROMPT_CHARS:
-        # Third: truncate graph and tool descriptions too
-        short_graphs = build_graph_catalog(graphs[:5])
-        prompt = ROUTING_TASK_TEMPLATE.format(
-            agent_catalog=short_catalog,
-            graph_catalog=short_graphs,
-            mcp_tool_catalog="(trimmed for size)",
-            conversation_summary="(trimmed for size)",
-            last_agent_info=last_agent_info,
-        )
+        # Third: truncate graph, tool, and memory
+        fmt_kwargs["graph_catalog"] = build_graph_catalog(graphs[:5])
+        fmt_kwargs["mcp_tool_catalog"] = "(trimmed for size)"
+        fmt_kwargs["memory_section"] = ""
+        prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
 
     return prompt

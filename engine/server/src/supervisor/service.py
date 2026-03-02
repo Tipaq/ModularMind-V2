@@ -12,6 +12,7 @@ Redis Streams worker via the router after this service returns.
 
 import json
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -114,11 +115,14 @@ class SuperSupervisorService:
         conv_config = conv_config or {}
         conv_config = self._auto_enable_mcp_servers(conv_config)
 
+        routing_start = time.perf_counter()
         decision = await self._resolve_routing(
-            conversation_id, content, messages, conv_config,
+            conversation_id, content, messages, conv_config, user_id=user_id,
         )
+        routing_duration_ms = int((time.perf_counter() - routing_start) * 1000)
 
         routing_metadata = self._build_routing_metadata(decision)
+        routing_metadata["duration_ms"] = routing_duration_ms
         logger.info(
             "Routing decision: strategy=%s confidence=%.2f reasoning='%s'",
             decision.strategy.value, decision.confidence or 0, decision.reasoning or "",
@@ -132,6 +136,7 @@ class SuperSupervisorService:
             decision, conversation_id, effective_content, user_id, conv_config,
         )
         result["routing_metadata"] = routing_metadata
+        result["memory_entries"] = getattr(self, "_last_memory_entries", [])
         return result
 
     # =========================================================================
@@ -161,6 +166,7 @@ class SuperSupervisorService:
         content: str,
         messages: list[dict[str, Any]] | None,
         conv_config: dict[str, Any],
+        user_id: str = "",
     ) -> RoutingDecision:
         """Determine routing strategy from message content and context."""
         parsed, matched_agent_ids = await self.parser.parse_multi(content)
@@ -215,10 +221,19 @@ class SuperSupervisorService:
 
         # No explicit routing — use LLM with session affinity
         last_agent = await self.context_manager.get_last_agent(conversation_id)
+
+        # Retrieve memory context for routing (enriches DIRECT_RESPONSE)
+        memory_context = ""
+        self._last_memory_entries: list[dict[str, Any]] = []
+        if user_id:
+            memory_context, self._last_memory_entries = await self._get_memory_context(
+                user_id, content,
+            )
+
         decision = await self._route_with_llm(
             conversation_id, parsed.clean_content,
             messages=messages, affinity_agent_id=last_agent,
-            conv_config=conv_config,
+            conv_config=conv_config, memory_context=memory_context,
         )
         decision = self._apply_single_selection_override(decision, conv_config)
         return decision
@@ -262,12 +277,14 @@ class SuperSupervisorService:
         messages: list[dict[str, Any]] | None = None,
         affinity_agent_id: str | None = None,
         conv_config: dict[str, Any] | None = None,
+        memory_context: str = "",
     ) -> RoutingDecision:
         """Call supervisor LLM for routing decision."""
         conv_config = conv_config or {}
         try:
             task_prompt = await self._build_routing_prompt(
                 messages, affinity_agent_id, conv_config,
+                memory_context=memory_context,
             )
             llm_messages = self._compose_routing_messages(conv_config, task_prompt)
 
@@ -298,6 +315,7 @@ class SuperSupervisorService:
         messages: list[dict[str, Any]] | None,
         affinity_agent_id: str | None,
         conv_config: dict[str, Any],
+        memory_context: str = "",
     ) -> str:
         """Build the routing task prompt with agent/graph catalog and MCP tools."""
         agents = await self.config_provider.list_agents()
@@ -322,6 +340,7 @@ class SuperSupervisorService:
             history=messages or [],
             last_agent=last_agent_info,
             mcp_tools=mcp_tools,
+            memory_context=memory_context,
         )
 
     async def _discover_mcp_tools_for_routing(
@@ -430,7 +449,7 @@ class SuperSupervisorService:
         from src.conversations.service import ConversationService
 
         conv_service = ConversationService(self.db)
-        await conv_service.add_message(
+        msg = await conv_service.add_message(
             conversation_id=conv_id,
             role=MessageRole.ASSISTANT,
             content=decision.direct_response or "",
@@ -440,6 +459,7 @@ class SuperSupervisorService:
         return {
             "direct_response": decision.direct_response,
             "execution_id": None,
+            "message_id": msg.id,
         }
 
     # =========================================================================
@@ -475,7 +495,12 @@ class SuperSupervisorService:
                 logger.info("Model %s doesn't support tools, falling back", model_name)
                 return await self._handle_direct_response(decision, conv_id)
 
-            llm_messages = self._compose_tool_messages(conv_config, content)
+            memory_context, _ = await self._get_memory_context(user_id, content)
+            llm_messages = self._compose_tool_messages(
+                conv_config, content, memory_context=memory_context,
+            )
+
+            step_start = time.perf_counter()
 
             await self._publish_tool_step_started(
                 publish_fn, execution.id, model_name, lc_tools,
@@ -491,8 +516,11 @@ class SuperSupervisorService:
                 publish_fn=publish_fn,
             )
 
+            step_duration_ms = int((time.perf_counter() - step_start) * 1000)
+
             await self._finalize_tool_response(
                 conv_id, execution, response_text, publish_fn,
+                step_duration_ms=step_duration_ms,
             )
 
             return {
@@ -556,8 +584,104 @@ class SuperSupervisorService:
 
         return execution, publish_fn
 
-    def _compose_tool_messages(self, conv_config: dict[str, Any], content: str) -> list[Any]:
+    async def _get_memory_context(
+        self, user_id: str, query: str,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Retrieve user memory context for supervisor inline responses.
+
+        Returns:
+            Tuple of (formatted_text, raw_entries_as_dicts) for prompt injection
+            and frontend display respectively.
+        """
+        from uuid import UUID
+
+        try:
+            from src.embedding import get_embedding_provider
+            from src.infra.config import get_settings
+            from src.infra.database import async_session_maker
+            from src.memory.manager import MemoryManager
+            from src.memory.models import MemoryScope
+            from src.memory.repository import MemoryRepository
+
+            settings = get_settings()
+            if not settings.FACT_EXTRACTION_ENABLED:
+                return "", []
+
+            embedding_provider = get_embedding_provider(
+                settings.EMBEDDING_PROVIDER,
+                base_url=settings.OLLAMA_BASE_URL,
+                model=settings.EMBEDDING_MODEL,
+            )
+
+            async with async_session_maker() as session:
+                repo = MemoryRepository(session)
+                manager = MemoryManager(repo, embedding_provider)
+
+                uid = UUID(user_id) if len(user_id) == 36 else UUID(int=0)
+
+                entries = await manager.get_context(
+                    query=query,
+                    scope=MemoryScope.CROSS_CONVERSATION,
+                    scope_id=uid,
+                    user_id=user_id,
+                    limit=5,
+                )
+
+                profile_entries = await manager.get_context(
+                    query=query,
+                    scope=MemoryScope.USER_PROFILE,
+                    scope_id=uid,
+                    user_id=user_id,
+                    limit=5,
+                )
+
+                all_entries = entries + profile_entries
+                seen: set[str] = set()
+                unique = []
+                for e in all_entries:
+                    eid = str(e.id)
+                    if eid not in seen:
+                        seen.add(eid)
+                        unique.append(e)
+                unique = unique[:5]
+
+                result = manager.format_context_for_prompt(unique, max_tokens=2000)
+
+                # Build raw entry dicts for frontend display
+                raw_entries = [
+                    {
+                        "id": str(e.id),
+                        "content": e.content,
+                        "scope": e.scope.value if hasattr(e.scope, "value") else str(e.scope),
+                        "tier": e.tier.value if hasattr(e.tier, "value") else str(e.tier),
+                        "importance": e.importance,
+                        "memory_type": (
+                            e.memory_type.value
+                            if hasattr(e.memory_type, "value")
+                            else str(e.memory_type)
+                        ),
+                        "category": (e.meta or {}).get("category", ""),
+                    }
+                    for e in unique
+                ]
+
+                if unique:
+                    logger.info(
+                        "Memory context: %d entries, %d chars for user %s",
+                        len(unique), len(result), user_id[:8],
+                    )
+                return result, raw_entries
+
+        except Exception as e:
+            logger.warning("Memory retrieval for supervisor failed: %s", e, exc_info=True)
+            return "", []
+
+    def _compose_tool_messages(
+        self, conv_config: dict[str, Any], content: str, memory_context: str = "",
+    ) -> list[Any]:
         """Compose layered LLM messages for tool-calling (identity + personality + task)."""
+        from langchain_core.messages import SystemMessage
+
         from src.prompt_layers import (
             LayerType,
             PromptComposer,
@@ -571,7 +695,11 @@ class SuperSupervisorService:
         personality = conv_config.get("supervisor_prompt") or get_supervisor_personality()
         composer.add(PromptLayer(LayerType.PERSONALITY, personality, "supervisor_personality"))
         composer.add(PromptLayer(LayerType.TASK, get_tool_task(), "tool_task"))
-        return composer.build() + [HumanMessage(content=content)]
+        messages = composer.build()
+        if memory_context:
+            messages.append(SystemMessage(content=memory_context))
+        messages.append(HumanMessage(content=content))
+        return messages
 
     async def _publish_tool_step_started(
         self, publish_fn, execution_id: str, model_name: str, lc_tools: list,
@@ -592,6 +720,7 @@ class SuperSupervisorService:
 
     async def _finalize_tool_response(
         self, conv_id: str, execution, response_text: str, publish_fn,
+        *, step_duration_ms: int | None = None,
     ) -> None:
         """Save response, update execution status, and publish completion events."""
         from src.conversations.models import MessageRole
@@ -619,6 +748,7 @@ class SuperSupervisorService:
             "run_id": execution.id,
             "node_id": "supervisor_tools", "node_type": "agent",
             "status": "completed",
+            "duration_ms": step_duration_ms,
             "output_data": {"response": response_text[:OUTPUT_TRUNCATION_LENGTH]},
         })
         await publish_fn({
@@ -626,6 +756,7 @@ class SuperSupervisorService:
             "execution_id": execution.id,
             "run_id": execution.id,
             "status": "completed",
+            "duration_ms": step_duration_ms,
             "output": {"response": response_text},
             "output_data": {"response": response_text},
         })
@@ -673,10 +804,16 @@ class SuperSupervisorService:
                 )
 
         mcp_server_ids = conv_config.get("enabled_mcp_servers", [])
+        input_data: dict[str, Any] = {
+            "routing_strategy": decision.strategy.value,
+            "delegated_to": agent.name,
+        }
+        if mcp_server_ids:
+            input_data["mcp_server_ids"] = mcp_server_ids
         execution_data = ExecutionCreate(
             prompt=content,
             session_id=conv_id,
-            input_data={"mcp_server_ids": mcp_server_ids} if mcp_server_ids else None,
+            input_data=input_data,
         )
         execution = await self.exec_service.start_agent_execution(
             agent_id=agent_id,
@@ -703,9 +840,16 @@ class SuperSupervisorService:
                 "execution_id": None,
             }
 
+        graph_config = await self.config_provider.get_graph_config(graph_id)
+        graph_name = graph_config.name if graph_config else graph_id
+
         execution_data = ExecutionCreate(
             prompt=content,
             session_id=conv_id,
+            input_data={
+                "routing_strategy": decision.strategy.value,
+                "delegated_to": graph_name,
+            },
         )
         execution = await self.exec_service.start_graph_execution(
             graph_id=graph_id,

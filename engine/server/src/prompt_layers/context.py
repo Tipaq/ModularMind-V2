@@ -85,8 +85,28 @@ class AgentContextBuilder:
                 scope=MemoryScope.AGENT,
                 scope_id=UUID(str(agent.id)),
                 user_id=user_id,
-                limit=5,
+                limit=3,
             )
+
+            # Also search user profile memories (facts extracted from conversations)
+            if user_id:
+                profile_entries = await manager.get_context(
+                    query=query,
+                    scope=MemoryScope.USER_PROFILE,
+                    scope_id=UUID(user_id) if len(user_id) == 36 else UUID(int=0),
+                    user_id=user_id,
+                    limit=3,
+                )
+                all_entries = entries + profile_entries
+                seen: set[str] = set()
+                unique = []
+                for e in all_entries:
+                    eid = str(e.id)
+                    if eid not in seen:
+                        seen.add(eid)
+                        unique.append(e)
+                entries = unique[:5]
+
             return manager.format_context_for_prompt(entries, max_tokens=2000)
 
         except Exception as e:
