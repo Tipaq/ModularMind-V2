@@ -1,0 +1,84 @@
+{
+  "uid": "mm-llm-ollama",
+  "title": "ModularMind — LLM & Ollama",
+  "tags": ["modularmind", "llm", "ollama"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Models Loaded in VRAM",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "modularmind_ollama_loaded_models", "legendFormat": "Models" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": null }] } } }
+    },
+    {
+      "id": 2,
+      "title": "VRAM Used",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "modularmind_vram_used_percent", "legendFormat": "VRAM %" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] } } }
+    },
+    {
+      "id": 3,
+      "title": "VRAM Used (bytes)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "modularmind_vram_used_bytes", "legendFormat": "VRAM" }],
+      "fieldConfig": { "defaults": { "unit": "bytes", "thresholds": { "steps": [{ "color": "blue", "value": null }] } } }
+    },
+    {
+      "id": 4,
+      "title": "MCP Sidecars Active",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "modularmind_mcp_sidecars_active", "legendFormat": "Sidecars" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": null }, { "color": "yellow", "value": 15 }, { "color": "red", "value": 20 }] } } }
+    },
+    {
+      "id": 5,
+      "title": "LLM Request Latency by Model",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(modularmind_llm_request_duration_seconds_bucket[5m])) by (model, le))", "legendFormat": "{{ model }} p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } } }
+    },
+    {
+      "id": 6,
+      "title": "Time to First Token (TTFT) by Model",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(modularmind_llm_ttft_seconds_bucket[5m])) by (model, le))", "legendFormat": "{{ model }} p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } } }
+    },
+    {
+      "id": 7,
+      "title": "Tokens / Second by Model",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(modularmind_llm_tokens_per_second_bucket[5m])) by (model, le))", "legendFormat": "{{ model }} p50" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } }
+    },
+    {
+      "id": 8,
+      "title": "LLM Request Volume by Provider",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "targets": [
+        { "expr": "sum(rate(modularmind_llm_request_duration_seconds_count[5m])) by (provider)", "legendFormat": "{{ provider }}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "bars", "fillOpacity": 50 } } }
+    }
+  ],
+  "schemaVersion": 39
+}

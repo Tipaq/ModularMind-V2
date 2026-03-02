@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # --- ModularMind Engine (FastAPI + custom metrics) ---
+  - job_name: engine
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["engine:8000"]
+        labels:
+          service: engine
+
+  # --- Node Exporter (host system metrics) ---
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # --- cAdvisor (Docker container metrics) ---
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # --- PostgreSQL Exporter ---
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  # --- Redis Exporter ---
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  # --- Qdrant (built-in /metrics) ---
+  - job_name: qdrant
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["qdrant:6333"]

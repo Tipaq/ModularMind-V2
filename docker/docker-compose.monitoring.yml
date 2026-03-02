@@ -1,0 +1,104 @@
+# =============================================================================
+# ModularMind V2 — Monitoring Stack
+# =============================================================================
+# Usage:  make dev-monitoring
+#         docker compose -f docker/docker-compose.monitoring.yml up -d
+#
+# Joins the mm-engine network so Prometheus can scrape engine, db, redis, etc.
+
+name: mm-monitoring
+
+services:
+  # --- Prometheus ---
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    networks:
+      - mm-engine
+    restart: unless-stopped
+
+  # --- Grafana ---
+  grafana:
+    image: grafana/grafana:11.5.2
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: modularmind
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/overview.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3333:3000"
+    networks:
+      - mm-engine
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # --- Node Exporter (host system metrics: CPU, RAM, disk, network) ---
+  node-exporter:
+    image: prom/node-exporter:v1.9.0
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    networks:
+      - mm-engine
+    restart: unless-stopped
+
+  # --- cAdvisor (Docker container metrics) ---
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - mm-engine
+    restart: unless-stopped
+
+  # --- PostgreSQL Exporter ---
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    environment:
+      DATA_SOURCE_NAME: postgresql://modularmind:modularmind@db:5432/modularmind?sslmode=disable
+    networks:
+      - mm-engine
+    restart: unless-stopped
+
+  # --- Redis Exporter ---
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    networks:
+      - mm-engine
+    restart: unless-stopped
+
+networks:
+  mm-engine:
+    external: true
+    name: mm-engine_default
+
+volumes:
+  prometheus-data:
+  grafana-data:

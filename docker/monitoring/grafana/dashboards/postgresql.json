@@ -1,0 +1,75 @@
+{
+  "uid": "mm-postgresql",
+  "title": "ModularMind — PostgreSQL",
+  "tags": ["modularmind", "postgresql"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active Connections",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "pg_stat_activity_count", "legendFormat": "{{ state }}" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 15 } } }
+    },
+    {
+      "id": 2,
+      "title": "DB Pool Size (Engine)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "modularmind_db_pool_size", "legendFormat": "Pool Size" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10 } } }
+    },
+    {
+      "id": 3,
+      "title": "Transactions / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "rate(pg_stat_database_xact_commit{datname=\"modularmind\"}[5m])", "legendFormat": "Commits/s" },
+        { "expr": "rate(pg_stat_database_xact_rollback{datname=\"modularmind\"}[5m])", "legendFormat": "Rollbacks/s" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 15 } } }
+    },
+    {
+      "id": 4,
+      "title": "Cache Hit Ratio",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "pg_stat_database_blks_hit{datname=\"modularmind\"} / (pg_stat_database_blks_hit{datname=\"modularmind\"} + pg_stat_database_blks_read{datname=\"modularmind\"}) * 100", "legendFormat": "Hit Ratio" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 90 }, { "color": "green", "value": 99 }] } } }
+    },
+    {
+      "id": 5,
+      "title": "Database Size",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        { "expr": "pg_database_size_bytes{datname=\"modularmind\"}", "legendFormat": "DB Size" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "thresholds": { "steps": [{ "color": "blue", "value": null }] } } }
+    },
+    {
+      "id": 6,
+      "title": "Rows Inserted / Updated / Deleted per sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        { "expr": "sum(rate(pg_stat_user_tables_n_tup_ins[5m]))", "legendFormat": "Inserts/s" },
+        { "expr": "sum(rate(pg_stat_user_tables_n_tup_upd[5m]))", "legendFormat": "Updates/s" },
+        { "expr": "sum(rate(pg_stat_user_tables_n_tup_del[5m]))", "legendFormat": "Deletes/s" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 15 } } }
+    }
+  ],
+  "schemaVersion": 39
+}

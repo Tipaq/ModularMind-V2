@@ -34,6 +34,7 @@ services:
       - ../engine/server/alembic:/app/alembic
       - ../engine/server/alembic.ini:/app/alembic.ini
       - ../shared/src:/tmp/shared-src
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       <<: *engine-env
     depends_on:
@@ -90,6 +91,8 @@ services:
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
+    environment:
+      OLLAMA_KEEP_ALIVE: "24h"
     volumes:
       - ollama-data:/root/.ollama
 
