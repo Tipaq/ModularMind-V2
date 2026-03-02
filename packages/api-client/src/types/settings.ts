@@ -6,6 +6,7 @@ export interface LocalSettings {
   telemetry_enabled: boolean;
   auto_sync: boolean;
   sync_interval_minutes: number;
+  ollama_keep_alive: string;
 }
 
 // ─── MCP Servers ─────────────────────────────────────────────────────────────
@@ -22,6 +23,15 @@ export interface MCPServer {
   project_id: string | null;
   managed: boolean;
   catalog_id: string | null;
+  transport: 'http' | 'stdio';
+}
+
+export interface MCPCatalogSecret {
+  key: string;
+  label: string;
+  placeholder: string;
+  required: boolean;
+  is_secret: boolean;
 }
 
 export interface MCPCatalogEntry {
@@ -30,8 +40,10 @@ export interface MCPCatalogEntry {
   description: string;
   icon: string;
   category: string;
-  image: string;
-  env_keys: string[];
+  required_secrets: MCPCatalogSecret[];
+  documentation_url: string | null;
+  npm_package: string | null;
+  docker_image: string | null;
   setup_flow: string | null;
 }
 

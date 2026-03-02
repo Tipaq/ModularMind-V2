@@ -1,4 +1,4 @@
-export { ApiClient, ApiError } from "./client";
+export { ApiClient, ApiError, AUTH_SESSION_EXPIRED_EVENT } from "./client";
 
 // Types
 export type * from "./types/agents";
