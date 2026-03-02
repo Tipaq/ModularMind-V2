@@ -35,7 +35,7 @@ _SCORER_PROMPT = """You are a memory importance evaluator. Analyze each fact and
 Respond with a JSON array matching the input order:
 ```json
 [
-  {"importance": 0.7, "memory_type": "semantic", "salience": 0.6},
+  {{"importance": 0.7, "memory_type": "semantic", "salience": 0.6}},
   ...
 ]
 ```
@@ -145,11 +145,24 @@ class MemoryScorer:
         if not model_id:
             model_id = self._settings.FACT_EXTRACTION_MODEL
         if not model_id:
-            model_id = f"{self._settings.DEFAULT_LLM_PROVIDER}/"
+            # Resolve first available chat model
+            provider_name = self._settings.DEFAULT_LLM_PROVIDER
+            provider = LLMProviderFactory.get_provider(provider_name)
+            if provider:
+                available = await provider.list_models()
+                chat_models = [
+                    m for m in available
+                    if "embed" not in m.id.lower()
+                    and "minilm" not in m.id.lower()
+                ]
+                if chat_models:
+                    model_id = f"{provider_name}:{chat_models[0].id}"
+            if not model_id:
+                raise ValueError("No chat model available for scoring")
 
         provider_name, model_name = parse_model_id(model_id)
         provider = LLMProviderFactory.get_provider(provider_name)
-        llm = provider.get_model(model_name, temperature=0.1)
+        llm = await provider.get_model(model_name, temperature=0.1)
 
         response = await llm.ainvoke([HumanMessage(content=prompt)])
         raw_text = response.content.strip()

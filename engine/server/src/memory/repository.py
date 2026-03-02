@@ -170,7 +170,7 @@ class MemoryRepository:
             .where(MemoryEntry.id == entry_id)
             .values(
                 access_count=MemoryEntry.access_count + 1,
-                last_accessed=datetime.now(UTC),
+                last_accessed=datetime.now(UTC).replace(tzinfo=None),
                 importance=new_importance,
             )
         )

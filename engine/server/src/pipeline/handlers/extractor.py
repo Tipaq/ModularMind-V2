@@ -76,6 +76,10 @@ async def extractor_handler(data: dict[str, Any]) -> None:
         ]),
     }
     await bus.publish("memory:extracted", payload)
+
+    from src.infra.metrics import pipeline_facts_extracted
+    pipeline_facts_extracted.inc(len(facts))
+
     logger.info(
         "Published %d facts from conversation %s to memory:extracted",
         len(facts), conversation_id,

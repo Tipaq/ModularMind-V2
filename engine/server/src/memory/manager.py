@@ -31,7 +31,7 @@ class MemoryManager:
         repository: IMemoryRepository,
         embedding_provider: IEmbeddingProvider,
         max_context_entries: int = 10,
-        similarity_threshold: float = 0.7,
+        similarity_threshold: float = 0.3,
     ):
         """Initialize the memory manager.
 
@@ -96,13 +96,20 @@ class MemoryManager:
             # Cast UUIDs to str for Qdrant payload filtering
             uid = str(user_id) if user_id else str(scope_id)
 
+            # For user-scoped searches (USER_PROFILE, CROSS_CONVERSATION),
+            # don't pass scope_id — user_id + scope is sufficient for filtering.
+            # The scope_id stored in Qdrant may differ (e.g. "global" for cross_conversation).
+            effective_scope_id: str | None = None
+            if scope == MemoryScope.AGENT:
+                effective_scope_id = str(scope_id)
+
             # Search via hybrid (dense + BM25)
             results = await self.repository.search_hybrid(
                 query_embedding=query_embedding,
                 query_text=query,
                 user_id=uid,
                 scope=scope,
-                scope_id=str(scope_id),
+                scope_id=effective_scope_id,
                 limit=limit,
                 threshold=self.similarity_threshold,
             )

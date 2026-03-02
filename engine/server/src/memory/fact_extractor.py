@@ -42,23 +42,34 @@ class ExtractedFact:
     category: FactCategory
     confidence: float = 0.8
     entities: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
 
-_EXTRACTION_PROMPT = """Analyze the following conversation and extract key facts about the user.
+_EXTRACTION_PROMPT = """Analyze the following conversation and extract key facts worth remembering.
+
+Extract facts from BOTH the user's messages AND the assistant's responses.
 
 Focus on:
 - User preferences (tools, languages, frameworks, styles)
-- Personal context (role, team, projects)
-- Decisions made during the conversation
-- Problems encountered
-- Solutions found or preferred
+- Personal context (role, location, team, projects)
+- Decisions made during the conversation (architecture, tech choices)
+- Problems encountered and their root causes
+- Solutions found, fixes applied, or workarounds discovered
+- Technical knowledge shared by the assistant (configurations, patterns, explanations)
+- Project-specific facts (stack, structure, conventions)
 - Personal information shared voluntarily
 
+Do NOT extract:
+- Generic greetings or pleasantries
+- Vague or hypothetical statements
+- Facts already obvious from context (e.g., "the user is chatting with an AI")
+
 Return a JSON array of facts. Each fact must have:
-- "content": a concise statement about the user (1-2 sentences)
+- "content": a concise, self-contained statement (1-2 sentences). Write it as a fact, not a quote.
 - "category": one of "preference", "context", "decision", "problem", "solution", "personal_info"
-- "confidence": float 0-1 (how confident this is a real fact, not a hypothetical)
-- "entities": list of key entity strings (names, tools, concepts)
+- "confidence": float 0-1 (how confident this is a real, confirmed fact)
+- "entities": list of key entity strings (names, tools, concepts mentioned)
+- "tags": list of 2-5 lowercase topic tags describing what the fact is about (e.g. "python", "docker", "authentication", "performance", "database"). Tags must be short, concrete, and reusable across multiple facts. Do NOT use category names as tags.
 
 Return ONLY the JSON array, no other text. If no facts found, return [].
 
@@ -102,7 +113,21 @@ class FactExtractor:
 
             model_id = self._settings.FACT_EXTRACTION_MODEL
             if not model_id:
-                model_id = f"{self._settings.DEFAULT_LLM_PROVIDER}:default"
+                # Resolve first available chat model from the default provider
+                provider_name = self._settings.DEFAULT_LLM_PROVIDER
+                provider = LLMProviderFactory.get_provider(provider_name)
+                if provider:
+                    available = await provider.list_models()
+                    chat_models = [
+                        m for m in available
+                        if "embed" not in m.id.lower()
+                        and "minilm" not in m.id.lower()
+                    ]
+                    if chat_models:
+                        model_id = f"{provider_name}:{chat_models[0].id}"
+                if not model_id:
+                    logger.warning("No chat model available for fact extraction")
+                    return []
 
             from src.infra.constants import parse_model_id
             provider_name, model_name = parse_model_id(model_id)
@@ -112,7 +137,7 @@ class FactExtractor:
                 logger.warning("No LLM provider available for fact extraction")
                 return []
 
-            llm = provider.get_model(model_name, temperature=0.1)
+            llm = await provider.get_model(model_name, temperature=0.1)
 
             from langchain_core.messages import HumanMessage
             response = await llm.ainvoke([HumanMessage(content=prompt)])
@@ -136,6 +161,7 @@ class FactExtractor:
                         category=FactCategory(item.get("category", "context")),
                         confidence=float(item.get("confidence", 0.8)),
                         entities=item.get("entities", []),
+                        tags=[str(t).lower().strip() for t in item.get("tags", []) if t],
                     )
                     facts.append(fact)
                 except (KeyError, ValueError) as e:
@@ -207,6 +233,9 @@ class FactExtractor:
                             # Update existing entry with merged content
                             merged_content = f"{result.content} | {fact.content}"
                             merged_entities = list(existing_entities | fact_entities)
+                            merged_tags = list(
+                                set(existing_meta.get("tags", [])) | set(fact.tags)
+                            )
                             await vector_store.upsert_entry(
                                 entry_id=result.point_id,
                                 embedding=fact_embedding,
@@ -218,6 +247,7 @@ class FactExtractor:
                                 metadata={
                                     "category": fact.category.value,
                                     "entities": merged_entities,
+                                    "tags": merged_tags,
                                     "source": "fact_extraction",
                                 },
                             )
@@ -228,6 +258,9 @@ class FactExtractor:
                     # Tier 2: Semantic similarity
                     if result.score >= _SEMANTIC_SIMILARITY_THRESHOLD:
                         # Update existing entry
+                        merged_tags = list(
+                            set(existing_meta.get("tags", [])) | set(fact.tags)
+                        )
                         await vector_store.upsert_entry(
                             entry_id=result.point_id,
                             embedding=fact_embedding,
@@ -239,6 +272,7 @@ class FactExtractor:
                             metadata={
                                 "category": fact.category.value,
                                 "entities": fact.entities,
+                                "tags": fact.tags,
                                 "source": "fact_extraction",
                             },
                         )
@@ -263,6 +297,7 @@ class FactExtractor:
                             metadata={
                                 "category": fact.category.value,
                                 "entities": fact.entities,
+                                "tags": fact.tags,
                                 "source": "fact_extraction",
                             },
                             user_id=user_id,

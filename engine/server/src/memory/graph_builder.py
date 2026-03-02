@@ -96,7 +96,7 @@ class MemoryGraphBuilder:
                             "shared_entities": sorted(shared),
                         }
 
-        # Step 2: Same category (only for entries not already connected)
+        # Step 2: Same category (only for entries not already connected, weak signal)
         cat_index: dict[str, set[str]] = defaultdict(set)
         for entry in entries:
             cat = (entry.meta or {}).get("category", "")
@@ -110,17 +110,40 @@ class MemoryGraphBuilder:
             for i in range(len(id_list)):
                 for j in range(i + 1, len(id_list)):
                     pair = (id_list[i], id_list[j])
-                    # Only add if same scope AND no existing entity edge
                     e_a = entries_by_id[pair[0]]
                     e_b = entries_by_id[pair[1]]
                     if pair not in edge_set and e_a.scope == e_b.scope:
                         edge_set[pair] = {
                             "edge_type": EdgeType.SAME_CATEGORY,
-                            "weight": 0.5,
+                            "weight": 0.3,
                             "shared_entities": [],
                         }
 
-        # Step 3: Semantic fallback for isolated nodes
+        # Step 3 (new): Same tag — primary magnet, strongest attraction
+        tag_index: dict[str, set[str]] = defaultdict(set)
+        for entry in entries:
+            tags = (entry.meta or {}).get("tags", [])
+            for tag in tags:
+                tag_key = str(tag).lower().strip()
+                if tag_key:
+                    tag_index[tag_key].add(entry.id)
+
+        for tag, entry_ids in tag_index.items():
+            if len(entry_ids) < 2:
+                continue
+            id_list = sorted(entry_ids)
+            for i in range(len(id_list)):
+                for j in range(i + 1, len(id_list)):
+                    pair = (id_list[i], id_list[j])
+                    # same_tag overrides same_category (stronger signal)
+                    if pair not in edge_set or edge_set[pair]["edge_type"] == EdgeType.SAME_CATEGORY:
+                        edge_set[pair] = {
+                            "edge_type": EdgeType.SAME_TAG,
+                            "weight": 0.9,
+                            "shared_entities": [],
+                        }
+
+        # Step 4: Semantic fallback for isolated nodes
         connected_ids = set()
         for src, tgt in edge_set:
             connected_ids.add(src)

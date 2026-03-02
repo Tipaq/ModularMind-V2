@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.auth import CurrentUser, RequireAdmin
+from src.auth.models import User as AuthUser
 from src.embedding import get_embedding_provider
 from src.infra.config import get_settings
 from src.infra.database import DbSession
@@ -123,9 +124,14 @@ class GraphNodeResponse(BaseModel):
     content: str
     memory_type: str
     scope: str
+    scope_id: str
+    tier: str
     importance: float
     access_count: int
     entities: list
+    tags: list
+    user_id: str | None
+    last_accessed: datetime | None
     created_at: datetime
 
 
@@ -150,6 +156,7 @@ class MemoryUserResponse(BaseModel):
     """User with memory count."""
 
     user_id: str
+    email: str | None
     memory_count: int
 
 
@@ -390,9 +397,14 @@ async def get_graph_data(
             content=e.content[:200],
             memory_type=e.memory_type.value,
             scope=e.scope.value,
+            scope_id=e.scope_id,
+            tier=e.tier.value,
             importance=e.importance,
             access_count=e.access_count,
             entities=(e.meta or {}).get("entities", []),
+            tags=(e.meta or {}).get("tags", []),
+            user_id=e.user_id,
+            last_accessed=e.last_accessed,
             created_at=e.created_at,
         )
         for e in entries
@@ -438,17 +450,19 @@ async def get_memory_users(
         select(
             MemoryEntry.user_id,
             func.count(MemoryEntry.id).label("cnt"),
+            AuthUser.email,
         )
+        .outerjoin(AuthUser, AuthUser.id == MemoryEntry.user_id)
         .where(
             MemoryEntry.user_id.isnot(None),
             MemoryEntry.expired_at.is_(None),
         )
-        .group_by(MemoryEntry.user_id)
+        .group_by(MemoryEntry.user_id, AuthUser.email)
         .order_by(func.count(MemoryEntry.id).desc())
     )
 
     return [
-        MemoryUserResponse(user_id=row[0], memory_count=row[1])
+        MemoryUserResponse(user_id=row[0], memory_count=row[1], email=row[2])
         for row in result.all()
     ]
 

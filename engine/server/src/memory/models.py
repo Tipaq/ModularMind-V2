@@ -48,6 +48,7 @@ class EdgeType(str, Enum):
     ENTITY_OVERLAP = "entity_overlap"
     SAME_CATEGORY = "same_category"
     SEMANTIC_SIMILARITY = "semantic_similarity"
+    SAME_TAG = "same_tag"
 
 
 class MemoryEntry(Base):

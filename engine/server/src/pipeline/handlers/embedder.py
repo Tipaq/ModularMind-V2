@@ -117,6 +117,10 @@ async def embedder_handler(data: dict[str, Any]) -> None:
 
         await session.commit()
 
+    if stored > 0:
+        from src.infra.metrics import pipeline_embeddings_stored
+        pipeline_embeddings_stored.inc(stored)
+
     logger.info(
         "Stored %d/%d facts from conversation %s",
         stored,
