@@ -73,6 +73,10 @@ class Settings(BaseSettings):
         default="http://localhost:11434",
         description="Ollama server URL",
     )
+    OLLAMA_KEEP_ALIVE: str = Field(
+        default="24h",
+        description="How long Ollama keeps models in VRAM (e.g. '5m', '1h', '24h', '-1' for forever)",
+    )
     DEFAULT_LLM_PROVIDER: str = "ollama"
     LLM_TIMEOUT_SECONDS: int = Field(default=60, ge=10, le=300)
     LLM_PROVIDER: Literal["ollama", "vllm", "tgi", "auto"] = "ollama"
@@ -141,6 +145,20 @@ class Settings(BaseSettings):
         description="LLM model for fact extraction. Empty = use runtime default.",
     )
     FACT_EXTRACTION_MIN_MESSAGES: int = Field(default=5, ge=1, le=100)
+
+    # ---- Memory Extraction Triggers ------------------------------------------
+    MEMORY_EXTRACTION_BATCH_SIZE: int = Field(
+        default=15, ge=5, le=100,
+        description="Marathon threshold: extract after this many new messages even if active",
+    )
+    MEMORY_EXTRACTION_IDLE_SECONDS: int = Field(
+        default=300, ge=60, le=3600,
+        description="Idle timeout: extract when conversation idle for this many seconds",
+    )
+    MEMORY_EXTRACTION_SCAN_INTERVAL: int = Field(
+        default=120, ge=30, le=600,
+        description="How often (seconds) the scheduler scans for conversations needing extraction",
+    )
 
     # ---- Memory Scorer -------------------------------------------------------
     MEMORY_SCORER_ENABLED: bool = True

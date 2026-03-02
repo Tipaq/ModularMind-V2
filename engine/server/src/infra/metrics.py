@@ -127,6 +127,35 @@ embedding_cache_ops = Counter(
     ["result"],  # "hit" or "miss"
 )
 
+# ---------------------------------------------------------------------------
+# MCP sidecar metrics
+# ---------------------------------------------------------------------------
+
+mcp_sidecars_active = Gauge(
+    "modularmind_mcp_sidecars_active",
+    "Number of active MCP sidecar containers",
+)
+
+# ---------------------------------------------------------------------------
+# Memory pipeline metrics
+# ---------------------------------------------------------------------------
+
+pipeline_facts_extracted = Counter(
+    "modularmind_pipeline_facts_extracted_total",
+    "Total number of facts extracted by the memory pipeline",
+)
+
+pipeline_embeddings_stored = Counter(
+    "modularmind_pipeline_embeddings_stored_total",
+    "Total number of embeddings stored by the memory pipeline",
+)
+
+memory_extraction_enqueued = Counter(
+    "modularmind_memory_extraction_enqueued_total",
+    "Conversations enqueued for memory extraction",
+    ["trigger"],  # "idle" | "marathon"
+)
+
 
 # ---------------------------------------------------------------------------
 # Metric snapshot keys for Redis sorted sets

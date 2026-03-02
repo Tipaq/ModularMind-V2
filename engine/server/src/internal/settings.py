@@ -28,6 +28,7 @@ class SettingsResponse(BaseModel):
     telemetry_enabled: bool
     auto_sync: bool
     sync_interval_minutes: int
+    ollama_keep_alive: str
 
 
 class SettingsUpdate(BaseModel):
@@ -36,6 +37,7 @@ class SettingsUpdate(BaseModel):
     telemetry_enabled: bool | None = None
     auto_sync: bool | None = None
     sync_interval_minutes: int | None = None
+    ollama_keep_alive: str | None = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -66,6 +68,7 @@ def build_settings_response() -> SettingsResponse:
         telemetry_enabled=True,
         auto_sync=True,
         sync_interval_minutes=5,
+        ollama_keep_alive=settings.OLLAMA_KEEP_ALIVE,
     )
 
 
@@ -100,5 +103,8 @@ async def update_settings_endpoint(update: SettingsUpdate, user: CurrentUser) ->
             else:
                 # Set the new key
                 secrets_store.set(env_key, key_value)
+
+    if update.ollama_keep_alive is not None:
+        settings.OLLAMA_KEEP_ALIVE = update.ollama_keep_alive
 
     return build_settings_response()

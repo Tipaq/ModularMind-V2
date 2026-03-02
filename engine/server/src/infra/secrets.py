@@ -242,9 +242,11 @@ class SecretsStore:
         with self._lock:
             return key in self._secrets
 
-    def list_keys(self) -> list[str]:
-        """List all available secret keys (not values)."""
+    def list_keys(self, prefix: str | None = None) -> list[str]:
+        """List available secret keys, optionally filtered by prefix."""
         with self._lock:
+            if prefix:
+                return [k for k in self._secrets if k.startswith(prefix)]
             return list(self._secrets.keys())
 
     def get_configured_providers(self) -> dict[str, bool]:

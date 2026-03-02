@@ -262,7 +262,8 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
     except Exception:
         pass
 
-    streaming_data = StreamingMonitoring(active_streams=0)
+    from src.infra.sse import get_active_streams
+    streaming_data = StreamingMonitoring(active_streams=get_active_streams())
 
     redis_ok, redis_latency = await check_redis_health()
 

@@ -14,6 +14,15 @@ from typing import Any
 from fastapi import Request
 from starlette.responses import StreamingResponse
 
+# Module-level counter for active SSE connections.
+# Safe for asyncio single-threaded access without a lock.
+_active_streams: int = 0
+
+
+def get_active_streams() -> int:
+    """Return the current number of active SSE connections."""
+    return _active_streams
+
 
 async def sse_response(
     generator: AsyncGenerator[dict[str, Any], None],
@@ -26,6 +35,8 @@ async def sse_response(
     """
 
     async def stream():
+        global _active_streams
+        _active_streams += 1
         try:
             async for event in generator:
                 if await request.is_disconnected():
@@ -39,6 +50,8 @@ async def sse_response(
                 yield lines
         except asyncio.CancelledError:
             pass
+        finally:
+            _active_streams -= 1
 
     return StreamingResponse(
         stream(),
