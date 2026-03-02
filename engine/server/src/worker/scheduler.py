@@ -4,7 +4,8 @@ Configures interval and cron jobs for:
 - Platform sync polling (every SYNC_INTERVAL_SECONDS)
 - Report to platform (every 15 minutes)
 - Stale execution cleanup (every 5 minutes)
-- Memory consolidation (every 6 hours, Phase 5)
+- Memory consolidation (every 6 hours)
+- Memory extraction scan (every MEMORY_EXTRACTION_SCAN_INTERVAL seconds)
 """
 
 import logging
@@ -57,6 +58,15 @@ def create_scheduler() -> AsyncIOScheduler:
             hour="*/6",
             id="memory_consolidation",
             name="Consolidate memory entries",
+        )
+
+        # Memory extraction scan — idle + marathon triggers
+        scheduler.add_job(
+            memory_extraction_scan,
+            "interval",
+            seconds=settings.MEMORY_EXTRACTION_SCAN_INTERVAL,
+            id="memory_extraction_scan",
+            name="Scan conversations for memory extraction",
         )
 
     return scheduler
@@ -171,6 +181,149 @@ async def memory_consolidation() -> None:
             await redis_client.delete(lock_key)
         except Exception:
             logger.error("Failed to release consolidation lock")
+
+
+async def _extract_new_messages(session, conv, now) -> None:
+    """Fetch new messages since last extraction and enqueue them."""
+    import json
+    from datetime import datetime
+
+    from sqlalchemy import select, update
+
+    from src.conversations.models import Conversation, ConversationMessage
+    from src.infra.metrics import memory_extraction_enqueued
+    from src.infra.publish import enqueue_memory_raw
+
+    cutoff = conv.last_memory_extracted_at or datetime(2000, 1, 1)
+    result = await session.execute(
+        select(ConversationMessage)
+        .where(
+            ConversationMessage.conversation_id == conv.id,
+            ConversationMessage.created_at > cutoff,
+        )
+        .order_by(ConversationMessage.created_at)
+    )
+    messages = list(result.scalars().all())
+    if not messages:
+        return
+
+    messages_json = json.dumps([
+        {"role": m.role.value, "content": m.content}
+        for m in messages
+    ])
+
+    await enqueue_memory_raw(
+        conversation_id=conv.id,
+        agent_id=conv.agent_id or "",
+        messages=messages_json,
+        user_id=conv.user_id,
+    )
+
+    latest_msg_time = messages[-1].created_at
+    await session.execute(
+        update(Conversation)
+        .where(Conversation.id == conv.id)
+        .values(last_memory_extracted_at=latest_msg_time)
+    )
+    memory_extraction_enqueued.labels(trigger="idle").inc()
+    logger.info(
+        "Enqueued %d new messages from conversation %s for extraction",
+        len(messages), conv.id,
+    )
+
+
+async def memory_extraction_scan() -> None:
+    """Scan for conversations needing memory extraction.
+
+    Two triggers:
+    1. Idle >= MEMORY_EXTRACTION_IDLE_SECONDS AND >= MIN_MESSAGES new messages
+    2. >= MEMORY_EXTRACTION_BATCH_SIZE new messages (marathon, regardless of idle)
+    """
+    from datetime import datetime, timedelta
+
+    import sqlalchemy as sa
+    from sqlalchemy import func, select
+
+    from src.conversations.models import Conversation, ConversationMessage
+    from src.infra.config import get_settings
+    from src.infra.database import async_session_maker
+    from src.infra.redis import redis_client
+
+    settings = get_settings()
+
+    lock_key = "memory:extraction_scan:lock"
+    lock_acquired = await redis_client.set(
+        lock_key, "1", nx=True, ex=settings.MEMORY_EXTRACTION_SCAN_INTERVAL,
+    )
+    if not lock_acquired:
+        logger.debug("Memory extraction scan skipped — another scan in progress")
+        return
+
+    try:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        idle_cutoff = now - timedelta(seconds=settings.MEMORY_EXTRACTION_IDLE_SECONDS)
+        min_messages = settings.FACT_EXTRACTION_MIN_MESSAGES
+        batch_size = settings.MEMORY_EXTRACTION_BATCH_SIZE
+
+        async with async_session_maker() as session:
+            # Subquery: count messages after last extraction per conversation
+            epoch = datetime(2000, 1, 1)
+            new_msg_count = (
+                select(
+                    ConversationMessage.conversation_id.label("conv_id"),
+                    func.count(ConversationMessage.id).label("new_count"),
+                )
+                .where(
+                    ConversationMessage.created_at > func.coalesce(
+                        Conversation.last_memory_extracted_at, epoch,
+                    )
+                )
+                .join(Conversation, ConversationMessage.conversation_id == Conversation.id)
+                .group_by(ConversationMessage.conversation_id)
+                .subquery()
+            )
+
+            # Main query: conversations matching either trigger
+            query = (
+                select(Conversation, new_msg_count.c.new_count)
+                .join(new_msg_count, Conversation.id == new_msg_count.c.conv_id)
+                .where(
+                    Conversation.is_active.is_(True),
+                    new_msg_count.c.new_count >= min_messages,
+                    sa.or_(
+                        Conversation.updated_at < idle_cutoff,
+                        new_msg_count.c.new_count >= batch_size,
+                    ),
+                )
+                .limit(20)
+            )
+
+            result = await session.execute(query)
+            rows = result.all()
+
+            if not rows:
+                logger.debug("Memory extraction scan: no conversations to process")
+                return
+
+            logger.info("Memory extraction scan: %d conversation(s) to process", len(rows))
+
+            for conv, _new_count in rows:
+                try:
+                    await _extract_new_messages(session, conv, now)
+                except Exception:
+                    logger.exception(
+                        "Failed to enqueue extraction for conversation %s", conv.id,
+                    )
+
+            await session.commit()
+
+    except Exception:
+        logger.exception("Memory extraction scan failed")
+    finally:
+        try:
+            await redis_client.delete(lock_key)
+        except Exception:
+            logger.error("Failed to release extraction scan lock")
 
 
 async def cleanup_stale_executions() -> None:

@@ -73,17 +73,31 @@ class SendMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=50000)
 
 
+class MemoryEntryResponse(BaseModel):
+    """Memory entry used during supervisor routing."""
+
+    id: str
+    content: str
+    scope: str
+    tier: str
+    importance: float = 0.5
+    memory_type: str = "episodic"
+    category: str = ""
+
+
 class SendMessageResponse(BaseModel):
     """Send message response with execution info."""
 
     user_message: MessageResponse
     execution_id: str | None = None
+    message_id: str | None = None
     stream_url: str | None = None
     direct_response: str | None = None
     routing_strategy: str | None = None
     delegated_to: str | None = None
     is_ephemeral: bool | None = None
     ephemeral_agent: dict | None = None
+    memory_entries: list[MemoryEntryResponse] = Field(default_factory=list)
 
 
 # ─── Search Schemas ──────────────────────────────────────────────────────────

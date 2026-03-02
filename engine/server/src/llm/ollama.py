@@ -61,10 +61,15 @@ class OllamaProvider(LLMProvider):
         # Strip provider prefix if present
         _, model_name = self.parse_model_id(model_id)
 
+        from src.infra.config import get_settings
+
+        keep_alive = get_settings().OLLAMA_KEEP_ALIVE
+
         return ChatOllama(
             model=model_name,
             base_url=self.base_url,
             temperature=temperature,
+            keep_alive=keep_alive,
             **kwargs,
         )
 

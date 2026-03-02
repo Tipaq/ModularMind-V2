@@ -33,6 +33,8 @@ class CollectionResponse(BaseModel):
     description: str
     document_count: int
     chunk_count: int
+    chunk_size: int = 500
+    chunk_overlap: int = 50
     last_sync: datetime | None
     created_at: datetime | None = None
     scope: str = "global"

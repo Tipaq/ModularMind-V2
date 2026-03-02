@@ -4,6 +4,7 @@ Conversation router.
 API endpoints for conversation management and message sending.
 """
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
@@ -34,6 +35,92 @@ from .service import ConversationService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
+
+
+async def _maybe_enqueue_marathon_extraction(conversation_id: str) -> None:
+    """Check marathon threshold and enqueue extraction if hit (fire-and-forget).
+
+    Uses its own DB session to avoid interfering with the request transaction.
+    """
+    import json
+    from datetime import datetime
+
+    from sqlalchemy import func, select, update
+
+    from src.infra.database import async_session_maker
+    from src.infra.metrics import memory_extraction_enqueued
+    from src.infra.publish import enqueue_memory_raw
+
+    from .models import Conversation, ConversationMessage
+
+    s = get_settings()
+    if not s.FACT_EXTRACTION_ENABLED:
+        return
+
+    try:
+        async with async_session_maker() as session:
+            conv = await session.get(Conversation, conversation_id)
+            if not conv:
+                return
+
+            cutoff = conv.last_memory_extracted_at or datetime(2000, 1, 1)
+
+            count_result = await session.execute(
+                select(func.count(ConversationMessage.id)).where(
+                    ConversationMessage.conversation_id == conversation_id,
+                    ConversationMessage.created_at > cutoff,
+                )
+            )
+            new_count = count_result.scalar() or 0
+
+            if new_count < s.MEMORY_EXTRACTION_BATCH_SIZE:
+                return
+            if new_count < s.FACT_EXTRACTION_MIN_MESSAGES:
+                return
+
+            result = await session.execute(
+                select(ConversationMessage)
+                .where(
+                    ConversationMessage.conversation_id == conversation_id,
+                    ConversationMessage.created_at > cutoff,
+                )
+                .order_by(ConversationMessage.created_at)
+            )
+            messages = list(result.scalars().all())
+            if not messages:
+                return
+
+            messages_json = json.dumps([
+                {"role": m.role.value, "content": m.content}
+                for m in messages
+            ])
+
+            await enqueue_memory_raw(
+                conversation_id=conv.id,
+                agent_id=conv.agent_id or "",
+                messages=messages_json,
+                user_id=conv.user_id,
+            )
+
+            latest_msg_time = messages[-1].created_at
+            await session.execute(
+                update(Conversation)
+                .where(Conversation.id == conv.id)
+                .values(last_memory_extracted_at=latest_msg_time)
+            )
+            await session.commit()
+
+            memory_extraction_enqueued.labels(trigger="marathon").inc()
+            logger.info(
+                "Marathon extraction: enqueued %d messages from conversation %s",
+                len(messages), conv.id,
+            )
+    except Exception:
+        logger.debug(
+            "Marathon extraction check failed for conversation %s",
+            conversation_id,
+            exc_info=True,
+        )
 
 
 # ─── Cross-Conversation Search (MUST be before {conversation_id} routes) ──────
@@ -418,7 +505,10 @@ async def send_message(
 
             await db.commit()
 
-            # TODO(Phase 5): Enqueue message indexing via memory pipeline
+            # Fire-and-forget: check marathon threshold for memory extraction
+            asyncio.ensure_future(
+                _maybe_enqueue_marathon_extraction(conversation_id)
+            )
 
             # Resolve delegated agent name and ephemeral status for frontend
             routing_meta = result.get("routing_metadata", {})
@@ -436,15 +526,18 @@ async def send_message(
                     ) if _agent.routing_metadata else False
 
             ephemeral_agent = result.get("ephemeral_agent")
+            memory_entries = result.get("memory_entries", [])
 
             # Build response based on result type
             if result.get("direct_response"):
                 return SendMessageResponse(
                     user_message=user_msg_response,
                     execution_id=None,
+                    message_id=result.get("message_id"),
                     stream_url=None,
                     direct_response=result["direct_response"],
                     routing_strategy=routing_strategy,
+                    memory_entries=memory_entries,
                 )
             elif exec_ids:
                 # MULTI_ACTION — return first execution_id for SSE stream
@@ -456,6 +549,7 @@ async def send_message(
                     delegated_to=delegated_to,
                     is_ephemeral=is_ephemeral,
                     ephemeral_agent=ephemeral_agent,
+                    memory_entries=memory_entries,
                 )
             else:
                 # Single delegation
@@ -470,6 +564,7 @@ async def send_message(
                     delegated_to=delegated_to,
                     is_ephemeral=is_ephemeral,
                     ephemeral_agent=ephemeral_agent,
+                    memory_entries=memory_entries,
                 )
 
         # =====================================================================
@@ -503,7 +598,10 @@ async def send_message(
 
         await db.commit()
 
-        # TODO(Phase 5): Enqueue message indexing via memory pipeline
+        # Fire-and-forget: check marathon threshold for memory extraction
+        asyncio.ensure_future(
+            _maybe_enqueue_marathon_extraction(conversation_id)
+        )
 
         # Dispatch to Redis Streams worker
         from src.executions.scheduler import fair_scheduler

@@ -51,6 +51,9 @@ class Conversation(Base):
     updated_at: Mapped[datetime] = mapped_column(
         default=utcnow, onupdate=utcnow
     )
+    last_memory_extracted_at: Mapped[datetime | None] = mapped_column(
+        nullable=True, default=None
+    )
 
     # Relationships
     messages: Mapped[list["ConversationMessage"]] = relationship(

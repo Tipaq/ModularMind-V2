@@ -58,6 +58,10 @@ async def lifespan(app: FastAPI):
 
     # ── Startup ──────────────────────────────────────────────────────────
 
+    # 0. Configure application logging (uvicorn only sets its own loggers)
+    log_level = logging.DEBUG if settings.DEBUG else logging.INFO
+    logging.basicConfig(level=log_level, force=True)
+
     # 1. Verify Redis connectivity
     from src.infra.redis import check_redis_health
 
@@ -174,6 +178,17 @@ app = FastAPI(
     redoc_url="/api/redoc",
     lifespan=lifespan,
 )
+
+# ---------------------------------------------------------------------------
+# Prometheus instrumentation
+# ---------------------------------------------------------------------------
+
+from prometheus_fastapi_instrumentator import Instrumentator
+
+Instrumentator(
+    should_group_status_codes=False,
+    excluded_handlers=["/health", "/health/live", "/health/ready", "/metrics"],
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 # ---------------------------------------------------------------------------
 # Middleware

@@ -471,10 +471,25 @@ class ExecutionService:
         compiler = GraphCompiler(self.config_provider, llm_provider, mcp_registry=get_mcp_registry())
         graph = await compiler.compile_agent_graph(agent)
 
+        # Build memory/RAG context layers for the agent
+        from src.prompt_layers.context import AgentContextBuilder
+
+        context_builder = AgentContextBuilder()
+        context_messages = await context_builder.build_context_messages(
+            agent=agent,
+            query=execution.input_prompt,
+            session=self.db,
+            user_id=execution.user_id,
+        )
+
+        input_data = dict(execution.input_data or {})
+        if context_messages:
+            input_data["_context_layers"] = [msg.content for msg in context_messages]
+
         # Create initial state
         state = create_initial_state(
             prompt=execution.input_prompt,
-            input_data=execution.input_data,
+            input_data=input_data,
             messages=[HumanMessage(content=execution.input_prompt)],
         )
 
