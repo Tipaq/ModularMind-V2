@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { AUTH_SESSION_EXPIRED_EVENT } from "@modularmind/api-client";
 
 export type Role = "owner" | "admin" | "user";
 
@@ -62,3 +63,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: null, isLoading: false });
   },
 }));
+
+// Listen for session expiry from ApiClient and auto-logout
+window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, () => {
+  useAuthStore.getState().logout();
+});

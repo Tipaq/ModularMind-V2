@@ -1,6 +1,5 @@
 import {
   LayoutDashboard,
-  Activity,
   Bot,
   Layers,
   GitFork,
@@ -9,11 +8,40 @@ import {
   HardDrive,
   MemoryStick,
   Clock,
+  type LucideIcon,
 } from "lucide-react";
 import { cn, formatDuration, PageHeader } from "@modularmind/ui";
-import type { SystemMetrics, WorkerStatus, PipelineHealth } from "@modularmind/api-client";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
+
+interface MonitoringResponse {
+  timestamp: string;
+  uptime_seconds: number;
+  system: {
+    cpu_percent: number;
+    memory_percent: number;
+    disk_percent: number;
+  };
+  worker: Record<string, unknown>;
+}
+
+interface HealthResponse {
+  status: string;
+  components: {
+    database?: { status: string };
+    redis?: { status: string };
+    qdrant?: { status: string };
+    worker?: { status: string };
+  };
+}
+
+interface PipelineResponse {
+  memory_raw: { length: number; consumers: number; lag: number };
+  memory_extracted: { length: number; consumers: number; lag: number };
+  tasks_executions: { length: number; consumers: number; lag: number };
+  tasks_models: { length: number; consumers: number; lag: number };
+  dlq: { length: number; consumers: number; lag: number };
+}
 
 function MetricCard({
   label,
@@ -25,7 +53,7 @@ function MetricCard({
   label: string;
   value: string;
   sub?: string;
-  icon: typeof Activity;
+  icon: LucideIcon;
   color: string;
 }) {
   return (
@@ -49,20 +77,16 @@ function StatusDot({ ok }: { ok: boolean }) {
 }
 
 export default function Dashboard() {
-  const { data: metrics } = useApi<SystemMetrics>(
-    () => api.get("/internal/monitoring/metrics"),
+  const { data: monitoring } = useApi<MonitoringResponse>(
+    () => api.get("/internal/monitoring"),
     [],
   );
-  const { data: worker } = useApi<WorkerStatus>(
-    () => api.get("/internal/monitoring/worker"),
+  const { data: health } = useApi<HealthResponse>(
+    () => fetch("/health").then((r) => r.json()),
     [],
   );
-  const { data: pipeline } = useApi<PipelineHealth>(
-    () => api.get("/internal/monitoring/pipeline"),
-    [],
-  );
-  const { data: health } = useApi<{ database: boolean; redis: boolean; qdrant: boolean }>(
-    () => api.get("/health"),
+  const { data: pipeline } = useApi<PipelineResponse>(
+    () => api.get("/report/pipeline"),
     [],
   );
 
@@ -78,19 +102,19 @@ export default function Dashboard() {
       {/* Infrastructure status */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4">
-          <StatusDot ok={health?.database ?? false} />
+          <StatusDot ok={health?.components?.database?.status === "ok"} />
           <span className="text-sm font-medium">Database</span>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4">
-          <StatusDot ok={health?.redis ?? false} />
+          <StatusDot ok={health?.components?.redis?.status === "ok"} />
           <span className="text-sm font-medium">Redis</span>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4">
-          <StatusDot ok={health?.qdrant ?? false} />
+          <StatusDot ok={health?.components?.qdrant?.status === "ok"} />
           <span className="text-sm font-medium">Qdrant</span>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4">
-          <StatusDot ok={worker?.running ?? false} />
+          <StatusDot ok={health?.components?.worker?.status === "ok"} />
           <span className="text-sm font-medium">Worker</span>
         </div>
       </div>
@@ -99,25 +123,25 @@ export default function Dashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="CPU"
-          value={metrics ? `${metrics.cpu_percent.toFixed(1)}%` : "--"}
+          value={monitoring ? `${monitoring.system.cpu_percent.toFixed(1)}%` : "--"}
           icon={Cpu}
           color="bg-info"
         />
         <MetricCard
           label="Memory"
-          value={metrics ? `${metrics.memory_percent.toFixed(1)}%` : "--"}
+          value={monitoring ? `${monitoring.system.memory_percent.toFixed(1)}%` : "--"}
           icon={MemoryStick}
           color="bg-primary"
         />
         <MetricCard
           label="Disk"
-          value={metrics ? `${metrics.disk_percent.toFixed(1)}%` : "--"}
+          value={monitoring ? `${monitoring.system.disk_percent.toFixed(1)}%` : "--"}
           icon={HardDrive}
           color="bg-warning"
         />
         <MetricCard
           label="Uptime"
-          value={metrics ? formatDuration(metrics.uptime_seconds) : "--"}
+          value={monitoring ? formatDuration(monitoring.uptime_seconds) : "--"}
           icon={Clock}
           color="bg-success"
         />
@@ -148,11 +172,11 @@ export default function Dashboard() {
       </div>
 
       {/* Pipeline */}
-      {pipeline && Object.keys(pipeline.streams).length > 0 && (
+      {pipeline && (
         <div>
           <h2 className="mb-3 text-lg font-semibold">Pipeline Streams</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {Object.entries(pipeline.streams).map(([name, info]) => (
+            {Object.entries(pipeline).map(([name, info]) => (
               <div key={name} className="rounded-xl border border-border/50 bg-card/50 p-4">
                 <p className="text-sm font-medium">{name}</p>
                 <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
@@ -163,8 +187,8 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-          {pipeline.dlq_size > 0 && (
-            <p className="mt-2 text-sm text-destructive">Dead letter queue: {pipeline.dlq_size} messages</p>
+          {pipeline.dlq?.length > 0 && (
+            <p className="mt-2 text-sm text-destructive">Dead letter queue: {pipeline.dlq.length} messages</p>
           )}
         </div>
       )}

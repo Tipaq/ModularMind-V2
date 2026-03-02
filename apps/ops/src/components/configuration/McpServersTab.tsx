@@ -51,7 +51,6 @@ import {
 import type {
   MCPServer,
   MCPCatalogEntry,
-  MCPSidecarStatus,
   MCPTool,
   MCPTestResult,
 } from "@modularmind/api-client";
@@ -111,8 +110,6 @@ export default function McpServersTab() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [catalog, setCatalog] = useState<MCPCatalogEntry[]>([]);
-  const [sidecarStatus, setSidecarStatus] =
-    useState<MCPSidecarStatus | null>(null);
   const [showCatalog, setShowCatalog] = useState(false);
   const [deployingId, setDeployingId] = useState<string | null>(null);
   const [catalogSecrets, setCatalogSecrets] = useState<Record<string, string>>(
@@ -138,14 +135,12 @@ export default function McpServersTab() {
   useEffect(() => {
     (async () => {
       try {
-        const [serversRes, catalogRes, statusRes] = await Promise.all([
+        const [serversRes, catalogRes] = await Promise.all([
           api.get<MCPServer[]>("/internal/mcp/servers"),
           api.get<MCPCatalogEntry[]>("/internal/mcp/catalog"),
-          api.get<MCPSidecarStatus>("/internal/mcp/sidecar-status"),
         ]);
         setMcpServers(serversRes);
         setCatalog(catalogRes);
-        setSidecarStatus(statusRes);
       } catch {
         /* endpoints may not be available */
       }
@@ -374,41 +369,25 @@ export default function McpServersTab() {
                   <X className="h-4 w-4" /> {saveError}
                 </span>
               )}
-              {sidecarStatus?.docker_available ? (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setShowCatalog(!showCatalog);
-                    setShowManualForm(false);
-                  }}
-                >
-                  {showCatalog ? (
-                    <ChevronUp className="mr-1 h-4 w-4" />
-                  ) : (
-                    <Plus className="mr-1 h-4 w-4" />
-                  )}
-                  {showCatalog ? "Close Catalog" : "Add Server"}
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setShowManualForm(!showManualForm);
-                    setShowCatalog(false);
-                  }}
-                >
+              <Button
+                size="sm"
+                onClick={() => {
+                  setShowCatalog(!showCatalog);
+                  setShowManualForm(false);
+                }}
+              >
+                {showCatalog ? (
+                  <ChevronUp className="mr-1 h-4 w-4" />
+                ) : (
                   <Plus className="mr-1 h-4 w-4" />
-                  Add Server
-                </Button>
-              )}
+                )}
+                {showCatalog ? "Close Catalog" : "Add Server"}
+              </Button>
             </div>
           </div>
           <CardDescription>
             Connect external tool servers via Model Context Protocol.
-            {sidecarStatus?.docker_available
-              ? " Deploy from the catalog or add a custom server URL."
-              : " Add MCP server URLs manually, or enable Docker for one-click catalog deployment."}
+            Deploy from the catalog or add a custom server URL.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -468,9 +447,19 @@ export default function McpServersTab() {
                                 Auto
                               </Badge>
                             )}
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground"
+                            >
+                              {server.transport === "stdio" ? "Subprocess" : "HTTP"}
+                            </Badge>
                           </div>
                           <p className="text-xs text-muted-foreground truncate">
-                            {server.managed ? "Managed sidecar" : server.url}
+                            {server.transport === "stdio"
+                              ? "Local subprocess"
+                              : server.managed
+                                ? "Managed sidecar"
+                                : server.url}
                             {server.description &&
                               ` \u2014 ${server.description}`}
                           </p>
@@ -603,25 +592,25 @@ export default function McpServersTab() {
                     </Button>
                   </div>
 
-                  {selectedCatalogEntry.env_keys.length > 0 && (
+                  {(selectedCatalogEntry.required_secrets?.length ?? 0) > 0 && (
                     <div className="space-y-2">
                       <p className="text-xs font-medium">
-                        Required environment variables
+                        Required configuration
                       </p>
                       <div className="grid grid-cols-2 gap-3">
-                        {selectedCatalogEntry.env_keys.map((envKey) => (
-                          <div key={envKey} className="space-y-1">
+                        {(selectedCatalogEntry.required_secrets ?? []).map((secret) => (
+                          <div key={secret.key} className="space-y-1">
                             <Label className="text-xs font-mono">
-                              {envKey}
+                              {secret.label}
                             </Label>
                             <Input
-                              type="password"
-                              placeholder="Enter value..."
-                              value={catalogSecrets[envKey] || ""}
+                              type={secret.is_secret ? "password" : "text"}
+                              placeholder={secret.placeholder || "Enter value..."}
+                              value={catalogSecrets[secret.key] || ""}
                               onChange={(e) =>
                                 setCatalogSecrets((prev) => ({
                                   ...prev,
-                                  [envKey]: e.target.value,
+                                  [secret.key]: e.target.value,
                                 }))
                               }
                               className="text-xs h-8"
@@ -637,8 +626,8 @@ export default function McpServersTab() {
                       onClick={handleDeployFromCatalog}
                       disabled={
                         deployingId === selectedCatalogEntry.id ||
-                        selectedCatalogEntry.env_keys.some(
-                          (k) => !catalogSecrets[k]?.trim(),
+                        (selectedCatalogEntry.required_secrets ?? []).some(
+                          (s) => s.required && !catalogSecrets[s.key]?.trim(),
                         )
                       }
                     >

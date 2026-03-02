@@ -46,9 +46,14 @@ export interface GraphNode {
   content: string;
   memory_type: string;
   scope: string;
+  scope_id: string;
+  tier: string;
   importance: number;
   access_count: number;
   entities: string[];
+  tags: string[];
+  user_id: string | null;
+  last_accessed: string | null;
   created_at: string;
 }
 
@@ -67,6 +72,7 @@ export interface GraphData {
 
 export interface MemoryUser {
   user_id: string;
+  email: string | null;
   memory_count: number;
 }
 
@@ -124,6 +130,10 @@ interface MemoryState {
   memoryUsers: MemoryUser[];
 
   // Actions
+  // Graph filters (subset of MemoryFilters relevant to graph)
+  graphFilters: { scope: string; memory_type: string; user_id: string };
+  setGraphFilters: (f: Partial<{ scope: string; memory_type: string; user_id: string }>) => void;
+
   fetchGlobalStats: () => Promise<void>;
   fetchEntries: (page?: number) => Promise<void>;
   fetchGraphData: () => Promise<void>;
@@ -154,6 +164,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   graphData: null,
   graphLoading: false,
   graphError: null,
+  graphFilters: { scope: "", memory_type: "", user_id: "" },
 
   consolLogs: [],
   consolTotal: 0,
@@ -207,13 +218,22 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   fetchGraphData: async () => {
     set({ graphLoading: true, graphError: null });
     try {
-      const data = await api.get<GraphData>("/memory/admin/graph?limit=500&edge_limit=2000");
+      const { graphFilters } = get();
+      const params = new URLSearchParams({ limit: "500", edge_limit: "2000" });
+      if (graphFilters.scope) params.set("scope", graphFilters.scope);
+      if (graphFilters.memory_type) params.set("memory_type", graphFilters.memory_type);
+      if (graphFilters.user_id) params.set("user_id", graphFilters.user_id);
+      const data = await api.get<GraphData>(`/memory/admin/graph?${params}`);
       set({ graphData: data });
     } catch (err) {
       set({ graphError: err instanceof Error ? err.message : "Failed to fetch graph" });
     } finally {
       set({ graphLoading: false });
     }
+  },
+
+  setGraphFilters: (f) => {
+    set((state) => ({ graphFilters: { ...state.graphFilters, ...f } }));
   },
 
   fetchConsolidationLogs: async (page = 1) => {

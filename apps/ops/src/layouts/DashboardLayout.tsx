@@ -2,14 +2,23 @@ import { useEffect } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
 import { useAuthStore } from "../stores/auth";
+import { api } from "../lib/api";
 
 export default function DashboardLayout() {
-  const { user, isLoading, loadFromSession } = useAuthStore();
+  const { user, isLoading, loadFromSession, logout } = useAuthStore();
   const navigate = useNavigate();
 
   useEffect(() => {
     loadFromSession();
   }, [loadFromSession]);
+
+  // Validate session against server when a stored user is found
+  useEffect(() => {
+    if (!user || isLoading) return;
+    api.get("/auth/me").catch(() => {
+      logout();
+    });
+  }, [user, isLoading, logout]);
 
   useEffect(() => {
     if (!isLoading && !user) {

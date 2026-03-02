@@ -6,10 +6,18 @@ export interface UseApiState<T> {
   isLoading: boolean;
 }
 
+export interface UseApiOptions {
+  /** Keep the last successful data when a refetch errors (useful for polling). */
+  keepDataOnError?: boolean;
+}
+
 export function useApi<T>(
   fetcher: () => Promise<T>,
   deps: unknown[] = [],
+  options: UseApiOptions = {},
 ): UseApiState<T> & { refetch: () => Promise<void> } {
+  const { keepDataOnError = false } = options;
+
   const [state, setState] = useState<UseApiState<T>>({
     data: null,
     error: null,
@@ -23,10 +31,14 @@ export function useApi<T>(
       setState({ data, error: null, isLoading: false });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      setState({ data: null, error: msg, isLoading: false });
+      setState((prev) => ({
+        data: keepDataOnError ? prev.data : null,
+        error: msg,
+        isLoading: false,
+      }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, keepDataOnError]);
 
   useEffect(() => {
     execute();

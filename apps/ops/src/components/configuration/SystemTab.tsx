@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, RefreshCcw, Bell, Shield } from "lucide-react";
+import { RefreshCw, RefreshCcw, Bell, Shield, Cpu } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -55,6 +55,20 @@ export default function SystemTab() {
     try {
       await api.patch<LocalSettings>("/internal/settings", {
         sync_interval_minutes: newValue,
+      });
+    } catch {
+      setSettings(settings);
+      setSaveError("Failed to save setting");
+    }
+  };
+
+  const updateKeepAlive = async (value: string) => {
+    if (!settings) return;
+    const updated = { ...settings, ollama_keep_alive: value };
+    setSettings(updated);
+    try {
+      await api.patch<LocalSettings>("/internal/settings", {
+        ollama_keep_alive: value,
       });
     } catch {
       setSettings(settings);
@@ -130,6 +144,47 @@ export default function SystemTab() {
                 <SelectItem value="60">1 hour</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Ollama */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Cpu className="h-5 w-5" />
+            <CardTitle>Ollama</CardTitle>
+          </div>
+          <CardDescription>
+            Configure how Ollama manages models in GPU memory.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Keep Alive (model unload timeout)
+            </label>
+            <Select
+              value={settings?.ollama_keep_alive || "24h"}
+              onValueChange={updateKeepAlive}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5m">5 minutes</SelectItem>
+                <SelectItem value="30m">30 minutes</SelectItem>
+                <SelectItem value="1h">1 hour</SelectItem>
+                <SelectItem value="4h">4 hours</SelectItem>
+                <SelectItem value="12h">12 hours</SelectItem>
+                <SelectItem value="24h">24 hours</SelectItem>
+                <SelectItem value="-1">Never unload</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              How long Ollama keeps a model loaded in VRAM after the last request.
+              Longer values reduce cold-start latency but use more GPU memory.
+            </p>
           </div>
         </CardContent>
       </Card>

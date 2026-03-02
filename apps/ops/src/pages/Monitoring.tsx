@@ -1,173 +1,115 @@
-import { Activity, Cpu, HardDrive, MemoryStick, Clock, RefreshCw } from "lucide-react";
-import { cn, formatDuration, PageHeader } from "@modularmind/ui";
-import type { SystemMetrics, WorkerStatus, PipelineHealth } from "@modularmind/api-client";
+import { useEffect, useRef, useState } from "react";
+import { Activity, RefreshCw } from "lucide-react";
+import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
+import type { LlmGpuData, MonitoringData, PipelineData } from "@modularmind/api-client";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
+import { OverviewTab } from "../components/monitoring/OverviewTab";
+import { LlmGpuTab } from "../components/monitoring/LlmGpuTab";
+import { InfraTab } from "../components/monitoring/InfraTab";
 
-function ProgressBar({ value, color }: { value: number; color: string }) {
-  return (
-    <div className="h-2 w-full rounded-full bg-muted">
-      <div className={cn("h-2 rounded-full transition-all", color)} style={{ width: `${Math.min(value, 100)}%` }} />
-    </div>
-  );
-}
+const POLL_INTERVAL_MS = 10_000;
 
 export default function Monitoring() {
-  const { data: metrics, refetch: refetchMetrics } = useApi<SystemMetrics>(
-    () => api.get("/internal/monitoring/metrics"),
+  const { data: monitoring, refetch: refetchMonitoring } = useApi<MonitoringData>(
+    () => api.get("/internal/monitoring"),
     [],
+    { keepDataOnError: true },
   );
-  const { data: worker, refetch: refetchWorker } = useApi<WorkerStatus>(
-    () => api.get("/internal/monitoring/worker"),
+  const { data: pipeline, refetch: refetchPipeline } = useApi<PipelineData>(
+    () => api.get("/report/pipeline"),
     [],
+    { keepDataOnError: true },
   );
-  const { data: pipeline, refetch: refetchPipeline } = useApi<PipelineHealth>(
-    () => api.get("/internal/monitoring/pipeline"),
+  const { data: llmGpu, refetch: refetchLlmGpu } = useApi<LlmGpuData>(
+    () => api.get("/internal/llm-gpu"),
     [],
+    { keepDataOnError: true },
   );
 
-  const refetchAll = async () => {
-    await Promise.all([refetchMetrics(), refetchWorker(), refetchPipeline()]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // Track first successful load
+  useEffect(() => {
+    if (monitoring && !lastUpdated) setLastUpdated(new Date());
+  }, [monitoring, lastUpdated]);
+
+  // Auto-refresh every 10s
+  const refetchMonitoringRef = useRef(refetchMonitoring);
+  const refetchPipelineRef = useRef(refetchPipeline);
+  const refetchLlmGpuRef = useRef(refetchLlmGpu);
+  refetchMonitoringRef.current = refetchMonitoring;
+  refetchPipelineRef.current = refetchPipeline;
+  refetchLlmGpuRef.current = refetchLlmGpu;
+
+  useEffect(() => {
+    const id = setInterval(async () => {
+      await Promise.all([
+        refetchMonitoringRef.current(),
+        refetchPipelineRef.current(),
+        refetchLlmGpuRef.current(),
+      ]);
+      setLastUpdated(new Date());
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleManualRefresh = async () => {
+    await Promise.all([refetchMonitoring(), refetchPipeline(), refetchLlmGpu()]);
+    setLastUpdated(new Date());
   };
 
+  const alertCount = monitoring?.alerts.active_count ?? 0;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         icon={Activity}
         gradient="from-success to-success/70"
         title="Monitoring"
-        description="System health, resources, and pipeline status"
+        description="System health, resources, and live activity"
         actions={
-          <button
-            onClick={refetchAll}
-            className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm hover:bg-muted/80 transition-colors"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            {lastUpdated && (
+              <span className="text-xs text-muted-foreground">
+                Updated {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+            {alertCount > 0 && (
+              <span className="rounded-md bg-destructive/15 px-2 py-1 text-xs font-medium text-destructive">
+                ⚠ {alertCount} alert{alertCount > 1 ? "s" : ""}
+              </span>
+            )}
+            <button
+              onClick={handleManualRefresh}
+              className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm hover:bg-muted/80 transition-colors"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </button>
+          </div>
         }
       />
 
-      {/* System Resources */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">System Resources</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Cpu className="h-4 w-4 text-info" />
-              <span className="text-sm font-medium">CPU</span>
-            </div>
-            <p className="text-2xl font-bold">{metrics ? `${metrics.cpu_percent.toFixed(1)}%` : "--"}</p>
-            {metrics && <ProgressBar value={metrics.cpu_percent} color="bg-info" />}
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <MemoryStick className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">Memory</span>
-            </div>
-            <p className="text-2xl font-bold">{metrics ? `${metrics.memory_percent.toFixed(1)}%` : "--"}</p>
-            {metrics && <ProgressBar value={metrics.memory_percent} color="bg-primary" />}
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <HardDrive className="h-4 w-4 text-warning" />
-              <span className="text-sm font-medium">Disk</span>
-            </div>
-            <p className="text-2xl font-bold">{metrics ? `${metrics.disk_percent.toFixed(1)}%` : "--"}</p>
-            {metrics && <ProgressBar value={metrics.disk_percent} color="bg-warning" />}
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-success" />
-              <span className="text-sm font-medium">Uptime</span>
-            </div>
-            <p className="text-2xl font-bold">{metrics ? formatDuration(metrics.uptime_seconds) : "--"}</p>
-          </div>
-        </div>
-      </section>
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="llm">LLM & GPU</TabsTrigger>
+          <TabsTrigger value="infra">Infrastructure</TabsTrigger>
+        </TabsList>
 
-      {/* Worker */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">Worker Status</h2>
-        {worker ? (
-          <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-4">
-            <div className="flex items-center gap-3">
-              <span className={cn("h-3 w-3 rounded-full", worker.running ? "bg-success" : "bg-destructive")} />
-              <span className="font-medium">{worker.running ? "Running" : "Stopped"}</span>
-              <span className="text-sm text-muted-foreground ml-auto">
-                Uptime: {formatDuration(worker.uptime_seconds)}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Streams:</span>{" "}
-                <span className="font-medium">{worker.streams.length}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Scheduler jobs:</span>{" "}
-                <span className="font-medium">{worker.scheduler_jobs}</span>
-              </div>
-            </div>
-            {worker.streams.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {worker.streams.map((s) => (
-                  <span key={s} className="rounded-md bg-muted px-2 py-1 text-xs font-mono">
-                    {s}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-border/50 bg-card/50 p-5 text-sm text-muted-foreground">
-            Loading worker status...
-          </div>
-        )}
-      </section>
+        <TabsContent value="overview" className="mt-6">
+          <OverviewTab monitoring={monitoring} pipeline={pipeline} />
+        </TabsContent>
 
-      {/* Pipeline */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">Pipeline Health</h2>
-        {pipeline ? (
-          <div className="space-y-3">
-            {Object.keys(pipeline.streams).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No active streams</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border/50">
-                      <th className="pb-2 text-left font-medium text-muted-foreground">Stream</th>
-                      <th className="pb-2 text-right font-medium text-muted-foreground">Pending</th>
-                      <th className="pb-2 text-right font-medium text-muted-foreground">Consumers</th>
-                      <th className="pb-2 text-right font-medium text-muted-foreground">Lag</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(pipeline.streams).map(([name, info]) => (
-                      <tr key={name} className="border-b border-border/30">
-                        <td className="py-2 font-mono text-xs">{name}</td>
-                        <td className="py-2 text-right">{info.length}</td>
-                        <td className="py-2 text-right">{info.consumers}</td>
-                        <td className="py-2 text-right">{info.lag}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {pipeline.dlq_size > 0 && (
-              <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                Dead letter queue: {pipeline.dlq_size} messages
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-border/50 bg-card/50 p-5 text-sm text-muted-foreground">
-            Loading pipeline data...
-          </div>
-        )}
-      </section>
+        <TabsContent value="llm" className="mt-6">
+          <LlmGpuTab llmGpu={llmGpu} />
+        </TabsContent>
+
+        <TabsContent value="infra" className="mt-6">
+          <InfraTab monitoring={monitoring} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
