@@ -11,7 +11,7 @@ import logging
 import time
 from pathlib import Path
 
-from .client import MCPClient, MCPClientError
+from . import MCPClient, MCPClientError
 from .schemas import MCPServerConfig, MCPServerStatus, MCPToolDefinition
 
 logger = logging.getLogger(__name__)
@@ -126,6 +126,18 @@ class MCPRegistry:
             if not config.enabled:
                 raise MCPClientError(f"MCP server '{config.name}' is disabled")
 
+            # Resolve secrets for STDIO configs (env stays empty on disk)
+            from .schemas import MCPTransport
+            if config.transport == MCPTransport.STDIO and not config.env:
+                from src.infra.secrets import secrets_store
+                resolved_env = {}
+                prefix = f"MCP_{config.id}_"
+                for key in secrets_store.list_keys(prefix):
+                    env_key = key.removeprefix(prefix)
+                    resolved_env[env_key] = secrets_store.get(key)
+                if resolved_env:
+                    config = config.model_copy(update={"env": resolved_env})
+
             client = MCPClient(config)
             await client.connect()
             self._clients[server_id] = client
@@ -178,7 +190,7 @@ class MCPRegistry:
         error: str | None = None
 
         # If enabled server has no client yet, attempt to connect
-        if not client and config.enabled and config.url:
+        if not client and config.enabled and (config.url or config.command):
             try:
                 client = await self.get_client(server_id)
             except Exception as e:

@@ -5,6 +5,7 @@ registry instance. Both API and worker processes load from the same disk storage
 The sidecar manager is only active in the API process (not worker processes).
 """
 
+import asyncio
 import logging
 import sys
 import uuid
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 _registry: MCPRegistry | None = None
 _sidecar_manager = None  # Lazy import to avoid docker dependency in workers
+_health_task: asyncio.Task | None = None
 
 
 def get_mcp_registry() -> MCPRegistry:
@@ -87,17 +89,23 @@ async def _auto_deploy_free_catalog_entries() -> None:
     """Deploy catalog entries that require no credentials.
 
     Skips entries that are already registered (matched by catalog_id).
-    Requires Docker to be available — silently skips otherwise.
+    Supports hybrid deployment: Docker sidecar for entries with docker_image,
+    subprocess via stdio_client for npm-only entries.
 
     Uses a file lock to prevent duplicate deploys when multiple Uvicorn
     workers start concurrently.
     """
+    import shutil
+
     from src.mcp.catalog import get_free_catalog_entries
     from src.mcp.schemas import MCPServerConfig, MCPTransport
 
     manager = get_sidecar_manager()
-    if not manager.is_available:
-        logger.debug("Docker not available — skipping free MCP auto-deploy")
+    has_docker = manager.is_available
+    has_npx = shutil.which("npx") is not None
+
+    if not has_docker and not has_npx:
+        logger.info("MCP auto-deploy: neither Docker nor npx available, skipping")
         return
 
     settings = get_settings()
@@ -130,6 +138,11 @@ async def _auto_deploy_free_catalog_entries() -> None:
         free_entries = get_free_catalog_entries()
         deployed = 0
 
+        logger.info(
+            "MCP auto-deploy: docker=%s, npx=%s, %d free entries",
+            has_docker, has_npx, len(free_entries),
+        )
+
         for entry in free_entries:
             if entry.id in existing_catalog_ids:
                 logger.debug("MCP auto-deploy: %s already registered, skipping", entry.name)
@@ -137,32 +150,55 @@ async def _auto_deploy_free_catalog_entries() -> None:
 
             server_id = str(uuid.uuid4())
             try:
-                info = await manager.deploy(
-                    catalog_id=entry.id,
-                    secrets={},
-                    server_id=server_id,
+                if entry.docker_image and has_docker:
+                    # Docker sidecar path
+                    info = await manager.deploy(
+                        catalog_id=entry.id,
+                        secrets={},
+                        server_id=server_id,
+                    )
+                    config = MCPServerConfig(
+                        id=server_id,
+                        name=entry.name,
+                        description=entry.description,
+                        transport=MCPTransport.HTTP,
+                        url=info.internal_url,
+                        enabled=True,
+                        managed=True,
+                        catalog_id=entry.id,
+                    )
+                elif entry.npm_package and not entry.docker_image and has_npx:
+                    # Subprocess path
+                    config = MCPServerConfig(
+                        id=server_id,
+                        name=entry.name,
+                        description=entry.description,
+                        transport=MCPTransport.STDIO,
+                        command="npx",
+                        args=["-y", entry.npm_package],
+                        enabled=True,
+                        managed=True,
+                        catalog_id=entry.id,
+                    )
+                else:
+                    logger.info(
+                        "MCP auto-deploy: skipping '%s' "
+                        "(docker_image=%s docker=%s, npm=%s npx=%s)",
+                        entry.name, bool(entry.docker_image), has_docker,
+                        bool(entry.npm_package), has_npx,
+                    )
+                    continue
+
+                registry.register(config)
+                registry.persist_config(config)
+                deployed += 1
+                logger.info(
+                    "MCP auto-deploy: deployed '%s' (%s)",
+                    entry.name, config.transport.value,
                 )
             except Exception as e:
                 logger.warning("MCP auto-deploy: failed to deploy %s: %s", entry.name, e)
                 continue
-
-            config = MCPServerConfig(
-                id=server_id,
-                name=entry.name,
-                description=entry.description,
-                transport=MCPTransport.HTTP,
-                url=info.internal_url,
-                enabled=True,
-                managed=True,
-                catalog_id=entry.id,
-            )
-            registry.register(config)
-            registry.persist_config(config)
-            deployed += 1
-            logger.info(
-                "MCP auto-deploy: deployed '%s' → %s (id=%s)",
-                entry.name, info.internal_url, server_id,
-            )
 
         if deployed:
             logger.info("MCP auto-deploy: %d credential-free server(s) deployed", deployed)
@@ -222,26 +258,31 @@ async def startup_mcp(*, leader_only: bool = False) -> None:
     # them as "Online" immediately rather than waiting for first use.
     await _warm_mcp_clients()
 
+    # Start health check loop (API process only)
+    global _health_task
+    _health_task = asyncio.create_task(_mcp_health_loop())
+
 
 async def _warm_mcp_clients() -> None:
     """Connect to all enabled MCP servers in the background.
 
-    Waits a few seconds for sidecars to be fully ready, then attempts
-    connection with one retry.  Failures are non-fatal — clients will
+    Waits a few seconds for HTTP sidecars to be fully ready, then attempts
+    connection with retries.  Failures are non-fatal — clients will
     reconnect lazily when actually used.
     """
-    import asyncio
-
-    from src.mcp.client import MCPClientError
+    from src.mcp import MCPClientError
+    from src.mcp.schemas import MCPTransport
 
     registry = get_mcp_registry()
     servers = [s for s in registry.list_servers() if s.enabled]
     if not servers:
         return
 
-    # Give sidecars time to finish starting — npm-based servers need
-    # to download packages on first run which can take 15-30 seconds.
-    await asyncio.sleep(10)
+    # Only delay for HTTP servers (Docker sidecars need startup time).
+    # STDIO servers start on-demand via subprocess — no wait needed.
+    has_http = any(s.transport == MCPTransport.HTTP for s in servers)
+    if has_http:
+        await asyncio.sleep(10)
 
     async def _try_connect(server_id: str, name: str) -> None:
         for attempt in range(3):
@@ -261,9 +302,41 @@ async def _warm_mcp_clients() -> None:
         logger.info("MCP warm-up: %d/%d server(s) connected", connected, len(servers))
 
 
+async def _mcp_health_loop() -> None:
+    """Background health-check loop for connected MCP servers.
+
+    Pings each connected client every 60 seconds. Disconnects are
+    handled lazily by the registry on next access. Runs only in the
+    API process (MCP clients are not shared with the worker process).
+    """
+    from src.mcp import MCPClientError
+
+    while True:
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            return
+
+        registry = get_mcp_registry()
+        for server_id, client in list(registry._clients.items()):
+            try:
+                healthy = await client.health_check()
+                if not healthy:
+                    logger.warning("MCP health: '%s' ping failed", server_id)
+            except Exception as e:
+                logger.warning("MCP health: error checking '%s': %s", server_id, e)
+
+
 async def shutdown_mcp() -> None:
-    """Shutdown hook — disconnect all MCP clients."""
-    global _registry, _sidecar_manager
+    """Shutdown hook — cancel health loop and disconnect all MCP clients."""
+    global _registry, _sidecar_manager, _health_task
+    if _health_task:
+        _health_task.cancel()
+        try:
+            await _health_task
+        except asyncio.CancelledError:
+            pass
+        _health_task = None
     if _registry:
         await _registry.shutdown()
         _registry = None

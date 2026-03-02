@@ -54,6 +54,7 @@ class MCPServerResponse(BaseModel):
     project_id: str | None
     managed: bool = False
     catalog_id: str | None = None
+    transport: str = "http"
 
 
 class MCPCatalogEntryResponse(BaseModel):
@@ -101,6 +102,7 @@ def _server_to_response(config, status_info) -> MCPServerResponse:
         project_id=config.project_id,
         managed=config.managed,
         catalog_id=config.catalog_id,
+        transport=config.transport.value,
     )
 
 
@@ -140,11 +142,13 @@ async def list_catalog(user: CurrentUser) -> list[MCPCatalogEntryResponse]:
 
 @router.post("/deploy", dependencies=[RequireOwner], status_code=status.HTTP_201_CREATED)
 async def deploy_from_catalog(body: MCPDeployFromCatalogRequest, user: CurrentUser) -> MCPServerResponse:
-    """Deploy an MCP server from the catalog via Docker sidecar.
+    """Deploy an MCP server from the catalog.
 
-    This spins up a mcp-proxy container that wraps the stdio-based MCP server
-    as a Streamable HTTP endpoint, then registers it in the MCPRegistry.
+    Auto-detects transport: Docker sidecar if docker_image is set,
+    subprocess via stdio_client if npm_package only.
     """
+    import shutil
+
     from src.infra.secrets import secrets_store
     from src.mcp import MCPServerConfig, MCPTransport, get_catalog_entry
 
@@ -155,48 +159,76 @@ async def deploy_from_catalog(body: MCPDeployFromCatalogRequest, user: CurrentUs
             detail=f"Unknown catalog entry: {body.catalog_id}",
         )
 
-    # Check if Docker is available
-    manager = _get_sidecar_manager()
-    if not manager.is_available:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Docker is not available. Install the Docker SDK and mount the Docker socket to enable auto-provisioning.",
-        )
+    # Duplicate check
+    registry = _get_registry()
+    for s in registry.list_servers():
+        if s.catalog_id == body.catalog_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"'{entry.name}' already deployed (id={s.id}). Undeploy first.",
+            )
 
     server_id = str(uuid.uuid4())
 
-    # Deploy sidecar container
-    try:
-        info = await manager.deploy(
+    if entry.docker_image:
+        # Docker sidecar path
+        manager = _get_sidecar_manager()
+        if not manager.is_available:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Docker required for this MCP server but not available.",
+            )
+        try:
+            info = await manager.deploy(
+                catalog_id=body.catalog_id,
+                secrets=body.secrets,
+                server_id=server_id,
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to deploy sidecar: {e}",
+            )
+        config = MCPServerConfig(
+            id=server_id,
+            name=entry.name,
+            description=entry.description,
+            transport=MCPTransport.HTTP,
+            url=info.internal_url,
+            enabled=True,
+            project_id=body.project_id,
+            managed=True,
             catalog_id=body.catalog_id,
-            secrets=body.secrets,
-            server_id=server_id,
         )
-    except Exception as e:
+    elif entry.npm_package:
+        # Subprocess path — SDK's stdio_client handles process lifecycle
+        if not shutil.which("npx"):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="npx not found. Install Node.js to deploy npm-based MCP servers.",
+            )
+        config = MCPServerConfig(
+            id=server_id,
+            name=entry.name,
+            description=entry.description,
+            transport=MCPTransport.STDIO,
+            command="npx",
+            args=["-y", entry.npm_package],
+            enabled=True,
+            project_id=body.project_id,
+            managed=True,
+            catalog_id=body.catalog_id,
+        )
+    else:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to deploy sidecar: {e}",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Catalog entry '{entry.name}' has no docker_image or npm_package.",
         )
 
-    # Store secrets encrypted (for recovery/UI display)
+    # Store secrets encrypted (env stays empty on disk for STDIO)
     for key, value in body.secrets.items():
-        secret_ref = f"MCP_{server_id}_{key}"
-        secrets_store.set(secret_ref, value)
+        secrets_store.set(f"MCP_{server_id}_{key}", value)
 
-    # Register in MCPRegistry (managed=True → SSRF validation skipped)
-    config = MCPServerConfig(
-        id=server_id,
-        name=entry.name,
-        description=entry.description,
-        transport=MCPTransport.HTTP,
-        url=info.internal_url,
-        enabled=True,
-        project_id=body.project_id,
-        managed=True,
-        catalog_id=body.catalog_id,
-    )
-
-    registry = _get_registry()
     registry.register(config)
     registry.persist_config(config)
 
@@ -401,9 +433,10 @@ async def delete_mcp_server(server_id: str, user: CurrentUser) -> dict:
     if not config:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
-    # Clean up secrets
-    if config.secret_ref:
-        secrets_store.delete(config.secret_ref)
+    # Clean up all secrets for this server (covers both secret_ref and catalog secrets)
+    prefix = f"MCP_{server_id}_"
+    for key in secrets_store.list_keys(prefix):
+        secrets_store.delete(key)
 
     # If managed sidecar, remove the Docker container
     if config.managed:

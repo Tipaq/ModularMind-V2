@@ -9,13 +9,40 @@ multiple MCP servers can expose tools with the same name without collision.
 
 import asyncio
 import logging
+import time
 from typing import Any
 
-from .client import MCPClientError
+from . import MCPClientError
 from .registry import MCPRegistry
 from .schemas import MCPToolCallRequest, MCPToolDefinition
 
 logger = logging.getLogger(__name__)
+
+
+class _TokenBucket:
+    """Simple token-bucket rate limiter keyed by server_id.
+
+    Shared across all tool calls. Default: 30 calls/min per server.
+    """
+
+    def __init__(self, rate: float = 30.0, period: float = 60.0):
+        self._rate = rate
+        self._period = period
+        self._buckets: dict[str, tuple[float, float]] = {}  # key → (tokens, last_ts)
+
+    def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        tokens, last_ts = self._buckets.get(key, (self._rate, now))
+        elapsed = now - last_ts
+        tokens = min(self._rate, tokens + elapsed * (self._rate / self._period))
+        if tokens >= 1.0:
+            self._buckets[key] = (tokens - 1.0, now)
+            return True
+        self._buckets[key] = (tokens, now)
+        return False
+
+
+_mcp_tool_bucket = _TokenBucket()
 
 
 class MCPToolExecutor:
@@ -54,6 +81,13 @@ class MCPToolExecutor:
             )
 
         server_id, real_name = mapping
+
+        if not _mcp_tool_bucket.allow(server_id):
+            raise MCPClientError(
+                f"Rate limit exceeded for MCP server '{server_id}'. "
+                "Try again shortly."
+            )
+
         client = await self.registry.get_client(server_id)
         result = await client.call_tool(
             MCPToolCallRequest(

@@ -252,6 +252,7 @@ class SidecarManager:
             server_id=server_id,
         )
         self._sidecars[server_id] = info
+        self._update_sidecar_gauge()
 
         logger.info(
             "Deployed MCP sidecar %s for %s → %s",
@@ -276,6 +277,7 @@ class SidecarManager:
         except Exception as e:
             logger.warning("Error removing sidecar %s: %s", info.container_name, e)
 
+        self._update_sidecar_gauge()
         return True
 
     async def get_sidecar_status(self, server_id: str) -> dict[str, Any] | None:
@@ -351,6 +353,7 @@ class SidecarManager:
 
         if recovered:
             logger.info("Recovered %d MCP sidecar(s)", len(recovered))
+            self._update_sidecar_gauge()
         return recovered
 
     async def shutdown(self) -> None:
@@ -368,6 +371,14 @@ class SidecarManager:
                 logger.info("Stopped sidecar %s", info.container_name)
             except Exception:
                 pass
+
+    def _update_sidecar_gauge(self) -> None:
+        """Update the Prometheus gauge for active sidecars."""
+        try:
+            from src.infra.metrics import mcp_sidecars_active
+            mcp_sidecars_active.set(len(self._sidecars))
+        except Exception:
+            pass
 
     @property
     def tracked_sidecars(self) -> dict[str, SidecarInfo]:

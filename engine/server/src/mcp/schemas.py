@@ -19,7 +19,7 @@ class MCPServerConfig(BaseModel):
     description: str | None = None
     transport: MCPTransport = MCPTransport.HTTP
     url: str | None = Field(None, description="Server URL for Streamable HTTP transport")
-    command: str | None = Field(None, description="Command for stdio transport (Phase 3)")
+    command: str | None = Field(None, description="Command for stdio transport")
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
     headers: dict[str, str] = Field(default_factory=dict, description="HTTP headers (e.g., Authorization)")
