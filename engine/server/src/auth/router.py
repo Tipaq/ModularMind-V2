@@ -5,7 +5,6 @@ API endpoints for authentication.
 """
 
 import logging
-import secrets
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -235,31 +234,6 @@ async def refresh_tokens(
 
     logger.info("Tokens refreshed for user_id=%s", user.id)
     return {"status": "ok"}
-
-
-@router.post("/ws-ticket")
-async def create_ws_ticket(user: CurrentUser) -> dict[str, str]:
-    """Issue a short-lived one-time ticket for SSE authentication.
-
-    SSE connections go directly to the runtime (bypassing the
-    Next.js proxy), so cookies aren't available. This endpoint issues a
-    30-second, single-use ticket that the client sends as an SSE query param.
-    """
-    from src.infra.redis import get_redis_client
-
-    ticket = secrets.token_urlsafe(32)
-    redis_client = await get_redis_client()
-    if not redis_client:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Redis unavailable",
-        )
-    try:
-        await redis_client.set(f"ws_ticket:{ticket}", user.id, ex=30)
-    finally:
-        await redis_client.aclose()
-
-    return {"ticket": ticket}
 
 
 @router.get("/me", response_model=UserResponse)

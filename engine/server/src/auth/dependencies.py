@@ -125,6 +125,15 @@ async def get_current_user(
 
     # Check internal service token (Platform proxy → Engine)
     if _is_internal_service_token(resolved_token):
+        # When Platform forwards a user email, resolve to the real user
+        # so conversations/memory are owned by the actual person.
+        platform_email = request.headers.get("X-Platform-User-Email")
+        if platform_email:
+            auth_service = AuthService(db)
+            real_user = await auth_service.get_user_by_email(platform_email)
+            if real_user and real_user.is_active:
+                return real_user
+        # Fallback: anonymous service calls without a user context
         return await _get_or_create_platform_service_user(db)
 
     # Standard JWT path
