@@ -7,7 +7,7 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const res = await engineFetch("/api/v1/models");
+  const res = await engineFetch("/api/v1/models", {}, session.user?.email ?? undefined);
   const data = await res.json().catch(() => []);
 
   return NextResponse.json(data, { status: res.status });

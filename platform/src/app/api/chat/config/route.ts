@@ -7,10 +7,11 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const email = session.user?.email ?? undefined;
   const [agentsRes, graphsRes, mcpRes] = await Promise.all([
-    engineFetch("/api/v1/agents?page=1&page_size=200"),
-    engineFetch("/api/v1/graphs?page=1&page_size=200"),
-    engineFetch("/api/v1/mcp/servers").catch(() => null),
+    engineFetch("/api/v1/agents?page=1&page_size=200", {}, email),
+    engineFetch("/api/v1/graphs?page=1&page_size=200", {}, email),
+    engineFetch("/api/v1/mcp/servers", {}, email).catch(() => null),
   ]);
 
   const agentsData = await agentsRes.json().catch(() => ({ items: [] }));

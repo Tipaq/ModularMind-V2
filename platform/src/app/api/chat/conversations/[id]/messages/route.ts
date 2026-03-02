@@ -13,10 +13,11 @@ export async function POST(
   const { id } = await params;
   const body = await req.json();
 
-  const res = await engineFetch(`/api/v1/conversations/${id}/messages`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  const res = await engineFetch(
+    `/api/v1/conversations/${id}/messages`,
+    { method: "POST", body: JSON.stringify(body) },
+    session.user?.email ?? undefined,
+  );
   const data = await res.json();
 
   // Rewrite stream_url from Engine path to Platform proxy path

@@ -11,7 +11,7 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const res = await engineFetch(`/api/v1/conversations/${id}`);
+  const res = await engineFetch(`/api/v1/conversations/${id}`, {}, session.user?.email ?? undefined);
   const data = await res.json();
 
   return NextResponse.json(data, { status: res.status });
@@ -28,10 +28,11 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json();
 
-  const res = await engineFetch(`/api/v1/conversations/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
+  const res = await engineFetch(
+    `/api/v1/conversations/${id}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+    session.user?.email ?? undefined,
+  );
   const data = await res.json();
 
   return NextResponse.json(data, { status: res.status });
@@ -46,9 +47,11 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const res = await engineFetch(`/api/v1/conversations/${id}`, {
-    method: "DELETE",
-  });
+  const res = await engineFetch(
+    `/api/v1/conversations/${id}`,
+    { method: "DELETE" },
+    session.user?.email ?? undefined,
+  );
 
   if (res.status === 204) return new NextResponse(null, { status: 204 });
 

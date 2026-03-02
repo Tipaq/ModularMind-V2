@@ -38,12 +38,24 @@ export default function ChatPage() {
     messages,
     isStreaming,
     error,
-    tokenUsage,
     activities,
+    executionDataMap,
+    selectedMessageId,
+    setSelectedMessageId,
+    streamingMessageId,
     sendMessage,
     setInitialMessages,
     cancelStream,
   } = useChat(activeConversationId);
+
+  // Compute selected execution data for the panel
+  const isLiveSelected = isStreaming && selectedMessageId === streamingMessageId;
+  const selectedExecution = useMemo(() => {
+    if (!selectedMessageId) return null;
+    // If the selected message is currently streaming, build a live snapshot
+    // with memory entries from the ref (already captured in the map once complete)
+    return executionDataMap[selectedMessageId] ?? null;
+  }, [selectedMessageId, executionDataMap]);
 
   // Determine if sending is blocked
   const sendDisabledReason = useMemo(() => {
@@ -226,6 +238,20 @@ export default function ChatPage() {
       if (!convId) return;
     }
 
+    // Auto-title on first message
+    const conv = conversations.find((c) => c.id === convId);
+    if (conv && (conv.title === "New Chat" || !conv.title) && messages.length === 0) {
+      const title = inputValue.trim().length > 50 ? inputValue.trim().slice(0, 50) + "\u2026" : inputValue.trim();
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title } : c)),
+      );
+      fetch(`/api/chat/conversations/${convId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      }).catch(() => {});
+    }
+
     // Cancel any pending debounced PATCH to avoid concurrent writes
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
@@ -250,7 +276,7 @@ export default function ChatPage() {
 
     sendMessage(inputValue, convId ?? undefined);
     setInputValue("");
-  }, [inputValue, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, sendMessage]);
+  }, [inputValue, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, sendMessage, conversations, messages.length]);
 
   const handleToggleAgent = useCallback((agentId: string) => {
     setEnabledAgentIds((prev) =>
@@ -292,6 +318,8 @@ export default function ChatPage() {
           messages={messages}
           isStreaming={isStreaming}
           activities={activities}
+          selectedMessageId={selectedMessageId}
+          onSelectMessage={setSelectedMessageId}
         />
 
         <ChatInput
@@ -312,9 +340,10 @@ export default function ChatPage() {
 
       {/* Right: Execution panel */}
       <ExecutionPanel
-        activities={activities}
-        tokenUsage={tokenUsage}
+        selectedExecution={selectedExecution}
+        liveActivities={activities}
         isStreaming={isStreaming}
+        isLiveSelected={isLiveSelected}
         config={chatConfig}
         onConfigChange={handleConfigChange}
         models={models}

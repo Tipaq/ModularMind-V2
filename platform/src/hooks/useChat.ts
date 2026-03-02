@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useExecutionActivities } from "./useExecutionActivities";
+import type { ExecutionActivity } from "./useExecutionActivities";
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "./useExecutionActivities";
 
@@ -19,8 +20,25 @@ export interface TokenUsage {
   total: number;
 }
 
+export interface MemoryEntry {
+  id: string;
+  content: string;
+  scope: string;
+  tier: string;
+  importance: number;
+  memory_type: string;
+  category: string;
+}
+
+export interface MessageExecutionData {
+  activities: ExecutionActivity[];
+  memoryEntries: MemoryEntry[];
+  tokenUsage: TokenUsage | null;
+}
+
 interface SendMessageResponse {
   execution_id?: string;
+  message_id?: string;
   stream_url?: string;
   user_message: Message;
   direct_response?: string;
@@ -28,6 +46,7 @@ interface SendMessageResponse {
   delegated_to?: string;
   is_ephemeral?: boolean;
   ephemeral_agent?: { id: string; name: string };
+  memory_entries?: MemoryEntry[];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,9 +73,16 @@ export function useChat(conversationId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [executionDataMap, setExecutionDataMap] = useState<Record<string, MessageExecutionData>>({});
   const sourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef("");
+
+  // Refs for accumulating data during a single message exchange
+  const currentAssistantIdRef = useRef("");
+  const currentExecutionIdRef = useRef("");
+  const currentMemoryRef = useRef<MemoryEntry[]>([]);
+  const currentTokenUsageRef = useRef<TokenUsage | null>(null);
 
   const {
     activities,
@@ -65,8 +91,65 @@ export function useChat(conversationId: string | null) {
     finalize: finalizeActivities,
   } = useExecutionActivities();
 
+  // Snapshot execution data into the map when streaming finishes
+  useEffect(() => {
+    if (!isStreaming && currentAssistantIdRef.current) {
+      const id = currentAssistantIdRef.current;
+      const execId = currentExecutionIdRef.current;
+      currentAssistantIdRef.current = "";
+      currentExecutionIdRef.current = "";
+      const data: MessageExecutionData = {
+        activities: [...activities],
+        memoryEntries: [...currentMemoryRef.current],
+        tokenUsage: currentTokenUsageRef.current,
+      };
+      setExecutionDataMap((prev) => ({ ...prev, [id]: data }));
+      // Persist to localStorage so execution data survives hard refresh.
+      // Key: mm:exec:<execution_id> for delegated executions,
+      //      mm:msg:<message_id>   for direct responses (no execution_id).
+      if (execId) {
+        try {
+          localStorage.setItem(`mm:exec:${execId}`, JSON.stringify(data));
+        } catch {
+          // Ignore storage errors (quota exceeded, etc.)
+        }
+      }
+    }
+  }, [isStreaming, activities]);
+
+  // Safety net: auto-restore any loaded message that has execution_id (delegated)
+  // or that matches a mm:msg:<id> localStorage key (direct response).
+  // Runs whenever messages change — handles hard refresh + any load path.
+  const restoredMsgIdsRef = useRef(new Set<string>());
+  useEffect(() => {
+    const toRestore: Record<string, MessageExecutionData> = {};
+    for (const msg of messages) {
+      if (msg.role !== "assistant" || restoredMsgIdsRef.current.has(msg.id)) continue;
+      restoredMsgIdsRef.current.add(msg.id);
+      try {
+        // Delegated execution: key = mm:exec:<execution_id>
+        const execId = msg.metadata?.execution_id as string | undefined;
+        if (execId) {
+          const stored = localStorage.getItem(`mm:exec:${execId}`);
+          if (stored) { toRestore[msg.id] = JSON.parse(stored) as MessageExecutionData; continue; }
+        }
+        // Direct response: key = mm:exec:<message_id> (message_id used as execId at save time)
+        const stored = localStorage.getItem(`mm:exec:${msg.id}`);
+        if (stored) { toRestore[msg.id] = JSON.parse(stored) as MessageExecutionData; }
+      } catch {
+        // Ignore parse/storage errors
+      }
+    }
+    if (Object.keys(toRestore).length > 0) {
+      setExecutionDataMap((prev) => ({ ...prev, ...toRestore }));
+    }
+  }, [messages]);
+
   const setInitialMessages = useCallback((msgs: Message[]) => {
     setMessages(msgs);
+    setSelectedMessageId(null);
+    restoredMsgIdsRef.current.clear();
+    setExecutionDataMap({});
   }, []);
 
   const sendMessage = useCallback(
@@ -78,6 +161,8 @@ export function useChat(conversationId: string | null) {
       setIsStreaming(true);
       streamBufferRef.current = "";
       resetActivities();
+      currentMemoryRef.current = [];
+      currentTokenUsageRef.current = null;
 
       // Optimistically add user message
       const tempUserMsg: Message = {
@@ -91,6 +176,8 @@ export function useChat(conversationId: string | null) {
 
       // Add placeholder assistant message
       const assistantId = `assistant-${Date.now()}`;
+      currentAssistantIdRef.current = assistantId;
+      setSelectedMessageId(assistantId);
       setMessages((prev) => [
         ...prev,
         { id: assistantId, role: "assistant" as const, content: "", created_at: new Date().toISOString(), metadata: {} },
@@ -116,20 +203,37 @@ export function useChat(conversationId: string | null) {
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to send message");
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+        currentAssistantIdRef.current = "";
         setIsStreaming(false);
         return;
       }
 
-      const { execution_id, user_message, direct_response, routing_strategy, delegated_to, ephemeral_agent } = res;
+      const { execution_id, message_id, user_message, direct_response, routing_strategy, delegated_to, ephemeral_agent, memory_entries: resMemory } = res;
+
+      // Track the stable key for localStorage persistence:
+      // - delegated executions: use execution_id
+      // - direct responses: use message_id (the persisted assistant message UUID)
+      if (execution_id) {
+        currentExecutionIdRef.current = execution_id;
+      } else if (message_id) {
+        currentExecutionIdRef.current = message_id;
+      }
+
+      // Capture memory entries for this message
+      if (resMemory && resMemory.length > 0) {
+        currentMemoryRef.current = resMemory;
+      }
 
       // Replace temp user message with real one
       setMessages((prev) => prev.map((m) => (m.id === tempUserMsg.id ? user_message : m)));
 
+      const routingDurationMs = Date.now() - sendStartMs;
+
       // Direct response (no execution needed)
       if (!execution_id && direct_response) {
-        handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy || "DIRECT_RESPONSE" });
-        handleTraceEvent({ type: "trace:supervisor_direct", preview: direct_response.slice(0, 150) });
-        const durationMs = Date.now() - sendStartMs;
+        handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy || "DIRECT_RESPONSE", duration_ms: routingDurationMs });
+        handleTraceEvent({ type: "trace:supervisor_direct", preview: direct_response.slice(0, 150), duration_ms: routingDurationMs });
+        const durationMs = routingDurationMs;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId ? { ...m, content: direct_response, metadata: { routing_strategy, delegated_to, duration_ms: durationMs } } : m,
@@ -143,13 +247,14 @@ export function useChat(conversationId: string | null) {
       if (!execution_id) {
         setError("No execution started");
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+        currentAssistantIdRef.current = "";
         setIsStreaming(false);
         return;
       }
 
       // Emit routing traces
       if (routing_strategy) {
-        handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy });
+        handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy, duration_ms: routingDurationMs });
         if (ephemeral_agent) {
           handleTraceEvent({ type: "trace:agent_created", agent_name: ephemeral_agent.name });
         }
@@ -179,7 +284,8 @@ export function useChat(conversationId: string | null) {
           }
 
           if (data.type === "tokens") {
-            setTokenUsage({ prompt: data.prompt_tokens || 0, completion: data.completion_tokens || 0, total: data.total_tokens || 0 });
+            const usage = { prompt: data.prompt_tokens || 0, completion: data.completion_tokens || 0, total: data.total_tokens || 0 };
+            currentTokenUsageRef.current = usage;
           }
 
           if (data.type === "complete") {
@@ -243,12 +349,18 @@ export function useChat(conversationId: string | null) {
     setIsStreaming(false);
   }, []);
 
+  // ID of the message currently being streamed (for live activity display)
+  const streamingMessageId = isStreaming ? currentAssistantIdRef.current : null;
+
   return {
     messages,
     isStreaming,
     error,
-    tokenUsage,
     activities,
+    executionDataMap,
+    selectedMessageId,
+    setSelectedMessageId,
+    streamingMessageId,
     sendMessage,
     setInitialMessages,
     cancelStream,

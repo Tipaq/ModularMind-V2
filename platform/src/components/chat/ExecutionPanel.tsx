@@ -3,10 +3,10 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Bot,
+  Brain,
   Crown,
   Cpu,
   Wrench,
-  Zap,
   ChevronDown,
   ChevronRight,
   Activity,
@@ -14,9 +14,20 @@ import {
   Pencil,
   Loader2,
   Settings2,
+  MousePointerClick,
 } from "lucide-react";
-import { Badge, Button, Switch, Separator } from "@modularmind/ui";
-import type { ExecutionActivity, TokenUsage } from "@/hooks/useChat";
+import {
+  Badge,
+  Button,
+  Switch,
+  Separator,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@modularmind/ui";
+import type { ExecutionActivity, MemoryEntry, MessageExecutionData } from "@/hooks/useChat";
 import type { EngineModel, SupervisorLayer } from "@/hooks/useChatConfig";
 import { ExecutionActivityList } from "./ExecutionActivity";
 import { ToolCallCard } from "./ToolCallCard";
@@ -29,9 +40,10 @@ interface ChatConfig {
 }
 
 interface ExecutionPanelProps {
-  activities: ExecutionActivity[];
-  tokenUsage: TokenUsage | null;
+  selectedExecution: MessageExecutionData | null;
+  liveActivities: ExecutionActivity[];
   isStreaming: boolean;
+  isLiveSelected: boolean;
   config: ChatConfig;
   onConfigChange: (patch: Partial<ChatConfig>) => void;
   models: EngineModel[];
@@ -236,17 +248,21 @@ function ModelSectionContent({
         </div>
       ) : (
         <>
-          <select
-            value={selectedModelId || ""}
-            onChange={(e) => onSelectModel(e.target.value || null)}
-            className="w-full text-sm bg-muted/50 border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
+          <Select
+            value={selectedModelId ?? ""}
+            onValueChange={(v) => onSelectModel(v || null)}
           >
-            {availableModels.map((m) => (
-              <option key={m.id} value={toEngineModelId(m)}>
-                {m.display_name || m.name} ({m.provider})
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full text-sm">
+              <SelectValue placeholder="Select a model..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availableModels.map((m) => (
+                <SelectItem key={m.id} value={toEngineModelId(m)}>
+                  {m.display_name || m.name} ({m.provider})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <div className="flex items-center justify-between">
             <div>
@@ -265,42 +281,109 @@ function ModelSectionContent({
   );
 }
 
+// ── Memory Section ────────────────────────────────────────────
+
+const SCOPE_LABELS: Record<string, string> = {
+  cross_conversation: "Cross-conv",
+  user_profile: "Profile",
+  agent: "Agent",
+  conversation: "Conversation",
+};
+
+const IMPORTANCE_COLORS: Record<string, string> = {
+  high: "text-warning",
+  medium: "text-muted-foreground",
+  low: "text-muted-foreground/60",
+};
+
+function importanceLevel(score: number): string {
+  if (score >= 0.7) return "high";
+  if (score >= 0.4) return "medium";
+  return "low";
+}
+
+function MemorySectionContent({ entries }: { entries: MemoryEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">No memories retrieved for this message.</p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {entries.map((entry) => {
+        const level = importanceLevel(entry.importance);
+        return (
+          <div
+            key={entry.id}
+            className="border border-border/50 rounded-lg p-2.5 space-y-1.5"
+          >
+            <p className="text-xs leading-relaxed">{entry.content}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {entry.category && (
+                <Badge variant="outline" className="text-[10px] h-4">
+                  {entry.category}
+                </Badge>
+              )}
+              <Badge variant="secondary" className="text-[10px] h-4">
+                {SCOPE_LABELS[entry.scope] || entry.scope}
+              </Badge>
+              <span className={`text-[10px] ${IMPORTANCE_COLORS[level]}`}>
+                {(entry.importance * 100).toFixed(0)}%
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Main Panel ────────────────────────────────────────────────
 
 export function ExecutionPanel({
-  activities,
-  tokenUsage,
+  selectedExecution,
+  liveActivities,
   isStreaming,
+  isLiveSelected,
   config,
   onConfigChange,
   models,
   supervisorLayers,
   onUpdateLayer,
 }: ExecutionPanelProps) {
+  // Use live activities when the streaming message is selected, otherwise use snapshot
+  const displayActivities = isLiveSelected && isStreaming
+    ? liveActivities
+    : selectedExecution?.activities ?? [];
+
+  const memoryEntries = selectedExecution?.memoryEntries ?? [];
+  const tokenUsage = selectedExecution?.tokenUsage ?? null;
+
   // Extract tool calls from activities
   const toolCalls = useMemo(
-    () => activities.filter((a) => a.type === "tool" && a.toolData),
-    [activities],
+    () => displayActivities.filter((a) => a.type === "tool" && a.toolData),
+    [displayActivities],
   );
 
   // Extract active agent info from delegation activities
   const activeAgent = useMemo(() => {
-    const delegation = [...activities].reverse().find((a) => a.type === "delegation");
+    const delegation = [...displayActivities].reverse().find((a) => a.type === "delegation");
     if (!delegation) return null;
     return {
       name: delegation.agentName || delegation.label.replace("Delegating to ", ""),
       isEphemeral: delegation.isEphemeral,
       status: delegation.status,
     };
-  }, [activities]);
+  }, [displayActivities]);
 
   // Extract step data for intermediate I/O
   const steps = useMemo(
-    () => activities.filter((a) => a.type === "step"),
-    [activities],
+    () => displayActivities.filter((a) => a.type === "step"),
+    [displayActivities],
   );
 
-  const hasExecutionContent = activities.length > 0 || isStreaming || tokenUsage;
+  const hasExecutionContent = displayActivities.length > 0 || memoryEntries.length > 0 || tokenUsage;
 
   return (
     <div className="w-80 h-full border-l flex flex-col bg-card overflow-hidden shrink-0">
@@ -335,10 +418,20 @@ export function ExecutionPanel({
           />
         </CollapsibleSection>
 
-        {/* Execution sections — only show when there's data */}
-        {hasExecutionContent && (
+        <Separator />
+
+        {/* Per-message execution details */}
+        {hasExecutionContent ? (
           <>
-            <Separator />
+            {/* Memory section */}
+            <CollapsibleSection
+              title="Memory"
+              icon={Brain}
+              defaultOpen={true}
+              badge={memoryEntries.length > 0 ? `${memoryEntries.length}` : undefined}
+            >
+              <MemorySectionContent entries={memoryEntries} />
+            </CollapsibleSection>
 
             {/* Token Usage */}
             {tokenUsage && (
@@ -355,13 +448,21 @@ export function ExecutionPanel({
             )}
 
             {/* Activity Stream */}
-            <CollapsibleSection title="Activity" icon={Activity} defaultOpen={true} badge={activities.length > 0 ? `${activities.length}` : undefined}>
-              <ExecutionActivityList
-                activities={activities}
-                isStreaming={isStreaming}
-                hasContent={true}
-              />
-            </CollapsibleSection>
+            {displayActivities.length > 0 && (
+              <CollapsibleSection
+                title="Activity"
+                icon={Activity}
+                defaultOpen={true}
+                badge={`${displayActivities.length}`}
+              >
+                <ExecutionActivityList
+                  activities={displayActivities}
+                  isStreaming={isLiveSelected && isStreaming}
+                  hasContent={true}
+                  flat
+                />
+              </CollapsibleSection>
+            )}
 
             {/* Active Agent */}
             {activeAgent && (
@@ -410,17 +511,14 @@ export function ExecutionPanel({
               </CollapsibleSection>
             )}
           </>
-        )}
-
-        {/* Empty execution state */}
-        {!hasExecutionContent && (
-          <>
-            <Separator />
-            <div className="flex flex-col items-center justify-center h-24 text-muted-foreground">
-              <Zap className="h-5 w-5 mb-1.5 opacity-30" />
-              <p className="text-xs">Send a message to see execution details</p>
-            </div>
-          </>
+        ) : (
+          /* Empty state — no message selected or no data */
+          <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+            <MousePointerClick className="h-5 w-5 mb-2 opacity-30" />
+            <p className="text-xs text-center px-4">
+              Click on a response to see execution details
+            </p>
+          </div>
         )}
       </div>
     </div>

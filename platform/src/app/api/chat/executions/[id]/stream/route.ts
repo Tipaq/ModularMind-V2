@@ -36,6 +36,9 @@ export async function GET(
   if (INTERNAL_TOKEN) {
     headers["Authorization"] = `Bearer ${INTERNAL_TOKEN}`;
   }
+  if (session.user?.email) {
+    headers["X-Platform-User-Email"] = session.user.email;
+  }
 
   const engineRes = await fetch(engineUrl, {
     headers,

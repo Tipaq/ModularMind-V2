@@ -48,6 +48,7 @@ interface EngineRequestInit extends Omit<RequestInit, "headers"> {
 export async function engineFetch(
   path: string,
   init: EngineRequestInit = {},
+  userEmail?: string,
 ): Promise<Response> {
   const url = `${ENGINE_URL}${path}`;
 
@@ -57,6 +58,12 @@ export async function engineFetch(
 
   if (INTERNAL_TOKEN) {
     headers["Authorization"] = `Bearer ${INTERNAL_TOKEN}`;
+  }
+
+  // Forward the real Platform user email so the Engine can resolve
+  // the actual user_id (instead of using the "platform-service" user).
+  if (userEmail) {
+    headers["X-Platform-User-Email"] = userEmail;
   }
 
   if (init.body && !headers["Content-Type"]) {

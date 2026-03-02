@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const qs = searchParams.toString();
   const path = `/api/v1/conversations${qs ? `?${qs}` : ""}`;
 
-  const res = await engineFetch(path);
+  const res = await engineFetch(path, {}, session.user?.email ?? undefined);
   const data = await res.json();
 
   return NextResponse.json(data, { status: res.status });
@@ -24,10 +24,11 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
-  const res = await engineFetch("/api/v1/conversations", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  const res = await engineFetch(
+    "/api/v1/conversations",
+    { method: "POST", body: JSON.stringify(body) },
+    session.user?.email ?? undefined,
+  );
   const data = await res.json();
 
   return NextResponse.json(data, { status: res.status });

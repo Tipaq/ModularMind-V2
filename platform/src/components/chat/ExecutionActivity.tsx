@@ -108,9 +108,11 @@ interface Props {
   activities: ExecutionActivity[];
   isStreaming: boolean;
   hasContent: boolean;
+  /** When true, skip the collapsible summary and always show all items (used inside the panel). */
+  flat?: boolean;
 }
 
-export function ExecutionActivityList({ activities, isStreaming, hasContent }: Props) {
+export function ExecutionActivityList({ activities, isStreaming, hasContent, flat }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   if (activities.length === 0 && !isStreaming) return null;
@@ -142,7 +144,18 @@ export function ExecutionActivityList({ activities, isStreaming, hasContent }: P
     );
   }
 
-  // After completion: collapsible summary
+  // flat mode (inside panel): show all items directly, no inner collapse
+  if (flat) {
+    return (
+      <div className="space-y-0.5">
+        {activities.map((a) => (
+          <ActivityItem key={a.id} activity={a} />
+        ))}
+      </div>
+    );
+  }
+
+  // After completion: collapsible summary (used in chat bubble)
   const llmCount = activities.filter((a) => a.type === "llm").length;
   const toolCount = activities.filter((a) => a.type === "tool").length;
   const totalMs = activities.reduce((sum, a) => sum + (a.durationMs || 0), 0);
@@ -153,16 +166,24 @@ export function ExecutionActivityList({ activities, isStreaming, hasContent }: P
 
   return (
     <div>
+      {/* Button mirrors ActivityItem layout: [status-col] [icon-col] [content-col] */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        className="flex items-start gap-2 py-1 w-full text-muted-foreground hover:text-foreground transition-colors"
       >
-        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <span>{parts.join(", ")}</span>
-        <span>&middot; {formatDuration(totalMs)}</span>
+        <div className="mt-0.5 shrink-0">
+          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </div>
+        <div className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium">{parts.join(", ")}</span>
+            <span className="ml-auto text-[10px]">&middot; {formatDuration(totalMs)}</span>
+          </div>
+        </div>
       </button>
       {expanded && (
-        <div className="mt-1 space-y-0.5 pl-1 border-l-2 border-border/50">
+        <div className="mt-0.5 space-y-0.5">
           {activities.map((a) => (
             <ActivityItem key={a.id} activity={a} />
           ))}

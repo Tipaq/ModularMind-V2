@@ -11,7 +11,7 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const res = await engineFetch(`/api/v1/executions/${id}`);
+  const res = await engineFetch(`/api/v1/executions/${id}`, {}, session.user?.email ?? undefined);
   const data = await res.json();
 
   return NextResponse.json(data, { status: res.status });
@@ -26,9 +26,11 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const res = await engineFetch(`/api/v1/executions/${id}/stop`, {
-    method: "POST",
-  });
+  const res = await engineFetch(
+    `/api/v1/executions/${id}/stop`,
+    { method: "POST" },
+    session.user?.email ?? undefined,
+  );
   const data = await res.json();
 
   return NextResponse.json(data, { status: res.status });

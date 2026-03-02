@@ -7,7 +7,7 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const res = await engineFetch("/api/v1/internal/supervisor/layers");
+  const res = await engineFetch("/api/v1/internal/supervisor/layers", {}, session.user?.email ?? undefined);
   if (!res.ok) {
     return NextResponse.json({ layers: [] }, { status: 200 });
   }
