@@ -2,7 +2,7 @@
 # ModularMind V2 — Development Commands
 # =============================================================================
 
-.PHONY: help setup dev dev-chat dev-ops dev-platform dev-engine dev-worker dev-infra build build-docker build-platform deploy deploy-platform test test-cov lint lint-fix migrate migrate-new db-push db-studio clean
+.PHONY: help setup dev dev-chat dev-ops dev-platform dev-engine dev-worker dev-infra dev-monitoring stop-monitoring build build-docker build-platform build-mcp-sidecars deploy deploy-platform test test-cov lint lint-fix migrate migrate-new db-push db-studio clean
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -39,6 +39,14 @@ dev-worker: ## Start Worker process (auto-reload)
 dev-infra: ## Start infra only (db, redis, qdrant, ollama)
 	docker compose -f docker/docker-compose.dev.yml up db redis qdrant ollama
 
+dev-monitoring: ## Start monitoring (Prometheus + Grafana + exporters)
+	docker compose -f docker/docker-compose.monitoring.yml up -d
+	@echo "Grafana:    http://localhost:3333  (admin / modularmind)"
+	@echo "Prometheus: http://localhost:9090"
+
+stop-monitoring: ## Stop monitoring stack
+	docker compose -f docker/docker-compose.monitoring.yml down
+
 # --- Build ---
 
 build: ## Build all apps
@@ -49,6 +57,15 @@ build-docker: ## Build Docker images (client deployment)
 
 build-platform: ## Build Platform Docker image
 	docker compose -f docker/docker-compose.platform.yml build
+
+build-mcp-sidecars: ## Build MCP sidecar Docker images
+	docker build -t modularmind/mcp-node-proxy:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.node-proxy engine/mcp-sidecars/mcp-sidecars/
+	docker build -t modularmind/mcp-brave-search:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.brave-search engine/mcp-sidecars/mcp-sidecars/
+	docker build -t modularmind/mcp-duckduckgo:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.duckduckgo engine/mcp-sidecars/mcp-sidecars/
+	docker build -t modularmind/mcp-qdrant:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.qdrant engine/mcp-sidecars/mcp-sidecars/
+	docker build -t modularmind/mcp-motherduck:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.motherduck engine/mcp-sidecars/mcp-sidecars/
+	docker build -t modularmind/mcp-puppeteer:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.puppeteer engine/mcp-sidecars/mcp-sidecars/
+	docker build -t modularmind/mcp-whatsapp:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.whatsapp engine/mcp-sidecars/mcp-sidecars/
 
 deploy: ## Deploy client stack
 	docker compose -f docker/docker-compose.yml up -d
