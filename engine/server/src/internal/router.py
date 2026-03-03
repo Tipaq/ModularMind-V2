@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from src.auth import CurrentUser, RequireAdmin
-from src.auth.models import User, UserRole, UserSource
+from src.auth.models import User, UserRole
 from src.domain_config import get_config_provider
 from src.infra.constants import RATE_LIMIT_INTERNAL
 from src.infra.database import DbSession
@@ -237,7 +237,6 @@ async def sync_users(request: Request, body: UserSyncRequest, db: DbSession) -> 
             # Link to platform if not yet linked
             if existing.platform_user_id != item.id:
                 existing.platform_user_id = item.id
-                existing.source = UserSource.PLATFORM
                 changed = True
             if changed:
                 updated += 1
@@ -249,18 +248,17 @@ async def sync_users(request: Request, body: UserSyncRequest, db: DbSession) -> 
                 hashed_password=item.hashed_password,
                 role=role,
                 is_active=item.is_active,
-                source=UserSource.PLATFORM,
                 platform_user_id=item.id,
             )
             db.add(new_user)
             created += 1
 
     # Deactivate platform-synced users not in the current list.
-    # LOCAL users (CLI-created) are never touched.
+    # Users without platform_user_id (CLI-created) are never touched.
     if synced_platform_ids:
         result = await db.execute(
             select(User).where(
-                User.source == UserSource.PLATFORM,
+                User.platform_user_id.isnot(None),
                 User.is_active == True,
                 User.platform_user_id.notin_(synced_platform_ids),
             )
@@ -269,7 +267,7 @@ async def sync_users(request: Request, body: UserSyncRequest, db: DbSession) -> 
         # No users synced — deactivate ALL platform users
         result = await db.execute(
             select(User).where(
-                User.source == UserSource.PLATFORM,
+                User.platform_user_id.isnot(None),
                 User.is_active == True,
             )
         )

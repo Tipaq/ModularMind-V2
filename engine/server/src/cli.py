@@ -51,13 +51,12 @@ async def _create_admin_async(email: str, password: str | None = None) -> str:
         password = password or generate_password()
 
         # CLI bypass: skip password strength validation when explicitly provided
-        from src.auth.models import User, UserSource
+        from src.auth.models import User
 
         user = User(
             email=email,
             hashed_password=auth_service.hash_password(password),
             role=UserRole.OWNER,
-            source=UserSource.LOCAL,
             is_active=True,
         )
         session.add(user)
