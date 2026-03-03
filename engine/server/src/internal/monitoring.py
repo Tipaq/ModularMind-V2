@@ -627,7 +627,7 @@ async def get_live_executions(user: CurrentUser) -> LiveExecutionsResponse:
         ExecutionStatus.STOPPED,
     ]
 
-    def _to_summary(run: ExecutionRun, email: str, now: datetime) -> ExecutionSummary:
+    def _to_summary(run: ExecutionRun, email: str | None, now: datetime) -> ExecutionSummary:
         started = run.started_at
         completed = run.completed_at
         if completed and started:
@@ -642,7 +642,7 @@ async def get_live_executions(user: CurrentUser) -> LiveExecutionsResponse:
             execution_type=run.execution_type.value,
             status=run.status.value,
             user_id=run.user_id,
-            user_email=email,
+            user_email=email or "unknown",
             agent_id=run.agent_id,
             graph_id=run.graph_id,
             model=run.model,
@@ -662,26 +662,35 @@ async def get_live_executions(user: CurrentUser) -> LiveExecutionsResponse:
         now = datetime.now(UTC).replace(tzinfo=None)
         one_hour_ago = now - timedelta(hours=1)
 
-        active_rows = (await db.execute(
-            select(ExecutionRun, User.email)
-            .join(User, ExecutionRun.user_id == User.id)
+        # Query execution runs directly (no JOIN) to avoid silent row elimination
+        # when a user_id has no matching row in users (e.g. stale FK or deleted user).
+        active_runs = (await db.execute(
+            select(ExecutionRun)
             .where(ExecutionRun.status.in_(_ACTIVE_STATUSES))
             .order_by(ExecutionRun.created_at.desc())
-        )).all()
+        )).scalars().all()
 
-        recent_rows = (await db.execute(
-            select(ExecutionRun, User.email)
-            .join(User, ExecutionRun.user_id == User.id)
+        recent_runs = (await db.execute(
+            select(ExecutionRun)
             .where(
                 ExecutionRun.status.in_(_TERMINAL_STATUSES),
                 ExecutionRun.created_at >= one_hour_ago,
             )
             .order_by(ExecutionRun.created_at.desc())
             .limit(20)
-        )).all()
+        )).scalars().all()
 
-        active_summaries = [_to_summary(run, email, now) for run, email in active_rows]
-        recent_summaries = [_to_summary(run, email, now) for run, email in recent_rows]
+        # Batch-fetch emails for all referenced user IDs in one query
+        all_user_ids = list({r.user_id for r in [*active_runs, *recent_runs]})
+        email_map: dict[str, str] = {}
+        if all_user_ids:
+            user_rows = (await db.execute(
+                select(User.id, User.email).where(User.id.in_(all_user_ids))
+            )).all()
+            email_map = {uid: email for uid, email in user_rows}
+
+        active_summaries = [_to_summary(r, email_map.get(r.user_id), now) for r in active_runs]
+        recent_summaries = [_to_summary(r, email_map.get(r.user_id), now) for r in recent_runs]
 
     return LiveExecutionsResponse(
         active=active_summaries,

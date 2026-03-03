@@ -27,10 +27,12 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
     - user_id: str
     - ab_model_override: str (optional)
     """
+    from src.executions.scheduler import fair_scheduler
     from src.executions.service import ExecutionService
     from src.infra.database import async_session_maker
 
     execution_id = data.get("execution_id", "")
+    user_id = data.get("user_id", "")
     if not execution_id:
         logger.error("graph_execution_handler: missing execution_id")
         return
@@ -83,6 +85,18 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
             )
             await session.commit()
             raise  # Re-raise to trigger retry/DLQ
+
+        finally:
+            # Release the fair-scheduler slot so the global/team counters stay accurate.
+            # This runs whether the execution succeeded, failed, or was cancelled.
+            if user_id and execution_id:
+                try:
+                    await fair_scheduler.release(user_id, execution_id)
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to release scheduler slot for execution %s: %s",
+                        execution_id, exc,
+                    )
 
 
 # --- Persist assistant message after execution ---
