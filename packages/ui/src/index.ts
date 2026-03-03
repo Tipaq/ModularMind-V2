@@ -1,5 +1,12 @@
+// Auth store
+export { useAuthStore } from "./stores/auth";
+export type { User, Role } from "./stores/auth";
+
+// Auth hook
+export { useAuth } from "./hooks/useAuth";
+
 // Utilities
-export { cn, formatBytes, formatDuration, formatNumber, relativeTime, stripProvider, isLocalModel, formatDurationMs } from "./lib/utils";
+export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTime, stripProvider, isLocalModel, formatDurationMs, formatCost } from "./lib/utils";
 
 // Color constants
 export { ACTIVITY_COLORS, CHANNEL_COLORS, STATUS_COLORS, ROLE_COLORS, HEALTH_COLORS } from "./lib/colors";
@@ -34,6 +41,12 @@ export { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/tabs";
 export { Textarea } from "./components/textarea";
 export type { TextareaProps } from "./components/textarea";
 export { AppearanceCard } from "./components/appearance-card";
+export { ErrorBoundary } from "./components/error-boundary";
+export { LoginForm } from "./components/login-form";
+export type { LoginFormProps } from "./components/login-form";
+export { ProfilePage } from "./components/profile-page";
+export type { ProfilePageProps } from "./components/profile-page";
+export { SettingsPage } from "./components/settings-page";
 export { ThemeCustomizer } from "./components/theme-customizer";
 export { ThemeToggle } from "./components/theme-toggle";
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/tooltip";

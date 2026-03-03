@@ -30,10 +30,16 @@
   },
   "peerDependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.0",
+    "@modularmind/api-client": "workspace:*",
+    "react-router-dom": "^7.0.0"
   },
   "devDependencies": {
+    "@modularmind/api-client": "workspace:*",
     "@types/react": "^19.0.0",
-    "typescript": "^5.7.0"
+    "react-router-dom": "^7.0.0",
+    "typescript": "^5.7.0",
+    "zustand": "^5.0.0"
   }
 }

@@ -1,3 +1,5 @@
+"use client";
+
 import { User, Settings, LogOut, ChevronsUpDown } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Avatar, AvatarFallback } from "./avatar";

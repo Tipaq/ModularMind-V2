@@ -27,6 +27,9 @@ export function formatNumber(num: number): string {
   return num.toString();
 }
 
+/** Alias for formatNumber — formats token counts with K/M suffixes. */
+export const formatTokens = formatNumber;
+
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -68,4 +71,10 @@ export function isLocalModel(modelId: string): boolean {
 export function formatDurationMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+export function formatCost(cost: number | null): string {
+  if (cost === null || cost === undefined) return "--";
+  if (cost < 0.01) return "<$0.01";
+  return `$${cost.toFixed(2)}`;
 }
