@@ -181,6 +181,30 @@ class AgentMetricsItem(BaseModel):
     error_rate: float
 
 
+class ExecutionSummary(BaseModel):
+    id: str
+    execution_type: str
+    status: str
+    user_id: str
+    user_email: str
+    agent_id: str | None
+    graph_id: str | None
+    model: str | None
+    tokens_prompt: int
+    tokens_completion: int
+    input_preview: str
+    started_at: str | None
+    created_at: str
+    completed_at: str | None
+    duration_seconds: float | None
+
+
+class LiveExecutionsResponse(BaseModel):
+    active: list[ExecutionSummary]
+    recent: list[ExecutionSummary]
+    total_active: int
+
+
 RANGE_MAP = {
     "15m": 900,
     "1h": 3600,
@@ -574,3 +598,93 @@ async def get_agent_metrics(user: CurrentUser) -> list[AgentMetricsItem]:
             ))
 
     return results
+
+
+@router.get("/executions/live", dependencies=[RequireAdmin])
+async def get_live_executions(user: CurrentUser) -> LiveExecutionsResponse:
+    """Active and recently completed executions across all users.
+
+    Active: pending / running / paused / awaiting_approval.
+    Recent: last 20 completed / failed / stopped in the past hour.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from src.auth.models import User
+    from src.executions.models import ExecutionRun, ExecutionStatus
+    from src.infra.database import get_db_readonly
+
+    _ACTIVE_STATUSES = [
+        ExecutionStatus.PENDING,
+        ExecutionStatus.RUNNING,
+        ExecutionStatus.PAUSED,
+        ExecutionStatus.AWAITING_APPROVAL,
+    ]
+    _TERMINAL_STATUSES = [
+        ExecutionStatus.COMPLETED,
+        ExecutionStatus.FAILED,
+        ExecutionStatus.STOPPED,
+    ]
+
+    def _to_summary(run: ExecutionRun, email: str, now: datetime) -> ExecutionSummary:
+        started = run.started_at
+        completed = run.completed_at
+        if completed and started:
+            duration: float | None = (completed - started).total_seconds()
+        elif started and run.status in (ExecutionStatus.RUNNING, ExecutionStatus.PAUSED):
+            duration = (now - started).total_seconds()
+        else:
+            duration = None
+
+        return ExecutionSummary(
+            id=run.id,
+            execution_type=run.execution_type.value,
+            status=run.status.value,
+            user_id=run.user_id,
+            user_email=email,
+            agent_id=run.agent_id,
+            graph_id=run.graph_id,
+            model=run.model,
+            tokens_prompt=run.tokens_prompt,
+            tokens_completion=run.tokens_completion,
+            input_preview=run.input_prompt[:100],
+            started_at=started.isoformat() if started else None,
+            created_at=run.created_at.isoformat(),
+            completed_at=completed.isoformat() if completed else None,
+            duration_seconds=round(duration, 1) if duration is not None else None,
+        )
+
+    active_summaries: list[ExecutionSummary] = []
+    recent_summaries: list[ExecutionSummary] = []
+
+    async for db in get_db_readonly():
+        now = datetime.now(UTC).replace(tzinfo=None)
+        one_hour_ago = now - timedelta(hours=1)
+
+        active_rows = (await db.execute(
+            select(ExecutionRun, User.email)
+            .join(User, ExecutionRun.user_id == User.id)
+            .where(ExecutionRun.status.in_(_ACTIVE_STATUSES))
+            .order_by(ExecutionRun.created_at.desc())
+        )).all()
+
+        recent_rows = (await db.execute(
+            select(ExecutionRun, User.email)
+            .join(User, ExecutionRun.user_id == User.id)
+            .where(
+                ExecutionRun.status.in_(_TERMINAL_STATUSES),
+                ExecutionRun.created_at >= one_hour_ago,
+            )
+            .order_by(ExecutionRun.created_at.desc())
+            .limit(20)
+        )).all()
+
+        active_summaries = [_to_summary(run, email, now) for run, email in active_rows]
+        recent_summaries = [_to_summary(run, email, now) for run, email in recent_rows]
+
+    return LiveExecutionsResponse(
+        active=active_summaries,
+        recent=recent_summaries,
+        total_active=len(active_summaries),
+    )
