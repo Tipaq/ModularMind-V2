@@ -13,6 +13,7 @@ export interface Collection {
   scope: RAGScope;
   allowed_groups: string[];
   owner_user_id: string | null;
+  metadata: Record<string, unknown> | null;
 }
 
 export interface CollectionCreate {
