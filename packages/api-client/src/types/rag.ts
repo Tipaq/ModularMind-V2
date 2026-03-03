@@ -22,23 +22,15 @@ export interface CollectionCreate {
   scope?: RAGScope;
   allowed_groups?: string[];
   owner_user_id?: string | null;
-  chunk_size?: number;
-  chunk_overlap?: number;
 }
 
 export interface CollectionUpdate {
   name?: string;
   description?: string | null;
-  chunk_size?: number;
-  chunk_overlap?: number;
 }
 
-export interface CollectionListResponse {
-  items: Collection[];
-  total: number;
-  page: number;
-  page_size: number;
-}
+import type { PaginatedResponse } from './common';
+export type CollectionListResponse = PaginatedResponse<Collection>;
 
 export interface KnowledgeDocument {
   id: string;
@@ -52,12 +44,7 @@ export interface KnowledgeDocument {
   created_at: string;
 }
 
-export interface DocumentListResponse {
-  items: KnowledgeDocument[];
-  total: number;
-  page: number;
-  page_size: number;
-}
+export type DocumentListResponse = PaginatedResponse<KnowledgeDocument>;
 
 export interface RAGSearchRequest {
   query: string;

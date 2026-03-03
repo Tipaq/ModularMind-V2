@@ -185,3 +185,73 @@ export interface LiveExecutionsData {
   recent: ExecutionSummary[];
   total_active: number;
 }
+
+// ─── Pipelines ─────────────────────────────────────────────────────────────────
+
+export interface StreamGroupInfo {
+  name: string;
+  pending: number;
+  consumers: number;
+}
+
+export interface StreamDetail {
+  length: number;
+  groups: StreamGroupInfo[];
+}
+
+export interface DLQMessage {
+  id: string;
+  original_stream: string;
+  original_id: string;
+  error: string;
+  data: string;
+}
+
+export interface DocumentStatusCounts {
+  pending: number;
+  processing: number;
+  ready: number;
+  failed: number;
+  total: number;
+}
+
+export interface ActiveDocument {
+  id: string;
+  filename: string;
+  collection_id: string;
+  collection_name: string;
+  status: string;
+  error_message: string | null;
+  size_bytes: number | null;
+  created_at: string;
+}
+
+export interface MemoryPipelineData {
+  memory_raw: StreamDetail;
+  memory_extracted: StreamDetail;
+  memory_scored: StreamDetail | null;
+  memory_dlq: StreamDetail;
+  scorer_enabled: boolean;
+  total_entries: number;
+  entries_by_tier: Record<string, number>;
+  entries_by_type: Record<string, number>;
+  avg_importance: number;
+}
+
+export interface KnowledgePipelineData {
+  documents_stream: StreamDetail;
+  status_counts: DocumentStatusCounts;
+  active_documents: ActiveDocument[];
+}
+
+export interface PipelineCounters {
+  facts_extracted_total: number;
+  embeddings_stored_total: number;
+}
+
+export interface PipelinesData {
+  memory: MemoryPipelineData;
+  knowledge: KnowledgePipelineData;
+  dlq_messages: DLQMessage[];
+  counters: PipelineCounters;
+}

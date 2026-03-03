@@ -7,7 +7,7 @@ export type ExecutionStatus =
   | 'stopped'
   | 'failed';
 
-export type ExecutionType = 'agent' | 'graph';
+export type ExecutionType = 'agent' | 'graph' | 'supervisor';
 
 export interface ExecutionStep {
   id: string;
@@ -16,10 +16,13 @@ export interface ExecutionStep {
   node_id: string | null;
   node_type: string | null;
   node_name: string | null;
+  parent_step_id: string | null;
   status: ExecutionStatus;
   input_data: Record<string, unknown> | null;
   output_data: Record<string, unknown> | null;
   error_message: string | null;
+  tokens_prompt: number;
+  tokens_completion: number;
   started_at: string | null;
   completed_at: string | null;
   duration_ms: number | null;
@@ -31,6 +34,8 @@ export interface ExecutionRun {
   execution_type: ExecutionType;
   agent_id: string | null;
   graph_id: string | null;
+  session_id: string | null;
+  user_id: string;
   status: ExecutionStatus;
   config_version: number | null;
   config_hash: string | null;
@@ -38,8 +43,8 @@ export interface ExecutionRun {
   input_data: Record<string, unknown>;
   output_data: Record<string, unknown> | null;
   error_message: string | null;
-  thread_id: string;
-  current_node_id: string | null;
+  tokens_prompt: number;
+  tokens_completion: number;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;

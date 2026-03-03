@@ -86,13 +86,8 @@ export interface GraphUpdateInput {
   change_note?: string;
 }
 
-export interface PaginatedGraphList {
-  items: GraphListItem[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
+import type { PaginatedResponse } from './common';
+export type PaginatedGraphList = PaginatedResponse<GraphListItem>;
 
 export interface ValidationIssue {
   type: 'error' | 'warning';

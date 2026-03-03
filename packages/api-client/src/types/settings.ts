@@ -7,6 +7,10 @@ export interface LocalSettings {
   auto_sync: boolean;
   sync_interval_minutes: number;
   ollama_keep_alive: string;
+  memory_embedding_provider: string;
+  memory_embedding_model: string;
+  knowledge_embedding_provider: string;
+  knowledge_embedding_model: string;
 }
 
 // ─── MCP Servers ─────────────────────────────────────────────────────────────

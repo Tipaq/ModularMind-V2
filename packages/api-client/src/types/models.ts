@@ -51,6 +51,8 @@ export interface PaginatedCatalog {
   page_size: number;
   total_pages: number;
 }
+// Note: PaginatedCatalog uses `models` key instead of `items`, so it cannot
+// extend the generic PaginatedResponse<T>. This is intentional.
 
 export interface ProviderConfig {
   provider: ModelProvider;
@@ -69,16 +71,16 @@ export interface TokenUsage {
 }
 
 export const PROVIDER_INFO: Record<ModelProvider, { name: string; color: string }> = {
-  ollama: { name: 'Ollama', color: 'bg-gray-500' },
-  openai: { name: 'OpenAI', color: 'bg-green-500' },
-  anthropic: { name: 'Anthropic', color: 'bg-orange-500' },
-  google: { name: 'Google', color: 'bg-blue-500' },
-  mistral: { name: 'Mistral', color: 'bg-indigo-500' },
-  cohere: { name: 'Cohere', color: 'bg-purple-500' },
-  groq: { name: 'Groq', color: 'bg-amber-500' },
+  ollama: { name: 'Ollama', color: 'bg-muted' },
+  openai: { name: 'OpenAI', color: 'bg-success' },
+  anthropic: { name: 'Anthropic', color: 'bg-warning' },
+  google: { name: 'Google', color: 'bg-info' },
+  mistral: { name: 'Mistral', color: 'bg-accent' },
+  cohere: { name: 'Cohere', color: 'bg-secondary' },
+  groq: { name: 'Groq', color: 'bg-primary' },
 };
 
-const DEFAULT_PROVIDER = { name: 'Unknown', color: 'bg-gray-400' };
+const DEFAULT_PROVIDER = { name: 'Unknown', color: 'bg-muted' };
 export function getProviderInfo(provider: string): { name: string; color: string } {
   return PROVIDER_INFO[provider as ModelProvider] ?? DEFAULT_PROVIDER;
 }
