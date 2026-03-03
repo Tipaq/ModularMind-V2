@@ -204,8 +204,8 @@ def record_llm_latency(duration_s: float) -> None:
         r = get_sync_redis_client()
         r.rpush("metrics:llm_raw_latencies", str(duration_s))
         r.expire("metrics:llm_raw_latencies", METRICS_TTL_SECONDS)
-    except Exception:
-        pass  # Never break execution for metrics
+    except Exception as e:
+        logger.debug("record_llm_latency failed: %s", e)
 
 
 def record_llm_tps(tps: float) -> None:
@@ -215,8 +215,8 @@ def record_llm_tps(tps: float) -> None:
         r = get_sync_redis_client()
         r.rpush("metrics:llm_raw_tps", str(tps))
         r.expire("metrics:llm_raw_tps", METRICS_TTL_SECONDS)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("record_llm_tps failed: %s", e)
 
 
 def record_llm_ttft(ttft_s: float) -> None:
@@ -226,8 +226,8 @@ def record_llm_ttft(ttft_s: float) -> None:
         r = get_sync_redis_client()
         r.rpush("metrics:llm_raw_ttft", str(ttft_s))
         r.expire("metrics:llm_raw_ttft", METRICS_TTL_SECONDS)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("record_llm_ttft failed: %s", e)
 
 
 async def _drain_llm_metrics(redis) -> tuple[list[float], list[float], list[float]]:
@@ -395,7 +395,8 @@ async def get_thresholds(r=None) -> dict:
         if raw:
             return json.loads(raw)
         return DEFAULT_THRESHOLDS.copy()
-    except Exception:
+    except Exception as e:
+        logger.debug("get_thresholds failed, using defaults: %s", e)
         return DEFAULT_THRESHOLDS.copy()
     finally:
         if owns_client and r:
@@ -443,8 +444,8 @@ async def evaluate_alerts(r) -> None:
         try:
             groups = await r.xinfo_groups("tasks:executions")
             workers_count = sum(g.get("consumers", 0) for g in groups) if groups else 0
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Worker count check failed: %s", e)
 
         min_workers = thresholds.get("workers_min", 1)
         if workers_count < min_workers:
@@ -477,8 +478,8 @@ async def evaluate_alerts(r) -> None:
         for stream_name in ["tasks:executions", "tasks:models"]:
             try:
                 total_queued += await r.xlen(stream_name)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Queue depth check for %s failed: %s", stream_name, e)
         q_max = thresholds.get("queue_depth_max", 50)
         if total_queued > q_max:
             akey = "monitoring:alert_active:queue_depth_max"
