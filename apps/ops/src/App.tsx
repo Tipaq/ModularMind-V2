@@ -11,6 +11,7 @@ import Models from "./pages/Models";
 import ModelDetail from "./pages/ModelDetail";
 import Knowledge from "./pages/Knowledge";
 import Users from "./pages/Users";
+import UserDetail from "./pages/UserDetail";
 import Playground from "./pages/Playground";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/memory" element={<Memory />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/users/:userId" element={<UserDetail />} />
           <Route path="/playground" element={<Playground />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/profile" element={<Profile />} />
