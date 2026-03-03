@@ -148,6 +148,7 @@ COLLECTIONS = [
         "description": "Brief, architecture, comptes-rendus et plan de tests du projet Phoenix (refonte interface)",
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "frontend", "product"],
+        "category": "project",
     },
     {
         "dir": "P2-projet-atlas",
@@ -155,6 +156,7 @@ COLLECTIONS = [
         "description": "Brief, architecture K8s, runbooks et bilans du projet Atlas (migration infrastructure)",
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "devops", "backend"],
+        "category": "project",
     },
     {
         "dir": "P3-projet-mercury",
@@ -162,6 +164,7 @@ COLLECTIONS = [
         "description": "Brief, architecture API Gateway, spec marketplace et plans de tests du projet Mercury",
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "backend", "product"],
+        "category": "project",
     },
     {
         "dir": "P4-projet-titan",
@@ -169,6 +172,7 @@ COLLECTIONS = [
         "description": "Brief, architecture pipeline analytics, spécifications export et plan de tests du projet Titan",
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "data", "backend"],
+        "category": "project",
     },
     {
         "dir": "P5-projet-orion",
@@ -176,6 +180,7 @@ COLLECTIONS = [
         "description": "Brief, architecture React Native, spec notifications push et plan de tests du projet Orion",
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "frontend", "product"],
+        "category": "project",
     },
 ]
 
@@ -210,6 +215,9 @@ async def seed_collections_and_documents():
                 print(f"  EXISTS: {col_def['name']} (id={collection.id})")
                 skipped_collections += 1
             else:
+                meta = {"chunk_strategy": "token_aware", "seed": True}
+                if col_def.get("category"):
+                    meta["category"] = col_def["category"]
                 collection = RAGCollection(
                     id=str(uuid4()),
                     name=col_def["name"],
@@ -218,7 +226,7 @@ async def seed_collections_and_documents():
                     allowed_groups=col_def["allowed_groups"],
                     chunk_size=500,
                     chunk_overlap=50,
-                    metadata={"chunk_strategy": "token_aware", "seed": True},
+                    metadata=meta,
                 )
                 session.add(collection)
                 await session.flush()
