@@ -156,7 +156,6 @@ export default function UserDetail() {
               <Badge variant={user.is_active ? "default" : "destructive"}>
                 {user.is_active ? "Active" : "Inactive"}
               </Badge>
-              <Badge variant="outline">{user.source}</Badge>
               <span className="text-xs text-muted-foreground">
                 Joined {new Date(user.created_at).toLocaleDateString()}
               </span>

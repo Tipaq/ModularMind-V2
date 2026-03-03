@@ -164,9 +164,6 @@ export default function Users() {
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                    Source
-                  </th>
                   <th className="px-4 py-3 text-right font-medium text-muted-foreground hidden md:table-cell">
                     Conversations
                   </th>
@@ -209,9 +206,6 @@ export default function Users() {
                         <Badge variant={u.is_active ? "default" : "destructive"}>
                           {u.is_active ? "Active" : "Inactive"}
                         </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="outline">{u.source}</Badge>
                       </td>
                       <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell">
                         {u.conversation_count}

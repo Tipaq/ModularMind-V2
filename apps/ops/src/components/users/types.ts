@@ -5,7 +5,6 @@ export interface UserStats {
   email: string;
   role: Role;
   is_active: boolean;
-  source: string;
   conversation_count: number;
   total_tokens_prompt: number;
   total_tokens_completion: number;
