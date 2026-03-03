@@ -321,10 +321,32 @@ async def list_users_with_stats(
     result = await db.execute(query)
     rows = result.all()
 
+    # Batch compute costs for all users on this page (1 query instead of N)
+    user_ids = [row[0].id for row in rows]
+    cost_map: dict[str, float] = {}
+    if user_ids:
+        cost_result = await db.execute(
+            select(
+                ExecutionRun.user_id,
+                ExecutionRun.model,
+                func.sum(ExecutionRun.tokens_prompt),
+                func.sum(ExecutionRun.tokens_completion),
+            )
+            .where(
+                ExecutionRun.user_id.in_(user_ids),
+                ExecutionRun.status == ExecutionStatus.COMPLETED,
+                ExecutionRun.model.isnot(None),
+            )
+            .group_by(ExecutionRun.user_id, ExecutionRun.model)
+        )
+        for uid, model_id, p, c in cost_result:
+            cost = estimate_cost(model_id, p, c)
+            if cost is not None:
+                cost_map[uid] = cost_map.get(uid, 0.0) + cost
+
     items = []
     for row in rows:
         u = row[0]
-        cost = await _compute_user_cost(db, u.id)
         items.append(UserStatsResponse(
             id=u.id,
             email=u.email,
@@ -334,7 +356,7 @@ async def list_users_with_stats(
             total_tokens_prompt=row[2],
             total_tokens_completion=row[3],
             execution_count=row[4],
-            estimated_cost_usd=cost,
+            estimated_cost_usd=cost_map.get(u.id),
             last_active_at=row[5],
             created_at=u.created_at,
         ))
@@ -425,53 +447,71 @@ async def list_user_conversations(
     )
     convs = convs_result.scalars().all()
 
-    items = []
-    for c in convs:
-        # Message count
-        msg_count = (await db.execute(
-            select(func.count()).where(ConversationMessage.conversation_id == c.id)
-        )).scalar() or 0
+    # Batch fetch all per-conversation data (3 queries instead of 3*N)
+    conv_ids = [c.id for c in convs]
 
-        # Token totals from executions linked to this conversation
-        exec_agg = await db.execute(
+    msg_count_map: dict[str, int] = {}
+    token_map: dict[str, tuple[int, int]] = {}
+    conv_cost_map: dict[str, float] = {}
+
+    if conv_ids:
+        # Message counts
+        msg_result = await db.execute(
             select(
+                ConversationMessage.conversation_id,
+                func.count(),
+            )
+            .where(ConversationMessage.conversation_id.in_(conv_ids))
+            .group_by(ConversationMessage.conversation_id)
+        )
+        msg_count_map = dict(msg_result.all())
+
+        # Token totals
+        token_result = await db.execute(
+            select(
+                ExecutionRun.session_id,
                 func.coalesce(func.sum(ExecutionRun.tokens_prompt), 0),
                 func.coalesce(func.sum(ExecutionRun.tokens_completion), 0),
-            ).where(
-                ExecutionRun.session_id == c.id,
+            )
+            .where(
+                ExecutionRun.session_id.in_(conv_ids),
                 ExecutionRun.status == ExecutionStatus.COMPLETED,
             )
+            .group_by(ExecutionRun.session_id)
         )
-        tp, tc = exec_agg.one()
+        token_map = {row[0]: (row[1], row[2]) for row in token_result}
 
-        # Cost for this conversation's executions
-        exec_rows = await db.execute(
+        # Cost data (per model per conversation)
+        cost_result = await db.execute(
             select(
+                ExecutionRun.session_id,
                 ExecutionRun.model,
-                ExecutionRun.tokens_prompt,
-                ExecutionRun.tokens_completion,
-            ).where(
-                ExecutionRun.session_id == c.id,
+                func.sum(ExecutionRun.tokens_prompt),
+                func.sum(ExecutionRun.tokens_completion),
+            )
+            .where(
+                ExecutionRun.session_id.in_(conv_ids),
                 ExecutionRun.status == ExecutionStatus.COMPLETED,
                 ExecutionRun.model.isnot(None),
             )
+            .group_by(ExecutionRun.session_id, ExecutionRun.model)
         )
-        conv_cost = 0.0
-        has_cloud = False
-        for model_id, p, comp in exec_rows:
+        for sid, model_id, p, comp in cost_result:
             cost = estimate_cost(model_id, p, comp)
             if cost is not None:
-                conv_cost += cost
-                has_cloud = True
+                conv_cost_map[sid] = conv_cost_map.get(sid, 0.0) + cost
 
+    items = []
+    for c in convs:
+        tp, tc = token_map.get(c.id, (0, 0))
         items.append(AdminConversationItem(
             id=c.id,
             agent_id=c.agent_id,
             title=c.title,
-            message_count=msg_count,
+            message_count=msg_count_map.get(c.id, 0),
             tokens_prompt=tp,
             tokens_completion=tc,
-            estimated_cost=conv_cost if has_cloud else None,
+            estimated_cost=conv_cost_map.get(c.id),
             created_at=c.created_at,
             updated_at=c.updated_at,
         ))
@@ -716,25 +756,34 @@ async def list_user_collections(
     repo = RAGRepository(db)
     collections = await repo.list_collections_for_user(user_id, target_groups)
 
-    result = []
-    for c in collections:
-        # Get chunk count
-        from src.rag.models import RAGChunk
-        chunk_count = (await db.execute(
-            select(func.count()).where(RAGChunk.collection_id == c.id)
-        )).scalar() or 0
+    # Batch fetch chunk counts (1 query instead of N)
+    from src.rag.models import RAGChunk
 
-        result.append(CollectionResponse(
+    collection_ids = [c.id for c in collections]
+    chunk_count_map: dict[str, int] = {}
+    if collection_ids:
+        chunk_result = await db.execute(
+            select(
+                RAGChunk.collection_id,
+                func.count(),
+            )
+            .where(RAGChunk.collection_id.in_(collection_ids))
+            .group_by(RAGChunk.collection_id)
+        )
+        chunk_count_map = dict(chunk_result.all())
+
+    return [
+        CollectionResponse(
             id=c.id,
             name=c.name,
             scope=c.scope,
             owner_user_id=c.owner_user_id,
             allowed_groups=c.allowed_groups or [],
-            chunk_count=chunk_count,
+            chunk_count=chunk_count_map.get(c.id, 0),
             created_at=c.created_at,
-        ))
-
-    return result
+        )
+        for c in collections
+    ]
 
 
 # ─── Moderation ─────────────────────────────────────────────────────────
