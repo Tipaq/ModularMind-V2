@@ -5,21 +5,32 @@ API endpoints for memory operations.
 """
 
 import logging
-from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, Response
-from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 
 from src.auth import CurrentUser, RequireAdmin
 from src.auth.models import User as AuthUser
-from src.embedding import get_embedding_provider
+from src.embedding.resolver import get_memory_embedding_provider
 from src.infra.config import get_settings
 from src.infra.database import DbSession
-from src.infra.schemas import PaginatedResponse
 
 from .models import ConsolidationLog, MemoryEdge, MemoryEntry, MemoryScope, MemoryTier, MemoryType
 from .repository import MemoryRepository
+from .schemas import (
+    ConsolidationLogResponse,
+    GlobalMemoryStatsResponse,
+    GraphEdgeResponse,
+    GraphNodeResponse,
+    GraphResponse,
+    MemoryEntryResponse,
+    MemoryListResponse,
+    MemorySearchRequest,
+    MemorySearchResponse,
+    MemorySearchResult,
+    MemoryStatsResponse,
+    MemoryUserResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,201 +38,48 @@ router = APIRouter(prefix="/memory", tags=["Memory"])
 settings = get_settings()
 
 
-# ---- Response Models ----
-
-
-class MemoryEntryResponse(BaseModel):
-    """Memory entry response."""
-
-    id: str
-    scope: MemoryScope
-    scope_id: str
-    tier: MemoryTier
-    memory_type: MemoryType
-    content: str
-    importance: float
-    access_count: int
-    last_accessed: datetime | None
-    expired_at: datetime | None
-    metadata: dict = Field(validation_alias="meta")
-    user_id: str | None
-    created_at: datetime
-
-    model_config = {"from_attributes": True, "populate_by_name": True}
-
-
-class MemoryListResponse(PaginatedResponse[MemoryEntryResponse]):
-    """Memory list response."""
-
-
-class MemorySearchRequest(BaseModel):
-    """Memory search request."""
-
-    query: str = Field(min_length=1, max_length=1000)
-    scope: MemoryScope
-    scope_id: str
-    limit: int = Field(default=10, ge=1, le=50)
-    threshold: float = Field(default=0.7, ge=0, le=1)
-
-
-class MemorySearchResult(BaseModel):
-    """Memory search result."""
-
-    entry: MemoryEntryResponse
-    score: float
-
-
-class MemorySearchResponse(BaseModel):
-    """Memory search response."""
-
-    results: list[MemorySearchResult]
-    query_embedding_cached: bool = False
-    warning: str | None = None
-
-
-class MemoryStatsResponse(BaseModel):
-    """Memory stats response."""
-
-    total_entries: int
-    entries_by_tier: dict[str, int]
-    entries_by_type: dict[str, int]
-    oldest_entry: datetime | None
-    newest_entry: datetime | None
-
-
-class GlobalMemoryStatsResponse(BaseModel):
-    """Global memory stats for Ops dashboard."""
-
-    total_entries: int
-    entries_by_type: dict[str, int]
-    entries_by_tier: dict[str, int]
-    entries_by_scope: dict[str, int]
-    avg_importance: float
-    total_accesses: int
-    last_consolidation: datetime | None
-    entries_decayed_last_cycle: int
-
-
-class ConsolidationLogResponse(BaseModel):
-    """Consolidation log entry response."""
-
-    id: str
-    scope: str
-    scope_id: str
-    action: str
-    source_entry_ids: list
-    result_entry_id: str | None
-    details: dict
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class GraphNodeResponse(BaseModel):
-    """Graph node for visualization."""
-
-    id: str
-    content: str
-    memory_type: str
-    scope: str
-    scope_id: str
-    tier: str
-    importance: float
-    access_count: int
-    entities: list
-    tags: list
-    user_id: str | None
-    last_accessed: datetime | None
-    created_at: datetime
-
-
-class GraphEdgeResponse(BaseModel):
-    """Graph edge for visualization."""
-
-    source: str
-    target: str
-    edge_type: str
-    weight: float
-    shared_entities: list
-
-
-class GraphResponse(BaseModel):
-    """Graph data for visualization."""
-
-    nodes: list[GraphNodeResponse]
-    edges: list[GraphEdgeResponse]
-
-
-class MemoryUserResponse(BaseModel):
-    """User with memory count."""
-
-    user_id: str
-    email: str | None
-    memory_count: int
-
-
 # ---- Admin Endpoints (require RequireAdmin) ----
 # IMPORTANT: These must be defined BEFORE the /{entry_id} catch-all route,
 # otherwise FastAPI would match "admin" as an entry_id.
 
 
-@router.get("/admin/stats/global", response_model=GlobalMemoryStatsResponse)
+@router.get("/admin/stats/global", response_model=GlobalMemoryStatsResponse, dependencies=[RequireAdmin])
 async def get_global_stats(
-    _: None = RequireAdmin,
     db: DbSession = None,
 ) -> GlobalMemoryStatsResponse:
     """Get aggregate memory stats across all scopes (admin only)."""
-    # Total by type
-    type_result = await db.execute(
-        select(
-            MemoryEntry.memory_type,
-            func.count(MemoryEntry.id),
-        )
-        .where(MemoryEntry.expired_at.is_(None))
-        .group_by(MemoryEntry.memory_type)
-    )
-    entries_by_type = {mt.value: 0 for mt in MemoryType}
-    for row in type_result.all():
-        entries_by_type[row[0].value] = row[1]
+    # Single-scan aggregate: conditional counts + avg/sum in one query
+    not_expired = MemoryEntry.expired_at.is_(None)
+    columns = [
+        func.count(MemoryEntry.id).label("total"),
+        func.avg(MemoryEntry.importance).label("avg_importance"),
+        func.sum(MemoryEntry.access_count).label("total_accesses"),
+        *[
+            func.sum(case((MemoryEntry.memory_type == mt, 1), else_=0)).label(
+                f"type_{mt.value}"
+            )
+            for mt in MemoryType
+        ],
+        *[
+            func.sum(case((MemoryEntry.tier == t, 1), else_=0)).label(
+                f"tier_{t.value}"
+            )
+            for t in MemoryTier
+        ],
+        *[
+            func.sum(case((MemoryEntry.scope == s, 1), else_=0)).label(
+                f"scope_{s.value}"
+            )
+            for s in MemoryScope
+        ],
+    ]
+    agg_result = await db.execute(select(*columns).where(not_expired))
+    row = agg_result.one()
 
-    # Total by tier
-    tier_result = await db.execute(
-        select(
-            MemoryEntry.tier,
-            func.count(MemoryEntry.id),
-        )
-        .where(MemoryEntry.expired_at.is_(None))
-        .group_by(MemoryEntry.tier)
-    )
-    entries_by_tier = {t.value: 0 for t in MemoryTier}
-    for row in tier_result.all():
-        entries_by_tier[row[0].value] = row[1]
-
-    # Total by scope
-    scope_result = await db.execute(
-        select(
-            MemoryEntry.scope,
-            func.count(MemoryEntry.id),
-        )
-        .where(MemoryEntry.expired_at.is_(None))
-        .group_by(MemoryEntry.scope)
-    )
-    entries_by_scope = {s.value: 0 for s in MemoryScope}
-    for row in scope_result.all():
-        entries_by_scope[row[0].value] = row[1]
-
-    # Aggregates
-    agg_result = await db.execute(
-        select(
-            func.avg(MemoryEntry.importance),
-            func.sum(MemoryEntry.access_count),
-        ).where(MemoryEntry.expired_at.is_(None))
-    )
-    agg_row = agg_result.one()
-    avg_importance = float(agg_row[0] or 0)
-    total_accesses = int(agg_row[1] or 0)
-
-    total = sum(entries_by_type.values())
+    total = int(row.total or 0)
+    entries_by_type = {mt.value: int(getattr(row, f"type_{mt.value}") or 0) for mt in MemoryType}
+    entries_by_tier = {t.value: int(getattr(row, f"tier_{t.value}") or 0) for t in MemoryTier}
+    entries_by_scope = {s.value: int(getattr(row, f"scope_{s.value}") or 0) for s in MemoryScope}
 
     # Last consolidation
     last_log = await db.execute(
@@ -229,23 +87,21 @@ async def get_global_stats(
         .order_by(ConsolidationLog.created_at.desc())
         .limit(1)
     )
-    last_log_row = last_log.scalar_one_or_none()
 
     return GlobalMemoryStatsResponse(
         total_entries=total,
         entries_by_type=entries_by_type,
         entries_by_tier=entries_by_tier,
         entries_by_scope=entries_by_scope,
-        avg_importance=round(avg_importance, 3),
-        total_accesses=total_accesses,
-        last_consolidation=last_log_row,
-        entries_decayed_last_cycle=0,  # TODO: track in consolidation
+        avg_importance=round(float(row.avg_importance or 0), 3),
+        total_accesses=int(row.total_accesses or 0),
+        last_consolidation=last_log.scalar_one_or_none(),
+        entries_decayed_last_cycle=0,
     )
 
 
-@router.get("/admin/explore", response_model=MemoryListResponse)
+@router.get("/admin/explore", response_model=MemoryListResponse, dependencies=[RequireAdmin])
 async def explore_memories(
-    _: None = RequireAdmin,
     db: DbSession = None,
     user_id: str | None = Query(default=None),
     scope: MemoryScope | None = Query(default=None),
@@ -297,9 +153,8 @@ async def explore_memories(
     )
 
 
-@router.get("/admin/consolidation/logs")
+@router.get("/admin/consolidation/logs", dependencies=[RequireAdmin])
 async def get_consolidation_logs(
-    _: None = RequireAdmin,
     db: DbSession = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -326,10 +181,9 @@ async def get_consolidation_logs(
     }
 
 
-@router.post("/admin/{entry_id}/invalidate")
+@router.post("/admin/{entry_id}/invalidate", dependencies=[RequireAdmin])
 async def invalidate_memory(
     entry_id: str,
-    _: None = RequireAdmin,
     db: DbSession = None,
 ) -> dict[str, str]:
     """Manually invalidate (soft-delete) a memory entry (admin only)."""
@@ -361,9 +215,8 @@ async def invalidate_memory(
     return {"status": "invalidated"}
 
 
-@router.get("/admin/graph", response_model=GraphResponse)
+@router.get("/admin/graph", response_model=GraphResponse, dependencies=[RequireAdmin])
 async def get_graph_data(
-    _: None = RequireAdmin,
     db: DbSession = None,
     scope: MemoryScope | None = Query(default=None),
     scope_id: str | None = Query(default=None),
@@ -440,9 +293,8 @@ async def get_graph_data(
     return GraphResponse(nodes=nodes, edges=edges)
 
 
-@router.get("/admin/users", response_model=list[MemoryUserResponse])
+@router.get("/admin/users", response_model=list[MemoryUserResponse], dependencies=[RequireAdmin])
 async def get_memory_users(
-    _: None = RequireAdmin,
     db: DbSession = None,
 ) -> list[MemoryUserResponse]:
     """List users that have memories (for dropdown filter)."""
@@ -516,11 +368,7 @@ async def search_memories(
     """Search memories by hybrid search (dense + BM25)."""
     repo = MemoryRepository(db)
 
-    embedding_provider = get_embedding_provider(
-        settings.EMBEDDING_PROVIDER,
-        model=settings.EMBEDDING_MODEL,
-        base_url=settings.OLLAMA_BASE_URL,
-    )
+    embedding_provider = get_memory_embedding_provider()
 
     try:
         query_embedding = await embedding_provider.embed_text(request.query)
