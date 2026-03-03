@@ -28,7 +28,9 @@ from src.rag.repository import RAGRepository
 
 logger = logging.getLogger(__name__)
 
-admin_user_router = APIRouter(prefix="/users", tags=["Admin — Users"])
+admin_user_router = APIRouter(
+    prefix="/users", tags=["Admin — Users"], dependencies=[RequireAdmin]
+)
 
 
 # ─── Schemas ────────────────────────────────────────────────────────────
@@ -224,7 +226,7 @@ def _get_range_start(range_param: str) -> datetime | None:
 async def list_users_with_stats(
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
+
     search: str | None = None,
     role: UserRole | None = None,
     is_active: bool | None = None,
@@ -347,7 +349,7 @@ async def get_user_detail(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
+
 ) -> UserStatsResponse:
     """Get single user with aggregated stats (admin+)."""
     target = await _get_user_or_404(db, user_id)
@@ -400,7 +402,7 @@ async def list_user_conversations(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
+
     agent_id: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -488,7 +490,7 @@ async def get_conversation_messages(
     conversation_id: str,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
+
 ) -> AdminConversationMessagesResponse:
     """Get all messages for a specific conversation (admin+)."""
     target = await _get_user_or_404(db, user_id)
@@ -531,7 +533,7 @@ async def get_user_token_usage(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
+
     range: str = Query(default="30d", pattern="^(24h|7d|30d|all)$"),
     agent_id: str | None = None,
     model: str | None = None,
@@ -660,7 +662,7 @@ async def list_user_memory(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
+
     scope: MemoryScope | None = None,
     tier: MemoryTier | None = None,
     search: str | None = None,
@@ -703,7 +705,7 @@ async def list_user_collections(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
+
 ) -> list[CollectionResponse]:
     """List RAG collections accessible to a specific user (admin+)."""
     await _get_user_or_404(db, user_id)
@@ -744,7 +746,7 @@ async def update_user(
     data: AdminUserUpdate,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
+
 ) -> AdminUserUpdateResponse:
     """Update user role and/or active status (admin+)."""
     if user_id == user.id:
@@ -786,7 +788,7 @@ async def delete_user_conversations(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
+
 ) -> DeleteCountResponse:
     """Delete ALL conversations for a user (cascades to messages). Admin+."""
     from sqlalchemy import update
@@ -830,7 +832,7 @@ async def delete_user_memory(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
+
 ) -> DeleteCountResponse:
     """Clear ALL memory entries for a user from PostgreSQL and Qdrant. Admin+."""
     await _get_user_or_404(db, user_id)

@@ -1,55 +1,20 @@
-"""Auth module - Authentication and authorization."""
+"""Auth module - Authentication and authorization.
 
-from .dependencies import (
-    CurrentUser,
-    CurrentUserGroups,
-    RequireAdmin,
-    RequireOwner,
-    SyncCaller,
-    get_current_user,
-    get_current_user_groups,
-    require_min_role,
-    verify_sync_token,
-)
-from .models import User, UserRole
-from .router import router
-from .schemas import (
-    LoginRequest,
-    LoginResponse,
-    PasswordChange,
-    RefreshTokenData,
-    TokenData,
-    UserCreate,
-    UserResponse,
-    UserUpdate,
-)
+Only re-exports frequently used symbols.  For anything else, import directly
+from the submodule (e.g. ``from src.auth.models import User``).
+"""
+
+from .dependencies import CurrentUser, CurrentUserGroups, RequireAdmin, RequireOwner
+from .models import UserRole
+from .schemas import UserCreate
 from .service import AuthService
 
 __all__ = [
-    # Models
-    "User",
-    "UserRole",
-    # Schemas
-    "LoginRequest",
-    "LoginResponse",
-    "UserCreate",
-    "UserResponse",
-    "UserUpdate",
-    "TokenData",
-    "RefreshTokenData",
-    "PasswordChange",
-    # Service
     "AuthService",
-    # Dependencies
-    "get_current_user",
-    "get_current_user_groups",
     "CurrentUser",
     "CurrentUserGroups",
-    "require_min_role",
-    "RequireOwner",
     "RequireAdmin",
-    "verify_sync_token",
-    "SyncCaller",
-    # Router
-    "router",
+    "RequireOwner",
+    "UserCreate",
+    "UserRole",
 ]

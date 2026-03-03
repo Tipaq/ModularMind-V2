@@ -41,7 +41,11 @@ async def sse_response(
             async for event in generator:
                 if await request.is_disconnected():
                     break
-                event_type = event.get("type", "message")
+                raw_type = event.get("type", "message")
+                # Normalise compound types (e.g. "trace:llm_start" → "trace")
+                # so the browser EventSource listener for "trace" receives all
+                # trace sub-events.  The full type is still in the JSON payload.
+                event_type = raw_type.split(":")[0] if ":" in raw_type else raw_type
                 event_id = event.get("id")
                 lines = f"event: {event_type}\n"
                 if event_id:

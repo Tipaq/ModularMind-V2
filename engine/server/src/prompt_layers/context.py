@@ -8,6 +8,7 @@ empty context (the agent still works, just without augmentation).
 """
 
 import logging
+from typing import Any
 from uuid import UUID
 
 from langchain_core.messages import SystemMessage
@@ -26,6 +27,9 @@ class AgentContextBuilder:
     provider.
     """
 
+    def __init__(self) -> None:
+        self._last_rag_results: list[Any] = []
+
     async def build_context_messages(
         self,
         agent: AgentConfig,
@@ -38,6 +42,7 @@ class AgentContextBuilder:
         Returns an empty list if neither memory nor RAG is enabled or
         if retrieval fails.
         """
+        self._last_rag_results = []
         messages: list[SystemMessage] = []
 
         if agent.memory_enabled:
@@ -56,6 +61,10 @@ class AgentContextBuilder:
 
         return messages
 
+    def get_rag_results(self) -> list[dict[str, Any]]:
+        """Return raw RAG results from the last build, serialised for SSE."""
+        return self._last_rag_results
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
@@ -73,7 +82,7 @@ class AgentContextBuilder:
             from src.memory.models import MemoryScope
             from src.memory.repository import MemoryRepository
 
-            embedding_provider = self._get_embedding_provider()
+            embedding_provider = self._get_memory_embedding_provider()
             if embedding_provider is None:
                 return ""
 
@@ -124,10 +133,13 @@ class AgentContextBuilder:
     ) -> str:
         """Retrieve RAG context for the agent."""
         try:
+            from sqlalchemy import select
+
+            from src.rag.models import RAGCollection
             from src.rag.repository import RAGRepository
             from src.rag.retriever import RAGRetriever
 
-            embedding_provider = self._get_embedding_provider()
+            embedding_provider = self._get_knowledge_embedding_provider()
             if embedding_provider is None:
                 return ""
 
@@ -138,13 +150,58 @@ class AgentContextBuilder:
                 default_limit=agent.rag_config.retrieval_count,
                 default_threshold=agent.rag_config.similarity_threshold,
             )
-            return await retriever.retrieve(
+            raw_results = await retriever.retrieve_raw(
                 query=query,
                 user_id=user_id or "",
                 collection_ids=agent.rag_config.collection_ids,
                 limit=agent.rag_config.retrieval_count,
                 threshold=agent.rag_config.similarity_threshold,
             )
+
+            if not raw_results:
+                return ""
+
+            # Hydrate collection names
+            coll_ids = {r.collection_id for r in raw_results}
+            rows = await session.execute(
+                select(RAGCollection.id, RAGCollection.name).where(
+                    RAGCollection.id.in_(coll_ids)
+                )
+            )
+            coll_map = {row[0]: row[1] for row in rows.all()}
+
+            # Build serialisable results for the frontend
+            collections_seen: dict[str, dict[str, Any]] = {}
+            chunks: list[dict[str, Any]] = []
+            for r in raw_results:
+                cid = r.collection_id
+                cname = coll_map.get(cid, "Unknown")
+                if cid not in collections_seen:
+                    collections_seen[cid] = {
+                        "collection_id": cid,
+                        "collection_name": cname,
+                        "chunk_count": 0,
+                    }
+                collections_seen[cid]["chunk_count"] += 1
+                chunks.append({
+                    "chunk_id": r.chunk_id,
+                    "document_id": r.document_id,
+                    "collection_id": cid,
+                    "collection_name": cname,
+                    "document_filename": r.document.filename if r.document else None,
+                    "content_preview": (r.content or "")[:300],
+                    "score": round(r.score, 4),
+                    "chunk_index": r.chunk_index,
+                })
+
+            self._last_rag_results = [{
+                "collections": list(collections_seen.values()),
+                "chunks": chunks,
+                "total_results": len(raw_results),
+            }]
+
+            logger.info("Found %d RAG results for agent %s", len(raw_results), agent.id)
+            return retriever.format_context(raw_results)
 
         except Exception as e:
             logger.warning(
@@ -153,18 +210,21 @@ class AgentContextBuilder:
             return ""
 
     @staticmethod
-    def _get_embedding_provider():
-        """Get the embedding provider (reuses tasks.py singleton pattern)."""
+    def _get_memory_embedding_provider():
+        """Get the embedding provider for memory context."""
         try:
-            from src.embedding import get_embedding_provider
-            from src.infra.config import get_settings
-
-            settings = get_settings()
-            return get_embedding_provider(
-                settings.EMBEDDING_PROVIDER,
-                base_url=settings.OLLAMA_BASE_URL,
-                model=settings.EMBEDDING_MODEL,
-            )
+            from src.embedding.resolver import get_memory_embedding_provider
+            return get_memory_embedding_provider()
         except Exception as e:
-            logger.warning("Could not initialise embedding provider: %s", e)
+            logger.warning("Could not initialise memory embedding provider: %s", e)
+            return None
+
+    @staticmethod
+    def _get_knowledge_embedding_provider():
+        """Get the embedding provider for RAG / knowledge context."""
+        try:
+            from src.embedding.resolver import get_knowledge_embedding_provider
+            return get_knowledge_embedding_provider()
+        except Exception as e:
+            logger.warning("Could not initialise knowledge embedding provider: %s", e)
             return None

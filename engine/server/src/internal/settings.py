@@ -29,6 +29,10 @@ class SettingsResponse(BaseModel):
     auto_sync: bool
     sync_interval_minutes: int
     ollama_keep_alive: str
+    memory_embedding_provider: str
+    memory_embedding_model: str
+    knowledge_embedding_provider: str
+    knowledge_embedding_model: str
 
 
 class SettingsUpdate(BaseModel):
@@ -38,6 +42,10 @@ class SettingsUpdate(BaseModel):
     auto_sync: bool | None = None
     sync_interval_minutes: int | None = None
     ollama_keep_alive: str | None = None
+    memory_embedding_provider: str | None = None
+    memory_embedding_model: str | None = None
+    knowledge_embedding_provider: str | None = None
+    knowledge_embedding_model: str | None = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -50,8 +58,24 @@ def mask_key(value: str) -> str:
     return "\u2022" * 16
 
 
+def _load_embedding_overrides() -> None:
+    """Load persisted embedding overrides from secrets store into settings."""
+    for attr in (
+        "MEMORY_EMBEDDING_PROVIDER",
+        "MEMORY_EMBEDDING_MODEL",
+        "KNOWLEDGE_EMBEDDING_PROVIDER",
+        "KNOWLEDGE_EMBEDDING_MODEL",
+    ):
+        stored = secrets_store.get(attr, "")
+        if stored:
+            setattr(settings, attr, stored)
+
+
 def build_settings_response() -> SettingsResponse:
     """Build the current settings response with masked keys."""
+    # Ensure persisted embedding overrides are loaded
+    _load_embedding_overrides()
+
     providers = secrets_store.get_configured_providers()
     masked_keys = {}
     for provider, has_key in providers.items():
@@ -69,6 +93,18 @@ def build_settings_response() -> SettingsResponse:
         auto_sync=True,
         sync_interval_minutes=5,
         ollama_keep_alive=settings.OLLAMA_KEEP_ALIVE,
+        memory_embedding_provider=(
+            settings.MEMORY_EMBEDDING_PROVIDER or settings.EMBEDDING_PROVIDER
+        ),
+        memory_embedding_model=(
+            settings.MEMORY_EMBEDDING_MODEL or settings.EMBEDDING_MODEL
+        ),
+        knowledge_embedding_provider=(
+            settings.KNOWLEDGE_EMBEDDING_PROVIDER or settings.EMBEDDING_PROVIDER
+        ),
+        knowledge_embedding_model=(
+            settings.KNOWLEDGE_EMBEDDING_MODEL or settings.EMBEDDING_MODEL
+        ),
     )
 
 
@@ -106,5 +142,18 @@ async def update_settings_endpoint(update: SettingsUpdate, user: CurrentUser) ->
 
     if update.ollama_keep_alive is not None:
         settings.OLLAMA_KEEP_ALIVE = update.ollama_keep_alive
+
+    # Embedding pipeline overrides — persist via secrets store for restart survival
+    for attr in (
+        "memory_embedding_provider",
+        "memory_embedding_model",
+        "knowledge_embedding_provider",
+        "knowledge_embedding_model",
+    ):
+        value = getattr(update, attr, None)
+        if value is not None:
+            upper_attr = attr.upper()
+            setattr(settings, upper_attr, value)
+            secrets_store.set(upper_attr, value)
 
     return build_settings_response()

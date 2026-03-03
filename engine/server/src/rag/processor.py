@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
-from src.embedding import get_embedding_provider
+from src.embedding.resolver import get_knowledge_embedding_provider
 from src.infra.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -247,11 +247,7 @@ async def process_document(
         chunk_strategy = "token_aware"
 
     # Pre-create embedding provider for semantic chunking (and later embedding)
-    embedding_provider = get_embedding_provider(
-        settings.EMBEDDING_PROVIDER,
-        model=settings.EMBEDDING_MODEL,
-        base_url=settings.OLLAMA_BASE_URL,
-    )
+    embedding_provider = get_knowledge_embedding_provider()
 
     try:
         chunker = ChunkerFactory.get_chunker(

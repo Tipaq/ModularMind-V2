@@ -87,19 +87,23 @@ async def action_dlq_retry(body: DlqRetryRequest, user: CurrentUser) -> ActionRe
     if not r:
         return ActionResponse(status="error", message="Redis unavailable")
     try:
-        # Read from DLQ stream
+        # Read from DLQ stream and batch re-publish via pipeline
         entries = await r.xrange("memory:dlq", count=body.count)
-        retried = 0
-        for msg_id, data in entries:
-            original_stream = data.get("original_stream", "")
-            if original_stream:
-                await r.xadd(original_stream, {"_retry_from_dlq": "1", **data})
-                await r.xdel("memory:dlq", msg_id)
-                retried += 1
+        to_retry = [
+            (msg_id, data)
+            for msg_id, data in entries
+            if data.get("original_stream")
+        ]
+        if to_retry:
+            pipe = r.pipeline()
+            for msg_id, data in to_retry:
+                pipe.xadd(data["original_stream"], {"_retry_from_dlq": "1", **data})
+                pipe.xdel("memory:dlq", msg_id)
+            await pipe.execute()
         return ActionResponse(
             status="ok",
-            message=f"Retried {retried} entries",
-            details={"retried": retried},
+            message=f"Retried {len(to_retry)} entries",
+            details={"retried": len(to_retry)},
         )
     finally:
         await r.aclose()

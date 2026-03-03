@@ -41,12 +41,11 @@ async def list_groups(
     return [_group_response(g) for g in groups]
 
 
-@router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED, dependencies=[RequireAdmin])
 async def create_group(
     data: GroupCreate,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
 ) -> GroupResponse:
     """Create a new group (admin only)."""
     service = GroupService(db)
@@ -87,13 +86,12 @@ async def get_group(
     )
 
 
-@router.put("/{group_id}", response_model=GroupResponse)
+@router.put("/{group_id}", response_model=GroupResponse, dependencies=[RequireAdmin])
 async def update_group(
     group_id: str,
     data: GroupUpdate,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
 ) -> GroupResponse:
     """Update a group (admin only)."""
     service = GroupService(db)
@@ -103,12 +101,11 @@ async def update_group(
     return _group_response(group)
 
 
-@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[RequireAdmin])
 async def delete_group(
     group_id: str,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
 ) -> Response:
     """Delete a group (admin only, cascades to members)."""
     service = GroupService(db)
@@ -116,13 +113,12 @@ async def delete_group(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/{group_id}/members", response_model=MemberResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{group_id}/members", response_model=MemberResponse, status_code=status.HTTP_201_CREATED, dependencies=[RequireAdmin])
 async def add_member(
     group_id: str,
     data: MemberAdd,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
 ) -> MemberResponse:
     """Add a member to a group (admin only)."""
     service = GroupService(db)
@@ -138,13 +134,12 @@ async def add_member(
     )
 
 
-@router.delete("/{group_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{group_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[RequireAdmin])
 async def remove_member(
     group_id: str,
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-    _: None = RequireAdmin,
 ) -> Response:
     """Remove a member from a group (admin only)."""
     service = GroupService(db)

@@ -26,6 +26,7 @@ from src.internal import (
     alerts,
     logs,
     monitoring,
+    pipelines,
     playground,
     providers,
     settings,
@@ -55,6 +56,7 @@ router.include_router(settings.router)
 router.include_router(providers.router)
 router.include_router(playground.router)
 router.include_router(supervisor_layers.router)
+router.include_router(pipelines.router)
 
 
 # ==================== Core Endpoints ====================

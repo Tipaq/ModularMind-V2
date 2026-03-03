@@ -40,9 +40,9 @@ class CollectionResponse(BaseModel):
     scope: str = "global"
     allowed_groups: list[str] = Field(default_factory=list)
     owner_user_id: str | None = None
-    metadata: dict | None = None
+    metadata: dict | None = Field(default=None, validation_alias="meta")
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 class CollectionListResponse(PaginatedResponse[CollectionResponse]):

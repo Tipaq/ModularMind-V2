@@ -13,7 +13,7 @@ from fastapi import APIRouter, File, HTTPException, Response, UploadFile
 from sqlalchemy import update
 
 from src.auth import CurrentUser, CurrentUserGroups, UserRole
-from src.embedding import get_embedding_provider
+from src.embedding.resolver import get_knowledge_embedding_provider
 from src.infra.config import get_settings
 from src.infra.database import DbSession
 
@@ -256,6 +256,7 @@ async def upload_document_endpoint(
         content_type=file.content_type,
         size_bytes=total_size,
         status=DocumentStatus.PROCESSING.value,
+        meta={"file_path": tmp_path},
     )
     db.add(document)
     await db.commit()
@@ -371,11 +372,7 @@ async def search_rag(
 
     query_embedding = await embedding_cache.get(request.query)
     if query_embedding is None:
-        embedding_provider = get_embedding_provider(
-            settings.EMBEDDING_PROVIDER,
-            model=settings.EMBEDDING_MODEL,
-            base_url=settings.OLLAMA_BASE_URL,
-        )
+        embedding_provider = get_knowledge_embedding_provider()
         try:
             query_embedding = await embedding_provider.embed_text(request.query)
             await embedding_cache.set(request.query, query_embedding)

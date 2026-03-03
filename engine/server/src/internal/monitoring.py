@@ -571,25 +571,28 @@ async def get_agent_metrics(user: CurrentUser) -> list[AgentMetricsItem]:
         )
         rows = (await db.execute(stmt)).all()
 
+        # Batch-resolve agent names upfront instead of per-row
+        agent_name_map: dict[str, str] = {}
+        try:
+            from src.domain_config import get_config_provider
+            provider = get_config_provider()
+            for row in rows:
+                aid = str(row.agent_id)
+                cfg = await provider.get_agent_config(aid)
+                if cfg and hasattr(cfg, "name"):
+                    agent_name_map[aid] = cfg.name
+        except Exception:
+            pass
+
         for row in rows:
             total_exec = row.total_executions or 0
             err_count = row.error_count or 0
             error_rate = (err_count / total_exec * 100) if total_exec > 0 else 0.0
-
-            # Resolve agent name — fallback to agent_id string
-            agent_name = str(row.agent_id)
-            try:
-                from src.domain_config import get_config_provider
-                provider = get_config_provider()
-                cfg = await provider.get_agent_config(str(row.agent_id))
-                if cfg and hasattr(cfg, "name"):
-                    agent_name = cfg.name
-            except Exception:
-                pass
+            aid = str(row.agent_id)
 
             results.append(AgentMetricsItem(
-                agent_id=str(row.agent_id),
-                agent_name=agent_name,
+                agent_id=aid,
+                agent_name=agent_name_map.get(aid, aid),
                 total_executions=total_exec,
                 total_tokens=row.total_tokens or 0,
                 avg_duration_ms=round(row.avg_duration_ms or 0, 2),
