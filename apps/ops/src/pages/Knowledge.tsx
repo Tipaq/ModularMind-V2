@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  BookOpen, RefreshCw, Plus, Search, Globe, Users, User, AlertCircle,
+  BookOpen, RefreshCw, Plus, Search, Globe, Users, User, AlertCircle, FolderKanban,
 } from "lucide-react";
 import {
   Button, Input, Badge,
@@ -58,7 +58,10 @@ export default function Knowledge() {
   );
 
   const companyCollections  = filtered.filter((c) => c.scope === "global");
-  const groupCollections    = filtered.filter((c) => c.scope === "group");
+  const isProject = (c: Collection) =>
+    (c.metadata as Record<string, unknown> | null)?.category === "project";
+  const projectCollections  = filtered.filter((c) => c.scope === "group" && isProject(c));
+  const groupCollections    = filtered.filter((c) => c.scope === "group" && !isProject(c));
   const personalCollections = filtered.filter(
     (c) => c.scope === "agent" && (isAdmin || c.owner_user_id === user?.id),
   );
@@ -151,6 +154,15 @@ export default function Knowledge() {
                   </Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="projects" className="gap-1.5">
+                <FolderKanban className="h-3.5 w-3.5" />
+                Projects
+                {projectCollections.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1.5">
+                    {projectCollections.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="groups" className="gap-1.5">
                 <Users className="h-3.5 w-3.5" />
                 Groups
@@ -180,6 +192,27 @@ export default function Knowledge() {
                       ? "No company-wide collections yet — create one to share knowledge with all users"
                       : "No company-wide collections available"
                   }
+                />
+              </TabsContent>
+
+              <TabsContent value="projects">
+                {projectCollections.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {[...new Set(projectCollections.flatMap((c) => c.allowed_groups))].map((g) => (
+                      <Badge
+                        key={g}
+                        variant="outline"
+                        className="text-[11px] cursor-pointer hover:bg-muted"
+                        onClick={() => setSearch(search === g ? "" : g)}
+                      >
+                        {g}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <CollectionGrid
+                  items={projectCollections}
+                  emptyLabel="No project collections yet — create one and tag it as a project"
                 />
               </TabsContent>
 
