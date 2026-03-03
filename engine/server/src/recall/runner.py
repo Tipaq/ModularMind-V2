@@ -9,8 +9,7 @@ import time
 from datetime import UTC
 from pathlib import Path
 
-from src.embedding import get_embedding_provider
-from src.infra.config import get_settings
+from src.embedding.resolver import get_knowledge_embedding_provider
 from src.rag.vector_store import QdrantRAGVectorStore, RAGSearchResult
 
 from .schemas import (
@@ -27,7 +26,6 @@ class RecallTestRunner:
     """Runs recall test suites against the Qdrant knowledge collection."""
 
     def __init__(self) -> None:
-        self._settings = get_settings()
         self._vector_store = QdrantRAGVectorStore()
 
     async def run_suite(
@@ -42,11 +40,7 @@ class RecallTestRunner:
         k = params.get("limit", 5)
         threshold = params.get("threshold", 0.0)
 
-        embedding_provider = get_embedding_provider(
-            self._settings.EMBEDDING_PROVIDER,
-            model=self._settings.EMBEDDING_MODEL,
-            base_url=self._settings.OLLAMA_BASE_URL,
-        )
+        embedding_provider = get_knowledge_embedding_provider()
 
         from qdrant_client import models as qmodels
 

@@ -5,41 +5,13 @@ API endpoints for listing agents (read-only from config).
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from src.auth import CurrentUser
 from src.domain_config import get_config_provider
-from src.infra.schemas import PaginatedResponse
+
+from .schemas import AgentDetail, AgentListResponse, AgentSummary
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
-
-
-class AgentSummary(BaseModel):
-    """Agent summary for list view."""
-
-    id: str
-    name: str
-    description: str
-    model_id: str
-    version: int
-    memory_enabled: bool
-    timeout_seconds: int
-
-
-class AgentDetail(AgentSummary):
-    """Agent detail view."""
-
-    system_prompt: str
-    rag_enabled: bool
-    rag_collection_ids: list[str]
-    rag_retrieval_count: int
-    rag_similarity_threshold: float
-    config_version: int | None = None
-    config_hash: str | None = None
-
-
-class AgentListResponse(PaginatedResponse[AgentSummary]):
-    """Agent list response."""
 
 
 @router.get("", response_model=AgentListResponse)

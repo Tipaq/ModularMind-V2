@@ -528,6 +528,17 @@ async def send_message(
             ephemeral_agent = result.get("ephemeral_agent")
             memory_entries = result.get("memory_entries", [])
 
+            # Build knowledge_data response if available
+            raw_knowledge = result.get("knowledge_data")
+            knowledge_data_response = None
+            if raw_knowledge:
+                from src.conversations.schemas import KnowledgeDataResponse
+                knowledge_data_response = KnowledgeDataResponse(
+                    collections=raw_knowledge.get("collections", []),
+                    chunks=raw_knowledge.get("chunks", []),
+                    total_results=raw_knowledge.get("total_results", 0),
+                )
+
             # Build response based on result type
             if result.get("direct_response"):
                 return SendMessageResponse(
@@ -538,6 +549,7 @@ async def send_message(
                     direct_response=result["direct_response"],
                     routing_strategy=routing_strategy,
                     memory_entries=memory_entries,
+                    knowledge_data=knowledge_data_response,
                 )
             elif exec_ids:
                 # MULTI_ACTION — return first execution_id for SSE stream
@@ -641,13 +653,12 @@ async def send_message(
 
 from src.auth.dependencies import RequireAdmin
 
-admin_router = APIRouter(prefix="/conversations", tags=["Admin — Conversations"])
+admin_router = APIRouter(prefix="/conversations", tags=["Admin — Conversations"], dependencies=[RequireAdmin])
 
 
 @admin_router.get("", response_model=ConversationListResponse)
 async def admin_list_conversations(
     user: CurrentUser,
-    _: None = RequireAdmin,
     db: DbSession = ...,
     page: int = 1,
     page_size: int = Query(default=20, ge=1, le=100),

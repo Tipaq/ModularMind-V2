@@ -235,6 +235,13 @@ async def document_process_handler(data: dict[str, Any]) -> None:
             await session.commit()
             logger.info("Document %s processed: %d chunks", document_id, chunk_count)
 
+            # Clean up source file only on success; keep it on failure for retry
+            if file_path:
+                try:
+                    os.unlink(file_path)
+                except OSError:
+                    logger.warning("Failed to delete temp file %s", file_path)
+
         except Exception as exc:
             logger.exception("Failed to process document %s", document_id)
             try:
@@ -250,12 +257,6 @@ async def document_process_handler(data: dict[str, Any]) -> None:
             except Exception:
                 logger.exception("Failed to update document %s status to FAILED", document_id)
             raise  # Re-raise to trigger retry/DLQ
-
-        finally:
-            try:
-                os.unlink(file_path)
-            except OSError:
-                logger.warning("Failed to delete temp file %s", file_path)
 
 
 # --- Model tasks (stream: tasks:models) ---

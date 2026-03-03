@@ -5,10 +5,12 @@ API endpoints for agent and graph execution.
 Supports distributed execution via Redis Streams and inline (legacy) mode.
 """
 
+import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -139,6 +141,64 @@ async def dispatch_execution(
         created_at=execution.created_at,
         stream_url=f"/api/v1/executions/{execution.id}/stream",
     )
+
+
+@router.get("/{execution_id}/stream")
+async def stream_execution(
+    execution_id: str,
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+) -> StreamingResponse:
+    """SSE stream for real-time execution events.
+
+    Subscribes to the Redis pub/sub channel ``execution:{execution_id}``
+    and relays every event to the client as a Server-Sent Event.
+    """
+    from src.infra.redis import get_redis_pool
+    from src.infra.sse import sse_response
+
+    # Verify the execution exists and belongs to the user
+    result = await db.execute(
+        select(ExecutionRun).where(ExecutionRun.id == execution_id)
+    )
+    execution = result.scalar_one_or_none()
+    if not execution:
+        raise HTTPException(status_code=404, detail="Execution not found")
+    if execution.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    channel = f"execution:{execution_id}"
+
+    async def event_generator():
+        import redis.asyncio as aioredis
+
+        r = aioredis.Redis(connection_pool=get_redis_pool())
+        pubsub = r.pubsub()
+        try:
+            await pubsub.subscribe(channel)
+            while True:
+                if await request.is_disconnected():
+                    break
+                msg = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=1.0,
+                )
+                if msg and msg["type"] == "message":
+                    try:
+                        event = json.loads(msg["data"])
+                        yield event
+                        if event.get("type") in ("complete", "error"):
+                            break
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                else:
+                    await asyncio.sleep(0.05)
+        finally:
+            await pubsub.unsubscribe(channel)
+            await pubsub.aclose()
+            await r.aclose()
+
+    return await sse_response(event_generator(), request)
 
 
 @router.post(
@@ -378,7 +438,7 @@ async def resume_execution(
         )
 
     await db.commit()
-    return {"status": "resumed", "execution_id": execution_id}
+    return {"status": "resumed"}
 
 
 # ---------------------------------------------------------------------------

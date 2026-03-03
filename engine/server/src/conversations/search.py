@@ -12,8 +12,7 @@ from dataclasses import dataclass
 
 from qdrant_client import models
 
-from src.embedding import get_embedding_provider
-from src.infra.config import get_settings
+from src.embedding.resolver import get_memory_embedding_provider
 from src.infra.qdrant import qdrant_factory
 from src.infra.tokenizer import tokenize_bm25
 
@@ -53,12 +52,7 @@ class ConversationSearchService:
         Filters by scope IN (conversation, cross_conversation) and user_id.
         If group_search, expands to allowed_group_user_ids.
         """
-        settings = get_settings()
-        embedding_provider = get_embedding_provider(
-            settings.EMBEDDING_PROVIDER,
-            model=settings.EMBEDDING_MODEL,
-            base_url=settings.OLLAMA_BASE_URL,
-        )
+        embedding_provider = get_memory_embedding_provider()
         query_embedding = await embedding_provider.embed_text(query)
 
         client = await qdrant_factory.get_client()

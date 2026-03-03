@@ -137,6 +137,7 @@ class SuperSupervisorService:
         )
         result["routing_metadata"] = routing_metadata
         result["memory_entries"] = getattr(self, "_last_memory_entries", [])
+        result["knowledge_data"] = getattr(self, "_last_knowledge_data", None)
         return result
 
     # =========================================================================
@@ -230,10 +231,18 @@ class SuperSupervisorService:
                 user_id, content,
             )
 
+        # Retrieve knowledge context from agents' RAG collections
+        knowledge_context = ""
+        self._last_knowledge_data: dict[str, Any] | None = None
+        knowledge_context, self._last_knowledge_data = await self._get_knowledge_context(
+            content, conv_config,
+        )
+
         decision = await self._route_with_llm(
             conversation_id, parsed.clean_content,
             messages=messages, affinity_agent_id=last_agent,
             conv_config=conv_config, memory_context=memory_context,
+            knowledge_context=knowledge_context,
         )
         decision = self._apply_single_selection_override(decision, conv_config)
         return decision
@@ -278,6 +287,7 @@ class SuperSupervisorService:
         affinity_agent_id: str | None = None,
         conv_config: dict[str, Any] | None = None,
         memory_context: str = "",
+        knowledge_context: str = "",
     ) -> RoutingDecision:
         """Call supervisor LLM for routing decision."""
         conv_config = conv_config or {}
@@ -285,6 +295,7 @@ class SuperSupervisorService:
             task_prompt = await self._build_routing_prompt(
                 messages, affinity_agent_id, conv_config,
                 memory_context=memory_context,
+                knowledge_context=knowledge_context,
             )
             llm_messages = self._compose_routing_messages(conv_config, task_prompt)
 
@@ -316,6 +327,7 @@ class SuperSupervisorService:
         affinity_agent_id: str | None,
         conv_config: dict[str, Any],
         memory_context: str = "",
+        knowledge_context: str = "",
     ) -> str:
         """Build the routing task prompt with agent/graph catalog and MCP tools."""
         agents = await self.config_provider.list_agents()
@@ -341,6 +353,7 @@ class SuperSupervisorService:
             last_agent=last_agent_info,
             mcp_tools=mcp_tools,
             memory_context=memory_context,
+            knowledge_context=knowledge_context,
         )
 
     async def _discover_mcp_tools_for_routing(
@@ -596,7 +609,7 @@ class SuperSupervisorService:
         from uuid import UUID
 
         try:
-            from src.embedding import get_embedding_provider
+            from src.embedding.resolver import get_memory_embedding_provider
             from src.infra.config import get_settings
             from src.infra.database import async_session_maker
             from src.memory.manager import MemoryManager
@@ -607,11 +620,7 @@ class SuperSupervisorService:
             if not settings.FACT_EXTRACTION_ENABLED:
                 return "", []
 
-            embedding_provider = get_embedding_provider(
-                settings.EMBEDDING_PROVIDER,
-                base_url=settings.OLLAMA_BASE_URL,
-                model=settings.EMBEDDING_MODEL,
-            )
+            embedding_provider = get_memory_embedding_provider()
 
             async with async_session_maker() as session:
                 repo = MemoryRepository(session)
@@ -675,6 +684,115 @@ class SuperSupervisorService:
         except Exception as e:
             logger.warning("Memory retrieval for supervisor failed: %s", e, exc_info=True)
             return "", []
+
+    async def _get_knowledge_context(
+        self,
+        query: str,
+        conv_config: dict[str, Any],
+    ) -> tuple[str, dict[str, Any] | None]:
+        """Retrieve knowledge (RAG) context from agents' collections.
+
+        Collects all RAG collection IDs from enabled agents and performs
+        a unified retrieval.  The formatted text is injected into the
+        supervisor's routing prompt so it can answer directly when
+        the knowledge is sufficient.
+
+        Returns:
+            Tuple of (formatted_text, knowledge_data_dict_or_None).
+        """
+        try:
+            from sqlalchemy import select as sa_select
+
+            from src.embedding.resolver import get_knowledge_embedding_provider
+            from src.infra.database import async_session_maker
+            from src.rag.models import RAGCollection
+            from src.rag.repository import RAGRepository
+            from src.rag.retriever import RAGRetriever
+
+            # Collect collection IDs from enabled agents that have RAG
+            agents = await self.config_provider.list_agents()
+            enabled = conv_config.get("enabled_agents")
+            if enabled:
+                agents = [a for a in agents if a.id in enabled]
+
+            all_collection_ids = []
+            for agent in agents:
+                if agent.rag_config and agent.rag_config.enabled and agent.rag_config.collection_ids:
+                    all_collection_ids.extend(agent.rag_config.collection_ids)
+
+            if not all_collection_ids:
+                return "", None
+
+            # Deduplicate
+            all_collection_ids = list(dict.fromkeys(all_collection_ids))
+
+            embedding_provider = get_knowledge_embedding_provider()
+            if embedding_provider is None:
+                return "", None
+
+            async with async_session_maker() as session:
+                repo = RAGRepository(session)
+                retriever = RAGRetriever(repo, embedding_provider, default_limit=5)
+                raw_results = await retriever.retrieve_raw(
+                    query=query,
+                    user_id="",
+                    collection_ids=all_collection_ids,
+                    limit=5,
+                    threshold=0.3,
+                )
+
+                if not raw_results:
+                    return "", None
+
+                # Hydrate collection names
+                coll_ids = {r.collection_id for r in raw_results}
+                rows = await session.execute(
+                    sa_select(RAGCollection.id, RAGCollection.name).where(
+                        RAGCollection.id.in_(coll_ids)
+                    )
+                )
+                coll_map = {row[0]: row[1] for row in rows.all()}
+
+                # Build serialisable results for frontend
+                collections_seen: dict[str, dict[str, Any]] = {}
+                chunks: list[dict[str, Any]] = []
+                for r in raw_results:
+                    cid = r.collection_id
+                    cname = coll_map.get(cid, "Unknown")
+                    if cid not in collections_seen:
+                        collections_seen[cid] = {
+                            "collection_id": cid,
+                            "collection_name": cname,
+                            "chunk_count": 0,
+                        }
+                    collections_seen[cid]["chunk_count"] += 1
+                    chunks.append({
+                        "chunk_id": r.chunk_id,
+                        "document_id": r.document_id,
+                        "collection_id": cid,
+                        "collection_name": cname,
+                        "document_filename": r.document.filename if r.document else None,
+                        "content_preview": (r.content or "")[:300],
+                        "score": round(r.score, 4),
+                        "chunk_index": r.chunk_index,
+                    })
+
+                knowledge_data = {
+                    "collections": list(collections_seen.values()),
+                    "chunks": chunks,
+                    "total_results": len(raw_results),
+                }
+
+                formatted = retriever.format_context(raw_results)
+                logger.info(
+                    "Knowledge context: %d results from %d collections",
+                    len(raw_results), len(collections_seen),
+                )
+                return formatted, knowledge_data
+
+        except Exception as e:
+            logger.warning("Knowledge retrieval for supervisor failed: %s", e, exc_info=True)
+            return "", None
 
     def _compose_tool_messages(
         self, conv_config: dict[str, Any], content: str, memory_context: str = "",

@@ -85,6 +85,35 @@ class MemoryEntryResponse(BaseModel):
     category: str = ""
 
 
+class KnowledgeChunkResponse(BaseModel):
+    """A single RAG chunk used during retrieval."""
+
+    chunk_id: str
+    document_id: str
+    collection_id: str
+    collection_name: str
+    document_filename: str | None = None
+    content_preview: str = ""
+    score: float = 0.0
+    chunk_index: int = 0
+
+
+class KnowledgeCollectionResponse(BaseModel):
+    """A RAG collection queried during retrieval."""
+
+    collection_id: str
+    collection_name: str
+    chunk_count: int = 0
+
+
+class KnowledgeDataResponse(BaseModel):
+    """RAG knowledge data returned alongside a message."""
+
+    collections: list[KnowledgeCollectionResponse] = Field(default_factory=list)
+    chunks: list[KnowledgeChunkResponse] = Field(default_factory=list)
+    total_results: int = 0
+
+
 class SendMessageResponse(BaseModel):
     """Send message response with execution info."""
 
@@ -98,6 +127,7 @@ class SendMessageResponse(BaseModel):
     is_ephemeral: bool | None = None
     ephemeral_agent: dict | None = None
     memory_entries: list[MemoryEntryResponse] = Field(default_factory=list)
+    knowledge_data: KnowledgeDataResponse | None = None
 
 
 # ─── Search Schemas ──────────────────────────────────────────────────────────

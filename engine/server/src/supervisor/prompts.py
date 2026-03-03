@@ -44,6 +44,7 @@ Recent conversation context:
 Last routed agent: {last_agent_info}
 
 {memory_section}
+{knowledge_section}
 Respond with a JSON object matching this schema:
 {{
   "strategy": "DIRECT_RESPONSE|TOOL_RESPONSE|DELEGATE_AGENT|EXECUTE_GRAPH|CREATE_AGENT|MULTI_ACTION",
@@ -56,7 +57,7 @@ Respond with a JSON object matching this schema:
 }}
 
 Rules:
-- Use DIRECT_RESPONSE for greetings, small talk, simple factual questions, and ANY question about your identity or capabilities ("who are you?", "what can you do?", "describe yourself"). YOU must answer these yourself — never delegate identity questions to an agent.
+- Use DIRECT_RESPONSE for greetings, small talk, simple factual questions, ANY question about your identity or capabilities ("who are you?", "what can you do?", "describe yourself"), and questions that can be answered using the provided knowledge context. YOU must answer these yourself — never delegate identity questions to an agent.
 - Use TOOL_RESPONSE when the user needs information you can get via available tools (search, lookups, etc.)
 - Use DELEGATE_AGENT when a specific agent clearly matches the request
 - Use EXECUTE_GRAPH when the user requests a workflow or pipeline
@@ -166,6 +167,7 @@ def build_routing_task_prompt(
     last_agent: str | None = None,
     mcp_tools: dict[str, list[MCPToolDefinition]] | None = None,
     memory_context: str = "",
+    knowledge_context: str = "",
 ) -> str:
     """Build the complete routing prompt with size enforcement.
 
@@ -176,6 +178,7 @@ def build_routing_task_prompt(
         last_agent: Last routed agent name/id (for affinity hint)
         mcp_tools: Optional mapping of server_name → list of tool definitions
         memory_context: Pre-formatted memory context string
+        knowledge_context: Pre-formatted RAG knowledge context string
 
     Returns:
         Complete prompt string, guaranteed under MAX_ROUTING_PROMPT_CHARS
@@ -188,6 +191,10 @@ def build_routing_task_prompt(
     memory_section = (
         f"Known facts about the user:\n{memory_context}" if memory_context else ""
     )
+    knowledge_section = (
+        f"Relevant knowledge from documents (use this to answer directly when sufficient):\n{knowledge_context}"
+        if knowledge_context else ""
+    )
 
     fmt_kwargs = dict(
         agent_catalog=agent_catalog,
@@ -196,6 +203,7 @@ def build_routing_task_prompt(
         conversation_summary=conversation_summary,
         last_agent_info=last_agent_info,
         memory_section=memory_section,
+        knowledge_section=knowledge_section,
     )
 
     prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
@@ -212,10 +220,11 @@ def build_routing_task_prompt(
         prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
 
     if len(prompt) > MAX_ROUTING_PROMPT_CHARS:
-        # Third: truncate graph, tool, and memory
+        # Third: truncate graph, tool, memory, and knowledge
         fmt_kwargs["graph_catalog"] = build_graph_catalog(graphs[:5])
         fmt_kwargs["mcp_tool_catalog"] = "(trimmed for size)"
         fmt_kwargs["memory_section"] = ""
+        fmt_kwargs["knowledge_section"] = ""
         prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
 
     return prompt

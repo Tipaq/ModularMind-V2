@@ -11,7 +11,7 @@ import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from src.embedding import get_embedding_provider
+from src.embedding.resolver import get_memory_embedding_provider
 from src.infra.config import get_settings
 from src.memory.vector_store import QdrantMemoryVectorStore
 
@@ -33,11 +33,7 @@ class ConversationIndexer:
         self._vector_store = QdrantMemoryVectorStore()
 
     def _get_embedding_provider(self):
-        return get_embedding_provider(
-            self._settings.EMBEDDING_PROVIDER,
-            model=self._settings.EMBEDDING_MODEL,
-            base_url=self._settings.OLLAMA_BASE_URL,
-        )
+        return get_memory_embedding_provider()
 
     async def index_message(self, message, conversation) -> None:
         """Embed a single message and upsert to Qdrant memory collection.

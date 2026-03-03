@@ -486,6 +486,17 @@ class ExecutionService:
         if context_messages:
             input_data["_context_layers"] = [msg.content for msg in context_messages]
 
+        # Emit knowledge trace event for the frontend right panel
+        rag_results = context_builder.get_rag_results()
+        if rag_results:
+            data = rag_results[0]
+            yield {
+                "type": "trace:knowledge",
+                "collections": data["collections"],
+                "chunks": data["chunks"],
+                "total_results": data["total_results"],
+            }
+
         # Create initial state
         state = create_initial_state(
             prompt=execution.input_prompt,
