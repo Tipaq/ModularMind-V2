@@ -46,8 +46,13 @@ interface SendMessageResponse {
   }>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractResponse(output: any): string {
+interface ExecutionOutput {
+  response?: string;
+  messages?: Array<{ type: string; content?: string }>;
+  node_outputs?: Record<string, { response?: string }>;
+}
+
+function extractResponse(output: ExecutionOutput | null | undefined): string {
   if (!output) return "";
   if (typeof output.response === "string") return output.response;
   if (Array.isArray(output.messages)) {
@@ -57,8 +62,7 @@ function extractResponse(output: any): string {
     }
   }
   if (output.node_outputs && typeof output.node_outputs === "object") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const values = Object.values(output.node_outputs) as any[];
+    const values = Object.values(output.node_outputs);
     for (let i = values.length - 1; i >= 0; i--) {
       if (values[i]?.response) return values[i].response;
     }

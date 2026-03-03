@@ -11,7 +11,6 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -24,6 +23,7 @@ from .feedback import FeedbackCreate, FeedbackResponse
 from .models import ExecutionRun
 from .scheduler import fair_scheduler
 from .schemas import (
+    ApprovalRequest,
     ExecutionCreate,
     ExecutionCreatedResponse,
     ExecutionListResponse,
@@ -444,12 +444,6 @@ async def resume_execution(
 # ---------------------------------------------------------------------------
 # Approval endpoints
 # ---------------------------------------------------------------------------
-
-
-class ApprovalRequest(BaseModel):
-    """Approval/rejection request body."""
-
-    notes: str | None = None
 
 
 @router.post("/{execution_id}/approve", response_model=ExecutionResponse)

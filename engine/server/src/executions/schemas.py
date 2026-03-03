@@ -92,3 +92,9 @@ class ExecutionCreatedResponse(BaseModel):
 
 class ExecutionListResponse(PaginatedResponse[ExecutionResponse]):
     """Paginated execution list response."""
+
+
+class ApprovalRequest(BaseModel):
+    """Approval/rejection request body."""
+
+    notes: str | None = None

@@ -63,6 +63,41 @@ function completeLastRunning(
   return updated;
 }
 
+/** SSE trace event from the execution stream. */
+export interface SSETraceEvent {
+  type: string;
+  event?: string;
+  duration_ms?: number;
+  // LLM
+  model?: string;
+  message_count?: number;
+  prompt_preview?: string;
+  response_preview?: string;
+  tokens?: { total?: number; prompt?: number; completion?: number };
+  // Tool
+  tool_name?: string;
+  server_name?: string;
+  input_preview?: string;
+  output_preview?: string;
+  // Retrieval
+  status?: string;
+  query?: string;
+  num_results?: number;
+  // Node
+  node_name?: string;
+  // Parallel / Loop
+  branch_count?: number;
+  mode?: string;
+  total_items?: number;
+  // Supervisor
+  strategy?: string;
+  agent_name?: string;
+  is_ephemeral?: boolean;
+  preview?: string;
+  // Error
+  error?: string;
+}
+
 export function useExecutionActivities() {
   const [activities, setActivities] = useState<ExecutionActivity[]>([]);
   const seqRef = useRef(0);
@@ -82,8 +117,7 @@ export function useExecutionActivities() {
     );
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleEvent = useCallback((data: any) => {
+  const handleEvent = useCallback((data: SSETraceEvent) => {
     const eventType = data?.type as string | undefined;
     if (!eventType) return;
 
@@ -128,7 +162,7 @@ export function useExecutionActivities() {
     // --- Tool ---
     if (eventType === "trace:tool_start") {
       const id = `tool-${++seqRef.current}`;
-      const rawName = (data.tool_name as string) || "tool";
+      const rawName = data.tool_name || "tool";
       const displayName = rawName.includes("__") ? rawName.split("__").slice(1).join("__") : rawName;
       const serverHint = rawName.includes("__") ? rawName.split("__")[0] : undefined;
       setActivities((prev) => [
@@ -142,8 +176,8 @@ export function useExecutionActivities() {
           startedAt: Date.now(),
           toolData: {
             toolName: displayName,
-            serverName: (data.server_name as string) || serverHint,
-            args: data.input_preview as string | undefined,
+            serverName: data.server_name || serverHint,
+            args: data.input_preview,
           },
         },
       ]);
@@ -161,7 +195,7 @@ export function useExecutionActivities() {
           status: "completed",
           durationMs: data.duration_ms ?? Date.now() - existing.startedAt,
           preview: data.output_preview ? truncate(data.output_preview, 150) : existing.preview,
-          toolData: { ...existing.toolData!, result: data.output_preview as string | undefined },
+          toolData: { ...existing.toolData!, result: data.output_preview },
         };
         return updated;
       });
@@ -179,7 +213,7 @@ export function useExecutionActivities() {
             type: "retrieval",
             status: "running",
             label: "Searching documents",
-            detail: data.query ? `"${truncate(data.query as string, 60)}"` : undefined,
+            detail: data.query ? `"${truncate(data.query, 60)}"` : undefined,
             startedAt: Date.now(),
           },
         ]);
@@ -276,8 +310,8 @@ export function useExecutionActivities() {
           label: `Delegating to ${data.agent_name || "agent"}`,
           detail: data.is_ephemeral ? "ephemeral" : undefined,
           startedAt: Date.now(),
-          isEphemeral: data.is_ephemeral as boolean | undefined,
-          agentName: data.agent_name as string | undefined,
+          isEphemeral: data.is_ephemeral,
+          agentName: data.agent_name,
         },
       ]);
       return;
@@ -321,7 +355,7 @@ export function useExecutionActivities() {
     // --- Step events (execution) ---
     if (eventType === "step" && data.event === "step_started") {
       const id = `step-${++seqRef.current}`;
-      const agentName = data.agent_name as string | undefined;
+      const agentName = data.agent_name;
       const label = agentName
         ? `${agentName}${data.is_ephemeral ? " (ephemeral)" : ""}`
         : "Agent executing";

@@ -92,35 +92,48 @@ export function useRightPanel() {
     }));
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleTraceEvent = useCallback((data: any) => {
+  interface KnowledgeTraceEvent {
+    type: string;
+    collections?: Array<{
+      collection_id: string;
+      collection_name: string;
+      chunk_count: number;
+    }>;
+    chunks?: Array<{
+      chunk_id: string;
+      document_id: string;
+      collection_id: string;
+      collection_name: string;
+      document_filename?: string;
+      content_preview: string;
+      score: number;
+      chunk_index: number;
+    }>;
+    total_results?: number;
+  }
+
+  const handleTraceEvent = useCallback((data: KnowledgeTraceEvent) => {
     if (data?.type !== "trace:knowledge") return;
 
     setState((prev) => ({
       ...prev,
       knowledge: {
         status: "completed",
-        collections: (data.collections || []).map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (c: any) => ({
-            collectionId: c.collection_id,
-            collectionName: c.collection_name,
-            chunkCount: c.chunk_count,
-          }),
-        ),
-        chunks: (data.chunks || []).map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (ch: any) => ({
-            chunkId: ch.chunk_id,
-            documentId: ch.document_id,
-            collectionId: ch.collection_id,
-            collectionName: ch.collection_name,
-            documentFilename: ch.document_filename,
-            contentPreview: ch.content_preview,
-            score: ch.score,
-            chunkIndex: ch.chunk_index,
-          }),
-        ),
+        collections: (data.collections || []).map((c) => ({
+          collectionId: c.collection_id,
+          collectionName: c.collection_name,
+          chunkCount: c.chunk_count,
+        })),
+        chunks: (data.chunks || []).map((ch) => ({
+          chunkId: ch.chunk_id,
+          documentId: ch.document_id,
+          collectionId: ch.collection_id,
+          collectionName: ch.collection_name,
+          documentFilename: ch.document_filename ?? null,
+          contentPreview: ch.content_preview,
+          score: ch.score,
+          chunkIndex: ch.chunk_index,
+        })),
         totalResults: data.total_results || 0,
       },
     }));
