@@ -12,8 +12,7 @@ import json
 import logging
 from typing import Any
 
-from src.embedding import get_embedding_provider
-from src.infra.config import get_settings
+from src.embedding.resolver import get_memory_embedding_provider
 from src.infra.database import async_session_maker
 from src.memory.models import MemoryScope, MemoryTier, MemoryType
 from src.memory.repository import MemoryRepository
@@ -45,12 +44,7 @@ async def embedder_handler(data: dict[str, Any]) -> None:
         logger.debug("No facts to embed for conversation %s", conversation_id)
         return
 
-    settings = get_settings()
-    provider = get_embedding_provider(
-        settings.EMBEDDING_PROVIDER,
-        model=settings.EMBEDDING_MODEL,
-        base_url=settings.OLLAMA_BASE_URL,
-    )
+    provider = get_memory_embedding_provider()
 
     logger.info(
         "Embedding %d facts from conversation %s", len(facts), conversation_id

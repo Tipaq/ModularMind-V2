@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     EMBEDDING_PROVIDER: str = "ollama"
     EMBEDDING_MODEL: str = "nomic-embed-text"
 
+    # Per-pipeline overrides (empty = use EMBEDDING_PROVIDER / EMBEDDING_MODEL)
+    MEMORY_EMBEDDING_PROVIDER: str = ""
+    MEMORY_EMBEDDING_MODEL: str = ""
+    KNOWLEDGE_EMBEDDING_PROVIDER: str = ""
+    KNOWLEDGE_EMBEDDING_MODEL: str = ""
+
     # ---- Qdrant -------------------------------------------------------------
     QDRANT_URL: str = Field(default="http://localhost:6333")
     QDRANT_API_KEY: str | None = Field(default=None)
@@ -299,11 +305,6 @@ class Settings(BaseSettings):
 
     # ---- Prometheus ---------------------------------------------------------
     PROMETHEUS_ENABLED: bool = True
-
-    # ---- Auth ---------------------------------------------------------------
-    # (kept for backward compat if anything still references these names)
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # =====================================================================
     # Validators

@@ -47,8 +47,22 @@ qdrant_points_total = Gauge(
     ["collection"],
 )
 
-_DENSE_DIM = 768
+_DENSE_DIM_DEFAULT = 768
 _DENSE_DISTANCE = models.Distance.COSINE
+
+
+def _dense_dim_for_collection(name: str, settings: Settings) -> int:
+    """Resolve the dense vector dimension based on the configured embedding model."""
+    from src.embedding.ollama import MODEL_DIMENSIONS
+
+    if name == settings.QDRANT_COLLECTION_MEMORY:
+        model = settings.MEMORY_EMBEDDING_MODEL or settings.EMBEDDING_MODEL
+    elif name == settings.QDRANT_COLLECTION_KNOWLEDGE:
+        model = settings.KNOWLEDGE_EMBEDDING_MODEL or settings.EMBEDDING_MODEL
+    else:
+        model = settings.EMBEDDING_MODEL
+
+    return MODEL_DIMENSIONS.get(model, _DENSE_DIM_DEFAULT)
 
 # Payload indexes to create on every collection
 _PAYLOAD_INDEXES: list[tuple[str, models.PayloadSchemaType]] = [
@@ -104,6 +118,7 @@ class QdrantClientFactory:
 
     async def _ensure_one(self, name: str, settings: Settings) -> None:
         assert self._client is not None
+        expected_dim = _dense_dim_for_collection(name, settings)
         exists = await self._client.collection_exists(name)
         if exists:
             info = await self._client.get_collection(name)
@@ -117,13 +132,23 @@ class QdrantClientFactory:
                     actual,
                     expected,
                 )
+            # Check vector dimension mismatch
+            dense_params = info.config.params.vectors.get("dense")
+            if dense_params and dense_params.size != expected_dim:
+                logger.warning(
+                    "Collection %s has dense vector size=%d, but configured model "
+                    "needs size=%d. Recreation required to change dimensions.",
+                    name,
+                    dense_params.size,
+                    expected_dim,
+                )
             return
 
         await self._client.create_collection(
             collection_name=name,
             vectors_config={
                 "dense": models.VectorParams(
-                    size=_DENSE_DIM,
+                    size=expected_dim,
                     distance=_DENSE_DISTANCE,
                     on_disk=True,
                 ),

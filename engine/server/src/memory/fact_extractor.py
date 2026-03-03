@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 
-from src.embedding import get_embedding_provider
+from src.embedding.resolver import get_memory_embedding_provider
 from src.infra.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -188,12 +188,7 @@ class FactExtractor:
         from .models import MemoryScope, MemoryTier
         from .vector_store import QdrantMemoryVectorStore
 
-        settings = self._settings
-        embedding_provider = get_embedding_provider(
-            settings.EMBEDDING_PROVIDER,
-            model=settings.EMBEDDING_MODEL,
-            base_url=settings.OLLAMA_BASE_URL,
-        )
+        embedding_provider = get_memory_embedding_provider()
         vector_store = QdrantMemoryVectorStore()
 
         count = 0
