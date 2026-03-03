@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { FileText, Globe, Users, User, Trash2 } from "lucide-react";
 import type { Collection } from "@modularmind/api-client";
 import { Badge, Button, relativeTime } from "@modularmind/ui";
@@ -16,7 +17,7 @@ interface Props {
   canDelete: boolean;
 }
 
-export function CollectionCard({ collection, isSelected, onClick, onDelete, canDelete }: Props) {
+export const CollectionCard = memo(function CollectionCard({ collection, isSelected, onClick, onDelete, canDelete }: Props) {
   const scope = SCOPE_CONFIG[collection.scope] ?? SCOPE_CONFIG.global;
   const ScopeIcon = scope.icon;
 
@@ -70,4 +71,4 @@ export function CollectionCard({ collection, isSelected, onClick, onDelete, canD
       )}
     </div>
   );
-}
+});

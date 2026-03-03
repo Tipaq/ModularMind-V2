@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
-import type { LiveExecutionsData, LlmGpuData, MonitoringData, PipelineData } from "@modularmind/api-client";
+import type {
+  LiveExecutionsData,
+  LlmGpuData,
+  MonitoringData,
+  PipelineData,
+  PipelinesData,
+} from "@modularmind/api-client";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
 import { OverviewTab } from "../components/monitoring/OverviewTab";
 import { LlmGpuTab } from "../components/monitoring/LlmGpuTab";
 import { InfraTab } from "../components/monitoring/InfraTab";
 import { ActiveInstancesTab } from "../components/monitoring/ActiveInstancesTab";
+import { PipelinesTab } from "../components/monitoring/PipelinesTab";
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -32,6 +39,11 @@ export default function Monitoring() {
     [],
     { keepDataOnError: true },
   );
+  const { data: pipelinesDetail, refetch: refetchPipelines } = useApi<PipelinesData>(
+    () => api.get("/internal/pipelines"),
+    [],
+    { keepDataOnError: true },
+  );
 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -45,10 +57,12 @@ export default function Monitoring() {
   const refetchPipelineRef = useRef(refetchPipeline);
   const refetchLlmGpuRef = useRef(refetchLlmGpu);
   const refetchLiveExecutionsRef = useRef(refetchLiveExecutions);
+  const refetchPipelinesRef = useRef(refetchPipelines);
   refetchMonitoringRef.current = refetchMonitoring;
   refetchPipelineRef.current = refetchPipeline;
   refetchLlmGpuRef.current = refetchLlmGpu;
   refetchLiveExecutionsRef.current = refetchLiveExecutions;
+  refetchPipelinesRef.current = refetchPipelines;
 
   useEffect(() => {
     const id = setInterval(async () => {
@@ -57,6 +71,7 @@ export default function Monitoring() {
         refetchPipelineRef.current(),
         refetchLlmGpuRef.current(),
         refetchLiveExecutionsRef.current(),
+        refetchPipelinesRef.current(),
       ]);
       setLastUpdated(new Date());
     }, POLL_INTERVAL_MS);
@@ -69,12 +84,14 @@ export default function Monitoring() {
       refetchPipeline(),
       refetchLlmGpu(),
       refetchLiveExecutions(),
+      refetchPipelines(),
     ]);
     setLastUpdated(new Date());
   };
 
   const alertCount = monitoring?.alerts.active_count ?? 0;
   const activeCount = liveExecutions?.total_active ?? 0;
+  const failedDocs = pipelinesDetail?.knowledge.status_counts.failed ?? 0;
 
   return (
     <div className="space-y-6">
@@ -119,6 +136,14 @@ export default function Monitoring() {
           </TabsTrigger>
           <TabsTrigger value="llm">LLM & GPU</TabsTrigger>
           <TabsTrigger value="infra">Infrastructure</TabsTrigger>
+          <TabsTrigger value="pipelines" className="flex items-center gap-1.5">
+            Pipelines
+            {failedDocs > 0 && (
+              <span className="rounded-full bg-destructive/20 px-1.5 py-0.5 text-xs font-medium text-destructive leading-none">
+                {failedDocs}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
@@ -135,6 +160,10 @@ export default function Monitoring() {
 
         <TabsContent value="infra" className="mt-6">
           <InfraTab monitoring={monitoring} />
+        </TabsContent>
+
+        <TabsContent value="pipelines" className="mt-6">
+          <PipelinesTab pipelines={pipelinesDetail} onRefresh={handleManualRefresh} />
         </TabsContent>
       </Tabs>
     </div>

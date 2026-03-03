@@ -12,11 +12,10 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
-  FlaskConical,
   type LucideIcon,
 } from "lucide-react";
 import { cn, UserButton } from "@modularmind/ui";
-import { useAuthStore } from "../stores/auth";
+import { useAuthStore } from "@modularmind/ui";
 import { useNavigate } from "react-router-dom";
 
 interface NavItem {
@@ -26,40 +25,14 @@ interface NavItem {
   end?: boolean;
 }
 
-interface NavSection {
-  label: string;
-  items: NavItem[];
-}
-
-const sections: NavSection[] = [
-  {
-    label: "Overview",
-    items: [
-      { name: "Dashboard", to: "/", icon: LayoutDashboard, end: true },
-      { name: "Monitoring", to: "/monitoring", icon: Activity },
-    ],
-  },
-  {
-    label: "Platform",
-    items: [
-      { name: "Models", to: "/models", icon: Layers },
-      { name: "Memory", to: "/memory", icon: Brain },
-    ],
-  },
-  {
-    label: "Workspace",
-    items: [
-      { name: "Knowledge", to: "/knowledge", icon: BookOpen },
-      { name: "Playground", to: "/playground", icon: FlaskConical },
-    ],
-  },
-  {
-    label: "Admin",
-    items: [
-      { name: "Users", to: "/users", icon: Users },
-      { name: "Configuration", to: "/configuration", icon: Settings2 },
-    ],
-  },
+const navItems: NavItem[] = [
+  { name: "Dashboard", to: "/", icon: LayoutDashboard, end: true },
+  { name: "Configuration", to: "/configuration", icon: Settings2 },
+  { name: "Models", to: "/models", icon: Layers },
+  { name: "Memory", to: "/memory", icon: Brain },
+  { name: "Knowledge", to: "/knowledge", icon: BookOpen },
+  { name: "Users", to: "/users", icon: Users },
+  { name: "Monitoring", to: "/monitoring", icon: Activity },
 ];
 
 export function Sidebar() {
@@ -72,8 +45,6 @@ export function Sidebar() {
     logout();
     window.location.href = "/ops/login";
   };
-
-  let globalIndex = 0;
 
   return (
     <motion.aside
@@ -109,64 +80,42 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-        {sections.map((section, sectionIdx) => {
-          const startIdx = globalIndex;
-          globalIndex += section.items.length;
+        {navItems.map((item, idx) => {
+          const isActive = item.end ? pathname === "/" : pathname.startsWith(item.to);
           return (
-            <div key={section.label} className={cn(sectionIdx > 0 && "mt-5")}>
-              <AnimatePresence>
-                {!collapsed && (
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-primary/60"
-                  >
-                    {section.label}
-                  </motion.p>
+            <motion.div
+              key={item.name}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3, delay: idx * 0.05 }}
+            >
+              <NavLink
+                to={item.to}
+                end={item.end}
+                className={cn(
+                  "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
+                  collapsed && "justify-center px-0",
+                  isActive
+                    ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/30"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted",
                 )}
-              </AnimatePresence>
-              <div className="space-y-1">
-                {section.items.map((item, itemIdx) => {
-                  const isActive = item.end ? pathname === "/" : pathname.startsWith(item.to);
-                  return (
-                    <motion.div
-                      key={item.name}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3, delay: (startIdx + itemIdx) * 0.05 }}
+              >
+                <item.icon className={cn("h-5 w-5 flex-shrink-0", !isActive && "group-hover:scale-110 transition-transform")} />
+                <AnimatePresence>
+                  {!collapsed && (
+                    <motion.span
+                      initial={{ opacity: 0, width: 0 }}
+                      animate={{ opacity: 1, width: "auto" }}
+                      exit={{ opacity: 0, width: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="font-medium text-sm truncate"
                     >
-                      <NavLink
-                        to={item.to}
-                        end={item.end}
-                        className={cn(
-                          "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
-                          collapsed && "justify-center px-0",
-                          isActive
-                            ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/30"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted",
-                        )}
-                      >
-                        <item.icon className={cn("h-5 w-5 flex-shrink-0", !isActive && "group-hover:scale-110 transition-transform")} />
-                        <AnimatePresence>
-                          {!collapsed && (
-                            <motion.span
-                              initial={{ opacity: 0, width: 0 }}
-                              animate={{ opacity: 1, width: "auto" }}
-                              exit={{ opacity: 0, width: 0 }}
-                              transition={{ duration: 0.2 }}
-                              className="font-medium text-sm truncate"
-                            >
-                              {item.name}
-                            </motion.span>
-                          )}
-                        </AnimatePresence>
-                      </NavLink>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </div>
+                      {item.name}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </NavLink>
+            </motion.div>
           );
         })}
       </nav>

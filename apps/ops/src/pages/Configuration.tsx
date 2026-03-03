@@ -1,17 +1,19 @@
 import { useSearchParams } from "react-router-dom";
-import { Settings2, Key, Plug, Webhook, Cog } from "lucide-react";
+import { Settings2, Key, Plug, Webhook, Layers, Cog } from "lucide-react";
 import { PageHeader } from "@modularmind/ui";
 import ProvidersTab from "../components/configuration/ProvidersTab";
 import McpServersTab from "../components/configuration/McpServersTab";
 import IntegrationsTab from "../components/configuration/IntegrationsTab";
+import EmbeddingsTab from "../components/configuration/EmbeddingsTab";
 import SystemTab from "../components/configuration/SystemTab";
 
-type TabId = "providers" | "mcp" | "integrations" | "system";
+type TabId = "providers" | "mcp" | "integrations" | "embeddings" | "system";
 
 const tabs: { id: TabId; label: string; icon: typeof Key }[] = [
   { id: "providers", label: "Providers", icon: Key },
   { id: "mcp", label: "MCP Servers", icon: Plug },
   { id: "integrations", label: "Integrations", icon: Webhook },
+  { id: "embeddings", label: "Embeddings", icon: Layers },
   { id: "system", label: "System", icon: Cog },
 ];
 
@@ -55,6 +57,7 @@ export default function Configuration() {
       {activeTab === "providers" && <ProvidersTab />}
       {activeTab === "mcp" && <McpServersTab />}
       {activeTab === "integrations" && <IntegrationsTab />}
+      {activeTab === "embeddings" && <EmbeddingsTab />}
       {activeTab === "system" && <SystemTab />}
     </div>
   );

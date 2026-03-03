@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { RefreshCw, ChevronDown, ChevronRight, MessageCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, Badge, Button } from "@modularmind/ui";
 import { api } from "../../lib/api";
-import { formatTokens, formatCost } from "./format";
+import { formatTokens, formatCost } from "@modularmind/ui";
 import type {
   AdminConversation,
   AdminConversationListResponse,

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { cn } from "@modularmind/ui";
 import type { ExecutionSummary, LiveExecutionsData } from "@modularmind/api-client";
 
@@ -48,28 +49,28 @@ const STATUS_DOT: Record<string, string> = {
   stopped: "bg-muted-foreground",
 };
 
-function StatusBadge({ status }: { status: ExecutionSummary["status"] }) {
+const StatusBadge = memo(function StatusBadge({ status }: { status: ExecutionSummary["status"] }) {
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium", STATUS_STYLES[status] ?? "bg-muted text-muted-foreground")}>
       <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[status] ?? "bg-muted-foreground")} />
       {status.replace("_", " ")}
     </span>
   );
-}
+});
 
 // ─── Type badge ───────────────────────────────────────────────────────────────
 
-function TypeBadge({ type }: { type: ExecutionSummary["execution_type"] }) {
+const TypeBadge = memo(function TypeBadge({ type }: { type: ExecutionSummary["execution_type"] }) {
   return (
     <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
       {type}
     </span>
   );
-}
+});
 
 // ─── Table ────────────────────────────────────────────────────────────────────
 
-function ExecutionRow({ exec }: { exec: ExecutionSummary }) {
+const ExecutionRow = memo(function ExecutionRow({ exec }: { exec: ExecutionSummary }) {
   return (
     <tr className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors">
       <td className="px-4 py-3">
@@ -97,7 +98,7 @@ function ExecutionRow({ exec }: { exec: ExecutionSummary }) {
       </td>
     </tr>
   );
-}
+});
 
 function ExecutionTable({
   rows,

@@ -1,4 +1,4 @@
-import type { Role } from "../../stores/auth";
+import type { Role } from "@modularmind/ui";
 
 export interface UserStats {
   id: string;

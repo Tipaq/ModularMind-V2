@@ -106,7 +106,7 @@ const PROVIDERS: ProviderDef[] = [
     key: "openai",
     name: "OpenAI",
     icon: OpenAIIcon,
-    color: "bg-emerald-600",
+    color: "bg-success",
     description: "GPT-4o, GPT-4o-mini, o1, o3 and other OpenAI models",
     docUrl: "https://platform.openai.com/api-keys",
     setupSteps: [
@@ -121,7 +121,7 @@ const PROVIDERS: ProviderDef[] = [
     key: "anthropic",
     name: "Anthropic",
     icon: AnthropicIcon,
-    color: "bg-amber-700",
+    color: "bg-warning",
     description: "Claude Opus, Sonnet, Haiku models",
     docUrl: "https://console.anthropic.com/settings/keys",
     setupSteps: [
@@ -136,7 +136,7 @@ const PROVIDERS: ProviderDef[] = [
     key: "google",
     name: "Google AI",
     icon: GoogleIcon,
-    color: "bg-blue-500",
+    color: "bg-info",
     description: "Gemini 2.0, Gemini 1.5 Pro/Flash models",
     docUrl: "https://aistudio.google.com/apikey",
     setupSteps: [
@@ -151,7 +151,7 @@ const PROVIDERS: ProviderDef[] = [
     key: "mistral",
     name: "Mistral",
     icon: MistralIcon,
-    color: "bg-orange-500",
+    color: "bg-accent",
     description: "Mistral Large, Medium, Small, Codestral models",
     docUrl: "https://console.mistral.ai/api-keys/",
     setupSteps: [
@@ -166,7 +166,7 @@ const PROVIDERS: ProviderDef[] = [
     key: "cohere",
     name: "Cohere",
     icon: CohereIcon,
-    color: "bg-purple-600",
+    color: "bg-secondary",
     description: "Command R+, Command R, Embed models",
     docUrl: "https://dashboard.cohere.com/api-keys",
     setupSteps: [
@@ -181,7 +181,7 @@ const PROVIDERS: ProviderDef[] = [
     key: "groq",
     name: "Groq",
     icon: GroqIcon,
-    color: "bg-amber-500",
+    color: "bg-primary",
     description: "Llama, Mixtral, Gemma models via Groq inference",
     docUrl: "https://console.groq.com/keys",
     setupSteps: [

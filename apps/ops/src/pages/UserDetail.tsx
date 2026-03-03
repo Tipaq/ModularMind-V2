@@ -27,16 +27,17 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
+  useAuthStore,
+  formatTokens,
+  formatCost,
 } from "@modularmind/ui";
 import { api } from "../lib/api";
-import { useAuthStore } from "../stores/auth";
 import { EditUserDialog } from "../components/users/EditUserDialog";
 import { ConfirmDialog } from "../components/shared/ConfirmDialog";
 import { UserConversationsTab } from "../components/users/UserConversationsTab";
 import { UserTokenUsageTab } from "../components/users/UserTokenUsageTab";
 import { UserMemoryTab } from "../components/users/UserMemoryTab";
 import { UserKnowledgeTab } from "../components/users/UserKnowledgeTab";
-import { formatTokens, formatCost } from "../components/users/format";
 import type { UserStats } from "../components/users/types";
 
 const roleConfig = {

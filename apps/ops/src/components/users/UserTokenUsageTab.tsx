@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, TrendingUp, DollarSign, Cpu, Zap } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, Badge, cn } from "@modularmind/ui";
+import { Card, CardContent, CardHeader, CardTitle, Badge, cn, formatTokens, formatCost } from "@modularmind/ui";
 import {
   BarChart,
   Bar,
@@ -12,7 +12,6 @@ import {
   Legend,
 } from "recharts";
 import { api } from "../../lib/api";
-import { formatTokens, formatCost } from "./format";
 import type { TokenUsageResponse } from "./types";
 
 const RANGES = [

@@ -1,5 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { ThemeProvider } from "@modularmind/ui";
+import { ThemeProvider, ErrorBoundary } from "@modularmind/ui";
 
 import DashboardLayout from "./layouts/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
@@ -12,13 +12,14 @@ import ModelDetail from "./pages/ModelDetail";
 import Knowledge from "./pages/Knowledge";
 import Users from "./pages/Users";
 import UserDetail from "./pages/UserDetail";
-import Playground from "./pages/Playground";
+
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Memory from "./pages/Memory";
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <ThemeProvider defaultMode="system">
     <BrowserRouter basename="/ops">
       <Routes>
@@ -34,12 +35,13 @@ export default function App() {
           <Route path="/memory" element={<Memory />} />
           <Route path="/users" element={<Users />} />
           <Route path="/users/:userId" element={<UserDetail />} />
-          <Route path="/playground" element={<Playground />} />
+
           <Route path="/settings" element={<Settings />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
       </Routes>
     </BrowserRouter>
     </ThemeProvider>
+    </ErrorBoundary>
   );
 }

@@ -10,11 +10,9 @@ import {
   Pencil,
   Eye,
 } from "lucide-react";
-import { cn, ROLE_COLORS, PageHeader, Badge, Button, Input } from "@modularmind/ui";
+import { cn, ROLE_COLORS, PageHeader, Badge, Button, Input, useAuthStore, formatTokens, formatCost } from "@modularmind/ui";
 import { api } from "../lib/api";
-import { useAuthStore } from "../stores/auth";
 import { EditUserDialog } from "../components/users/EditUserDialog";
-import { formatTokens, formatCost } from "../components/users/format";
 import type { UserStats, UserStatsListResponse } from "../components/users/types";
 
 const roleConfig = {

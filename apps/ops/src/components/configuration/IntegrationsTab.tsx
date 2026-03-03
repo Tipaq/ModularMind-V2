@@ -67,7 +67,7 @@ const CONNECTOR_TYPES: ConnectorTypeDef[] = [
     type: "discord",
     name: "Discord",
     icon: DiscordIcon,
-    color: "bg-indigo-500",
+    color: "bg-accent",
     description: "Connect your bot to a Discord server via slash commands",
     docUrl: "https://discord.com/developers/docs/getting-started",
     setupSteps: [
@@ -113,7 +113,7 @@ const CONNECTOR_TYPES: ConnectorTypeDef[] = [
     type: "slack",
     name: "Slack",
     icon: Hash,
-    color: "bg-purple-500",
+    color: "bg-secondary",
     description: "Receive messages from Slack channels via Events API",
     docUrl: "https://api.slack.com/start/building",
     setupSteps: [
@@ -152,7 +152,7 @@ const CONNECTOR_TYPES: ConnectorTypeDef[] = [
     type: "teams",
     name: "Microsoft Teams",
     icon: MessageSquare,
-    color: "bg-blue-500",
+    color: "bg-info",
     description: "Receive messages from Teams via Bot Framework",
     docUrl: "https://learn.microsoft.com/en-us/microsoftteams/platform/bots/how-to/create-a-bot-for-teams",
     setupSteps: [
@@ -190,7 +190,7 @@ const CONNECTOR_TYPES: ConnectorTypeDef[] = [
     type: "email",
     name: "Email",
     icon: Mail,
-    color: "bg-green-500",
+    color: "bg-success",
     description: "Receive emails via SMTP/IMAP webhook forwarding",
     docUrl: "https://support.google.com/mail/answer/7126229",
     setupSteps: [

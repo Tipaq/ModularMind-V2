@@ -9,7 +9,7 @@ import {
 } from "@modularmind/ui";
 import type { Collection } from "@modularmind/api-client";
 import { useKnowledgeStore } from "../stores/knowledge";
-import { useAuthStore } from "../stores/auth";
+import { useAuthStore } from "@modularmind/ui";
 import { CollectionCard } from "../components/knowledge/CollectionCard";
 import { CreateCollectionDialog } from "../components/knowledge/CreateCollectionDialog";
 import { CollectionDetailPanel } from "../components/knowledge/CollectionDetailPanel";

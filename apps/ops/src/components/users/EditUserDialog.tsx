@@ -10,7 +10,7 @@ import {
   Badge,
   cn,
 } from "@modularmind/ui";
-import type { Role } from "../../stores/auth";
+import type { Role } from "@modularmind/ui";
 import type { UserStats } from "./types";
 
 const ROLES: { value: Role; label: string; level: number }[] = [

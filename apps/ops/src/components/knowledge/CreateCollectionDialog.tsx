@@ -6,7 +6,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@modularmind/ui";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@modularmind/ui";
 
 interface CreateData {
   name: string;
