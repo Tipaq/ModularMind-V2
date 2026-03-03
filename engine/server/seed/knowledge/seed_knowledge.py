@@ -314,7 +314,7 @@ async def process_seed_documents():
             select(RAGDocument, RAGCollection)
             .join(RAGCollection, RAGDocument.collection_id == RAGCollection.id)
             .where(RAGDocument.status == "pending")
-            .where(RAGDocument.metadata["seed"].as_boolean() == True)  # noqa: E712
+            .where(RAGDocument.meta["seed"].as_boolean() == True)  # noqa: E712
         )
         rows = result.all()
 

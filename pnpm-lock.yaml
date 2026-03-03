@@ -200,12 +200,21 @@ importers:
         specifier: ^2.6.0
         version: 2.6.1
     devDependencies:
+      '@modularmind/api-client':
+        specifier: workspace:*
+        version: link:../api-client
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.14
+      react-router-dom:
+        specifier: ^7.0.0
+        version: 7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
+      zustand:
+        specifier: ^5.0.0
+        version: 5.0.11(@types/react@19.2.14)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))
 
   platform:
     dependencies:

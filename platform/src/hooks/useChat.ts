@@ -30,9 +30,33 @@ export interface MemoryEntry {
   category: string;
 }
 
+export interface KnowledgeCollection {
+  collectionId: string;
+  collectionName: string;
+  chunkCount: number;
+}
+
+export interface KnowledgeChunk {
+  chunkId: string;
+  documentId: string;
+  collectionId: string;
+  collectionName: string;
+  documentFilename: string | null;
+  contentPreview: string;
+  score: number;
+  chunkIndex: number;
+}
+
+export interface KnowledgeData {
+  collections: KnowledgeCollection[];
+  chunks: KnowledgeChunk[];
+  totalResults: number;
+}
+
 export interface MessageExecutionData {
   activities: ExecutionActivity[];
   memoryEntries: MemoryEntry[];
+  knowledgeData: KnowledgeData | null;
   tokenUsage: TokenUsage | null;
 }
 
@@ -47,6 +71,11 @@ interface SendMessageResponse {
   is_ephemeral?: boolean;
   ephemeral_agent?: { id: string; name: string };
   memory_entries?: MemoryEntry[];
+  knowledge_data?: {
+    collections: { collection_id: string; collection_name: string; chunk_count: number }[];
+    chunks: { chunk_id: string; document_id: string; collection_id: string; collection_name: string; document_filename: string | null; content_preview: string; score: number; chunk_index: number }[];
+    total_results: number;
+  };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -82,6 +111,7 @@ export function useChat(conversationId: string | null) {
   const currentAssistantIdRef = useRef("");
   const currentExecutionIdRef = useRef("");
   const currentMemoryRef = useRef<MemoryEntry[]>([]);
+  const currentKnowledgeRef = useRef<KnowledgeData | null>(null);
   const currentTokenUsageRef = useRef<TokenUsage | null>(null);
 
   const {
@@ -101,6 +131,7 @@ export function useChat(conversationId: string | null) {
       const data: MessageExecutionData = {
         activities: [...activities],
         memoryEntries: [...currentMemoryRef.current],
+        knowledgeData: currentKnowledgeRef.current,
         tokenUsage: currentTokenUsageRef.current,
       };
       setExecutionDataMap((prev) => ({ ...prev, [id]: data }));
@@ -162,6 +193,7 @@ export function useChat(conversationId: string | null) {
       streamBufferRef.current = "";
       resetActivities();
       currentMemoryRef.current = [];
+      currentKnowledgeRef.current = null;
       currentTokenUsageRef.current = null;
 
       // Optimistically add user message
@@ -208,7 +240,7 @@ export function useChat(conversationId: string | null) {
         return;
       }
 
-      const { execution_id, message_id, user_message, direct_response, routing_strategy, delegated_to, ephemeral_agent, memory_entries: resMemory } = res;
+      const { execution_id, message_id, user_message, direct_response, routing_strategy, delegated_to, ephemeral_agent, memory_entries: resMemory, knowledge_data: resKnowledge } = res;
 
       // Track the stable key for localStorage persistence:
       // - delegated executions: use execution_id
@@ -222,6 +254,28 @@ export function useChat(conversationId: string | null) {
       // Capture memory entries for this message
       if (resMemory && resMemory.length > 0) {
         currentMemoryRef.current = resMemory;
+      }
+
+      // Capture knowledge data from HTTP response (DIRECT_RESPONSE path)
+      if (resKnowledge && resKnowledge.total_results > 0) {
+        currentKnowledgeRef.current = {
+          collections: resKnowledge.collections.map((c) => ({
+            collectionId: c.collection_id,
+            collectionName: c.collection_name,
+            chunkCount: c.chunk_count,
+          })),
+          chunks: resKnowledge.chunks.map((ch) => ({
+            chunkId: ch.chunk_id,
+            documentId: ch.document_id,
+            collectionId: ch.collection_id,
+            collectionName: ch.collection_name,
+            documentFilename: ch.document_filename,
+            contentPreview: ch.content_preview,
+            score: ch.score,
+            chunkIndex: ch.chunk_index,
+          })),
+          totalResults: resKnowledge.total_results,
+        };
       }
 
       // Replace temp user message with real one
@@ -281,6 +335,33 @@ export function useChat(conversationId: string | null) {
                 prev.map((m) => (m.id === assistantId ? { ...m, content: response } : m)),
               );
             }
+          }
+
+          if (data.type === "trace:knowledge") {
+            currentKnowledgeRef.current = {
+              collections: (data.collections || []).map(
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (c: any) => ({
+                  collectionId: c.collection_id,
+                  collectionName: c.collection_name,
+                  chunkCount: c.chunk_count,
+                }),
+              ),
+              chunks: (data.chunks || []).map(
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (ch: any) => ({
+                  chunkId: ch.chunk_id,
+                  documentId: ch.document_id,
+                  collectionId: ch.collection_id,
+                  collectionName: ch.collection_name,
+                  documentFilename: ch.document_filename,
+                  contentPreview: ch.content_preview,
+                  score: ch.score,
+                  chunkIndex: ch.chunk_index,
+                }),
+              ),
+              totalResults: data.total_results || 0,
+            };
           }
 
           if (data.type === "tokens") {
