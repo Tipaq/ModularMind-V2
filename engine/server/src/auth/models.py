@@ -37,12 +37,6 @@ class UserRole(str, Enum):
         return {"owner": 2, "admin": 1, "user": 0}[self.value]
 
 
-class UserSource(str, Enum):
-    """How the user was created."""
-
-    LOCAL = "local"        # CLI create-admin or direct creation
-    PLATFORM = "platform"  # Synced from platform
-
 
 class User(Base):
     """User model for authentication."""
@@ -59,10 +53,6 @@ class User(Base):
         default=UserRole.USER,
     )
     is_active: Mapped[bool] = mapped_column(default=True)
-    source: Mapped[UserSource] = mapped_column(
-        SQLEnum(UserSource, values_callable=lambda x: [e.value for e in x]),
-        default=UserSource.LOCAL,
-    )
     platform_user_id: Mapped[str | None] = mapped_column(
         String(36), unique=True, nullable=True, index=True
     )

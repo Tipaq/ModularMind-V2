@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import CurrentUser, UserRole
 from src.auth.dependencies import RequireAdmin
-from src.auth.models import User, UserSource
+from src.auth.models import User
 from src.auth.service import AuthService
 from src.conversations.models import Conversation, ConversationMessage
 from src.executions.models import ExecutionRun, ExecutionStatus
@@ -38,7 +38,6 @@ class UserStatsResponse(BaseModel):
     email: str
     role: UserRole
     is_active: bool
-    source: UserSource
     conversation_count: int
     total_tokens_prompt: int
     total_tokens_completion: int
@@ -329,7 +328,6 @@ async def list_users_with_stats(
             email=u.email,
             role=u.role,
             is_active=u.is_active,
-            source=u.source,
             conversation_count=row[1],
             total_tokens_prompt=row[2],
             total_tokens_completion=row[3],
@@ -385,7 +383,6 @@ async def get_user_detail(
         email=target.email,
         role=target.role,
         is_active=target.is_active,
-        source=target.source,
         conversation_count=conv_count,
         total_tokens_prompt=tokens_p,
         total_tokens_completion=tokens_c,

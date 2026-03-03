@@ -20,7 +20,7 @@ from fastapi.security import OAuth2PasswordBearer
 from src.infra.config import get_settings
 from src.infra.database import DbSession
 
-from .models import User, UserRole, UserSource
+from .models import User, UserRole
 from .service import AuthService
 
 # auto_error=False so missing Bearer header doesn't 401 before we check cookies
@@ -73,7 +73,6 @@ async def _get_or_create_platform_service_user(db: "AsyncSession") -> User:
         hashed_password="!service-account",
         role=UserRole.OWNER,
         is_active=True,
-        source=UserSource.PLATFORM,
         platform_user_id=None,
     )
     db.add(user)

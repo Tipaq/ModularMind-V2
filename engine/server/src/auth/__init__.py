@@ -11,7 +11,7 @@ from .dependencies import (
     require_min_role,
     verify_sync_token,
 )
-from .models import User, UserRole, UserSource
+from .models import User, UserRole
 from .router import router
 from .schemas import (
     LoginRequest,
@@ -29,7 +29,6 @@ __all__ = [
     # Models
     "User",
     "UserRole",
-    "UserSource",
     # Schemas
     "LoginRequest",
     "LoginResponse",

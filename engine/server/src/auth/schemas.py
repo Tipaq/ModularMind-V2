@@ -8,7 +8,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
 
-from .models import UserRole, UserSource
+from .models import UserRole
 
 
 class LoginRequest(BaseModel):
@@ -92,7 +92,6 @@ class UserListResponse(BaseModel):
     email: str
     role: UserRole
     is_active: bool
-    source: UserSource
     created_at: datetime
     updated_at: datetime
 
