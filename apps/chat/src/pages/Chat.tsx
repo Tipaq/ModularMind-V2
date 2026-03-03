@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { Bot, Zap } from "lucide-react";
+import { Bot, Zap, PanelRight } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
 import { useChat, type Message } from "../hooks/useChat";
 import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
 import { ChatSidebar, type Conversation } from "../components/ChatSidebar";
 import { ChatMessages } from "../components/ChatMessages";
 import { ChatInput } from "../components/ChatInput";
-import { useAuthStore } from "../stores/auth";
+import { RightPanel } from "../components/RightPanel";
+import { useAuthStore } from "@modularmind/ui";
 import { api } from "../lib/api";
 
 interface ChatConfig {
@@ -38,10 +39,13 @@ export default function Chat() {
     error,
     tokenUsage,
     activities,
+    panelState,
     sendMessage,
     setInitialMessages,
     cancelStream,
   } = useChat(activeConversationId);
+
+  const [panelOpen, setPanelOpen] = useState(false);
 
   // Determine if sending is blocked
   const sendDisabledReason = useMemo(() => {
@@ -318,6 +322,15 @@ export default function Chat() {
                 {tokenUsage.total}
               </span>
             )}
+
+            {/* Panel toggle */}
+            <button
+              onClick={() => setPanelOpen((prev) => !prev)}
+              className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Toggle insights panel"
+            >
+              <PanelRight className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
@@ -348,6 +361,17 @@ export default function Chat() {
           disabledReason={sendDisabledReason}
         />
       </div>
+
+      {/* Right: Insights panel */}
+      {panelOpen && (
+        <RightPanel
+          supervisor={panelState.supervisor}
+          knowledge={panelState.knowledge}
+          memory={panelState.memory}
+          isStreaming={isStreaming}
+          onClose={() => setPanelOpen(false)}
+        />
+      )}
     </div>
   );
 }

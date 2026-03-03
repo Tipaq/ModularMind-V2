@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   Brain,
   Wrench,
@@ -52,7 +52,7 @@ function formatDuration(ms?: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-function ActivityItem({ activity }: { activity: ExecutionActivity }) {
+const ActivityItem = memo(function ActivityItem({ activity }: { activity: ExecutionActivity }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = ACTIVITY_ICON[activity.type] || Bot;
   const color = ACTIVITY_COLOR[activity.type] || "text-muted-foreground";
@@ -100,7 +100,7 @@ function ActivityItem({ activity }: { activity: ExecutionActivity }) {
       </div>
     </div>
   );
-}
+});
 
 interface Props {
   activities: ExecutionActivity[];

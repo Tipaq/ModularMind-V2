@@ -1,8 +1,17 @@
 import { useCallback, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useExecutionActivities } from "./useExecutionActivities";
+import { useRightPanel } from "./useRightPanel";
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "./useExecutionActivities";
+export type {
+  SupervisorData,
+  KnowledgeData,
+  KnowledgeCollection,
+  KnowledgeChunk,
+  MemoryEntry,
+  RightPanelState,
+} from "./useRightPanel";
 
 export interface Message {
   id: string;
@@ -26,6 +35,15 @@ interface SendMessageResponse {
   delegated_to?: string;
   is_ephemeral?: boolean;
   ephemeral_agent?: { id: string; name: string };
+  memory_entries?: Array<{
+    id: string;
+    content: string;
+    scope: string;
+    tier: string;
+    importance: number;
+    memory_type: string;
+    category: string;
+  }>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -63,6 +81,15 @@ export function useChat(conversationId: string | null) {
     finalize: finalizeActivities,
   } = useExecutionActivities();
 
+  const {
+    panelState,
+    resetPanel,
+    setSupervisorData,
+    setMemoryEntries,
+    setKnowledgeLoading,
+    handlePanelEvent,
+  } = useRightPanel();
+
   const setInitialMessages = useCallback((msgs: Message[]) => {
     setMessages(msgs);
   }, []);
@@ -76,6 +103,7 @@ export function useChat(conversationId: string | null) {
       setIsStreaming(true);
       streamBufferRef.current = "";
       resetActivities();
+      resetPanel();
 
       // Optimistically add user message
       const tempUserMsg: Message = {
@@ -109,10 +137,34 @@ export function useChat(conversationId: string | null) {
         return;
       }
 
-      const { execution_id, user_message, direct_response, routing_strategy, delegated_to, ephemeral_agent } = res;
+      const { execution_id, user_message, direct_response, routing_strategy, delegated_to, is_ephemeral, ephemeral_agent, memory_entries } = res;
 
       // Replace temp user message with real one
       setMessages((prev) => prev.map((m) => (m.id === tempUserMsg.id ? user_message : m)));
+
+      // Populate right panel with supervisor + memory data
+      setSupervisorData({
+        routingStrategy: routing_strategy || null,
+        delegatedTo: delegated_to || null,
+        isEphemeral: is_ephemeral || false,
+        ephemeralAgent: ephemeral_agent || null,
+      });
+      if (memory_entries?.length) {
+        setMemoryEntries(
+          memory_entries.map((e) => ({
+            id: e.id,
+            content: e.content,
+            scope: e.scope,
+            tier: e.tier,
+            importance: e.importance,
+            memoryType: e.memory_type,
+            category: e.category,
+          })),
+        );
+      }
+      if (execution_id) {
+        setKnowledgeLoading();
+      }
 
       const routingDurationMs = Date.now() - sendStartMs;
 
@@ -157,6 +209,7 @@ export function useChat(conversationId: string | null) {
         try {
           const data = JSON.parse(e.data);
           handleTraceEvent(data);
+          handlePanelEvent(data);
 
           if (data.type === "step") {
             const output = data.output_data || data.output;
@@ -223,7 +276,7 @@ export function useChat(conversationId: string | null) {
         setIsStreaming(false);
       };
     },
-    [conversationId, isStreaming, handleTraceEvent, resetActivities, finalizeActivities],
+    [conversationId, isStreaming, handleTraceEvent, resetActivities, finalizeActivities, resetPanel, setSupervisorData, setMemoryEntries, setKnowledgeLoading, handlePanelEvent],
   );
 
   const cancelStream = useCallback(() => {
@@ -240,6 +293,7 @@ export function useChat(conversationId: string | null) {
     error,
     tokenUsage,
     activities,
+    panelState,
     sendMessage,
     setInitialMessages,
     cancelStream,

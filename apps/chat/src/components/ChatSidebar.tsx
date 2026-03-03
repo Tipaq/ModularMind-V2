@@ -13,7 +13,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@modularmind/ui";
-import { useAuthStore } from "../stores/auth";
+import { useAuthStore } from "@modularmind/ui";
 
 export interface Conversation {
   id: string;

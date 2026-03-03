@@ -1,5 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { ThemeProvider } from "@modularmind/ui";
+import { ThemeProvider, ErrorBoundary } from "@modularmind/ui";
 
 import ChatLayout from "./layouts/ChatLayout";
 import Chat from "./pages/Chat";
@@ -9,6 +9,7 @@ import Profile from "./pages/Profile";
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <ThemeProvider defaultMode="system">
       <BrowserRouter>
         <Routes>
@@ -21,5 +22,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
+    </ErrorBoundary>
   );
 }
