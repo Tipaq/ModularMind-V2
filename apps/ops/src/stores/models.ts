@@ -91,8 +91,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     try {
       const configs = await api.get<ProviderConfig[]>("/models/providers");
       set({ providerConfigs: configs });
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error("[models] Failed to fetch provider configs:", err);
     }
   },
 
@@ -104,8 +104,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         : "/models/browse";
       const data = await api.get<Record<string, BrowsableModel[]>>(url);
       set({ browsableModels: data });
-    } catch {
-      // Non-fatal — browsable models are supplementary
+    } catch (err) {
+      console.error("[models] Failed to fetch browsable models:", err);
     } finally {
       set({ browsableLoading: false });
     }
@@ -255,7 +255,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
             `/models/pull/${encodeURIComponent(m.model_name)}/status`,
           );
           return { model_name: m.model_name, data };
-        } catch {
+        } catch (err) {
+          console.error("[models] Failed to poll pull status:", err);
           return null;
         }
       }),

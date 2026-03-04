@@ -245,8 +245,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     try {
       const data = await api.get<MemoryUser[]>("/memory/admin/users");
       set({ memoryUsers: data });
-    } catch {
-      // Non-fatal
+    } catch (err) {
+      console.error("[memory] Failed to fetch memory users:", err);
     }
   },
 
