@@ -5,6 +5,8 @@ import {
   Bot,
   BookOpen,
   Brain,
+  Clock,
+  Cpu,
   Database,
   FileText,
   Wrench,
@@ -14,24 +16,24 @@ import {
   FileJson,
   Pencil,
   Loader2,
+  Route,
   Settings2,
+  Zap,
 } from "lucide-react";
 import {
   Badge,
   Button,
   cn,
   Switch,
-  Separator,
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-  Tabs,
-  TabsList,
-  TabsTrigger,
   TabsContent,
+  ChatPanel,
 } from "@modularmind/ui";
+import type { ChatPanelTab } from "@modularmind/ui";
 import type { ExecutionActivity, MemoryEntry, KnowledgeData, KnowledgeChunk, MessageExecutionData } from "@/hooks/useChat";
 import type { EngineModel, SupervisorLayer } from "@/hooks/useChatConfig";
 import { ExecutionActivityList } from "./ExecutionActivity";
@@ -44,7 +46,7 @@ interface ChatConfig {
   modelOverride: boolean;
 }
 
-interface ExecutionPanelProps {
+interface InsightsPanelProps {
   selectedExecution: MessageExecutionData | null;
   liveActivities: ExecutionActivity[];
   isStreaming: boolean;
@@ -54,6 +56,27 @@ interface ExecutionPanelProps {
   models: EngineModel[];
   supervisorLayers: SupervisorLayer[];
   onUpdateLayer: (key: string, content: string) => Promise<boolean>;
+}
+
+// ── Execution Metrics ────────────────────────────────────────
+
+interface ExecutionMetrics {
+  totalDurationMs: number | null;
+  llmDurationMs: number | null;
+  tokensPerSecond: number | null;
+  tokenUsage: { prompt: number; completion: number; total: number } | null;
+  modelUsed: string | null;
+  llmCalls: number;
+  toolCalls: number;
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatNumber(n: number): string {
+  return n.toLocaleString();
 }
 
 // ── Shared: Collapsible Section ──────────────────────────────
@@ -118,12 +141,14 @@ function ModelTabContent({
   modelOverride,
   onSelectModel,
   onToggleOverride,
+  metrics,
 }: {
   models: EngineModel[];
   selectedModelId: string | null;
   modelOverride: boolean;
   onSelectModel: (id: string | null) => void;
   onToggleOverride: (enabled: boolean) => void;
+  metrics: ExecutionMetrics | null;
 }) {
   const availableModels = useMemo(
     () => models.filter((m) => m.is_active && m.is_available && !m.is_embedding),
@@ -133,6 +158,12 @@ function ModelTabContent({
   const toEngineModelId = useCallback(
     (m: EngineModel) => `${m.provider}:${m.model_id}`,
     [],
+  );
+
+  // Find the selected model object for displaying details
+  const selectedModel = useMemo(
+    () => availableModels.find((m) => toEngineModelId(m) === selectedModelId) ?? null,
+    [availableModels, selectedModelId, toEngineModelId],
   );
 
   useEffect(() => {
@@ -174,6 +205,18 @@ function ModelTabContent({
             </SelectContent>
           </Select>
 
+          {/* Model info card — always visible when a model is selected */}
+          {selectedModel && (
+            <div className="border border-border/50 rounded-lg p-2.5">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                <span className="text-muted-foreground">Provider</span>
+                <span className="text-right font-medium">{selectedModel.provider}</span>
+                <span className="text-muted-foreground">Model ID</span>
+                <span className="text-right font-mono text-[11px] truncate">{selectedModel.model_id}</span>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm">Override agent models</p>
@@ -186,6 +229,73 @@ function ModelTabContent({
             <Switch checked={modelOverride} onCheckedChange={onToggleOverride} />
           </div>
         </>
+      )}
+
+      {/* Execution Metrics */}
+      {metrics && (metrics.totalDurationMs != null || metrics.tokenUsage) && (
+        <div className="space-y-2 pt-1">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Last Execution
+          </p>
+
+          {/* Stats grid */}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+            {metrics.totalDurationMs != null && (
+              <>
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  <Clock className="h-3 w-3" />Total time
+                </span>
+                <span className="font-mono text-right">{formatDuration(metrics.totalDurationMs)}</span>
+              </>
+            )}
+            {metrics.llmDurationMs != null && (
+              <>
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  <Zap className="h-3 w-3" />LLM time
+                </span>
+                <span className="font-mono text-right">
+                  {formatDuration(metrics.llmDurationMs)}
+                  {metrics.llmCalls > 1 && (
+                    <span className="text-muted-foreground ml-1">({metrics.llmCalls} calls)</span>
+                  )}
+                </span>
+              </>
+            )}
+            {metrics.toolCalls > 0 && (
+              <>
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  <Wrench className="h-3 w-3" />Tools
+                </span>
+                <span className="font-mono text-right">{metrics.toolCalls} call{metrics.toolCalls > 1 ? "s" : ""}</span>
+              </>
+            )}
+          </div>
+
+          {/* Token usage card */}
+          {metrics.tokenUsage && (
+            <div className="border border-border/50 rounded-lg p-2.5 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-mono">{formatNumber(metrics.tokenUsage.prompt)}</span>
+                <span className="text-muted-foreground">&rarr;</span>
+                <span className="font-mono">{formatNumber(metrics.tokenUsage.completion)}</span>
+                <span className="text-muted-foreground">=</span>
+                <span className="font-mono font-medium">{formatNumber(metrics.tokenUsage.total)}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>prompt</span>
+                <span />
+                <span>completion</span>
+                <span />
+                <span>total</span>
+              </div>
+              {metrics.tokensPerSecond != null && (
+                <div className="text-center text-[10px] text-muted-foreground pt-0.5 border-t border-border/30">
+                  <span className="font-mono font-medium text-foreground">{Math.round(metrics.tokensPerSecond)}</span> tok/s
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -210,12 +320,6 @@ function SupervisorTabContent({
         <span className="text-sm">Supervisor Mode</span>
         <Switch checked={supervisorMode} onCheckedChange={onToggle} />
       </div>
-      <p className="text-xs text-muted-foreground leading-relaxed">
-        {supervisorMode
-          ? "The supervisor automatically routes your messages to the best agent, or responds directly."
-          : "Select a specific agent below to handle all messages in this conversation."}
-      </p>
-
       {supervisorMode && layers.length > 0 && (
         <div className="space-y-2 pt-1">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -242,12 +346,14 @@ function LayerEditor({
   onSave: (key: string, content: string) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState(layer.content);
   const [saving, setSaving] = useState(false);
 
   const handleEdit = () => {
     setDraft(layer.content);
     setEditing(true);
+    setExpanded(false);
   };
 
   const handleSave = async () => {
@@ -267,10 +373,23 @@ function LayerEditor({
           </Button>
         )}
       </div>
-      {!editing && (
-        <p className="text-[10px] text-muted-foreground px-3 py-1.5">
-          {layer.description}
-        </p>
+      {!editing && layer.content && (
+        <div
+          className="relative cursor-pointer"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <pre
+            className={cn(
+              "text-[11px] font-mono text-muted-foreground whitespace-pre-wrap break-words px-3 py-2 leading-relaxed",
+              !expanded && "line-clamp-6",
+            )}
+          >
+            {layer.content}
+          </pre>
+          {!expanded && (
+            <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-card/80 to-transparent pointer-events-none" />
+          )}
+        </div>
       )}
       {editing && (
         <div className="px-3 pb-2 pt-1 space-y-1.5">
@@ -589,35 +708,19 @@ function StepCard({ step }: { step: ExecutionActivity }) {
   );
 }
 
-// ── Tab Trigger with Badge ───────────────────────────────────
+// ── Tab Definitions ──────────────────────────────────────────
 
-function TabTriggerWithBadge({
-  value,
-  label,
-  count,
-}: {
-  value: string;
-  label: string;
-  count?: number;
-}) {
-  return (
-    <TabsTrigger
-      value={value}
-      className="flex-1 flex items-center justify-center px-1 py-1.5 text-[10px] relative"
-    >
-      {label}
-      {count != null && count > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[8px] font-bold px-0.5">
-          {count}
-        </span>
-      )}
-    </TabsTrigger>
-  );
-}
+const PANEL_TABS: ChatPanelTab[] = [
+  { value: "model", label: "Model", icon: Cpu },
+  { value: "supervisor", label: "Supervisor", icon: Route },
+  { value: "activity", label: "Activity", icon: Activity },
+  { value: "memory", label: "Memory", icon: Brain },
+  { value: "knowledge", label: "RAG", icon: BookOpen },
+];
 
 // ── Main Panel ───────────────────────────────────────────────
 
-export function ExecutionPanel({
+export function InsightsPanel({
   selectedExecution,
   liveActivities,
   isStreaming,
@@ -627,10 +730,12 @@ export function ExecutionPanel({
   models,
   supervisorLayers,
   onUpdateLayer,
-}: ExecutionPanelProps) {
-  const displayActivities = isLiveSelected && isStreaming
-    ? liveActivities
-    : selectedExecution?.activities ?? [];
+}: InsightsPanelProps) {
+  const displayActivities = useMemo(() => {
+    return isLiveSelected && isStreaming
+      ? liveActivities
+      : selectedExecution?.activities ?? [];
+  }, [isLiveSelected, isStreaming, liveActivities, selectedExecution?.activities]);
 
   const memoryEntries = selectedExecution?.memoryEntries ?? [];
   const knowledgeData = selectedExecution?.knowledgeData ?? null;
@@ -656,73 +761,93 @@ export function ExecutionPanel({
     [displayActivities],
   );
 
+  const executionMetrics = useMemo<ExecutionMetrics | null>(() => {
+    // Show metrics as soon as we have any activities (routing, delegation, etc.) or token data
+    if (!displayActivities.length && !tokenUsage) return null;
+
+    const llmActivities = displayActivities.filter((a) => a.type === "llm");
+    const toolActivities = displayActivities.filter((a) => a.type === "tool");
+
+    // Total duration: use delegation end duration (most accurate) or compute from activity span
+    let totalDurationMs: number | null = null;
+    const delegationEnd = displayActivities.find((a) => a.type === "delegation" && a.status !== "running" && a.durationMs);
+    const directResponse = displayActivities.find((a) => a.type === "direct_response" && a.durationMs);
+    if (delegationEnd?.durationMs) {
+      totalDurationMs = delegationEnd.durationMs;
+    } else if (directResponse?.durationMs) {
+      totalDurationMs = directResponse.durationMs;
+    } else {
+      const withDuration = displayActivities.filter((a) => a.startedAt && a.durationMs != null);
+      if (withDuration.length > 0) {
+        const earliest = Math.min(...displayActivities.filter((a) => a.startedAt).map((a) => a.startedAt));
+        const latest = Math.max(...withDuration.map((a) => a.startedAt + (a.durationMs || 0)));
+        if (latest > earliest) totalDurationMs = latest - earliest;
+      }
+    }
+
+    // LLM duration: sum of all LLM call durations
+    const llmDurationMs = llmActivities.reduce((sum, a) => sum + (a.durationMs || 0), 0) || null;
+
+    // Tokens per second
+    let tokensPerSecond: number | null = null;
+    if (tokenUsage && llmDurationMs && llmDurationMs > 0) {
+      tokensPerSecond = (tokenUsage.completion / (llmDurationMs / 1000));
+    }
+
+    // Model used: from LLM activity trace, or fall back to configured model
+    const modelUsed = [...llmActivities].reverse().find((a) => a.model)?.model ?? config.modelId;
+
+    return {
+      totalDurationMs,
+      llmDurationMs,
+      tokensPerSecond,
+      tokenUsage,
+      modelUsed,
+      llmCalls: llmActivities.length,
+      toolCalls: toolActivities.length,
+    };
+  }, [displayActivities, tokenUsage, config.modelId]);
+
   return (
-    <div className="w-80 h-full border-l flex flex-col bg-card overflow-hidden shrink-0">
-      <Tabs defaultValue="model" className="flex flex-col h-full">
-        {/* Tab bar */}
-        <div className="border-b shrink-0 px-2 pt-2">
-          <TabsList className="w-full h-8 bg-muted/50 p-0.5">
-            <TabTriggerWithBadge value="model" label="Model" />
-            <TabTriggerWithBadge value="supervisor" label="Supvsr" />
-            <TabTriggerWithBadge
-              value="activity"
-              label="Activity"
-              count={displayActivities.length || undefined}
-            />
-            <TabTriggerWithBadge
-              value="memory"
-              label="Memory"
-              count={memoryEntries.length || undefined}
-            />
-            <TabTriggerWithBadge
-              value="knowledge"
-              label="RAG"
-              count={knowledgeData?.totalResults || undefined}
-            />
-          </TabsList>
-        </div>
+    <ChatPanel tabs={PANEL_TABS} defaultTab="model">
+      <TabsContent value="model" className="mt-0">
+        <ModelTabContent
+          models={models}
+          selectedModelId={config.modelId}
+          modelOverride={config.modelOverride}
+          onSelectModel={(id) => onConfigChange({ modelId: id })}
+          onToggleOverride={(enabled) => onConfigChange({ modelOverride: enabled })}
+          metrics={executionMetrics}
+        />
+      </TabsContent>
 
-        {/* Tab content — scrollable */}
-        <div className="flex-1 overflow-y-auto">
-          <TabsContent value="model" className="mt-0">
-            <ModelTabContent
-              models={models}
-              selectedModelId={config.modelId}
-              modelOverride={config.modelOverride}
-              onSelectModel={(id) => onConfigChange({ modelId: id })}
-              onToggleOverride={(enabled) => onConfigChange({ modelOverride: enabled })}
-            />
-          </TabsContent>
+      <TabsContent value="supervisor" className="mt-0">
+        <SupervisorTabContent
+          supervisorMode={config.supervisorMode}
+          onToggle={(enabled) => onConfigChange({ supervisorMode: enabled })}
+          layers={supervisorLayers}
+          onUpdateLayer={onUpdateLayer}
+        />
+      </TabsContent>
 
-          <TabsContent value="supervisor" className="mt-0">
-            <SupervisorTabContent
-              supervisorMode={config.supervisorMode}
-              onToggle={(enabled) => onConfigChange({ supervisorMode: enabled })}
-              layers={supervisorLayers}
-              onUpdateLayer={onUpdateLayer}
-            />
-          </TabsContent>
+      <TabsContent value="activity" className="mt-0">
+        <ActivityTabContent
+          activities={displayActivities}
+          isStreaming={isLiveSelected && isStreaming}
+          tokenUsage={tokenUsage}
+          activeAgent={activeAgent}
+          toolCalls={toolCalls}
+          steps={steps}
+        />
+      </TabsContent>
 
-          <TabsContent value="activity" className="mt-0">
-            <ActivityTabContent
-              activities={displayActivities}
-              isStreaming={isLiveSelected && isStreaming}
-              tokenUsage={tokenUsage}
-              activeAgent={activeAgent}
-              toolCalls={toolCalls}
-              steps={steps}
-            />
-          </TabsContent>
+      <TabsContent value="memory" className="mt-0">
+        <MemoryTabContent entries={memoryEntries} />
+      </TabsContent>
 
-          <TabsContent value="memory" className="mt-0">
-            <MemoryTabContent entries={memoryEntries} />
-          </TabsContent>
-
-          <TabsContent value="knowledge" className="mt-0">
-            <KnowledgeTabContent data={knowledgeData} />
-          </TabsContent>
-        </div>
-      </Tabs>
-    </div>
+      <TabsContent value="knowledge" className="mt-0">
+        <KnowledgeTabContent data={knowledgeData} />
+      </TabsContent>
+    </ChatPanel>
   );
 }

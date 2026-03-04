@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Wrench, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight } from "lucide-react";
-import { Badge, cn } from "@modularmind/ui";
+import { Badge } from "@modularmind/ui";
 import type { ToolCallData } from "@/hooks/useExecutionActivities";
 
 interface ToolCallCardProps {

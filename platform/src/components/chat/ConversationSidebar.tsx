@@ -2,7 +2,17 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Plus, Trash2, MessageSquare, Check, X } from "lucide-react";
-import { Button, Input, cn } from "@modularmind/ui";
+import {
+  Button,
+  Input,
+  cn,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@modularmind/ui";
 
 export interface Conversation {
   id: string;
@@ -45,6 +55,7 @@ export function ConversationSidebar({
 }: ConversationSidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [deletingConv, setDeletingConv] = useState<Conversation | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -135,7 +146,7 @@ export function ConversationSidebar({
                   className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm("Delete this conversation?")) onDelete(conv.id);
+                    setDeletingConv(conv);
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -145,6 +156,31 @@ export function ConversationSidebar({
           </div>
         ))}
       </div>
+
+      <Dialog open={!!deletingConv} onOpenChange={(open) => !open && setDeletingConv(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete conversation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &ldquo;{deletingConv?.title || "New Chat"}&rdquo;? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingConv(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deletingConv) onDelete(deletingConv.id);
+                setDeletingConv(null);
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

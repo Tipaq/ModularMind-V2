@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   Bot,
   FileUp,
@@ -8,7 +8,7 @@ import {
   Plus,
   Search,
   Send,
-  RefreshCw,
+  Square,
   Workflow,
   X,
 } from "lucide-react";
@@ -84,6 +84,13 @@ export function ChatInput({
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+
+  // Reset textarea height when value is cleared (e.g. after send)
+  useEffect(() => {
+    if (!value && textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+  }, [value]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -403,7 +410,6 @@ export function ChatInput({
             placeholder="Ask anything..."
             className="flex-1 resize-none bg-transparent px-1 py-3 text-sm focus:outline-none min-h-[44px] max-h-[200px]"
             rows={1}
-            disabled={isStreaming}
             style={{
               height: "auto",
               overflowY: value.split("\n").length > 6 ? "auto" : "hidden",
@@ -425,7 +431,7 @@ export function ChatInput({
             title={disabledReason || undefined}
           >
             {isStreaming ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <Square className="h-4 w-4 fill-current" />
             ) : (
               <Send className="h-4 w-4" />
             )}
