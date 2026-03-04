@@ -2,13 +2,25 @@
 
 import { create } from "zustand";
 
+export interface AgentConfig {
+  systemPrompt?: string;
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  tools?: string[];
+  mcpServers?: string[];
+  memoryEnabled?: boolean;
+  ragEnabled?: boolean;
+  [key: string]: unknown;
+}
+
 export interface PlatformAgent {
   id: string;
   name: string;
   description: string;
   model: string;
   provider: string;
-  config: Record<string, unknown>;
+  config: AgentConfig;
   version: number;
   tags: string[];
   createdAt: string;

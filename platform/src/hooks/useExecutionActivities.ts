@@ -1,44 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import type { ActivityType, ExecutionActivity } from "@modularmind/ui";
 
-export type ActivityType =
-  | "step"
-  | "llm"
-  | "tool"
-  | "retrieval"
-  | "parallel"
-  | "loop"
-  | "error"
-  | "routing"
-  | "delegation"
-  | "direct_response"
-  | "agent_created";
-
-export type ActivityStatus = "running" | "completed" | "failed";
-
-export interface ToolCallData {
-  toolName: string;
-  serverName?: string;
-  args?: string;
-  result?: string;
-}
-
-export interface ExecutionActivity {
-  id: string;
-  type: ActivityType;
-  status: ActivityStatus;
-  label: string;
-  detail?: string;
-  preview?: string;
-  startedAt: number;
-  durationMs?: number;
-  toolData?: ToolCallData;
-  agentName?: string;
-  isEphemeral?: boolean;
-  model?: string;
-  tools?: string[];
-}
+export type { ActivityType, ActivityStatus, ToolCallData, ExecutionActivity } from "@modularmind/ui";
 
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
@@ -84,8 +49,7 @@ export function useExecutionActivities() {
     );
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleEvent = useCallback((data: any) => {
+  const handleEvent = useCallback((data: Record<string, unknown>) => {
     const eventType = data?.type as string | undefined;
     if (!eventType) return;
 

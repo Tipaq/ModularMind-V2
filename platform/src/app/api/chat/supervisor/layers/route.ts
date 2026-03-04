@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-utils";
 import { engineFetch } from "@/lib/engine-proxy";
 
 // GET /api/chat/supervisor/layers — Get supervisor layers from Engine
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(): Promise<NextResponse> {
+  const { session, error } = await requireAuth();
+  if (error) return error;
 
   const res = await engineFetch("/api/v1/internal/supervisor/layers", {}, session.user?.email ?? undefined);
   if (!res.ok) {

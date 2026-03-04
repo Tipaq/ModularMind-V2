@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { engineRegisterSchema, parseBody } from "@/lib/validations";
 
 // POST /api/engines/register — Engine registers itself on startup
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   const { engine, error } = await validateEngineKey(req);
   if (error) return error;
 

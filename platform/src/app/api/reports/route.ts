@@ -4,7 +4,7 @@ import { parseBody, reportSchema } from "@/lib/validations";
 import { db } from "@/lib/db";
 
 // POST /api/reports — Engine posts metrics periodically
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   const { engine, error } = await validateEngineKey(req);
   if (error) return error;
 

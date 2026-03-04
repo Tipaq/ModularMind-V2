@@ -1,13 +1,15 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-utils";
 import { db } from "@/lib/db";
 import { createClientSchema, parseBody } from "@/lib/validations";
 
+const API_KEY_BYTES = 24;
+
 // GET /api/clients — List all clients with engine count (add ?include=engines for full engine data)
-export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  const { error } = await requireAuth();
+  if (error) return error;
 
   const includeEngines = new URL(req.url).searchParams.get("include") === "engines";
 
@@ -22,14 +24,14 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/clients — Create a new client (auto-generates first engine + API key)
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data, error } = await parseBody(req, createClientSchema);
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  const { error } = await requireAuth();
   if (error) return error;
 
-  const apiKey = `mmk_${crypto.randomBytes(24).toString("hex")}`;
+  const { data, error: bodyError } = await parseBody(req, createClientSchema);
+  if (bodyError) return bodyError;
+
+  const apiKey = `mmk_${crypto.randomBytes(API_KEY_BYTES).toString("hex")}`;
 
   const client = await db.client.create({
     data: {

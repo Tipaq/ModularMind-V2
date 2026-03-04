@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-utils";
 import { db } from "@/lib/db";
 import { paginatedQuery, paginatedResponse } from "@/lib/db-utils";
 import { parseBody, createGraphSchema } from "@/lib/validations";
 
 // GET /api/graphs — List graphs with pagination & search
-export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  const { error } = await requireAuth();
+  if (error) return error;
 
   const { items: graphs, total, page, pageSize } = await paginatedQuery(
     db.graph,
@@ -25,12 +25,12 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/graphs — Create a new graph
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data, error } = await parseBody(req, createGraphSchema);
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  const { error } = await requireAuth();
   if (error) return error;
+
+  const { data, error: bodyError } = await parseBody(req, createGraphSchema);
+  if (bodyError) return bodyError;
 
   const graph = await db.graph.create({
     data: {

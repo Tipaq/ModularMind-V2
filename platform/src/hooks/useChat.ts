@@ -6,13 +6,9 @@ import type { ExecutionActivity } from "./useExecutionActivities";
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "./useExecutionActivities";
 
-export interface Message {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  created_at: string;
-  metadata?: Record<string, unknown>;
-}
+import type { Message as ApiMessage } from "@modularmind/api-client";
+
+export type Message = ApiMessage;
 
 export interface TokenUsage {
   prompt: number;
@@ -78,8 +74,13 @@ interface SendMessageResponse {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractResponse(output: any): string {
+interface OutputData {
+  response?: string;
+  messages?: { type: string; content?: string }[];
+  node_outputs?: Record<string, { response?: string }>;
+}
+
+function extractResponse(output: OutputData | null | undefined): string {
   if (!output) return "";
   if (typeof output.response === "string") return output.response;
   if (Array.isArray(output.messages)) {
@@ -89,8 +90,7 @@ function extractResponse(output: any): string {
     }
   }
   if (output.node_outputs && typeof output.node_outputs === "object") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const values = Object.values(output.node_outputs) as any[];
+    const values = Object.values(output.node_outputs);
     for (let i = values.length - 1; i >= 0; i--) {
       if (values[i]?.response) return values[i].response;
     }
@@ -338,18 +338,18 @@ export function useChat(conversationId: string | null) {
           }
 
           if (data.type === "trace:knowledge") {
+            interface RawCollection { collection_id: string; collection_name: string; chunk_count: number }
+            interface RawChunk { chunk_id: string; document_id: string; collection_id: string; collection_name: string; document_filename: string | null; content_preview: string; score: number; chunk_index: number }
             currentKnowledgeRef.current = {
-              collections: (data.collections || []).map(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (c: any) => ({
+              collections: ((data.collections || []) as RawCollection[]).map(
+                (c) => ({
                   collectionId: c.collection_id,
                   collectionName: c.collection_name,
                   chunkCount: c.chunk_count,
                 }),
               ),
-              chunks: (data.chunks || []).map(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (ch: any) => ({
+              chunks: ((data.chunks || []) as RawChunk[]).map(
+                (ch) => ({
                   chunkId: ch.chunk_id,
                   documentId: ch.document_id,
                   collectionId: ch.collection_id,
@@ -360,7 +360,7 @@ export function useChat(conversationId: string | null) {
                   chunkIndex: ch.chunk_index,
                 }),
               ),
-              totalResults: data.total_results || 0,
+              totalResults: (data.total_results as number) || 0,
             };
           }
 

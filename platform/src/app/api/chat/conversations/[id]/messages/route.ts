@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-utils";
 import { engineFetch } from "@/lib/engine-proxy";
 import { parseBody, chatMessageSchema } from "@/lib/validations";
 
@@ -7,13 +7,13 @@ import { parseBody, chatMessageSchema } from "@/lib/validations";
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+): Promise<NextResponse> {
+  const { session, error } = await requireAuth();
+  if (error) return error;
 
   const { id } = await params;
-  const { data, error } = await parseBody(req, chatMessageSchema);
-  if (error) return error;
+  const { data, error: bodyError } = await parseBody(req, chatMessageSchema);
+  if (bodyError) return bodyError;
 
   const res = await engineFetch(
     `/api/v1/conversations/${id}/messages`,

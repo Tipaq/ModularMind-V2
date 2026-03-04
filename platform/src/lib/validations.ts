@@ -63,6 +63,26 @@ export const chatMessageSchema = z.object({
   content: z.string().min(1),
 });
 
+export const conversationPatchSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  supervisor_mode: z.boolean().optional(),
+  agent_id: z.string().optional(),
+  config: z.record(z.unknown()).optional(),
+});
+
+export const supervisorLayerPatchSchema = z.object({
+  content: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
+
+// ─── Auth schemas ───────────────────────────────────────────────────────────
+
+export const registerSchema = z.object({
+  name: z.string().min(1).max(255),
+  email: z.email(),
+  password: z.string().min(8).max(128),
+});
+
 // ─── Engine schemas ──────────────────────────────────────────────────────────
 
 export const engineRegisterSchema = z.object({

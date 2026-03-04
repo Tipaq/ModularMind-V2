@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-utils";
 import { engineFetch } from "@/lib/engine-proxy";
 
 // GET /api/chat/executions/:id — Get execution details
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+): Promise<NextResponse> {
+  const { session, error } = await requireAuth();
+  if (error) return error;
 
   const { id } = await params;
   const res = await engineFetch(`/api/v1/executions/${id}`, {}, session.user?.email ?? undefined);
@@ -21,9 +21,9 @@ export async function GET(
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+): Promise<NextResponse> {
+  const { session, error } = await requireAuth();
+  if (error) return error;
 
   const { id } = await params;
   const res = await engineFetch(

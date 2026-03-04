@@ -3,7 +3,7 @@ import { validateEngineKey } from "@/lib/engine-auth";
 import { db } from "@/lib/db";
 
 // GET /api/sync/manifest — Engine polls for config updates
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   const { engine, error } = await validateEngineKey(req);
   if (error) return error;
 

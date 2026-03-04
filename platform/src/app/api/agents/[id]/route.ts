@@ -1,28 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth, errorResponse } from "@/lib/api-utils";
 import { db } from "@/lib/db";
 import { parseBody, updateAgentSchema } from "@/lib/validations";
 
 // GET /api/agents/:id
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const { error } = await requireAuth();
+  if (error) return error;
 
   const { id } = await params;
   const agent = await db.agent.findUnique({ where: { id } });
-  if (!agent) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!agent) return errorResponse("Not found", 404);
 
   return NextResponse.json(agent);
 }
 
 // PATCH /api/agents/:id
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const { error } = await requireAuth();
+  if (error) return error;
 
   const { id } = await params;
-  const { data, error } = await parseBody(req, updateAgentSchema);
-  if (error) return error;
+  const { data, error: bodyError } = await parseBody(req, updateAgentSchema);
+  if (bodyError) return bodyError;
 
   const agent = await db.agent.update({
     where: { id },
@@ -41,9 +47,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 // DELETE /api/agents/:id
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const { error } = await requireAuth();
+  if (error) return error;
 
   const { id } = await params;
   await db.agent.delete({ where: { id } });

@@ -2,12 +2,31 @@
 
 import { create } from "zustand";
 
+export interface GraphNode {
+  id: string;
+  type: string;
+  label?: string;
+  position?: { x: number; y: number };
+  data?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+  type?: string;
+  data?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface PlatformGraph {
   id: string;
   name: string;
   description: string;
-  nodes: Record<string, unknown>[];
-  edges: Record<string, unknown>[];
+  nodes: GraphNode[];
+  edges: GraphEdge[];
   version: number;
   createdAt: string;
   updatedAt: string;

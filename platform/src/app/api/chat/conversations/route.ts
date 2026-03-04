@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-utils";
 import { engineFetch } from "@/lib/engine-proxy";
 import { parseBody, chatMessageSchema } from "@/lib/validations";
 
 // GET /api/chat/conversations — List conversations
-export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  const { session, error } = await requireAuth();
+  if (error) return error;
 
   const { searchParams } = req.nextUrl;
   const qs = searchParams.toString();
@@ -19,12 +19,12 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/chat/conversations — Create conversation
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data, error } = await parseBody(req, chatMessageSchema);
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  const { session, error } = await requireAuth();
   if (error) return error;
+
+  const { data, error: bodyError } = await parseBody(req, chatMessageSchema);
+  if (bodyError) return bodyError;
 
   const res = await engineFetch(
     "/api/v1/conversations",

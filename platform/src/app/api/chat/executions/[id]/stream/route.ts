@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
+import { errorResponse } from "@/lib/api-utils";
 import { INTERNAL_TOKEN } from "@/lib/engine-proxy";
 
 const ENGINE_URL = process.env.ENGINE_URL || "http://localhost:8000";
@@ -8,13 +9,10 @@ const ENGINE_URL = process.env.ENGINE_URL || "http://localhost:8000";
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-) {
+): Promise<Response> {
   const session = await auth();
   if (!session) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+    return errorResponse("Unauthorized", 401);
   }
 
   const { id } = await params;
@@ -35,10 +33,7 @@ export async function GET(
   });
 
   if (!engineRes.ok || !engineRes.body) {
-    return new Response(
-      JSON.stringify({ error: "Failed to connect to execution stream" }),
-      { status: engineRes.status, headers: { "Content-Type": "application/json" } },
-    );
+    return errorResponse("Failed to connect to execution stream", engineRes.status);
   }
 
   // Pipe the Engine SSE stream through to the client

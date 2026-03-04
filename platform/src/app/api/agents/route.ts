@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-utils";
 import { db } from "@/lib/db";
 import { paginatedQuery, paginatedResponse } from "@/lib/db-utils";
 import { parseBody, createAgentSchema } from "@/lib/validations";
 
 // GET /api/agents — List agents with pagination & search
-export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  const { error } = await requireAuth();
+  if (error) return error;
 
   const { items, total, page, pageSize } = await paginatedQuery(
     db.agent,
@@ -19,12 +19,12 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/agents — Create a new agent
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data, error } = await parseBody(req, createAgentSchema);
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  const { error } = await requireAuth();
   if (error) return error;
+
+  const { data, error: bodyError } = await parseBody(req, createAgentSchema);
+  if (bodyError) return bodyError;
 
   const agent = await db.agent.create({
     data: {
