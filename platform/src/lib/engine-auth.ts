@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "./db";
+import { errorResponse } from "./api-utils";
 
 /**
  * Validate X-Engine-Key header and return the engine record.
@@ -9,8 +10,8 @@ export async function validateEngineKey(req: NextRequest) {
   const apiKey = req.headers.get("X-Engine-Key");
   if (!apiKey) {
     return {
-      engine: null,
-      error: NextResponse.json({ error: "Missing X-Engine-Key" }, { status: 401 }),
+      engine: null as null,
+      error: errorResponse("Missing X-Engine-Key", 401),
     };
   }
 
@@ -21,10 +22,10 @@ export async function validateEngineKey(req: NextRequest) {
 
   if (!engine) {
     return {
-      engine: null,
-      error: NextResponse.json({ error: "Invalid API key" }, { status: 401 }),
+      engine: null as null,
+      error: errorResponse("Invalid API key", 401),
     };
   }
 
-  return { engine, error: null };
+  return { engine, error: null as null };
 }
