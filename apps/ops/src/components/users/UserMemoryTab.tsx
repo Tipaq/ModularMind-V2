@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { RefreshCw, Brain, Search, Trash2 } from "lucide-react";
 import { Card, CardContent, Badge, Button, Input, cn } from "@modularmind/ui";
 import { api } from "../../lib/api";
+import { Pagination } from "../shared/Pagination";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import type { MemoryEntry, MemoryListResponse } from "./types";
 
@@ -192,31 +193,7 @@ export function UserMemoryTab({ userId }: { userId: string }) {
         </div>
       )}
 
-      {pageCount > 1 && (
-        <div className="flex items-center justify-between px-2">
-          <span className="text-sm text-muted-foreground">
-            Page {page} of {pageCount} ({total} items)
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(page + 1)}
-              disabled={page >= pageCount}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      <Pagination page={page} totalPages={pageCount} total={total} onPageChange={setPage} />
 
       <ConfirmDialog
         open={clearOpen}

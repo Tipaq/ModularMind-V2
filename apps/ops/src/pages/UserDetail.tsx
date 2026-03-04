@@ -11,13 +11,9 @@ import {
   Brain,
   BookOpen,
   Trash2,
-  Shield,
-  UserCheck,
-  User,
 } from "lucide-react";
 import {
   cn,
-  ROLE_COLORS,
   PageHeader,
   Card,
   CardContent,
@@ -32,6 +28,7 @@ import {
   formatCost,
 } from "@modularmind/ui";
 import { api } from "../lib/api";
+import { roleConfig } from "../lib/constants";
 import { EditUserDialog } from "../components/users/EditUserDialog";
 import { ConfirmDialog } from "../components/shared/ConfirmDialog";
 import { UserConversationsTab } from "../components/users/UserConversationsTab";
@@ -39,12 +36,6 @@ import { UserTokenUsageTab } from "../components/users/UserTokenUsageTab";
 import { UserMemoryTab } from "../components/users/UserMemoryTab";
 import { UserKnowledgeTab } from "../components/users/UserKnowledgeTab";
 import type { UserStats } from "../components/users/types";
-
-const roleConfig = {
-  owner: { icon: Shield, color: ROLE_COLORS.owner },
-  admin: { icon: UserCheck, color: ROLE_COLORS.admin },
-  user: { icon: User, color: ROLE_COLORS.member },
-};
 
 export default function UserDetail() {
   const { userId } = useParams();

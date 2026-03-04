@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, ChevronDown, ChevronRight, MessageCircle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, Badge, Button } from "@modularmind/ui";
+import { Card, CardContent, CardHeader, CardTitle, Badge } from "@modularmind/ui";
 import { api } from "../../lib/api";
 import { formatTokens, formatCost } from "@modularmind/ui";
+import { Pagination } from "../shared/Pagination";
 import type {
   AdminConversation,
   AdminConversationListResponse,
@@ -171,31 +172,7 @@ export function UserConversationsTab({ userId }: { userId: string }) {
         );
       })}
 
-      {pageCount > 1 && (
-        <div className="flex items-center justify-between px-2">
-          <span className="text-sm text-muted-foreground">
-            Page {page} of {pageCount} ({total} items)
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(page + 1)}
-              disabled={page >= pageCount}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      <Pagination page={page} totalPages={pageCount} total={total} onPageChange={setPage} />
     </div>
   );
 }

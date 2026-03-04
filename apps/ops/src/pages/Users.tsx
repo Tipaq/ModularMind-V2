@@ -3,23 +3,16 @@ import { useNavigate } from "react-router-dom";
 import {
   Users as UsersIcon,
   RefreshCw,
-  Shield,
-  UserCheck,
-  User,
   Search,
   Pencil,
   Eye,
 } from "lucide-react";
-import { cn, ROLE_COLORS, PageHeader, Badge, Button, Input, useAuthStore, formatTokens, formatCost } from "@modularmind/ui";
+import { cn, PageHeader, Badge, Button, Input, useAuthStore, formatTokens, formatCost } from "@modularmind/ui";
 import { api } from "../lib/api";
+import { roleConfig } from "../lib/constants";
+import { Pagination } from "../components/shared/Pagination";
 import { EditUserDialog } from "../components/users/EditUserDialog";
 import type { UserStats, UserStatsListResponse } from "../components/users/types";
-
-const roleConfig = {
-  owner: { icon: Shield, color: ROLE_COLORS.owner },
-  admin: { icon: UserCheck, color: ROLE_COLORS.admin },
-  user: { icon: User, color: ROLE_COLORS.member },
-};
 
 export default function Users() {
   const navigate = useNavigate();
@@ -251,31 +244,7 @@ export default function Users() {
       )}
 
       {/* Pagination */}
-      {pageCount > 1 && (
-        <div className="flex items-center justify-between px-2">
-          <span className="text-sm text-muted-foreground">
-            Page {page} of {pageCount} ({total} users)
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(page + 1)}
-              disabled={page >= pageCount}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      <Pagination page={page} totalPages={pageCount} total={total} onPageChange={setPage} label="users" />
 
       {/* Edit dialog */}
       {editUser && (

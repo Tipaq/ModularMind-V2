@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { PaginatedResponse } from "@modularmind/api-client";
 import { api } from "../lib/api";
 
 // ---- Types ----
@@ -82,20 +83,6 @@ interface MemoryFilters {
   tier: string;
   user_id: string;
   include_expired: boolean;
-}
-
-interface PaginatedMemoryResponse {
-  items: MemoryEntry[];
-  total: number;
-  page: number;
-  page_size: number;
-}
-
-interface PaginatedLogsResponse {
-  items: ConsolidationLog[];
-  total: number;
-  page: number;
-  page_size: number;
 }
 
 // ---- Store ----
@@ -200,7 +187,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       if (filters.user_id) params.set("user_id", filters.user_id);
       if (filters.include_expired) params.set("include_expired", "true");
 
-      const data = await api.get<PaginatedMemoryResponse>(
+      const data = await api.get<PaginatedResponse<MemoryEntry>>(
         `/memory/admin/explore?${params}`,
       );
       set({
@@ -239,7 +226,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   fetchConsolidationLogs: async (page = 1) => {
     set({ consolLoading: true, consolError: null });
     try {
-      const data = await api.get<PaginatedLogsResponse>(
+      const data = await api.get<PaginatedResponse<ConsolidationLog>>(
         `/memory/admin/consolidation/logs?page=${page}&page_size=20`,
       );
       set({
