@@ -2,16 +2,16 @@
 
 import logging
 import re
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import select
-
-from src.infra.query_utils import raise_not_found
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.auth.models import User
 from src.groups.models import UserGroup, UserGroupMember
+from src.infra.query_utils import raise_not_found
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ class GroupService:
         )
         return list(result.scalars().all())
 
-    async def get_group_members(self, group_id: str) -> list[dict]:
+    async def get_group_members(self, group_id: str) -> list[dict[str, Any]]:
         """Get all members of a group with user details."""
         result = await self.db.execute(
             select(UserGroupMember, User)

@@ -12,7 +12,7 @@ router = APIRouter(prefix="/sync", tags=["Sync"])
 
 
 @router.post("/trigger")
-async def trigger_sync() -> dict:
+async def trigger_sync() -> dict[str, bool]:
     """Webhook endpoint — Platform notifies Engine of new config.
 
     This triggers an immediate poll instead of waiting for the next
@@ -28,8 +28,8 @@ async def trigger_sync() -> dict:
     try:
         updated = await svc.poll()
         return {"updated": updated}
-    except Exception:
+    except Exception as exc:
         logger.exception("Sync trigger failed")
-        raise HTTPException(status_code=500, detail="Sync failed")
+        raise HTTPException(status_code=500, detail="Sync failed") from exc
     finally:
         await svc.close()

@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Response, status
 
 from src.auth import CurrentUser, RequireAdmin
+from src.groups.models import UserGroup
 from src.groups.schemas import (
     GroupCreate,
     GroupDetailResponse,
@@ -17,7 +18,7 @@ from src.infra.database import DbSession
 router = APIRouter(prefix="/groups", tags=["Groups"])
 
 
-def _group_response(group, member_count: int = 0) -> GroupResponse:
+def _group_response(group: UserGroup, member_count: int = 0) -> GroupResponse:
     """Convert a UserGroup model to a GroupResponse."""
     return GroupResponse(
         id=group.id,

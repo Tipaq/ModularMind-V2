@@ -363,7 +363,7 @@ async def purge_dlq(user: CurrentUser) -> dict[str, str]:
 
 
 @router.post("/pipelines/memory/extract", dependencies=[RequireAdmin])
-async def trigger_memory_extraction(user: CurrentUser) -> dict:
+async def trigger_memory_extraction(user: CurrentUser) -> dict[str, str]:
     """Trigger an immediate memory extraction scan (bypass cooldown lock)."""
     import contextlib
 

@@ -309,8 +309,6 @@ async def _mcp_health_loop() -> None:
     handled lazily by the registry on next access. Runs only in the
     API process (MCP clients are not shared with the worker process).
     """
-    from src.mcp import MCPClientError
-
     while True:
         try:
             await asyncio.sleep(60)

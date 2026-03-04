@@ -5,6 +5,7 @@ Available to all authenticated users at /api/v1/mcp/.
 """
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -82,7 +83,7 @@ async def call_server_tool(
 
 
 @usage_router.post("/servers/{server_id}/test")
-async def test_mcp_connection(server_id: str, user: CurrentUser) -> dict:
+async def test_mcp_connection(server_id: str, user: CurrentUser) -> dict[str, Any]:
     """Test connectivity to an MCP server."""
     registry = _get_registry()
     if not registry.get_server(server_id):
