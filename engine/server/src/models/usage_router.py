@@ -425,7 +425,7 @@ async def remove_catalog_model(model_id: str, user: CurrentUser) -> dict:
 @usage_router.get("/providers")
 async def list_providers(user: CurrentUser) -> list[ProviderConfigResponse]:
     """List all known LLM providers with configuration status."""
-    from src.infra.secrets import PROVIDER_KEY_MAP, secrets_store
+    from src.infra.secrets import secrets_store
 
     configured = secrets_store.get_configured_providers()
 
@@ -438,7 +438,7 @@ async def list_providers(user: CurrentUser) -> list[ProviderConfigResponse]:
             resp = await client.get("/api/tags")
             ollama_connected = resp.status_code == 200
     except Exception:
-        pass
+        logger.debug("Ollama connectivity check failed")
 
     results: list[ProviderConfigResponse] = []
     for provider, display_name in PROVIDER_NAMES.items():

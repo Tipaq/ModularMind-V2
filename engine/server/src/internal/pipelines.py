@@ -223,7 +223,7 @@ async def get_pipelines(user: CurrentUser, db: DbSession) -> PipelinesResponse:
         counters.facts_extracted_total = int(pipeline_facts_extracted._value.get())
         counters.embeddings_stored_total = int(pipeline_embeddings_stored._value.get())
     except Exception:
-        pass  # Counters unavailable (e.g. multiprocess mode)
+        logger.debug("Prometheus counters unavailable (e.g. multiprocess mode)")
 
     return PipelinesResponse(
         memory=MemoryPipelineData(

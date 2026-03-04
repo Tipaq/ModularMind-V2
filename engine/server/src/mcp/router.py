@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/mcp", tags=["MCP"])
 
+DEFAULT_LOG_TAIL = 100
+MAX_LOG_TAIL = 500
+
 
 # --- Request/Response schemas ---
 
@@ -253,7 +256,7 @@ async def get_sidecar_availability(user: CurrentUser) -> dict:
 async def get_server_logs(
     server_id: str,
     user: CurrentUser,
-    tail: int = 100,
+    tail: int = DEFAULT_LOG_TAIL,
 ) -> dict:
     """Read recent logs from a managed sidecar container.
 
@@ -286,7 +289,7 @@ async def get_server_logs(
             docker_client.containers.get, info.container_id
         )
         logs_bytes = await asyncio.to_thread(
-            container.logs, tail=min(tail, 500), timestamps=False
+            container.logs, tail=min(tail, MAX_LOG_TAIL), timestamps=False
         )
         logs_text = logs_bytes.decode("utf-8", errors="replace")
 
@@ -297,12 +300,12 @@ async def get_server_logs(
             try:
                 exit_code, output = await asyncio.to_thread(
                     container.exec_run,
-                    ["tail", "-n", str(min(tail, 500)), log_file],
+                    ["tail", "-n", str(min(tail, MAX_LOG_TAIL)), log_file],
                 )
                 if exit_code == 0:
                     app_logs += output.decode("utf-8", errors="replace") + "\n"
             except Exception:
-                pass
+                logger.debug("Failed to read %s from container", log_file)
 
         return {
             "server_id": server_id,

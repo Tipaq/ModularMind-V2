@@ -213,7 +213,11 @@ class MCPRegistry:
                 self._tool_cache[server_id] = tools
                 self._tool_cache_ts[server_id] = time.monotonic()
             except Exception:
-                pass  # Non-critical, will retry on next status check
+                logger.debug(
+                    "Tool discovery for %s failed, will retry",
+                    server_id,
+                    exc_info=True,
+                )
 
         return MCPServerStatus(
             server_id=server_id,

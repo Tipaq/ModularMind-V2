@@ -537,7 +537,9 @@ async def start_metrics_sampler(interval: float = 10.0) -> None:
                 try:
                     await r.aclose()
                 except Exception:
-                    pass
+                    logger.debug(
+                        "Redis close failed during reconnect", exc_info=True
+                    )
                 r = None
         except asyncio.CancelledError:
             break
@@ -550,4 +552,4 @@ async def start_metrics_sampler(interval: float = 10.0) -> None:
         try:
             await r.aclose()
         except Exception:
-            pass
+            logger.debug("Redis close failed during cleanup", exc_info=True)

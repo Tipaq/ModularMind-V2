@@ -375,7 +375,11 @@ class SuperSupervisorService:
                     if tools:
                         tools_map[server_name] = tools
                 except Exception:
-                    pass
+                    logger.debug(
+                        "MCP tool discovery failed for server %s",
+                        sid,
+                        exc_info=True,
+                    )
             return tools_map or None
         except Exception as e:
             logger.debug("MCP tool discovery for routing failed: %s", e)

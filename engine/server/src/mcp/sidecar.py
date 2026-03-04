@@ -29,6 +29,9 @@ MCP_PROXY_IMAGE = "ghcr.io/sparfenyuk/mcp-proxy:latest"
 MCP_NODE_PROXY_IMAGE = "modularmind/mcp-node-proxy:latest"
 SIDECAR_INTERNAL_PORT = 9100
 SIDECAR_LABEL_PREFIX = "modularmind.mcp.sidecar"
+CONTAINER_STOP_TIMEOUT_SECS = 10
+MAX_CONCURRENT_DEPLOYS = 3
+DEFAULT_MEM_LIMIT = "256m"
 
 
 class SidecarError(Exception):
@@ -62,7 +65,7 @@ class SidecarManager:
         self._docker = None
         self._network = docker_network
         self._sidecars: dict[str, SidecarInfo] = {}  # server_id → info
-        self._deploy_semaphore = asyncio.Semaphore(3)  # max 3 concurrent deploys
+        self._deploy_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DEPLOYS)
 
     async def _get_docker(self):
         """Lazy-initialize Docker client."""
@@ -222,7 +225,7 @@ class SidecarManager:
             f"{SIDECAR_LABEL_PREFIX}.image": image,
         }
 
-        mem = entry.mem_limit or "256m"
+        mem = entry.mem_limit or DEFAULT_MEM_LIMIT
         vols = entry.volumes or {}
 
         try:
@@ -271,7 +274,7 @@ class SidecarManager:
             container = await asyncio.to_thread(
                 docker_client.containers.get, info.container_id
             )
-            await asyncio.to_thread(container.stop, timeout=10)
+            await asyncio.to_thread(container.stop, timeout=CONTAINER_STOP_TIMEOUT_SECS)
             await asyncio.to_thread(container.remove)
             logger.info("Removed MCP sidecar %s", info.container_name)
         except Exception as e:
@@ -367,7 +370,7 @@ class SidecarManager:
                 container = await asyncio.to_thread(
                     docker_client.containers.get, info.container_id
                 )
-                await asyncio.to_thread(container.stop, timeout=10)
+                await asyncio.to_thread(container.stop, timeout=CONTAINER_STOP_TIMEOUT_SECS)
                 logger.info("Stopped sidecar %s", info.container_name)
             except Exception:
                 logger.warning("Failed to stop sidecar %s", info.container_name, exc_info=True)
@@ -378,7 +381,7 @@ class SidecarManager:
             from src.infra.metrics import mcp_sidecars_active
             mcp_sidecars_active.set(len(self._sidecars))
         except Exception:
-            pass
+            logger.debug("Failed to update sidecar gauge metric")
 
     @property
     def tracked_sidecars(self) -> dict[str, SidecarInfo]:

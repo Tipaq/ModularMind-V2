@@ -89,6 +89,7 @@ async def health_check() -> dict[str, Any]:
             else:
                 components["ollama"] = {"status": "unavailable"}
     except Exception:
+        logger.debug("Ollama health check unavailable")
         components["ollama"] = {"status": "unavailable"}
 
     # Check worker (Redis Streams consumer health)
@@ -102,6 +103,7 @@ async def health_check() -> dict[str, Any]:
             "consumer_groups": len(worker_groups),
         }
     except Exception:
+        logger.debug("Worker health check unavailable")
         components["worker"] = {"status": "unknown"}
 
     # System metrics (run blocking psutil calls in thread to avoid stalling event loop)
