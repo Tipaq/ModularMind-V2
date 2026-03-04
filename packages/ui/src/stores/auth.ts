@@ -67,6 +67,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 }));
 
 // Listen for session expiry from ApiClient and auto-logout
-window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, () => {
-  useAuthStore.getState().logout();
-});
+if (typeof window !== "undefined") {
+  window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, () => {
+    useAuthStore.getState().logout();
+  });
+}
