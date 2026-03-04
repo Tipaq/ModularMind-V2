@@ -63,6 +63,26 @@ const INITIAL_KNOWLEDGE: KnowledgeData = {
   totalResults: 0,
 };
 
+interface KnowledgeTraceEvent {
+  type: string;
+  collections?: Array<{
+    collection_id: string;
+    collection_name: string;
+    chunk_count: number;
+  }>;
+  chunks?: Array<{
+    chunk_id: string;
+    document_id: string;
+    collection_id: string;
+    collection_name: string;
+    document_filename?: string;
+    content_preview: string;
+    score: number;
+    chunk_index: number;
+  }>;
+  total_results?: number;
+}
+
 export function useRightPanel() {
   const [state, setState] = useState<RightPanelState>({
     supervisor: null,
@@ -92,26 +112,6 @@ export function useRightPanel() {
       knowledge: { ...prev.knowledge, status: "loading" },
     }));
   }, []);
-
-  interface KnowledgeTraceEvent {
-    type: string;
-    collections?: Array<{
-      collection_id: string;
-      collection_name: string;
-      chunk_count: number;
-    }>;
-    chunks?: Array<{
-      chunk_id: string;
-      document_id: string;
-      collection_id: string;
-      collection_name: string;
-      document_filename?: string;
-      content_preview: string;
-      score: number;
-      chunk_index: number;
-    }>;
-    total_results?: number;
-  }
 
   const handleTraceEvent = useCallback((data: KnowledgeTraceEvent) => {
     if (data?.type !== "trace:knowledge") return;

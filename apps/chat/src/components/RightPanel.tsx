@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import {
   Badge,
   Tabs,
@@ -288,11 +288,10 @@ interface RightPanelProps {
   supervisor: SupervisorData | null;
   knowledge: KnowledgeData;
   memory: MemoryEntry[];
-  isStreaming: boolean;
   onClose: () => void;
 }
 
-export function RightPanel({
+export const RightPanel = memo(function RightPanel({
   supervisor,
   knowledge,
   memory,
@@ -351,4 +350,4 @@ export function RightPanel({
       </Tabs>
     </div>
   );
-}
+});

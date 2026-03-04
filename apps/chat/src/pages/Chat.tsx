@@ -103,7 +103,7 @@ export default function Chat() {
         setInitialMessages(msgs);
 
         // Apply conversation config
-        const convConfig = (data.config || {}) as ConversationConfig;
+        const convConfig = data.config || {};
         setEnabledAgentIds(convConfig.enabled_agent_ids || []);
         setEnabledGraphIds(convConfig.enabled_graph_ids || []);
         setChatConfig({
@@ -366,7 +366,6 @@ export default function Chat() {
           supervisor={panelState.supervisor}
           knowledge={panelState.knowledge}
           memory={panelState.memory}
-          isStreaming={isStreaming}
           onClose={() => setPanelOpen(false)}
         />
       )}
