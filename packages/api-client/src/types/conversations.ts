@@ -9,7 +9,7 @@ export interface Conversation {
   user_email: string | null;
   is_active: boolean;
   supervisor_mode: boolean;
-  config: Record<string, unknown>;
+  config: ConversationConfig;
   message_count: number;
   created_at: string;
   updated_at: string;
@@ -35,7 +35,6 @@ export interface ConversationConfig {
   model_override?: boolean;
   enabled_agent_ids?: string[];
   enabled_graph_ids?: string[];
-  [key: string]: unknown;
 }
 
 // ─── Requests ────────────────────────────────────────────────────────────────

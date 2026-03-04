@@ -17,7 +17,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
-import { cn } from "@modularmind/ui";
+import { cn, formatDurationMs } from "@modularmind/ui";
 import type { ExecutionActivity, ActivityType } from "@/hooks/useExecutionActivities";
 
 const ACTIVITY_ICON: Record<ActivityType, React.ElementType> = {
@@ -47,12 +47,6 @@ const ACTIVITY_COLOR: Record<ActivityType, string> = {
   direct_response: "text-success",
   agent_created: "text-primary",
 };
-
-function formatDuration(ms?: number): string {
-  if (ms == null) return "";
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
 
 function ActivityItem({ activity }: { activity: ExecutionActivity }) {
   const [expanded, setExpanded] = useState(false);
@@ -88,7 +82,7 @@ function ActivityItem({ activity }: { activity: ExecutionActivity }) {
             </span>
           )}
           <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
-            {formatDuration(activity.durationMs)}
+            {activity.durationMs != null ? formatDurationMs(activity.durationMs) : ""}
           </span>
           {activity.preview && (
             expanded ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -178,7 +172,7 @@ export function ExecutionActivityList({ activities, isStreaming, hasContent, fla
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-medium">{parts.join(", ")}</span>
-            <span className="ml-auto text-[10px]">&middot; {formatDuration(totalMs)}</span>
+            <span className="ml-auto text-[10px]">&middot; {formatDurationMs(totalMs)}</span>
           </div>
         </div>
       </button>
