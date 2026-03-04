@@ -20,10 +20,10 @@ interface GraphNodeProps {
 }
 
 const statusColors: Record<string, string> = {
-  running: "ring-blue-500 ring-2 animate-pulse",
-  completed: "ring-emerald-500 ring-2",
-  failed: "ring-red-500 ring-2",
-  paused: "ring-yellow-500 ring-2",
+  running: "ring-primary ring-2 animate-pulse",
+  completed: "ring-success ring-2",
+  failed: "ring-destructive ring-2",
+  paused: "ring-warning ring-2",
 };
 
 function GraphNodeComponent({ data, selected }: GraphNodeProps) {

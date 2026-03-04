@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { parseBody, updateGraphSchema } from "@/lib/validations";
 
 // GET /api/graphs/:id
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,15 +21,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const body = await req.json();
+  const { data, error } = await parseBody(req, updateGraphSchema);
+  if (error) return error;
 
   const graph = await db.graph.update({
     where: { id },
     data: {
-      ...(body.name !== undefined && { name: body.name }),
-      ...(body.description !== undefined && { description: body.description }),
-      ...(body.nodes !== undefined && { nodes: body.nodes }),
-      ...(body.edges !== undefined && { edges: body.edges }),
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.nodes !== undefined && { nodes: data.nodes }),
+      ...(data.edges !== undefined && { edges: data.edges }),
       version: { increment: 1 },
     },
   });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { parseBody, updateClientSchema } from "@/lib/validations";
 
 // GET /api/clients/:id
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -23,11 +24,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const body = await req.json();
+  const { data, error } = await parseBody(req, updateClientSchema);
+  if (error) return error;
 
   const client = await db.client.update({
     where: { id },
-    data: { ...(body.name !== undefined && { name: body.name }) },
+    data: { ...(data.name !== undefined && { name: data.name }) },
   });
 
   return NextResponse.json(client);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { parseBody, updateAgentSchema } from "@/lib/validations";
 
 // GET /api/agents/:id
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,17 +21,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const body = await req.json();
+  const { data, error } = await parseBody(req, updateAgentSchema);
+  if (error) return error;
 
   const agent = await db.agent.update({
     where: { id },
     data: {
-      ...(body.name !== undefined && { name: body.name }),
-      ...(body.description !== undefined && { description: body.description }),
-      ...(body.model !== undefined && { model: body.model }),
-      ...(body.provider !== undefined && { provider: body.provider }),
-      ...(body.config !== undefined && { config: body.config }),
-      ...(body.tags !== undefined && { tags: body.tags }),
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.model !== undefined && { model: data.model }),
+      ...(data.provider !== undefined && { provider: data.provider }),
+      ...(data.config !== undefined && { config: data.config }),
+      ...(data.tags !== undefined && { tags: data.tags }),
       version: { increment: 1 },
     },
   });

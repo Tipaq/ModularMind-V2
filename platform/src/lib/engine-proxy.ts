@@ -26,7 +26,7 @@ function deriveInternalToken(secretKey: string): string {
 }
 
 /** Cached token — derived once at startup. */
-const INTERNAL_TOKEN = ENGINE_SECRET_KEY
+export const INTERNAL_TOKEN = ENGINE_SECRET_KEY
   ? deriveInternalToken(ENGINE_SECRET_KEY)
   : "";
 

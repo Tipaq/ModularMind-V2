@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Bot, Clock, Loader2, User } from "lucide-react";
+import { Bot, Loader2, User } from "lucide-react";
 import { cn } from "@modularmind/ui";
 import type { Message } from "@/hooks/useChat";
 import type { ExecutionActivity } from "@/hooks/useExecutionActivities";
@@ -15,9 +15,25 @@ interface ChatMessagesProps {
   onSelectMessage: (id: string) => void;
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function isSameDay(a: string, b: string): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
+}
+
+function formatDateSeparator(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(now.getDate() - 1);
+
+  if (isSameDay(iso, now.toISOString())) return "Today";
+  if (isSameDay(iso, yesterday.toISOString())) return "Yesterday";
+  return d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 }
 
 export function ChatMessages({ messages, isStreaming, activities, selectedMessageId, onSelectMessage }: ChatMessagesProps) {
@@ -41,16 +57,25 @@ export function ChatMessages({ messages, isStreaming, activities, selectedMessag
         const isLast = i === messages.length - 1;
         const isLastAssistant = isAssistant && isLast;
         const isSelected = isAssistant && msg.id === selectedMessageId;
-        const metadata = msg.metadata || {};
-        const durationMs = typeof metadata.duration_ms === "number" ? metadata.duration_ms : null;
 
         // While streaming with no content yet: show activity inline next to avatar
         const showInlineActivity = !isUser && isStreaming && isLastAssistant && !msg.content;
         // While streaming with content building: show activity above the bubble
         const showActivityAbove = isLastAssistant && isStreaming && !!msg.content && activities.length > 0;
 
+        const prevMsg = i > 0 ? messages[i - 1] : null;
+        const showDate = !prevMsg || !isSameDay(prevMsg.created_at, msg.created_at);
+
         return (
           <div key={msg.id}>
+            {showDate && (
+              <div className="flex items-center justify-center my-4">
+                <span className="text-[11px] text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                  {formatDateSeparator(msg.created_at)}
+                </span>
+              </div>
+            )}
+
             {/* Activity stream above bubble — only while streaming with content */}
             {showActivityAbove && (
               <div className="mb-3 ml-9">
@@ -87,10 +112,10 @@ export function ChatMessages({ messages, isStreaming, activities, selectedMessag
               ) : (
                 <div
                   className={cn(
-                    "max-w-[75%] rounded-2xl px-4 py-2.5 transition-all",
+                    "max-w-[75%] px-4 py-2.5 transition-all",
                     isUser
-                      ? "bg-gradient-to-br from-primary to-secondary text-primary-foreground"
-                      : "bg-muted",
+                      ? "rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-secondary text-primary-foreground"
+                      : "rounded-2xl rounded-bl-md bg-muted",
                     isAssistant && "cursor-pointer hover:ring-2 hover:ring-primary/20",
                     isSelected && "ring-2 ring-primary/50 shadow-sm",
                   )}
@@ -107,11 +132,13 @@ export function ChatMessages({ messages, isStreaming, activities, selectedMessag
                     </div>
                   ) : null}
 
-                  {/* Duration inside message bubble */}
-                  {!isUser && msg.content && durationMs != null && durationMs > 0 && (
-                    <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
-                      <Clock className="h-2.5 w-2.5" />
-                      {formatDuration(durationMs)}
+                  {/* Timestamp */}
+                  {msg.content && (
+                    <div className={cn(
+                      "mt-1.5 text-[10px]",
+                      isUser ? "text-primary-foreground/60 text-right" : "text-muted-foreground",
+                    )}>
+                      {formatTime(msg.created_at)}
                     </div>
                   )}
                 </div>

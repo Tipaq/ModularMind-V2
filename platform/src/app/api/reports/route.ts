@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateEngineKey } from "@/lib/engine-auth";
+import { parseBody, reportSchema } from "@/lib/validations";
+import { db } from "@/lib/db";
 
 // POST /api/reports — Engine posts metrics periodically
 export async function POST(req: NextRequest) {
   const { engine, error } = await validateEngineKey(req);
   if (error) return error;
 
-  const body = await req.json();
+  const { data, error: validationError } = await parseBody(req, reportSchema);
+  if (validationError) return validationError;
 
-  // For now, just log that we received the report
-  // Future: store in a metrics table or time-series DB
-  console.log(
-    `[report] Engine ${engine.name} (${engine.id}): status=${body.status?.health}, models=${body.models?.length ?? 0}`
-  );
+  await db.engine.update({
+    where: { id: engine.id },
+    data: {
+      lastSeen: new Date(),
+      status: data.status.health === "ok" ? "synced" : "error",
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }

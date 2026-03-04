@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
@@ -14,21 +15,33 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = await req.json();
-
-  if (!body.email || !body.name) {
-    return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const existing = await db.user.findUnique({ where: { email: body.email } });
+  const { email, name, password } = body as Record<string, string>;
+  if (!email || !name || !password) {
+    return NextResponse.json(
+      { error: "Name, email, and password are required" },
+      { status: 400 },
+    );
+  }
+
+  const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
     return NextResponse.json({ error: "Email already registered" }, { status: 409 });
   }
 
+  const passwordHash = await bcrypt.hash(password, 12);
+
   const user = await db.user.create({
     data: {
-      email: body.email,
-      name: body.name,
+      email,
+      name,
+      passwordHash,
       role: "owner", // First user is always owner
     },
   });

@@ -4,10 +4,10 @@ import { memo } from "react";
 import { getBezierPath, type EdgeProps } from "@xyflow/react";
 
 const statusColors: Record<string, string> = {
-  idle: "#94a3b8",
-  running: "#3b82f6",
-  completed: "#10b981",
-  failed: "#ef4444",
+  idle: "hsl(var(--muted-foreground))",
+  running: "hsl(var(--primary))",
+  completed: "hsl(var(--success))",
+  failed: "hsl(var(--destructive))",
 };
 
 function ExecutionEdgeComponent({

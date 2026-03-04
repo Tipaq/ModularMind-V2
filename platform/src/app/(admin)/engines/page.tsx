@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Server, Wifi, WifiOff, Clock, Key } from "lucide-react";
-import { STATUS_COLORS } from "@modularmind/ui";
+import { STATUS_COLORS, relativeTime } from "@modularmind/ui";
 
 type Engine = {
   id: string;
@@ -32,19 +32,15 @@ export default function EnginesPage() {
 
   useEffect(() => {
     async function load() {
-      // Load engines from all clients
-      const res = await fetch("/api/clients");
+      // Single request: fetch all clients with engines included
+      const res = await fetch("/api/clients?include=engines");
       if (!res.ok) { setLoading(false); return; }
       const clients = await res.json();
 
       const allEngines: Engine[] = [];
       for (const client of clients) {
-        const cRes = await fetch(`/api/clients/${client.id}`);
-        if (cRes.ok) {
-          const data = await cRes.json();
-          for (const eng of data.engines ?? []) {
-            allEngines.push({ ...eng, client: { id: client.id, name: client.name } });
-          }
+        for (const eng of client.engines ?? []) {
+          allEngines.push({ ...eng, client: { id: client.id, name: client.name } });
         }
       }
       setEngines(allEngines);
@@ -59,17 +55,6 @@ export default function EnginesPage() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  }
-
-  function relativeTime(date: string | null) {
-    if (!date) return "Never";
-    const diff = Date.now() - new Date(date).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
   }
 
   if (loading) {
@@ -107,7 +92,7 @@ export default function EnginesPage() {
                 <div className="text-right text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5" />
-                    Last seen: {relativeTime(engine.lastSeen)}
+                    Last seen: {engine.lastSeen ? relativeTime(engine.lastSeen) : "Never"}
                   </div>
                   <div className="mt-0.5">v{engine.version}</div>
                 </div>

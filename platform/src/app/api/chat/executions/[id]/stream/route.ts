@@ -1,20 +1,8 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
-import { createHmac } from "crypto";
+import { INTERNAL_TOKEN } from "@/lib/engine-proxy";
 
 const ENGINE_URL = process.env.ENGINE_URL || "http://localhost:8000";
-const ENGINE_SECRET_KEY = process.env.ENGINE_SECRET_KEY || "";
-
-/** Derive the same HMAC token as engine-proxy.ts and Engine's internal auth. */
-function deriveInternalToken(secretKey: string): string {
-  return createHmac("sha256", secretKey)
-    .update("internal-service-token")
-    .digest("hex");
-}
-
-const INTERNAL_TOKEN = ENGINE_SECRET_KEY
-  ? deriveInternalToken(ENGINE_SECRET_KEY)
-  : "";
 
 // GET /api/chat/executions/:id/stream — SSE proxy passthrough
 export async function GET(

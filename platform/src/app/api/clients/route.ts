@@ -1,15 +1,20 @@
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import crypto from "crypto";
+import { createClientSchema, parseBody } from "@/lib/validations";
 
-// GET /api/clients — List all clients with engine count
-export async function GET() {
+// GET /api/clients — List all clients with engine count (add ?include=engines for full engine data)
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const includeEngines = new URL(req.url).searchParams.get("include") === "engines";
+
   const clients = await db.client.findMany({
-    include: { _count: { select: { engines: true } } },
+    include: includeEngines
+      ? { engines: true, _count: { select: { engines: true } } }
+      : { _count: { select: { engines: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -21,16 +26,18 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  const { data, error } = await parseBody(req, createClientSchema);
+  if (error) return error;
+
   const apiKey = `mmk_${crypto.randomBytes(24).toString("hex")}`;
 
   const client = await db.client.create({
     data: {
-      name: body.name,
+      name: data.name,
       engines: {
         create: {
-          name: `${body.name} Engine`,
-          url: body.engineUrl ?? "http://localhost:8000",
+          name: `${data.name} Engine`,
+          url: data.engineUrl ?? "http://localhost:8000",
           apiKey,
         },
       },

@@ -73,8 +73,8 @@ export default function ChatPage() {
       if (!res.ok) return;
       const data = await res.json();
       setConversations(data.items || []);
-    } catch {
-      // Silent fail
+    } catch (err) {
+      console.error("[Chat]", err);
     } finally {
       setLoadingConvs(false);
     }
@@ -116,8 +116,8 @@ export default function ChatPage() {
           modelId: convConfig.model_id || null,
           modelOverride: convConfig.model_override || false,
         });
-      } catch {
-        // Silent fail
+      } catch (err) {
+        console.error("[Chat]", err);
       }
     },
     [setInitialMessages],
@@ -147,7 +147,8 @@ export default function ChatPage() {
       setInitialMessages([]);
       setChatConfig({ ...DEFAULT_CONFIG, supervisorMode: chatConfig.supervisorMode });
       return conv.id as string;
-    } catch {
+    } catch (err) {
+      console.error("[Chat]", err);
       return null;
     }
   }, [enabledAgentIds, enabledGraphIds, chatConfig.supervisorMode, setInitialMessages]);
@@ -166,8 +167,8 @@ export default function ChatPage() {
           setInitialMessages([]);
           setChatConfig(DEFAULT_CONFIG);
         }
-      } catch {
-        // Silent fail
+      } catch (err) {
+        console.error("[Chat]", err);
       }
     },
     [activeConversationId, setInitialMessages],
@@ -184,8 +185,8 @@ export default function ChatPage() {
         setConversations((prev) =>
           prev.map((c) => (c.id === id ? { ...c, title } : c)),
         );
-      } catch {
-        // Silent fail
+      } catch (err) {
+        console.error("[Chat]", err);
       }
     },
     [],
