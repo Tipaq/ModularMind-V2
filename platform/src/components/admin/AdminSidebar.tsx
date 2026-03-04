@@ -6,11 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Building2,
+  LayoutDashboard,
   Server,
   Settings2,
   Bot,
   GitFork,
-  Layout,
   MessageSquare,
   ChevronLeft,
   ChevronRight,
@@ -35,6 +35,7 @@ const sections: NavSection[] = [
   {
     label: "Admin",
     items: [
+      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, end: true },
       { name: "Clients", href: "/clients", icon: Building2 },
       { name: "Engines", href: "/engines", icon: Server },
       { name: "Settings", href: "/settings", icon: Settings2 },
@@ -46,18 +47,20 @@ const sections: NavSection[] = [
       { name: "Chat", href: "/chat", icon: MessageSquare },
       { name: "Agents", href: "/agents", icon: Bot },
       { name: "Graphs", href: "/graphs", icon: GitFork },
-      { name: "Templates", href: "/templates", icon: Layout },
     ],
   },
 ];
+
+const sectionStartIndexes = sections.reduce<number[]>((acc, section, i) => {
+  acc.push(i === 0 ? 0 : acc[i - 1] + sections[i - 1].items.length);
+  return acc;
+}, []);
 
 export function AdminSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
-
-  let globalIndex = 0;
 
   return (
     <motion.aside
@@ -94,8 +97,7 @@ export function AdminSidebar() {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {sections.map((section, sectionIdx) => {
-          const startIdx = globalIndex;
-          globalIndex += section.items.length;
+          const startIdx = sectionStartIndexes[sectionIdx];
           return (
             <div key={section.label} className={cn(sectionIdx > 0 && "mt-5")}>
               <AnimatePresence>

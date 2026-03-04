@@ -90,6 +90,16 @@ export const engineRegisterSchema = z.object({
   version: z.number().int().optional(),
 });
 
+export const createEngineSchema = z.object({
+  name: z.string().min(1).max(255),
+  url: z.url().optional(),
+});
+
+export const updateEngineSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  url: z.url().optional(),
+});
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
