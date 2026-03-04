@@ -23,6 +23,10 @@ const DEFAULT_CONFIG: ChatConfig = {
   modelOverride: false,
 };
 
+const CONVERSATION_PAGE_SIZE = 50;
+const TITLE_MAX_LENGTH = 50;
+const CONFIG_DEBOUNCE_MS = 500;
+
 export default function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -69,7 +73,7 @@ export default function ChatPage() {
   const fetchConversations = useCallback(async () => {
     setLoadingConvs(true);
     try {
-      const res = await fetch("/api/chat/conversations?page_size=50");
+      const res = await fetch(`/api/chat/conversations?page_size=${CONVERSATION_PAGE_SIZE}`);
       if (!res.ok) return;
       const data = await res.json();
       setConversations(data.items || []);
@@ -212,7 +216,7 @@ export default function ChatPage() {
             },
           }),
         }).catch(() => {});
-      }, 500);
+      }, CONFIG_DEBOUNCE_MS);
     },
     [activeConversationId, enabledAgentIds, enabledGraphIds],
   );
@@ -242,7 +246,7 @@ export default function ChatPage() {
     // Auto-title on first message
     const conv = conversations.find((c) => c.id === convId);
     if (conv && (conv.title === "New Chat" || !conv.title) && messages.length === 0) {
-      const title = inputValue.trim().length > 50 ? inputValue.trim().slice(0, 50) + "\u2026" : inputValue.trim();
+      const title = inputValue.trim().length > TITLE_MAX_LENGTH ? inputValue.trim().slice(0, TITLE_MAX_LENGTH) + "\u2026" : inputValue.trim();
       setConversations((prev) =>
         prev.map((c) => (c.id === convId ? { ...c, title } : c)),
       );

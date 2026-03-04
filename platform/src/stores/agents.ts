@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { DEFAULT_PAGE_SIZE } from "@/lib/db-utils";
 
 export interface AgentConfig {
   systemPrompt?: string;
@@ -68,7 +69,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { search } = get();
-      const params = new URLSearchParams({ page: String(page), page_size: "20" });
+      const params = new URLSearchParams({ page: String(page), page_size: String(DEFAULT_PAGE_SIZE) });
       if (search) params.set("search", search);
       const res = await fetch(`/api/agents?${params}`);
       if (!res.ok) throw new Error("Failed to load agents");

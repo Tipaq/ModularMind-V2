@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { GitFork, Save, Trash2 } from "lucide-react";
+import { Save, Trash2 } from "lucide-react";
 import { Button, Badge } from "@modularmind/ui";
 import type { Node, Edge } from "@xyflow/react";
 import { DetailHeader } from "@/components/studio/shared/DetailHeader";
