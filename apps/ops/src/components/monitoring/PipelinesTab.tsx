@@ -141,7 +141,7 @@ export function PipelinesTab({ pipelines, onRefresh }: Props) {
       await api.post(`/internal/pipelines/documents/${documentId}/retry`);
       onRefresh();
     } catch (err) {
-      console.error("Retry failed:", err);
+      void err; // retry failed — silently handled
     } finally {
       setActionLoading(null);
     }
@@ -153,7 +153,7 @@ export function PipelinesTab({ pipelines, onRefresh }: Props) {
       await api.post("/internal/pipelines/dlq/purge");
       onRefresh();
     } catch (err) {
-      console.error("Purge failed:", err);
+      void err; // purge failed — silently handled
     } finally {
       setActionLoading(null);
     }
@@ -165,7 +165,7 @@ export function PipelinesTab({ pipelines, onRefresh }: Props) {
       await api.post("/internal/pipelines/memory/extract");
       onRefresh();
     } catch (err) {
-      console.error("Extraction trigger failed:", err);
+      void err; // extraction trigger failed — silently handled
     } finally {
       setActionLoading(null);
     }

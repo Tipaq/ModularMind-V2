@@ -1,5 +1,1 @@
-import { ApiClient } from "@modularmind/api-client";
-
-export const api = new ApiClient("/api/v1");
-
-export type { ApiClient };
+export { api, type ApiClient } from "@modularmind/api-client";
