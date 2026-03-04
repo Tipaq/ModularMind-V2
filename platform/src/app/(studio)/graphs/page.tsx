@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { GitBranch, Plus, Copy, Trash2 } from "lucide-react";
 import {
-  Badge,
   Button,
   Dialog,
   DialogContent,

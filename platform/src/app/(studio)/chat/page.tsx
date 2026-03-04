@@ -7,7 +7,8 @@ import { useChatConfig } from "@/hooks/useChatConfig";
 import { ConversationSidebar, type Conversation } from "@/components/chat/ConversationSidebar";
 import { ChatMessages } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { ExecutionPanel } from "@/components/chat/ExecutionPanel";
+import { InsightsPanel } from "@/components/chat/InsightsPanel";
+import { PanelRight } from "lucide-react";
 
 interface ChatConfig {
   supervisorMode: boolean;
@@ -33,8 +34,8 @@ export default function ChatPage() {
   const [inputValue, setInputValue] = useState("");
   const [enabledAgentIds, setEnabledAgentIds] = useState<string[]>([]);
   const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
-  const [loadingConvs, setLoadingConvs] = useState(true);
   const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CONFIG);
+  const [panelOpen, setPanelOpen] = useState(true);
 
   const { status: sessionStatus } = useSession();
   const { agents, graphs, models, supervisorLayers, load: loadConfig, updateSupervisorLayer } = useChatConfig();
@@ -52,12 +53,18 @@ export default function ChatPage() {
     cancelStream,
   } = useChat(activeConversationId);
 
+  // Auto-select the last assistant message when loading a conversation
+  useEffect(() => {
+    if (!selectedMessageId && messages.length > 0 && !isStreaming) {
+      const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+      if (lastAssistant) setSelectedMessageId(lastAssistant.id);
+    }
+  }, [messages, selectedMessageId, isStreaming, setSelectedMessageId]);
+
   // Compute selected execution data for the panel
   const isLiveSelected = isStreaming && selectedMessageId === streamingMessageId;
   const selectedExecution = useMemo(() => {
     if (!selectedMessageId) return null;
-    // If the selected message is currently streaming, build a live snapshot
-    // with memory entries from the ref (already captured in the map once complete)
     return executionDataMap[selectedMessageId] ?? null;
   }, [selectedMessageId, executionDataMap]);
 
@@ -70,26 +77,23 @@ export default function ChatPage() {
   // Debounce config persistence
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchConversations = useCallback(async () => {
-    setLoadingConvs(true);
-    try {
-      const res = await fetch(`/api/chat/conversations?page_size=${CONVERSATION_PAGE_SIZE}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      setConversations(data.items || []);
-    } catch (err) {
-      console.error("[Chat]", err);
-    } finally {
-      setLoadingConvs(false);
-    }
-  }, []);
-
   // Load data once session is authenticated
   useEffect(() => {
     if (sessionStatus !== "authenticated") return;
+    let active = true;
     loadConfig();
-    fetchConversations();
-  }, [sessionStatus, loadConfig, fetchConversations]);
+    (async () => {
+      try {
+        const res = await fetch(`/api/chat/conversations?page_size=${CONVERSATION_PAGE_SIZE}`);
+        if (!res.ok || !active) return;
+        const data = await res.json();
+        if (active) setConversations(data.items || []);
+      } catch (err) {
+        if (active) console.error("[Chat]", err);
+      }
+    })();
+    return () => { active = false; };
+  }, [sessionStatus, loadConfig]);
 
   // Load messages when selecting a conversation
   const handleSelectConversation = useCallback(
@@ -313,6 +317,20 @@ export default function ChatPage() {
 
       {/* Center: Messages + Input */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header */}
+        <div className="h-14 border-b flex items-center justify-between px-4 shrink-0">
+          <p className="text-sm font-medium truncate min-w-0">
+            {conversations.find((c) => c.id === activeConversationId)?.title || "New Chat"}
+          </p>
+          <button
+            onClick={() => setPanelOpen((prev) => !prev)}
+            className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="Toggle insights panel"
+          >
+            <PanelRight className="h-4 w-4" />
+          </button>
+        </div>
+
         {error && (
           <div className="px-4 py-2 bg-destructive/10 text-destructive text-sm border-b border-destructive/20 shrink-0">
             {error}
@@ -343,18 +361,20 @@ export default function ChatPage() {
         />
       </div>
 
-      {/* Right: Execution panel */}
-      <ExecutionPanel
-        selectedExecution={selectedExecution}
-        liveActivities={activities}
-        isStreaming={isStreaming}
-        isLiveSelected={isLiveSelected}
-        config={chatConfig}
-        onConfigChange={handleConfigChange}
-        models={models}
-        supervisorLayers={supervisorLayers}
-        onUpdateLayer={updateSupervisorLayer}
-      />
+      {/* Right: Insights panel */}
+      {panelOpen && (
+        <InsightsPanel
+          selectedExecution={selectedExecution}
+          liveActivities={activities}
+          isStreaming={isStreaming}
+          isLiveSelected={isLiveSelected}
+          config={chatConfig}
+          onConfigChange={handleConfigChange}
+          models={models}
+          supervisorLayers={supervisorLayers}
+          onUpdateLayer={updateSupervisorLayer}
+        />
+      )}
     </div>
   );
 }

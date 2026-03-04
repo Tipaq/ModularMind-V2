@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   Bot,
   Copy,
@@ -30,7 +29,7 @@ import {
   SelectItem,
 } from "@modularmind/ui";
 import { DetailHeader } from "@/components/studio/shared/DetailHeader";
-import { useAgentsStore, type PlatformAgent } from "@/stores/agents";
+import { useAgentsStore } from "@/stores/agents";
 
 function Section({
   icon: Icon,
