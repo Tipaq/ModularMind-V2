@@ -17,7 +17,7 @@ export interface Conversation {
 
 export interface Message {
   id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
   metadata: Record<string, unknown>;
   created_at: string;
@@ -28,6 +28,15 @@ export interface ConversationDetail extends Conversation {
 }
 
 export type ConversationListResponse = PaginatedResponse<Conversation>;
+
+/** Typed shape of Conversation.config. */
+export interface ConversationConfig {
+  model_id?: string | null;
+  model_override?: boolean;
+  enabled_agent_ids?: string[];
+  enabled_graph_ids?: string[];
+  [key: string]: unknown;
+}
 
 // ─── Requests ────────────────────────────────────────────────────────────────
 
@@ -92,7 +101,7 @@ export interface SendMessageResponse {
   routing_strategy: string | null;
   delegated_to: string | null;
   is_ephemeral: boolean | null;
-  ephemeral_agent: Record<string, unknown> | null;
+  ephemeral_agent: { id: string; name: string } | null;
   memory_entries: MemoryEntryResponse[];
   knowledge_data: KnowledgeDataResponse | null;
 }

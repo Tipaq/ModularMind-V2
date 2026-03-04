@@ -92,8 +92,83 @@ export interface ExecutionEvent {
   action?: string;
 }
 
-export interface ExecutionStreamEvent {
-  type: 'tokens' | 'trace' | 'step' | 'complete' | 'error';
-  id?: string;
-  data?: unknown;
+// ─── SSE Stream Events (discriminated union) ────────────────────────────────
+
+export interface TokensStreamEvent {
+  type: 'tokens';
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  model?: string;
 }
+
+export interface TraceStreamEvent {
+  type: `trace:${string}`;
+  event?: string;
+  duration_ms?: number;
+  // LLM
+  model?: string;
+  message_count?: number;
+  prompt_preview?: string;
+  response_preview?: string;
+  tokens?: { total?: number; prompt?: number; completion?: number };
+  // Tool
+  tool_name?: string;
+  server_name?: string;
+  tool_input?: Record<string, unknown>;
+  tool_output?: string;
+  input_preview?: string;
+  output_preview?: string;
+  // Retrieval
+  status?: string;
+  query?: string;
+  num_results?: number;
+  // Node
+  node_name?: string;
+  // Parallel / Loop
+  branch_count?: number;
+  mode?: string;
+  total_items?: number;
+  // Supervisor
+  strategy?: string;
+  agent_name?: string;
+  is_ephemeral?: boolean;
+  preview?: string;
+  // Error
+  error?: string;
+  // Knowledge
+  collections?: Array<{ collection_id: string; collection_name: string; chunk_count: number }>;
+  chunks?: Array<{ chunk_id: string; content_preview: string; score: number }>;
+}
+
+export interface StepStreamEvent {
+  type: 'step';
+  event?: string;
+  node_id?: string;
+  node_name?: string;
+  agent_name?: string;
+  is_ephemeral?: boolean;
+  output_data?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  duration_ms?: number;
+}
+
+export interface CompleteStreamEvent {
+  type: 'complete';
+  output_data?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  duration_ms?: number;
+}
+
+export interface ErrorStreamEvent {
+  type: 'error';
+  message?: string;
+  error_message?: string;
+}
+
+export type ExecutionStreamEvent =
+  | TokensStreamEvent
+  | TraceStreamEvent
+  | StepStreamEvent
+  | CompleteStreamEvent
+  | ErrorStreamEvent;

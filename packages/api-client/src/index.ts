@@ -1,5 +1,9 @@
 export { ApiClient, ApiError, AUTH_SESSION_EXPIRED_EVENT } from "./client";
 
+// Pre-configured default client instance — avoids duplication across apps.
+import { ApiClient as _ApiClient } from "./client";
+export const api = new _ApiClient("/api/v1");
+
 // Types
 export type * from "./types/common";
 export type * from "./types/agents";
@@ -14,6 +18,9 @@ export type * from "./types/memory";
 export type * from "./types/groups";
 export type * from "./types/supervisor";
 export type * from "./types/mcp";
+
+// Utils
+export { snakeToCamel, mapKeysToCamel } from "./utils";
 
 // Models (includes runtime values: PROVIDER_INFO, getProviderInfo)
 export { PROVIDER_INFO, getProviderInfo } from "./types/models";
