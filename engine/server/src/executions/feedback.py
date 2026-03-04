@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
+from src.infra.utils import utcnow
+
 from pydantic import BaseModel, Field
 from sqlalchemy import Index, String, Text, select
 from sqlalchemy.dialects.postgresql import JSONB
@@ -43,7 +45,7 @@ class ExecutionFeedback(Base):
         "metadata", JSONB, default=dict,
     )
 
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     __table_args__ = (
         Index("ix_feedback_agent_rating", "agent_id", "rating"),

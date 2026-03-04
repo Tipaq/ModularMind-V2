@@ -6,9 +6,8 @@ SQLAlchemy models for execution tracking.
 
 from datetime import datetime
 from enum import Enum
-from uuid import uuid4
-
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, Integer, String, Text
@@ -16,6 +15,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infra.database import Base
+from src.infra.utils import utcnow
 
 
 class ExecutionStatus(str, Enum):
@@ -81,7 +81,7 @@ class ExecutionRun(Base):
 
     started_at: Mapped[datetime | None] = mapped_column(nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # A/B testing fields
     experiment_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)

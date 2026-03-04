@@ -14,6 +14,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infra.database import Base
+from src.infra.utils import utcnow
 
 
 class ConnectorType(str, Enum):
@@ -42,9 +43,9 @@ class Connector(Base):
     is_enabled: Mapped[bool] = mapped_column(default=True)
     config: Mapped[dict] = mapped_column(JSONB, default=dict)
 
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, onupdate=datetime.utcnow
+        default=utcnow, onupdate=utcnow
     )
 
     def __repr__(self) -> str:

@@ -4,16 +4,12 @@ Conversation models.
 SQLAlchemy models for conversation tracking.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import Enum
+from typing import Any
 from uuid import uuid4
 
-
-def utcnow() -> datetime:
-    """Return a timezone-naive UTC datetime (required by asyncpg for TIMESTAMP WITHOUT TIME ZONE)."""
-    return datetime.now(UTC).replace(tzinfo=None)
-
-from typing import Any
+from src.infra.utils import utcnow
 
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, String, Text

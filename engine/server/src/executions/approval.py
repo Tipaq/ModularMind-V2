@@ -10,6 +10,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
+from src.infra.utils import utcnow
+
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,7 +61,7 @@ class ApprovalService:
 
         run.status = ExecutionStatus.AWAITING_APPROVAL
         run.approval_node_id = node_id
-        run.approval_timeout_at = datetime.utcnow() + timedelta(seconds=timeout_seconds)
+        run.approval_timeout_at = utcnow() + timedelta(seconds=timeout_seconds)
         run.approval_webhook_url = webhook_url
         run.approval_decision = None
         run.approved_by = None
@@ -105,7 +107,7 @@ class ApprovalService:
         Returns:
             True if approval was claimed successfully, False if already processed
         """
-        now = datetime.utcnow()
+        now = utcnow()
 
         result = await self.db.execute(
             update(ExecutionRun)
@@ -161,7 +163,7 @@ class ApprovalService:
         Returns:
             True if rejection was claimed successfully
         """
-        now = datetime.utcnow()
+        now = utcnow()
 
         result = await self.db.execute(
             update(ExecutionRun)
@@ -213,7 +215,7 @@ class ApprovalService:
         """
         stmt = select(ExecutionRun).where(
             ExecutionRun.status == ExecutionStatus.AWAITING_APPROVAL,
-            ExecutionRun.approval_timeout_at <= datetime.utcnow(),
+            ExecutionRun.approval_timeout_at <= utcnow(),
         )
         result = await self.db.execute(stmt)
         candidates = list(result.scalars().all())
@@ -223,7 +225,7 @@ class ApprovalService:
             node_config = await self._get_node_config(run)
             timeout_action = node_config.get("timeoutAction", "reject")
 
-            now = datetime.utcnow()
+            now = utcnow()
             if timeout_action == "approve":
                 new_status = ExecutionStatus.PENDING
                 decision = "timeout_approved"

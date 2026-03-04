@@ -185,64 +185,92 @@ class FactExtractor:
         if not facts:
             return 0
 
+        from src.infra.database import async_session_maker
+
         from .models import MemoryScope, MemoryTier
+        from .repository import MemoryRepository
         from .vector_store import QdrantMemoryVectorStore
 
         embedding_provider = get_memory_embedding_provider()
         vector_store = QdrantMemoryVectorStore()
 
         count = 0
-        for fact in facts:
-            try:
-                # Generate embedding for the fact
-                fact_embedding = await embedding_provider.embed_text(fact.content)
+        async with async_session_maker() as batch_db:
+            batch_repo = MemoryRepository(batch_db)
+            for fact in facts:
+                try:
+                    # Generate embedding for the fact
+                    fact_embedding = await embedding_provider.embed_text(fact.content)
 
-                # Search existing user profile memories
-                existing = await vector_store.search(
-                    query_embedding=fact_embedding,
-                    query_text=fact.content,
-                    user_id=user_id,
-                    scope="user_profile",
-                    limit=3,
-                    threshold=0.0,
-                )
+                    # Search existing user profile memories
+                    existing = await vector_store.search(
+                        query_embedding=fact_embedding,
+                        query_text=fact.content,
+                        user_id=user_id,
+                        scope="user_profile",
+                        limit=3,
+                        threshold=0.0,
+                    )
 
-                # Check for duplicates
-                is_duplicate = False
-                for result in existing:
-                    # Tier 1: Category + entity overlap
-                    existing_meta = result.metadata or {}
-                    existing_category = existing_meta.get("category", "")
-                    existing_entities = set(existing_meta.get("entities", []))
-                    fact_entities = set(fact.entities)
+                    # Check for duplicates
+                    is_duplicate = False
+                    for result in existing:
+                        # Tier 1: Category + entity overlap
+                        existing_meta = result.metadata or {}
+                        existing_category = existing_meta.get("category", "")
+                        existing_entities = set(existing_meta.get("entities", []))
+                        fact_entities = set(fact.entities)
 
-                    if (
-                        existing_category == fact.category.value
-                        and fact_entities
-                        and existing_entities
-                    ):
-                        overlap = len(fact_entities & existing_entities) / max(
-                            len(fact_entities), 1
-                        )
-                        if overlap >= _ENTITY_OVERLAP_THRESHOLD:
-                            # Update existing entry with merged content
-                            merged_content = f"{result.content} | {fact.content}"
-                            merged_entities = list(existing_entities | fact_entities)
+                        if (
+                            existing_category == fact.category.value
+                            and fact_entities
+                            and existing_entities
+                        ):
+                            overlap = len(fact_entities & existing_entities) / max(
+                                len(fact_entities), 1
+                            )
+                            if overlap >= _ENTITY_OVERLAP_THRESHOLD:
+                                merged_content = f"{result.content} | {fact.content}"
+                                merged_entities = list(existing_entities | fact_entities)
+                                merged_tags = list(
+                                    set(existing_meta.get("tags", [])) | set(fact.tags)
+                                )
+                                await vector_store.upsert_entry(
+                                    entry_id=result.point_id,
+                                    embedding=fact_embedding,
+                                    content=merged_content,
+                                    scope="user_profile",
+                                    scope_id=user_id,
+                                    user_id=user_id,
+                                    importance=max(result.importance, fact.confidence),
+                                    metadata={
+                                        "category": fact.category.value,
+                                        "entities": merged_entities,
+                                        "tags": merged_tags,
+                                        "source": "fact_extraction",
+                                    },
+                                )
+                                is_duplicate = True
+                                count += 1
+                                break
+
+                        # Tier 2: Semantic similarity
+                        if result.score >= _SEMANTIC_SIMILARITY_THRESHOLD:
                             merged_tags = list(
                                 set(existing_meta.get("tags", [])) | set(fact.tags)
                             )
                             await vector_store.upsert_entry(
                                 entry_id=result.point_id,
                                 embedding=fact_embedding,
-                                content=merged_content,
+                                content=fact.content,
                                 scope="user_profile",
                                 scope_id=user_id,
                                 user_id=user_id,
                                 importance=max(result.importance, fact.confidence),
                                 metadata={
                                     "category": fact.category.value,
-                                    "entities": merged_entities,
-                                    "tags": merged_tags,
+                                    "entities": fact.entities,
+                                    "tags": fact.tags,
                                     "source": "fact_extraction",
                                 },
                             )
@@ -250,40 +278,8 @@ class FactExtractor:
                             count += 1
                             break
 
-                    # Tier 2: Semantic similarity
-                    if result.score >= _SEMANTIC_SIMILARITY_THRESHOLD:
-                        # Update existing entry
-                        merged_tags = list(
-                            set(existing_meta.get("tags", [])) | set(fact.tags)
-                        )
-                        await vector_store.upsert_entry(
-                            entry_id=result.point_id,
-                            embedding=fact_embedding,
-                            content=fact.content,
-                            scope="user_profile",
-                            scope_id=user_id,
-                            user_id=user_id,
-                            importance=max(result.importance, fact.confidence),
-                            metadata={
-                                "category": fact.category.value,
-                                "entities": fact.entities,
-                                "tags": fact.tags,
-                                "source": "fact_extraction",
-                            },
-                        )
-                        is_duplicate = True
-                        count += 1
-                        break
-
-                if not is_duplicate:
-                    # Create new memory entry via repository
-                    from src.infra.database import async_session_maker
-
-                    from .repository import MemoryRepository
-
-                    async with async_session_maker() as db:
-                        repo = MemoryRepository(db)
-                        await repo.create_entry(
+                    if not is_duplicate:
+                        await batch_repo.create_entry(
                             scope=MemoryScope.USER_PROFILE,
                             scope_id=user_id,
                             content=fact.content,
@@ -298,11 +294,12 @@ class FactExtractor:
                             user_id=user_id,
                             importance=fact.confidence,
                         )
-                        await db.commit()
-                    count += 1
+                        count += 1
 
-            except Exception as e:
-                logger.error("Failed to process fact: %s", e)
+                except Exception as e:
+                    logger.error("Failed to process fact: %s", e)
+
+            await batch_db.commit()
 
         return count
 

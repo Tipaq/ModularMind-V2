@@ -105,7 +105,7 @@ async def get_dataset_progress(
     db: DbSession,
 ) -> DatasetProgress:
     """Get live build progress for a dataset (Redis polling)."""
-    from src.infra.redis_utils import get_sync_redis_client
+    from src.infra.redis import get_redis_client
 
     # Check dataset exists
     svc = FineTuningService(db)
@@ -114,19 +114,19 @@ async def get_dataset_progress(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    # Get Redis progress
+    # Get Redis progress (async — avoids blocking the event loop)
     try:
-        redis = get_sync_redis_client()
-        data = redis.hgetall(f"runtime:dataset_progress:{dataset_id}")
-        redis.close()
+        redis = get_redis_client()
+        data = await redis.hgetall(f"runtime:dataset_progress:{dataset_id}")
+        await redis.aclose()
         if data:
             return DatasetProgress(
-                status=data.get(b"status", b"unknown").decode(),
-                progress_pct=int(data.get(b"progress", 0)),
-                examples_found=int(data.get(b"examples_found", 0)),
+                status=data.get("status", "unknown"),
+                progress_pct=int(data.get("progress", 0)),
+                examples_found=int(data.get("examples_found", 0)),
             )
     except Exception:
-        pass  # Redis unavailable — fall back to DB-only status
+        logger.warning("Redis unavailable for dataset progress %s", dataset_id)
 
     return DatasetProgress(status=dataset.status.value)
 
