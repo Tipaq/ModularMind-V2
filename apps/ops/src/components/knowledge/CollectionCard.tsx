@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { FileText, Globe, Users, User, Trash2 } from "lucide-react";
 import type { Collection } from "@modularmind/api-client";
-import { Badge, Button, relativeTime } from "@modularmind/ui";
+import { Badge, Button, cn, relativeTime } from "@modularmind/ui";
 
 const SCOPE_CONFIG = {
   global: { label: "Company", icon: Globe, color: "text-info" },
@@ -24,11 +24,12 @@ export const CollectionCard = memo(function CollectionCard({ collection, isSelec
   return (
     <div
       onClick={onClick}
-      className={`rounded-xl border p-4 cursor-pointer transition-colors group ${
+      className={cn(
+        "rounded-xl border p-4 cursor-pointer transition-colors group",
         isSelected
           ? "border-primary bg-primary/5"
-          : "border-border/50 bg-card/50 hover:bg-muted/30"
-      }`}
+          : "border-border/50 bg-card/50 hover:bg-muted/30",
+      )}
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-medium truncate text-sm">{collection.name}</h3>
@@ -55,7 +56,7 @@ export const CollectionCard = memo(function CollectionCard({ collection, isSelec
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <Badge variant="outline" className={`text-[10px] gap-1 ${scope.color}`}>
+        <Badge variant="outline" className={cn("text-[10px] gap-1", scope.color)}>
           <ScopeIcon className="h-2.5 w-2.5" />
           {scope.label}
         </Badge>

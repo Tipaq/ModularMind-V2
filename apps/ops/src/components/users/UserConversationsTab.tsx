@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, ChevronDown, ChevronRight, MessageCircle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, Badge } from "@modularmind/ui";
+import { Card, CardContent, CardHeader, CardTitle, Badge, cn } from "@modularmind/ui";
 import { api } from "../../lib/api";
 import { formatTokens, formatCost } from "@modularmind/ui";
 import { Pagination } from "../shared/Pagination";
@@ -145,13 +145,14 @@ export function UserConversationsTab({ userId }: { userId: string }) {
                     {expanded[conv.id].messages.map((msg) => (
                       <div
                         key={msg.id}
-                        className={`rounded-lg p-3 text-sm ${
+                        className={cn(
+                          "rounded-lg p-3 text-sm",
                           msg.role === "user"
                             ? "bg-primary/10 ml-8"
                             : msg.role === "assistant"
                               ? "bg-muted mr-8"
-                              : "bg-muted/50 text-muted-foreground"
-                        }`}
+                              : "bg-muted/50 text-muted-foreground",
+                        )}
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">

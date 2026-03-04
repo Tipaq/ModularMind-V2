@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
-import { Button } from "@modularmind/ui";
+import { Button, cn } from "@modularmind/ui";
 import type { ResourceColumn, PaginationState, SortState } from "../../lib/types";
 
 interface ResourceTableProps<T> {
@@ -64,7 +64,7 @@ export function ResourceTable<T>({
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 ${col.className || ""}`}
+                  className={cn("text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3", col.className)}
                 >
                   {col.header}
                 </th>
@@ -97,7 +97,7 @@ export function ResourceTable<T>({
           <thead>
             <tr className="border-b bg-muted/50">
               {columns.map((col) => {
-                const thClass = `text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 ${col.className || ""}`;
+                const thClass = cn("text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3", col.className);
                 if (col.sortKey && onSort) {
                   return (
                     <th key={col.key} className={thClass}>
@@ -129,11 +129,11 @@ export function ResourceTable<T>({
             {items.map((item) => (
               <tr
                 key={keyExtractor(item)}
-                className={`border-b last:border-0 transition-colors hover:bg-muted/30 ${onRowClick ? "cursor-pointer" : ""}`}
+                className={cn("border-b last:border-0 transition-colors hover:bg-muted/30", onRowClick && "cursor-pointer")}
                 onClick={() => onRowClick?.(item)}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={`px-4 py-3 ${col.className || ""}`}>
+                  <td key={col.key} className={cn("px-4 py-3", col.className)}>
                     {col.render(item)}
                   </td>
                 ))}

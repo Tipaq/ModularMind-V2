@@ -3,7 +3,7 @@ import {
   Upload, FileText, Trash2, AlertCircle, CheckCircle,
   Loader2, Clock, X, RefreshCw,
 } from "lucide-react";
-import { Button, Badge, Separator } from "@modularmind/ui";
+import { Button, Badge, Separator, cn } from "@modularmind/ui";
 import type { Collection, KnowledgeDocument } from "@modularmind/api-client";
 import { useKnowledgeStore } from "../../stores/knowledge";
 
@@ -76,11 +76,12 @@ export function CollectionDetailPanel({ collection, documents, documentsLoading,
       {/* Upload zone */}
       <div className="p-3 border-b">
         <div
-          className={`rounded-lg border-2 border-dashed p-4 text-center transition-colors cursor-pointer ${
+          className={cn(
+            "rounded-lg border-2 border-dashed p-4 text-center transition-colors cursor-pointer",
             dragOver
               ? "border-primary bg-primary/5"
-              : "border-border hover:border-muted-foreground/40"
-          }`}
+              : "border-border hover:border-muted-foreground/40",
+          )}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
