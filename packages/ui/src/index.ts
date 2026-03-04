@@ -59,3 +59,5 @@ export { ChatMessages } from "./components/chat-messages";
 export type { ChatMessagesProps, ChatMessage } from "./components/chat-messages";
 export { ExecutionActivityList } from "./components/execution-activity";
 export type { ExecutionActivityListProps } from "./components/execution-activity";
+export { ChatPanel } from "./components/chat-panel";
+export type { ChatPanelProps, ChatPanelTab } from "./components/chat-panel";
