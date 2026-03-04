@@ -157,13 +157,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Run tests
-        run: |
-          if pnpm exec vitest --version >/dev/null 2>&1; then
-            pnpm exec vitest run --coverage.enabled --coverage.reporter=json-summary
-          else
-            echo "::notice::Vitest not configured yet — skipping TS tests"
-          fi
+      - name: Run tests with coverage
+        run: pnpm test:coverage
 
       - name: Check coverage ratchet
         if: success()
