@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Message as ApiMessage, SendMessageResponse } from "@modularmind/api-client";
 import { api } from "../lib/api";
 import { useExecutionActivities } from "./useExecutionActivities";
-import { useRightPanel } from "./useRightPanel";
+import { useInsightsPanel } from "./useInsightsPanel";
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "./useExecutionActivities";
 export type {
@@ -11,8 +11,8 @@ export type {
   KnowledgeCollection,
   KnowledgeChunk,
   MemoryEntry,
-  RightPanelState,
-} from "./useRightPanel";
+  InsightsPanelState,
+} from "./useInsightsPanel";
 
 export type Message = ApiMessage;
 
@@ -69,7 +69,7 @@ export function useChat(conversationId: string | null) {
     setMemoryEntries,
     setKnowledgeLoading,
     handlePanelEvent,
-  } = useRightPanel();
+  } = useInsightsPanel();
 
   const setInitialMessages = useCallback((msgs: Message[]) => {
     setMessages(msgs);

@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Bot, Zap, PanelRight } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
-import type { ConversationDetail, ConversationConfig, ConversationCreate } from "@modularmind/api-client";
+import type { ConversationDetail, ConversationCreate } from "@modularmind/api-client";
 import { useChat, type Message } from "../hooks/useChat";
 import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
 import { ChatSidebar, type Conversation } from "../components/ChatSidebar";
 import { ChatMessages } from "../components/ChatMessages";
 import { ChatInput } from "../components/ChatInput";
-import { RightPanel } from "../components/RightPanel";
+import { InsightsPanel } from "../components/InsightsPanel";
 import { useAuthStore } from "@modularmind/ui";
 import { api } from "../lib/api";
 
@@ -47,12 +47,6 @@ export default function Chat() {
 
   const [panelOpen, setPanelOpen] = useState(false);
 
-  // Determine if sending is blocked
-  const sendDisabledReason = useMemo(() => {
-    if (!chatConfig.modelId) return "Select a model before sending";
-    return null;
-  }, [chatConfig.modelId]);
-
   // Debounce config persistence
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -64,28 +58,35 @@ export default function Chat() {
     [models],
   );
 
-  // Auto-select first available model when none is selected
-  useEffect(() => {
-    if (!chatConfig.modelId && availableModels.length > 0) {
-      setChatConfig((prev) => ({ ...prev, modelId: toEngineModelId(availableModels[0]) }));
-    }
+  // Derived model ID: use explicit selection, or fall back to first available model
+  const effectiveModelId = useMemo(() => {
+    if (chatConfig.modelId) return chatConfig.modelId;
+    if (availableModels.length > 0) return toEngineModelId(availableModels[0]);
+    return null;
   }, [chatConfig.modelId, availableModels, toEngineModelId]);
 
-  const fetchConversations = useCallback(async () => {
-    try {
-      const data = await api.get<{ items: Conversation[] }>("/conversations?page_size=50");
-      setConversations(data.items || []);
-    } catch (err) {
-      console.error("[Chat]", err);
-    }
-  }, []);
+  // Determine if sending is blocked
+  const sendDisabledReason = useMemo(() => {
+    if (!effectiveModelId) return "Select a model before sending";
+    return null;
+  }, [effectiveModelId]);
 
   // Load data once user is authenticated
   useEffect(() => {
     if (!user) return;
     loadConfig();
-    fetchConversations();
-  }, [user, loadConfig, fetchConversations]);
+    let active = true;
+    async function fetchData() {
+      try {
+        const data = await api.get<{ items: Conversation[] }>("/conversations?page_size=50");
+        if (active) setConversations(data.items || []);
+      } catch (err) {
+        console.error("[Chat]", err);
+      }
+    }
+    fetchData();
+    return () => { active = false; };
+  }, [user, loadConfig]);
 
   // Load messages when selecting a conversation
   const handleSelectConversation = useCallback(
@@ -197,7 +198,7 @@ export default function Chat() {
   );
 
   const handleSend = useCallback(async () => {
-    if (!inputValue.trim() || isStreaming || !chatConfig.modelId) return;
+    if (!inputValue.trim() || isStreaming || !effectiveModelId) return;
 
     let convId = activeConversationId;
 
@@ -228,14 +229,14 @@ export default function Chat() {
       config: {
         enabled_agent_ids: enabledAgentIds,
         enabled_graph_ids: enabledGraphIds,
-        model_id: chatConfig.modelId,
+        model_id: effectiveModelId,
         model_override: chatConfig.modelOverride,
       },
     }).catch((err) => console.error("[Chat]", err));
 
     sendMessage(inputValue, convId ?? undefined);
     setInputValue("");
-  }, [inputValue, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, sendMessage, conversations, messages.length]);
+  }, [inputValue, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, effectiveModelId, sendMessage, conversations, messages.length]);
 
   const handleToggleAgent = useCallback((agentId: string) => {
     setEnabledAgentIds((prev) =>
@@ -297,7 +298,7 @@ export default function Chat() {
             {/* Model dropdown */}
             {availableModels.length > 0 && (
               <Select
-                value={chatConfig.modelId ?? ""}
+                value={effectiveModelId ?? ""}
                 onValueChange={(v) => handleModelChange(v)}
               >
                 <SelectTrigger className="w-[200px] h-8 text-xs">
@@ -363,11 +364,10 @@ export default function Chat() {
 
       {/* Right: Insights panel */}
       {panelOpen && (
-        <RightPanel
+        <InsightsPanel
           supervisor={panelState.supervisor}
           knowledge={panelState.knowledge}
           memory={panelState.memory}
-          onClose={() => setPanelOpen(false)}
         />
       )}
     </div>
