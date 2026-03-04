@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Bot, Zap, PanelRight } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
+import type { ConversationDetail, ConversationConfig, ConversationCreate } from "@modularmind/api-client";
 import { useChat, type Message } from "../hooks/useChat";
 import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
 import { ChatSidebar, type Conversation } from "../components/ChatSidebar";
@@ -28,7 +29,6 @@ export default function Chat() {
   const [inputValue, setInputValue] = useState("");
   const [enabledAgentIds, setEnabledAgentIds] = useState<string[]>([]);
   const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
-  const [, setLoadingConvs] = useState(true);
   const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CONFIG);
 
   const user = useAuthStore((s) => s.user);
@@ -72,14 +72,11 @@ export default function Chat() {
   }, [chatConfig.modelId, availableModels, toEngineModelId]);
 
   const fetchConversations = useCallback(async () => {
-    setLoadingConvs(true);
     try {
       const data = await api.get<{ items: Conversation[] }>("/conversations?page_size=50");
       setConversations(data.items || []);
-    } catch {
-      // Silent fail
-    } finally {
-      setLoadingConvs(false);
+    } catch (err) {
+      console.error("[Chat]", err);
     }
   }, []);
 
@@ -95,10 +92,10 @@ export default function Chat() {
     async (id: string) => {
       setActiveConversationId(id);
       try {
-        const data = await api.get<{ messages?: Array<{ id: string; role: string; content: string; created_at: string; metadata?: Record<string, unknown> }>; config?: Record<string, unknown>; supervisor_mode?: boolean }>(`/conversations/${id}`);
+        const data = await api.get<ConversationDetail>(`/conversations/${id}`);
         const msgs: Message[] = (data.messages || []).map((m) => ({
           id: m.id,
-          role: m.role as "user" | "assistant" | "system",
+          role: m.role,
           content: m.content,
           created_at: m.created_at,
           metadata: m.metadata || {},
@@ -106,16 +103,16 @@ export default function Chat() {
         setInitialMessages(msgs);
 
         // Apply conversation config
-        const convConfig = (data.config || {}) as Record<string, unknown>;
-        setEnabledAgentIds((convConfig.enabled_agent_ids as string[]) || []);
-        setEnabledGraphIds((convConfig.enabled_graph_ids as string[]) || []);
+        const convConfig = (data.config || {}) as ConversationConfig;
+        setEnabledAgentIds(convConfig.enabled_agent_ids || []);
+        setEnabledGraphIds(convConfig.enabled_graph_ids || []);
         setChatConfig({
           supervisorMode: data.supervisor_mode ?? true,
-          modelId: (convConfig.model_id as string) || null,
-          modelOverride: (convConfig.model_override as boolean) || false,
+          modelId: convConfig.model_id || null,
+          modelOverride: convConfig.model_override || false,
         });
-      } catch {
-        // Silent fail
+      } catch (err) {
+        console.error("[Chat]", err);
       }
     },
     [setInitialMessages],
@@ -123,7 +120,7 @@ export default function Chat() {
 
   const createConversation = useCallback(async (): Promise<string | null> => {
     try {
-      const body: Record<string, unknown> = {
+      const body: ConversationCreate = {
         supervisor_mode: chatConfig.supervisorMode,
       };
       // If a single agent is selected, use direct mode
@@ -138,7 +135,8 @@ export default function Chat() {
       setInitialMessages([]);
       setChatConfig({ ...DEFAULT_CONFIG, supervisorMode: chatConfig.supervisorMode });
       return conv.id;
-    } catch {
+    } catch (err) {
+      console.error("[Chat]", err);
       return null;
     }
   }, [enabledAgentIds, enabledGraphIds, chatConfig.supervisorMode, setInitialMessages]);
@@ -157,8 +155,8 @@ export default function Chat() {
           setInitialMessages([]);
           setChatConfig(DEFAULT_CONFIG);
         }
-      } catch {
-        // Silent fail
+      } catch (err) {
+        console.error("[Chat]", err);
       }
     },
     [activeConversationId, setInitialMessages],
@@ -171,8 +169,8 @@ export default function Chat() {
         setConversations((prev) =>
           prev.map((c) => (c.id === id ? { ...c, title } : c)),
         );
-      } catch {
-        // Silent fail
+      } catch (err) {
+        console.error("[Chat]", err);
       }
     },
     [],
@@ -192,7 +190,7 @@ export default function Chat() {
             model_id: newConfig.modelId,
             model_override: newConfig.modelOverride,
           },
-        }).catch(() => {});
+        }).catch((err) => console.error("[Chat]", err));
       }, 500);
     },
     [activeConversationId, enabledAgentIds, enabledGraphIds],
@@ -216,7 +214,7 @@ export default function Chat() {
       setConversations((prev) =>
         prev.map((c) => (c.id === convId ? { ...c, title } : c)),
       );
-      api.patch(`/conversations/${convId}`, { title }).catch(() => {});
+      api.patch(`/conversations/${convId}`, { title }).catch((err) => console.error("[Chat]", err));
     }
 
     // Cancel any pending debounced PATCH
@@ -233,7 +231,7 @@ export default function Chat() {
         model_id: chatConfig.modelId,
         model_override: chatConfig.modelOverride,
       },
-    }).catch(() => {});
+    }).catch((err) => console.error("[Chat]", err));
 
     sendMessage(inputValue, convId ?? undefined);
     setInputValue("");

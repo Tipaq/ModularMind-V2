@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import type { TraceStreamEvent, StepStreamEvent } from "@modularmind/api-client";
 
 export type ActivityType =
   | "step"
@@ -63,40 +64,8 @@ function completeLastRunning(
   return updated;
 }
 
-/** SSE trace event from the execution stream. */
-export interface SSETraceEvent {
-  type: string;
-  event?: string;
-  duration_ms?: number;
-  // LLM
-  model?: string;
-  message_count?: number;
-  prompt_preview?: string;
-  response_preview?: string;
-  tokens?: { total?: number; prompt?: number; completion?: number };
-  // Tool
-  tool_name?: string;
-  server_name?: string;
-  input_preview?: string;
-  output_preview?: string;
-  // Retrieval
-  status?: string;
-  query?: string;
-  num_results?: number;
-  // Node
-  node_name?: string;
-  // Parallel / Loop
-  branch_count?: number;
-  mode?: string;
-  total_items?: number;
-  // Supervisor
-  strategy?: string;
-  agent_name?: string;
-  is_ephemeral?: boolean;
-  preview?: string;
-  // Error
-  error?: string;
-}
+/** SSE trace event from the execution stream — re-exported from api-client. */
+export type SSETraceEvent = TraceStreamEvent | StepStreamEvent;
 
 export function useExecutionActivities() {
   const [activities, setActivities] = useState<ExecutionActivity[]>([]);

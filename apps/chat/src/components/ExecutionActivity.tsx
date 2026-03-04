@@ -15,7 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
-import { cn } from "@modularmind/ui";
+import { cn, formatDurationMs, ACTIVITY_COLORS } from "@modularmind/ui";
 import type { ExecutionActivity, ActivityType } from "../hooks/useExecutionActivities";
 
 const ACTIVITY_ICON: Record<ActivityType, React.ElementType> = {
@@ -32,30 +32,10 @@ const ACTIVITY_ICON: Record<ActivityType, React.ElementType> = {
   agent_created: Sparkles,
 };
 
-const ACTIVITY_COLOR: Record<ActivityType, string> = {
-  llm: "text-info",
-  tool: "text-primary",
-  retrieval: "text-warning",
-  step: "text-success",
-  parallel: "text-info",
-  loop: "text-primary",
-  error: "text-destructive",
-  routing: "text-warning",
-  delegation: "text-success",
-  direct_response: "text-success",
-  agent_created: "text-primary",
-};
-
-function formatDuration(ms?: number): string {
-  if (ms == null) return "";
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
 const ActivityItem = memo(function ActivityItem({ activity }: { activity: ExecutionActivity }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = ACTIVITY_ICON[activity.type] || Bot;
-  const color = ACTIVITY_COLOR[activity.type] || "text-muted-foreground";
+  const color = ACTIVITY_COLORS[activity.type] || "text-muted-foreground";
 
   return (
     <div
@@ -86,7 +66,7 @@ const ActivityItem = memo(function ActivityItem({ activity }: { activity: Execut
             </span>
           )}
           <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
-            {formatDuration(activity.durationMs)}
+            {activity.durationMs != null ? formatDurationMs(activity.durationMs) : ""}
           </span>
           {activity.preview && (
             expanded ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -105,10 +85,10 @@ const ActivityItem = memo(function ActivityItem({ activity }: { activity: Execut
 interface Props {
   activities: ExecutionActivity[];
   isStreaming: boolean;
-  hasContent: boolean;
+  hasContent?: boolean;
 }
 
-export function ExecutionActivityList({ activities, isStreaming }: Props) {
+export const ExecutionActivityList = memo(function ExecutionActivityList({ activities, isStreaming }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   if (activities.length === 0 && !isStreaming) return null;
@@ -163,7 +143,7 @@ export function ExecutionActivityList({ activities, isStreaming }: Props) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-medium">{parts.join(", ")}</span>
-            <span className="ml-auto text-[10px]">&middot; {formatDuration(totalMs)}</span>
+            <span className="ml-auto text-[10px]">&middot; {formatDurationMs(totalMs)}</span>
           </div>
         </div>
       </button>
@@ -176,4 +156,4 @@ export function ExecutionActivityList({ activities, isStreaming }: Props) {
       )}
     </div>
   );
-}
+});

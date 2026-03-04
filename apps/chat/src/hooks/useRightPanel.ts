@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { mapKeysToCamel } from "@modularmind/api-client";
 
 // ─── Supervisor ──────────────────────────────────────────────────────────────
 
@@ -119,21 +120,11 @@ export function useRightPanel() {
       ...prev,
       knowledge: {
         status: "completed",
-        collections: (data.collections || []).map((c) => ({
-          collectionId: c.collection_id,
-          collectionName: c.collection_name,
-          chunkCount: c.chunk_count,
-        })),
+        collections: (data.collections || []).map((c) => mapKeysToCamel(c) as unknown as KnowledgeCollection),
         chunks: (data.chunks || []).map((ch) => ({
-          chunkId: ch.chunk_id,
-          documentId: ch.document_id,
-          collectionId: ch.collection_id,
-          collectionName: ch.collection_name,
+          ...mapKeysToCamel(ch),
           documentFilename: ch.document_filename ?? null,
-          contentPreview: ch.content_preview,
-          score: ch.score,
-          chunkIndex: ch.chunk_index,
-        })),
+        }) as unknown as KnowledgeChunk),
         totalResults: data.total_results || 0,
       },
     }));

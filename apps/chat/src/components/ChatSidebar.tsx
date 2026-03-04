@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import type { ConversationConfig } from "@modularmind/api-client";
 import { useNavigate } from "react-router-dom";
 import { Plus, Trash2, MessageSquare, Check, X } from "lucide-react";
 import {
@@ -12,6 +13,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  relativeTime,
 } from "@modularmind/ui";
 import { useAuthStore } from "@modularmind/ui";
 
@@ -21,7 +23,7 @@ export interface Conversation {
   agent_id: string | null;
   message_count: number;
   supervisor_mode?: boolean;
-  config?: Record<string, unknown>;
+  config?: ConversationConfig;
   created_at: string;
   updated_at: string;
 }
@@ -33,17 +35,6 @@ interface ChatSidebarProps {
   onCreate: () => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
 }
 
 export function ChatSidebar({
@@ -140,7 +131,7 @@ export function ChatSidebar({
                     {conv.title || "New Chat"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {conv.message_count} msgs &middot; {timeAgo(conv.updated_at)}
+                    {conv.message_count} msgs &middot; {relativeTime(conv.updated_at)}
                   </p>
                 </div>
                 <Button

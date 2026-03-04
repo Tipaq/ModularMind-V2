@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Message as ApiMessage, SendMessageResponse } from "@modularmind/api-client";
 import { api } from "../lib/api";
 import { useExecutionActivities } from "./useExecutionActivities";
 import { useRightPanel } from "./useRightPanel";
@@ -13,37 +14,12 @@ export type {
   RightPanelState,
 } from "./useRightPanel";
 
-export interface Message {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  created_at: string;
-  metadata?: Record<string, unknown>;
-}
+export type Message = ApiMessage;
 
 export interface TokenUsage {
   prompt: number;
   completion: number;
   total: number;
-}
-
-interface SendMessageResponse {
-  execution_id?: string;
-  user_message: Message;
-  direct_response?: string;
-  routing_strategy?: string;
-  delegated_to?: string;
-  is_ephemeral?: boolean;
-  ephemeral_agent?: { id: string; name: string };
-  memory_entries?: Array<{
-    id: string;
-    content: string;
-    scope: string;
-    tier: string;
-    importance: number;
-    memory_type: string;
-    category: string;
-  }>;
 }
 
 interface ExecutionOutput {
@@ -64,7 +40,8 @@ function extractResponse(output: ExecutionOutput | null | undefined): string {
   if (output.node_outputs && typeof output.node_outputs === "object") {
     const values = Object.values(output.node_outputs);
     for (let i = values.length - 1; i >= 0; i--) {
-      if (values[i]?.response) return values[i].response;
+      const resp = values[i]?.response;
+      if (resp) return resp;
     }
   }
   return "";
@@ -206,8 +183,26 @@ export function useChat(conversationId: string | null) {
       }
 
       // Connect to SSE stream
+      // Close any previous source before opening a new one
+      if (sourceRef.current) {
+        sourceRef.current.close();
+        sourceRef.current = null;
+      }
+
       const source = new EventSource(`/api/v1/executions/${execution_id}/stream`, { withCredentials: true });
       sourceRef.current = source;
+
+      const cleanup = () => {
+        source.removeEventListener("tokens", onEvent);
+        source.removeEventListener("trace", onEvent);
+        source.removeEventListener("step", onEvent);
+        source.removeEventListener("complete", onEvent);
+        source.removeEventListener("error", onError);
+        source.close();
+        if (sourceRef.current === source) {
+          sourceRef.current = null;
+        }
+      };
 
       const onEvent = (e: MessageEvent) => {
         try {
@@ -245,24 +240,20 @@ export function useChat(conversationId: string | null) {
             );
             finalizeActivities();
             setIsStreaming(false);
-            source.close();
+            cleanup();
           }
 
           if (data.type === "error") {
             setError(data.message || "Execution error");
             setIsStreaming(false);
-            source.close();
+            cleanup();
           }
         } catch {
           // Ignore parse errors
         }
       };
 
-      source.addEventListener("tokens", onEvent);
-      source.addEventListener("trace", onEvent);
-      source.addEventListener("step", onEvent);
-      source.addEventListener("complete", onEvent);
-      source.addEventListener("error", (e) => {
+      const onError = (e: Event) => {
         const me = e as MessageEvent;
         if (me.data) {
           try {
@@ -273,8 +264,14 @@ export function useChat(conversationId: string | null) {
           }
         }
         setIsStreaming(false);
-        source.close();
-      });
+        cleanup();
+      };
+
+      source.addEventListener("tokens", onEvent);
+      source.addEventListener("trace", onEvent);
+      source.addEventListener("step", onEvent);
+      source.addEventListener("complete", onEvent);
+      source.addEventListener("error", onError);
 
       source.onerror = () => {
         setIsStreaming(false);
@@ -289,6 +286,16 @@ export function useChat(conversationId: string | null) {
       sourceRef.current = null;
     }
     setIsStreaming(false);
+  }, []);
+
+  // Cleanup on unmount: close any active SSE connection
+  useEffect(() => {
+    return () => {
+      if (sourceRef.current) {
+        sourceRef.current.close();
+        sourceRef.current = null;
+      }
+    };
   }, []);
 
   return {
