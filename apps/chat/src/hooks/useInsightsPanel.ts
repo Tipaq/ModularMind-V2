@@ -50,7 +50,7 @@ export interface MemoryEntry {
 
 // ─── Panel State ─────────────────────────────────────────────────────────────
 
-export interface RightPanelState {
+export interface InsightsPanelState {
   supervisor: SupervisorData | null;
   knowledge: KnowledgeData;
   memory: MemoryEntry[];
@@ -83,8 +83,8 @@ interface KnowledgeTraceEvent {
   total_results?: number;
 }
 
-export function useRightPanel() {
-  const [state, setState] = useState<RightPanelState>({
+export function useInsightsPanel() {
+  const [state, setState] = useState<InsightsPanelState>({
     supervisor: null,
     knowledge: INITIAL_KNOWLEDGE,
     memory: [],

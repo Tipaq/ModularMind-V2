@@ -1,18 +1,16 @@
 import { useState, memo } from "react";
 import {
   Badge,
-  Tabs,
-  TabsList,
-  TabsTrigger,
   TabsContent,
   cn,
+  ChatPanel,
 } from "@modularmind/ui";
+import type { ChatPanelTab } from "@modularmind/ui";
 import {
   Route,
   BookOpen,
   Brain,
   FileText,
-  X,
   ChevronDown,
   ChevronRight,
   Loader2,
@@ -25,7 +23,7 @@ import type {
   KnowledgeData,
   KnowledgeChunk,
   MemoryEntry,
-} from "../hooks/useRightPanel";
+} from "../hooks/useInsightsPanel";
 
 // ─── Supervisor Tab ──────────────────────────────────────────────────────────
 
@@ -284,70 +282,34 @@ function MemoryTab({ entries }: { entries: MemoryEntry[] }) {
 
 // ─── Main Panel ──────────────────────────────────────────────────────────────
 
-interface RightPanelProps {
+interface InsightsPanelProps {
   supervisor: SupervisorData | null;
   knowledge: KnowledgeData;
   memory: MemoryEntry[];
-  onClose: () => void;
 }
 
-export const RightPanel = memo(function RightPanel({
+const PANEL_TABS: ChatPanelTab[] = [
+  { value: "supervisor", label: "Supervisor", icon: Route },
+  { value: "knowledge", label: "Knowledge", icon: BookOpen },
+  { value: "memory", label: "Memory", icon: Brain },
+];
+
+export const InsightsPanel = memo(function InsightsPanel({
   supervisor,
   knowledge,
   memory,
-  onClose,
-}: RightPanelProps) {
+}: InsightsPanelProps) {
   return (
-    <div className="w-[320px] shrink-0 border-l border-border/50 flex flex-col bg-card/30">
-      {/* Header */}
-      <div className="h-14 border-b flex items-center justify-between px-3 shrink-0">
-        <span className="text-sm font-medium">Insights</span>
-        <button
-          onClick={onClose}
-          className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue="knowledge" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="w-full justify-start rounded-none border-b bg-transparent px-3 h-9 shrink-0">
-          <TabsTrigger
-            value="supervisor"
-            className="text-xs gap-1 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2"
-          >
-            <Route className="h-3 w-3" />
-            Supervisor
-          </TabsTrigger>
-          <TabsTrigger
-            value="knowledge"
-            className="text-xs gap-1 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2"
-          >
-            <BookOpen className="h-3 w-3" />
-            Knowledge
-          </TabsTrigger>
-          <TabsTrigger
-            value="memory"
-            className="text-xs gap-1 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2"
-          >
-            <Brain className="h-3 w-3" />
-            Memory
-          </TabsTrigger>
-        </TabsList>
-
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <TabsContent value="supervisor" className="m-0 p-3">
-            <SupervisorTab data={supervisor} />
-          </TabsContent>
-          <TabsContent value="knowledge" className="m-0 p-3">
-            <KnowledgeTab data={knowledge} />
-          </TabsContent>
-          <TabsContent value="memory" className="m-0 p-3">
-            <MemoryTab entries={memory} />
-          </TabsContent>
-        </div>
-      </Tabs>
-    </div>
+    <ChatPanel tabs={PANEL_TABS} defaultTab="knowledge">
+      <TabsContent value="supervisor" className="m-0 p-3">
+        <SupervisorTab data={supervisor} />
+      </TabsContent>
+      <TabsContent value="knowledge" className="m-0 p-3">
+        <KnowledgeTab data={knowledge} />
+      </TabsContent>
+      <TabsContent value="memory" className="m-0 p-3">
+        <MemoryTab entries={memory} />
+      </TabsContent>
+    </ChatPanel>
   );
 });
