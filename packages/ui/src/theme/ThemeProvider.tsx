@@ -128,7 +128,7 @@ export function ThemeProvider({
 
   const setMode = useCallback((m: ThemeMode) => {
     setModeState(m);
-    try { localStorage.setItem(STORAGE_MODE, m); } catch {}
+    try { localStorage.setItem(STORAGE_MODE, m); } catch { /* localStorage unavailable */ }
   }, []);
 
   const setAccent = useCallback((h: number, s: number) => {
@@ -139,7 +139,7 @@ export function ThemeProvider({
       localStorage.setItem(STORAGE_HUE, String(h));
       localStorage.setItem(STORAGE_SAT, String(s));
       localStorage.setItem(STORAGE_PRESET, "custom");
-    } catch {}
+    } catch { /* localStorage unavailable */ }
   }, []);
 
   const setPreset = useCallback((name: string) => {
@@ -152,7 +152,7 @@ export function ThemeProvider({
       localStorage.setItem(STORAGE_PRESET, name);
       localStorage.setItem(STORAGE_HUE, String(p.hue));
       localStorage.setItem(STORAGE_SAT, String(p.saturation));
-    } catch {}
+    } catch { /* localStorage unavailable */ }
   }, []);
 
   const value = useMemo<ThemeContextValue>(

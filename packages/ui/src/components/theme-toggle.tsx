@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Moon, Sun, Monitor } from "lucide-react";
 import { useTheme } from "../theme/useTheme";
 import { cn } from "../lib/utils";
@@ -20,9 +19,6 @@ interface ThemeToggleProps {
 
 export function ThemeToggle({ variant = "segmented", className }: ThemeToggleProps) {
   const { mode, setMode, resolvedMode } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
 
   if (variant === "icon") {
     const next: ThemeMode = resolvedMode === "dark" ? "light" : "dark";
@@ -49,7 +45,7 @@ export function ThemeToggle({ variant = "segmented", className }: ThemeTogglePro
           onClick={() => setMode(value)}
           className={cn(
             "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-            mounted && mode === value
+            mode === value
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground hover:bg-background/50",
           )}
