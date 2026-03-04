@@ -9,8 +9,13 @@ import asyncio
 import json as json_module
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
+
+from src.graph_engine.state import GraphState
+
+# A compiled node function: async (GraphState) -> dict
+NodeFn = Callable[[GraphState], Awaitable[dict[str, Any]]]
 
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -19,7 +24,12 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from .condition_eval import build_condition_context, safe_eval_condition
-from .interfaces import AgentConfig, GraphConfig
+from .interfaces import (
+    AgentConfig,
+    ConfigProviderProtocol,
+    GraphConfig,
+    LLMProviderProtocol,
+)
 from .state import GraphState
 
 logger = logging.getLogger(__name__)
@@ -81,14 +91,14 @@ class GraphCompiler:
 
     def __init__(
         self,
-        config_provider: Any,
-        llm_provider: Any,
+        config_provider: ConfigProviderProtocol,
+        llm_provider: LLMProviderProtocol,
         mcp_registry: Any | None = None,
     ):
         self.config_provider = config_provider
         self.llm_provider = llm_provider
         self.mcp_registry = mcp_registry
-        self._compiled_node_funcs: dict[str, Callable] = {}
+        self._compiled_node_funcs: dict[str, NodeFn] = {}
 
     def get_checkpointer(self) -> MemorySaver:
         """Create a memory checkpointer for state persistence.
@@ -360,7 +370,7 @@ class GraphCompiler:
         node_id: str,
         node_type: str,
         node_data: dict[str, Any],
-    ) -> Callable:
+    ) -> NodeFn:
         """Create a node function based on node type."""
         creator_name = self._NODE_CREATORS.get(node_type)
         if creator_name is None:
@@ -384,7 +394,7 @@ class GraphCompiler:
 
     async def _create_agent_node(
         self, node_id: str, node_data: dict[str, Any]
-    ) -> Callable:
+    ) -> NodeFn:
         """Create an agent node function."""
         agent_id = node_data.get("config", {}).get("agentId")
 
@@ -442,7 +452,7 @@ class GraphCompiler:
 
     async def _create_tool_node(
         self, node_id: str, node_data: dict[str, Any]
-    ) -> Callable:
+    ) -> NodeFn:
         """Create a tool node function.
 
         Dispatches based on tool configuration:
@@ -549,7 +559,7 @@ class GraphCompiler:
 
     async def _create_subgraph_node(
         self, node_id: str, node_data: dict[str, Any]
-    ) -> Callable:
+    ) -> NodeFn:
         """Create a subgraph node function."""
         subgraph_id = node_data.get("config", {}).get("subgraphId")
 
@@ -568,7 +578,7 @@ class GraphCompiler:
 
     def _create_condition_node(
         self, node_id: str, node_data: dict[str, Any]
-    ) -> Callable:
+    ) -> NodeFn:
         """Create a condition evaluation node."""
 
         async def condition_node(state: GraphState) -> dict:
@@ -584,7 +594,7 @@ class GraphCompiler:
     def _create_parallel_node(
         self, node_id: str, node_data: dict[str, Any],
         branch_node_ids: list[str] | None = None,
-    ) -> Callable:
+    ) -> NodeFn:
         """Create a parallel node that executes branches via asyncio.gather.
 
         Branch node functions are called internally — they are NOT separate
@@ -632,7 +642,7 @@ class GraphCompiler:
 
     def _create_merge_node(
         self, node_id: str, node_data: dict[str, Any]
-    ) -> Callable:
+    ) -> NodeFn:
         """Create a merge node that aggregates parallel branch results.
 
         Strategies:
@@ -714,7 +724,7 @@ class GraphCompiler:
 
     def _create_loop_node(
         self, node_id: str, node_data: dict[str, Any]
-    ) -> Callable:
+    ) -> NodeFn:
         """Create a loop node for iterating over collections.
 
         Modes:
@@ -797,7 +807,7 @@ class GraphCompiler:
 
     async def _create_supervisor_node(
         self, node_id: str, node_data: dict[str, Any]
-    ) -> Callable:
+    ) -> NodeFn:
         """Create a supervisor node that routes to agents via LLM.
 
         The supervisor:
@@ -1013,7 +1023,7 @@ class GraphCompiler:
     # Passthrough node
     # -------------------------------------------------------------------------
 
-    def _create_passthrough_node(self, node_id: str) -> Callable:
+    def _create_passthrough_node(self, node_id: str) -> NodeFn:
         """Create a passthrough node."""
 
         async def passthrough_node(state: GraphState) -> dict:

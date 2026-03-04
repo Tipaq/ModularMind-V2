@@ -1,10 +1,34 @@
-"""Data models for graph engine execution components."""
+"""Data models and protocols for graph engine execution components."""
+
+from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
+from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field, field_validator
+
+
+# ---------------------------------------------------------------------------
+# Protocols — structural type contracts for dependency injection
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class ConfigProviderProtocol(Protocol):
+    """Structural contract for configuration providers (DI boundary)."""
+
+    async def get_agent_config(self, agent_id: str) -> AgentConfig | None: ...
+    async def get_graph_config(self, graph_id: str) -> GraphConfig | None: ...
+    async def list_agents(self) -> list[AgentConfig]: ...
+
+
+@runtime_checkable
+class LLMProviderProtocol(Protocol):
+    """Structural contract for LLM providers (DI boundary)."""
+
+    async def get_model(self, model_id: str, **kwargs: Any) -> BaseChatModel: ...
 
 
 class RAGConfig(BaseModel):

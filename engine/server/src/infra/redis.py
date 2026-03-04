@@ -40,21 +40,26 @@ def get_redis_pool() -> aioredis.ConnectionPool:
 
 
 # ---------------------------------------------------------------------------
-# Module-level singleton (backward compat for V2 code: `from src.infra.redis import redis_client`)
+# Module-level singleton (backward compat: `from src.infra.redis import redis_client`)
 # ---------------------------------------------------------------------------
-# Uses a lazy wrapper so the pool is not created at import time if nothing
-# references ``redis_client`` immediately.  The wrapper is transparent — it
-# IS a real aioredis.Redis instance.
-redis_client: RedisClient = aioredis.Redis(
-    connection_pool=aioredis.ConnectionPool.from_url(
-        settings.REDIS_URL,
-        decode_responses=True,
-        max_connections=settings.REDIS_MAX_CONNECTIONS,
-        socket_timeout=float(settings.REDIS_SOCKET_TIMEOUT),
-        socket_keepalive=settings.REDIS_SOCKET_KEEPALIVE,
-        retry_on_timeout=True,
-    ),
-)
+# Backed by the same shared pool as get_redis_pool() — no duplicate connections.
+
+
+class _LazyRedisClient:
+    """Proxy that defers pool creation until first attribute access."""
+
+    _client: RedisClient | None = None
+
+    def _get_client(self) -> RedisClient:
+        if self._client is None:
+            self._client = aioredis.Redis(connection_pool=get_redis_pool())
+        return self._client
+
+    def __getattr__(self, name: str):  # noqa: ANN001
+        return getattr(self._get_client(), name)
+
+
+redis_client: RedisClient = _LazyRedisClient()  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------
@@ -116,10 +121,14 @@ async def close_redis() -> None:
     """Close the module-level client and drain the shared connection pool."""
     global _pool
 
-    try:
-        await redis_client.aclose()
-    except Exception:
-        logger.debug("redis_client already closed or not initialised")
+    # Close the lazy singleton if it was ever initialised.
+    proxy = redis_client
+    if isinstance(proxy, _LazyRedisClient) and proxy._client is not None:
+        try:
+            await proxy._client.aclose()
+        except Exception:
+            logger.debug("redis_client already closed or not initialised")
+        proxy._client = None
 
     if _pool is not None:
         await _pool.disconnect()

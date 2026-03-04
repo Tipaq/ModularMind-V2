@@ -27,8 +27,8 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
     items: list[T]
     total: int
-    page: int | None = None
-    page_size: int | None = None
+    page: int = 1
+    page_size: int = 20
 
     @computed_field  # type: ignore[prop-decorator]
     @property

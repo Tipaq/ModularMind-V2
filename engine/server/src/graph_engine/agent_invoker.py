@@ -10,6 +10,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.types import RunnableConfig
 
+from .interfaces import ConfigProviderProtocol, LLMProviderProtocol
 from .state import GraphState
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,11 @@ class AgentInvoker:
     and future tool integrations.
     """
 
-    def __init__(self, config_provider: Any, llm_provider: Any):
+    def __init__(
+        self,
+        config_provider: ConfigProviderProtocol,
+        llm_provider: LLMProviderProtocol,
+    ):
         self.config_provider = config_provider
         self.llm_provider = llm_provider
 

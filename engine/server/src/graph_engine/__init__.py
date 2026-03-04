@@ -6,9 +6,11 @@ from .compiler import GraphCompiler
 from .condition_eval import build_condition_context, safe_eval_condition
 from .interfaces import (
     AgentConfig,
+    ConfigProviderProtocol,
     ConfigVersion,
     EdgeConfig,
     GraphConfig,
+    LLMProviderProtocol,
     NodeConfig,
     RAGConfig,
 )
@@ -23,6 +25,9 @@ __all__ = [
     # Condition evaluator
     "safe_eval_condition",
     "build_condition_context",
+    # Protocols (DI contracts)
+    "ConfigProviderProtocol",
+    "LLMProviderProtocol",
     # Data models
     "AgentConfig",
     "GraphConfig",
