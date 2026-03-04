@@ -362,13 +362,17 @@ async def list_executions(
     )
 
 
-@router.post("/{execution_id}/stop")
-async def stop_execution(
+async def _update_execution_status(
     execution_id: str,
     user: CurrentUser,
     db: DbSession,
-) -> dict:
-    """Stop a running execution."""
+    action: str,
+) -> dict[str, str]:
+    """Shared helper for stop/pause/resume execution endpoints.
+
+    Validates ownership, calls the service method, commits, and
+    returns a status dict.
+    """
     service = ExecutionService(db)
 
     execution = await service.get_execution(execution_id)
@@ -378,15 +382,29 @@ async def stop_execution(
     if execution.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    success = await service.stop_execution(execution_id)
+    method = getattr(service, f"{action}_execution")
+    success = await method(execution_id)
     if not success:
         raise HTTPException(
             status_code=400,
-            detail="Cannot stop execution in current state",
+            detail=f"Cannot {action} execution in current state",
         )
 
     await db.commit()
-    return {"status": "stopped"}
+    _past = {"stop": "stopped", "pause": "paused", "resume": "resumed"}
+    return {"status": _past[action]}
+
+
+@router.post("/{execution_id}/stop")
+async def stop_execution(
+    execution_id: str,
+    user: CurrentUser,
+    db: DbSession,
+) -> dict[str, str]:
+    """Stop a running execution."""
+    return await _update_execution_status(
+        execution_id, user, db, "stop",
+    )
 
 
 @router.post("/{execution_id}/pause")
@@ -394,26 +412,11 @@ async def pause_execution(
     execution_id: str,
     user: CurrentUser,
     db: DbSession,
-) -> dict:
+) -> dict[str, str]:
     """Pause a running execution."""
-    service = ExecutionService(db)
-
-    execution = await service.get_execution(execution_id)
-    if not execution:
-        raise_not_found("Execution")
-
-    if execution.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    success = await service.pause_execution(execution_id)
-    if not success:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot pause execution in current state",
-        )
-
-    await db.commit()
-    return {"status": "paused"}
+    return await _update_execution_status(
+        execution_id, user, db, "pause",
+    )
 
 
 @router.post("/{execution_id}/resume")
@@ -421,26 +424,11 @@ async def resume_execution(
     execution_id: str,
     user: CurrentUser,
     db: DbSession,
-) -> dict:
+) -> dict[str, str]:
     """Resume a paused execution."""
-    service = ExecutionService(db)
-
-    execution = await service.get_execution(execution_id)
-    if not execution:
-        raise_not_found("Execution")
-
-    if execution.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    result = await service.resume_execution(execution_id)
-    if not result:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot resume execution in current state",
-        )
-
-    await db.commit()
-    return {"status": "resumed"}
+    return await _update_execution_status(
+        execution_id, user, db, "resume",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -543,20 +531,14 @@ async def submit_feedback(
     data: FeedbackCreate,
     user: CurrentUser,
     db: DbSession,
-):
+) -> FeedbackResponse:
     """Submit feedback for an execution."""
-    from .feedback import FeedbackCreate, FeedbackService
+    from .feedback import FeedbackService
 
     svc = FeedbackService(db)
-    create_data = FeedbackCreate(
-        rating=data.rating,
-        correction=data.correction,
-        original_response=data.original_response,
-        step_id=data.step_id,
-        agent_id=data.agent_id,
-        tags=data.tags,
+    feedback = await svc.create_feedback(
+        execution_id, str(user.id), data,
     )
-    feedback = await svc.create_feedback(execution_id, str(user.id), create_data)
     return FeedbackResponse.model_validate(feedback)
 
 
@@ -565,7 +547,7 @@ async def get_feedback(
     execution_id: str,
     user: CurrentUser,
     db: DbSession,
-):
+) -> list[FeedbackResponse]:
     """Get feedback for an execution."""
     from .feedback import FeedbackService
 
