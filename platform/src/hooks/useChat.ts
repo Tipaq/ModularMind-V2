@@ -6,9 +6,9 @@ import type { ExecutionActivity } from "./useExecutionActivities";
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "./useExecutionActivities";
 
-import type { Message as ApiMessage } from "@modularmind/api-client";
+import type { ChatMessage } from "@modularmind/ui";
 
-export type Message = ApiMessage;
+export type Message = ChatMessage;
 
 export interface TokenUsage {
   prompt: number;
@@ -92,7 +92,8 @@ function extractResponse(output: OutputData | null | undefined): string {
   if (output.node_outputs && typeof output.node_outputs === "object") {
     const values = Object.values(output.node_outputs);
     for (let i = values.length - 1; i >= 0; i--) {
-      if (values[i]?.response) return values[i].response;
+      const resp = values[i]?.response;
+      if (resp) return resp;
     }
   }
   return "";

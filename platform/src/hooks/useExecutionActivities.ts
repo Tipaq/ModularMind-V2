@@ -49,7 +49,10 @@ export function useExecutionActivities() {
     );
   }, []);
 
-  const handleEvent = useCallback((data: Record<string, unknown>) => {
+  // SSE event data from the engine. Uses a permissive record type since
+  // event shapes vary by type and are validated at the source.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleEvent = useCallback((data: Record<string, any>) => {
     const eventType = data?.type as string | undefined;
     if (!eventType) return;
 

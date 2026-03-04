@@ -1,3 +1,4 @@
+import type { Session } from "next-auth";
 import { NextResponse } from "next/server";
 import { auth } from "./auth";
 
@@ -5,7 +6,7 @@ import { auth } from "./auth";
  * Require an authenticated session. Returns the session or a 401 response.
  */
 export async function requireAuth(): Promise<
-  | { session: Awaited<ReturnType<typeof auth>>; error?: never }
+  | { session: Session; error?: never }
   | { session?: never; error: NextResponse }
 > {
   const session = await auth();
