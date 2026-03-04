@@ -9,9 +9,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel
 from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import CurrentUser, UserRole
 from src.auth.dependencies import RequireAdmin
@@ -23,200 +21,33 @@ from src.infra.database import DbSession
 from src.infra.token_pricing import estimate_cost, get_provider, parse_model_name
 from src.memory.models import MemoryEntry, MemoryScope, MemoryTier
 from src.memory.vector_store import QdrantMemoryVectorStore
-from src.rag.models import RAGScope
 from src.rag.repository import RAGRepository
+
+from .schemas import (
+    AdminConversationItem,
+    AdminConversationListResponse,
+    AdminConversationMessagesResponse,
+    AdminMessageResponse,
+    AdminUserUpdate,
+    AdminUserUpdateResponse,
+    CollectionResponse,
+    DailyTokenUsage,
+    DeleteCountResponse,
+    MemoryEntryResponse,
+    MemoryListResponse,
+    ModelTokenUsage,
+    TokenUsageResponse,
+    TokenUsageSummary,
+    UserStatsListResponse,
+    UserStatsResponse,
+)
+from .service import compute_user_cost, get_range_start, get_user_or_404
 
 logger = logging.getLogger(__name__)
 
 admin_user_router = APIRouter(
     prefix="/users", tags=["Admin — Users"], dependencies=[RequireAdmin]
 )
-
-
-# ─── Schemas ────────────────────────────────────────────────────────────
-
-class UserStatsResponse(BaseModel):
-    id: str
-    email: str
-    role: UserRole
-    is_active: bool
-    conversation_count: int
-    total_tokens_prompt: int
-    total_tokens_completion: int
-    execution_count: int
-    estimated_cost_usd: float | None
-    last_active_at: datetime | None
-    created_at: datetime
-
-
-class UserStatsListResponse(BaseModel):
-    items: list[UserStatsResponse]
-    total: int
-    page: int
-    page_size: int
-
-
-class AdminUserUpdate(BaseModel):
-    role: UserRole | None = None
-    is_active: bool | None = None
-
-
-class AdminUserUpdateResponse(BaseModel):
-    id: str
-    email: str
-    role: UserRole
-    is_active: bool
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class DeleteCountResponse(BaseModel):
-    deleted_count: int
-
-
-class AdminConversationItem(BaseModel):
-    id: str
-    agent_id: str | None
-    title: str | None
-    message_count: int
-    tokens_prompt: int
-    tokens_completion: int
-    estimated_cost: float | None
-    created_at: datetime
-    updated_at: datetime
-
-
-class AdminConversationListResponse(BaseModel):
-    items: list[AdminConversationItem]
-    total: int
-    page: int
-    page_size: int
-
-
-class AdminMessageResponse(BaseModel):
-    id: str
-    role: str
-    content: str
-    metadata: dict | None
-    execution_id: str | None
-    created_at: datetime
-
-
-class AdminConversationMessagesResponse(BaseModel):
-    conversation_id: str
-    user_id: str
-    user_email: str
-    messages: list[AdminMessageResponse]
-
-
-class TokenUsageSummary(BaseModel):
-    total_prompt: int
-    total_completion: int
-    estimated_cost_usd: float | None
-    execution_count: int
-
-
-class DailyTokenUsage(BaseModel):
-    date: str  # YYYY-MM-DD
-    tokens_prompt: int
-    tokens_completion: int
-    estimated_cost_usd: float | None
-    execution_count: int
-
-
-class ModelTokenUsage(BaseModel):
-    model: str
-    provider: str | None
-    tokens_prompt: int
-    tokens_completion: int
-    estimated_cost_usd: float | None
-
-
-class TokenUsageResponse(BaseModel):
-    summary: TokenUsageSummary
-    daily: list[DailyTokenUsage]
-    by_model: list[ModelTokenUsage]
-
-
-class MemoryEntryResponse(BaseModel):
-    id: str
-    scope: MemoryScope
-    scope_id: str
-    tier: MemoryTier
-    content: str
-    importance: float
-    access_count: int
-    last_accessed: datetime | None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class MemoryListResponse(BaseModel):
-    items: list[MemoryEntryResponse]
-    total: int
-    page: int
-    page_size: int
-
-
-class CollectionResponse(BaseModel):
-    id: str
-    name: str
-    scope: RAGScope
-    owner_user_id: str | None
-    allowed_groups: list[str]
-    chunk_count: int
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-# ─── Helpers ────────────────────────────────────────────────────────────
-
-async def _compute_user_cost(db: AsyncSession, user_id: str) -> float | None:
-    """Sum estimated cost across all completed executions for a user."""
-    result = await db.execute(
-        select(
-            ExecutionRun.model,
-            ExecutionRun.tokens_prompt,
-            ExecutionRun.tokens_completion,
-        )
-        .where(
-            ExecutionRun.user_id == user_id,
-            ExecutionRun.status == ExecutionStatus.COMPLETED,
-            ExecutionRun.model.isnot(None),
-        )
-    )
-    total = 0.0
-    has_cloud = False
-    for model_id, prompt_tokens, completion_tokens in result:
-        cost = estimate_cost(model_id, prompt_tokens, completion_tokens)
-        if cost is not None:
-            total += cost
-            has_cloud = True
-    return total if has_cloud else None
-
-
-async def _get_user_or_404(db: AsyncSession, user_id: str) -> User:
-    """Fetch user by ID or raise 404."""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
-
-
-def _get_range_start(range_param: str) -> datetime | None:
-    """Convert range string to start datetime."""
-    now = datetime.now(UTC).replace(tzinfo=None)
-    if range_param == "24h":
-        return now - timedelta(hours=24)
-    elif range_param == "7d":
-        return now - timedelta(days=7)
-    elif range_param == "30d":
-        return now - timedelta(days=30)
-    return None  # "all"
 
 
 # ─── Endpoints ──────────────────────────────────────────────────────────
@@ -339,8 +170,8 @@ async def list_users_with_stats(
             )
             .group_by(ExecutionRun.user_id, ExecutionRun.model)
         )
-        for uid, model_id, p, c in cost_result:
-            cost = estimate_cost(model_id, p, c)
+        for uid, model_id, prompt_tokens, completion_tokens in cost_result:
+            cost = estimate_cost(model_id, prompt_tokens, completion_tokens)
             if cost is not None:
                 cost_map[uid] = cost_map.get(uid, 0.0) + cost
 
@@ -373,34 +204,40 @@ async def get_user_detail(
     db: DbSession,
 
 ) -> UserStatsResponse:
-    """Get single user with aggregated stats (admin+)."""
-    target = await _get_user_or_404(db, user_id)
+    """Get single user with aggregated stats (admin+).
 
-    conv_count = (await db.execute(
-        select(func.count()).where(Conversation.user_id == user_id)
-    )).scalar() or 0
+    Combines conversation count, token totals, execution count, and last activity
+    into a single query + one cost aggregation query (2 queries total).
+    """
+    target = await get_user_or_404(db, user_id)
 
-    exec_result = await db.execute(
+    # Single aggregation query for all stats
+    stats_result = await db.execute(
         select(
+            # Conversation count (correlated subquery)
+            select(func.count())
+            .where(Conversation.user_id == user_id)
+            .scalar_subquery()
+            .label("conv_count"),
+            # Token + execution aggregates
             func.coalesce(func.sum(ExecutionRun.tokens_prompt), 0),
             func.coalesce(func.sum(ExecutionRun.tokens_completion), 0),
             func.count(),
+            func.max(ExecutionRun.completed_at),
         ).where(
             ExecutionRun.user_id == user_id,
             ExecutionRun.status == ExecutionStatus.COMPLETED,
         )
     )
-    tokens_p, tokens_c, exec_count = exec_result.one()
+    conv_count, tokens_prompt, tokens_completion, exec_count, last_exec = stats_result.one()
 
-    last_exec = (await db.execute(
-        select(func.max(ExecutionRun.completed_at)).where(ExecutionRun.user_id == user_id)
-    )).scalar()
+    # Last conversation update (lightweight scalar)
     last_conv = (await db.execute(
         select(func.max(Conversation.updated_at)).where(Conversation.user_id == user_id)
     )).scalar()
     last_active = last_exec or last_conv
 
-    cost = await _compute_user_cost(db, user_id)
+    cost = await compute_user_cost(db, user_id)
 
     return UserStatsResponse(
         id=target.id,
@@ -408,8 +245,8 @@ async def get_user_detail(
         role=target.role,
         is_active=target.is_active,
         conversation_count=conv_count,
-        total_tokens_prompt=tokens_p,
-        total_tokens_completion=tokens_c,
+        total_tokens_prompt=tokens_prompt,
+        total_tokens_completion=tokens_completion,
         execution_count=exec_count,
         estimated_cost_usd=cost,
         last_active_at=last_active,
@@ -430,7 +267,7 @@ async def list_user_conversations(
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> AdminConversationListResponse:
     """List all conversations for a specific user (admin+)."""
-    await _get_user_or_404(db, user_id)
+    await get_user_or_404(db, user_id)
 
     base = select(Conversation).where(Conversation.user_id == user_id)
     if agent_id:
@@ -496,8 +333,8 @@ async def list_user_conversations(
             )
             .group_by(ExecutionRun.session_id, ExecutionRun.model)
         )
-        for sid, model_id, p, comp in cost_result:
-            cost = estimate_cost(model_id, p, comp)
+        for sid, model_id, prompt_tokens, completion_tokens in cost_result:
+            cost = estimate_cost(model_id, prompt_tokens, completion_tokens)
             if cost is not None:
                 conv_cost_map[sid] = conv_cost_map.get(sid, 0.0) + cost
 
@@ -533,7 +370,7 @@ async def get_conversation_messages(
 
 ) -> AdminConversationMessagesResponse:
     """Get all messages for a specific conversation (admin+)."""
-    target = await _get_user_or_404(db, user_id)
+    target = await get_user_or_404(db, user_id)
 
     conv = (await db.execute(
         select(Conversation).where(
@@ -579,9 +416,9 @@ async def get_user_token_usage(
     model: str | None = None,
 ) -> TokenUsageResponse:
     """Get token usage analytics for a specific user (admin+)."""
-    await _get_user_or_404(db, user_id)
+    await get_user_or_404(db, user_id)
 
-    range_start = _get_range_start(range)
+    range_start = get_range_start(range)
 
     # Base filter
     base_filter = [
@@ -603,7 +440,7 @@ async def get_user_token_usage(
             func.count(),
         ).where(*base_filter)
     )
-    total_p, total_c, total_count = summary_result.one()
+    total_prompt, total_completion, total_count = summary_result.one()
 
     # Cost for summary
     cost_rows = await db.execute(
@@ -615,15 +452,15 @@ async def get_user_token_usage(
     )
     summary_cost = 0.0
     has_cloud = False
-    for m, p, c in cost_rows:
-        cost = estimate_cost(m, p, c)
+    for model_id, prompt_tokens, completion_tokens in cost_rows:
+        cost = estimate_cost(model_id, prompt_tokens, completion_tokens)
         if cost is not None:
             summary_cost += cost
             has_cloud = True
 
     summary = TokenUsageSummary(
-        total_prompt=total_p,
-        total_completion=total_c,
+        total_prompt=total_prompt,
+        total_completion=total_completion,
         estimated_cost_usd=summary_cost if has_cloud else None,
         execution_count=total_count,
     )
@@ -650,7 +487,7 @@ async def get_user_token_usage(
 
     # Aggregate per day (multiple models per day → sum)
     daily_map: dict[str, DailyTokenUsage] = {}
-    for date_val, model_id, dp, dc, dcount in daily_rows:
+    for date_val, model_id, daily_prompt, daily_completion, daily_count in daily_rows:
         date_str = str(date_val)
         if date_str not in daily_map:
             daily_map[date_str] = DailyTokenUsage(
@@ -661,12 +498,12 @@ async def get_user_token_usage(
                 execution_count=0,
             )
         entry = daily_map[date_str]
-        entry.tokens_prompt += dp
-        entry.tokens_completion += dc
-        entry.execution_count += dcount
+        entry.tokens_prompt += daily_prompt
+        entry.tokens_completion += daily_completion
+        entry.execution_count += daily_count
 
         if model_id:
-            day_cost = estimate_cost(model_id, dp, dc)
+            day_cost = estimate_cost(model_id, daily_prompt, daily_completion)
             if day_cost is not None:
                 entry.estimated_cost_usd = (entry.estimated_cost_usd or 0.0) + day_cost
 
@@ -684,13 +521,13 @@ async def get_user_token_usage(
     )
 
     by_model = []
-    for model_id, mp, mc in model_rows:
-        cost = estimate_cost(model_id, mp, mc)
+    for model_id, model_prompt, model_completion in model_rows:
+        cost = estimate_cost(model_id, model_prompt, model_completion)
         by_model.append(ModelTokenUsage(
             model=parse_model_name(model_id),
             provider=get_provider(model_id),
-            tokens_prompt=mp,
-            tokens_completion=mc,
+            tokens_prompt=model_prompt,
+            tokens_completion=model_completion,
             estimated_cost_usd=cost,
         ))
 
@@ -710,7 +547,7 @@ async def list_user_memory(
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> MemoryListResponse:
     """List memory entries for a specific user (admin+)."""
-    await _get_user_or_404(db, user_id)
+    await get_user_or_404(db, user_id)
 
     base = select(MemoryEntry).where(MemoryEntry.user_id == user_id)
     if scope:
@@ -748,7 +585,7 @@ async def list_user_collections(
 
 ) -> list[CollectionResponse]:
     """List RAG collections accessible to a specific user (admin+)."""
-    await _get_user_or_404(db, user_id)
+    await get_user_or_404(db, user_id)
 
     auth_service = AuthService(db)
     target_groups = await auth_service.get_user_group_slugs(user_id)
@@ -804,7 +641,7 @@ async def update_user(
             detail="Cannot modify own account",
         )
 
-    target = await _get_user_or_404(db, user_id)
+    target = await get_user_or_404(db, user_id)
 
     if data.role is not None:
         # Can only assign roles at or below own level
@@ -842,7 +679,7 @@ async def delete_user_conversations(
     """Delete ALL conversations for a user (cascades to messages). Admin+."""
     from sqlalchemy import update
 
-    await _get_user_or_404(db, user_id)
+    await get_user_or_404(db, user_id)
 
     # Count before delete
     count = (await db.execute(
@@ -884,7 +721,7 @@ async def delete_user_memory(
 
 ) -> DeleteCountResponse:
     """Clear ALL memory entries for a user from PostgreSQL and Qdrant. Admin+."""
-    await _get_user_or_404(db, user_id)
+    await get_user_or_404(db, user_id)
 
     # Delete from Qdrant first (best effort)
     vector_store = QdrantMemoryVectorStore()
