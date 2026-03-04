@@ -342,6 +342,7 @@ export default function Chat() {
           messages={messages}
           isStreaming={isStreaming}
           activities={activities}
+          showRoutingMetadata
         />
 
         <ChatInput
