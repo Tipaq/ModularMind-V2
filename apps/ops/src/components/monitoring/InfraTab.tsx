@@ -1,14 +1,56 @@
 "use client";
 
-import { CheckCircle, XCircle } from "lucide-react";
 import { cn } from "@modularmind/ui";
 import type { MonitoringData } from "@modularmind/api-client";
+import { Sparkline } from "./Sparkline";
+
+type SparklineData = Array<{ ts: number; value: number }>;
+
+// ─── Service Card ───────────────────────────────────────────────────────────
+
+function ServiceCard({
+  name,
+  healthy,
+  latencyMs,
+  detail,
+  children,
+}: {
+  name: string;
+  healthy: boolean;
+  latencyMs?: number | null;
+  detail?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{name}</p>
+        <div className={cn("h-2.5 w-2.5 rounded-full", healthy ? "bg-success" : "bg-destructive")} />
+      </div>
+      <div className="flex items-center justify-between">
+        <span className={cn("text-sm", healthy ? "text-success" : "text-destructive")}>
+          {healthy ? "Connected" : "Unavailable"}
+        </span>
+        {latencyMs != null && (
+          <span className="text-xs text-muted-foreground tabular-nums">{latencyMs} ms</span>
+        )}
+      </div>
+      {detail && (
+        <p className="text-xs text-muted-foreground">{detail}</p>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// ─── Main ───────────────────────────────────────────────────────────────────
 
 interface Props {
   monitoring: MonitoringData | null;
+  sparklines?: Record<string, SparklineData>;
 }
 
-export function InfraTab({ monitoring }: Props) {
+export function InfraTab({ monitoring, sparklines }: Props) {
   if (!monitoring) {
     return (
       <div className="rounded-xl border border-border/50 bg-card/50 p-5 text-sm text-muted-foreground">
@@ -24,67 +66,47 @@ export function InfraTab({ monitoring }: Props) {
       {/* Services */}
       <section>
         <h2 className="mb-4 text-lg font-semibold">Services</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* Redis */}
-          <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
-            <p className="text-sm font-medium">Redis</p>
-            <div className="flex items-center gap-2">
-              {infrastructure.redis_healthy ? (
-                <CheckCircle className="h-4 w-4 text-success" />
-              ) : (
-                <XCircle className="h-4 w-4 text-destructive" />
-              )}
-              <span
-                className={cn(
-                  "text-sm",
-                  infrastructure.redis_healthy ? "text-success" : "text-destructive",
-                )}
-              >
-                {infrastructure.redis_healthy ? "Healthy" : "Unhealthy"}
-              </span>
-              {infrastructure.redis_latency_ms !== null && (
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {infrastructure.redis_latency_ms} ms
-                </span>
-              )}
-            </div>
-          </div>
+          <ServiceCard
+            name="Redis"
+            healthy={infrastructure.redis_healthy}
+            latencyMs={infrastructure.redis_latency_ms}
+          >
+            {sparklines?.latency && sparklines.latency.length > 1 && (
+              <Sparkline data={sparklines.latency} color="hsl(var(--success))" name="redis-lat" height={28} />
+            )}
+          </ServiceCard>
 
           {/* Database */}
-          <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
-            <p className="text-sm font-medium">Database</p>
-            <p className="text-sm text-muted-foreground">
-              Pool:{" "}
-              <span className="font-medium text-foreground">{infrastructure.db_pool_size}</span>
-              {" + "}
-              {infrastructure.db_pool_max_overflow} overflow (configured max)
-            </p>
-          </div>
+          <ServiceCard
+            name="Database"
+            healthy={true}
+            detail={`Pool: ${infrastructure.db_pool_size} + ${infrastructure.db_pool_max_overflow} overflow`}
+          />
 
           {/* Ollama */}
-          <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-3">
-            <p className="text-sm font-medium">Ollama</p>
-            <div className="flex items-center gap-2">
-              {infrastructure.ollama_status === "ok" ? (
-                <CheckCircle className="h-4 w-4 text-success" />
-              ) : (
-                <XCircle className="h-4 w-4 text-destructive" />
-              )}
-              <span
-                className={cn(
-                  "text-sm",
-                  infrastructure.ollama_status === "ok" ? "text-success" : "text-destructive",
-                )}
-              >
-                {infrastructure.ollama_status === "ok" ? "Connected" : "Unavailable"}
-              </span>
-              {infrastructure.ollama_status === "ok" && (
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {infrastructure.ollama_models.length} installed
-                </span>
-              )}
-            </div>
-          </div>
+          <ServiceCard
+            name="Ollama"
+            healthy={infrastructure.ollama_status === "ok"}
+            detail={
+              infrastructure.ollama_status === "ok"
+                ? `${infrastructure.ollama_models.length} model${infrastructure.ollama_models.length !== 1 ? "s" : ""} installed`
+                : undefined
+            }
+          />
+
+          {/* Qdrant */}
+          <ServiceCard
+            name="Qdrant"
+            healthy={infrastructure.qdrant_status === "ok"}
+            latencyMs={infrastructure.qdrant_latency_ms}
+            detail={
+              infrastructure.qdrant_status === "ok"
+                ? `${infrastructure.qdrant_collections} collection${infrastructure.qdrant_collections !== 1 ? "s" : ""}`
+                : undefined
+            }
+          />
         </div>
       </section>
 

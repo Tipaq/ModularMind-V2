@@ -5,6 +5,8 @@ import {
   AlertTriangle,
   ArrowRight,
   Brain,
+  ChevronDown,
+  ChevronUp,
   Database,
   FileText,
   Loader2,
@@ -13,7 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "@modularmind/ui";
-import type { PipelinesData, StreamDetail } from "@modularmind/api-client";
+import type { DLQMessage, PipelinesData, StreamDetail } from "@modularmind/api-client";
 import { api } from "../../lib/api";
 
 /* ------------------------------------------------------------------ */
@@ -56,24 +58,37 @@ function PipelineStage({
   label,
   stream,
   highlight,
+  throughputLabel,
 }: {
   label: string;
   stream: StreamDetail | null;
   highlight?: boolean;
+  throughputLabel?: string;
 }) {
   const pending = stream?.groups.reduce((sum, g) => sum + g.pending, 0) ?? 0;
+  const consumers = stream?.groups.reduce((sum, g) => sum + g.consumers, 0) ?? 0;
   const variant = pending > 10 ? "danger" : pending > 0 ? "warning" : "default";
+  const hasConsumers = consumers > 0;
 
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-1 rounded-lg border px-4 py-3 min-w-[110px]",
+        "flex flex-col items-center gap-1 rounded-lg border px-4 py-3 min-w-[120px]",
         highlight ? "border-primary/50 bg-primary/5" : "border-border/50 bg-card/50",
       )}
     >
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       <span className="text-lg font-bold">{stream?.length ?? 0}</span>
       {pending > 0 && <CountBadge count={pending} variant={variant} />}
+      <div className="flex items-center gap-1.5 mt-1">
+        <span className={cn("h-1.5 w-1.5 rounded-full", hasConsumers ? "bg-success" : "bg-muted-foreground")} />
+        <span className="text-[10px] text-muted-foreground">
+          {consumers} consumer{consumers !== 1 ? "s" : ""}
+        </span>
+      </div>
+      {throughputLabel && (
+        <span className="text-[10px] text-muted-foreground mt-0.5">{throughputLabel}</span>
+      )}
     </div>
   );
 }
@@ -106,6 +121,114 @@ function StatusTile({
       </div>
       <p className={cn("text-2xl font-bold", color)}>{count}</p>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Queue Summary Card                                                 */
+/* ------------------------------------------------------------------ */
+
+function QueueSummaryCard({ pipelines }: { pipelines: PipelinesData }) {
+  const { memory, knowledge, counters } = pipelines;
+
+  const memoryPending = [
+    memory.memory_raw,
+    memory.memory_extracted,
+    memory.memory_scored,
+  ]
+    .filter(Boolean)
+    .reduce((sum, s) => sum + (s?.groups.reduce((g, grp) => g + grp.pending, 0) ?? 0), 0);
+
+  const docsPending = knowledge.documents_stream.groups.reduce(
+    (sum, g) => sum + g.pending, 0,
+  );
+
+  const totalPending = memoryPending + docsPending;
+  const dlqDepth = memory.memory_dlq.length;
+
+  const activeQueues = [
+    memory.memory_raw.length > 0,
+    memory.memory_extracted.length > 0,
+    memory.memory_scored && memory.memory_scored.length > 0,
+    knowledge.documents_stream.length > 0,
+  ].filter(Boolean).length;
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-card/50 p-5">
+      <h3 className="text-sm font-semibold mb-4">Pipeline Queue Summary</h3>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="text-center">
+          <p className={cn("text-2xl font-bold", totalPending > 0 ? "text-warning" : "text-foreground")}>
+            {totalPending}
+          </p>
+          <p className="text-xs text-muted-foreground">Total Pending</p>
+        </div>
+        <div className="text-center">
+          <p className="text-2xl font-bold">{activeQueues}</p>
+          <p className="text-xs text-muted-foreground">Active Queues</p>
+        </div>
+        <div className="text-center">
+          <p className={cn("text-2xl font-bold", dlqDepth > 0 ? "text-destructive" : "text-success")}>
+            {dlqDepth}
+          </p>
+          <p className="text-xs text-muted-foreground">DLQ Messages</p>
+        </div>
+        <div className="text-center">
+          <p className="text-2xl font-bold">{counters.facts_extracted_total}</p>
+          <p className="text-xs text-muted-foreground">Facts Extracted</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Expandable DLQ Row                                                 */
+/* ------------------------------------------------------------------ */
+
+function DLQMessageRow({ msg }: { msg: DLQMessage }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <>
+      <tr
+        className="border-b border-border/30 last:border-0 cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <td className="px-4 py-2 font-mono text-xs">{msg.original_stream}</td>
+        <td className="px-4 py-2 text-xs text-muted-foreground max-w-[300px] truncate">
+          {msg.error}
+        </td>
+        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{msg.id}</td>
+        <td className="px-4 py-2 text-muted-foreground">
+          {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="border-b border-border/30">
+          <td colSpan={4} className="px-4 py-3 bg-muted/20">
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Error</p>
+                <pre className="text-xs whitespace-pre-wrap break-all font-mono text-destructive bg-destructive/5 rounded-md p-2">
+                  {msg.error}
+                </pre>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Data Payload</p>
+                <pre className="text-xs whitespace-pre-wrap break-all font-mono text-muted-foreground bg-muted/30 rounded-md p-2 max-h-40 overflow-y-auto">
+                  {msg.data}
+                </pre>
+              </div>
+              <div className="flex gap-4 text-xs text-muted-foreground">
+                <span>Original Stream: <code className="font-mono text-foreground">{msg.original_stream}</code></span>
+                <span>Original ID: <code className="font-mono text-foreground">{msg.original_id}</code></span>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -173,6 +296,9 @@ export function PipelinesTab({ pipelines, onRefresh }: Props) {
 
   return (
     <div className="space-y-8">
+      {/* ===== Queue Summary ===== */}
+      <QueueSummaryCard pipelines={pipelines} />
+
       {/* ===== DLQ Warning Banner ===== */}
       {hasDLQ && (
         <div className="flex items-center justify-between rounded-lg bg-destructive/10 px-4 py-3">
@@ -223,7 +349,12 @@ export function PipelinesTab({ pipelines, onRefresh }: Props) {
           <div className="flex items-center justify-center flex-wrap gap-1">
             <PipelineStage label="Raw" stream={memory.memory_raw} />
             <PipelineArrow />
-            <PipelineStage label="Extracted" stream={memory.memory_extracted} highlight />
+            <PipelineStage
+              label="Extracted"
+              stream={memory.memory_extracted}
+              highlight
+              throughputLabel={`${counters.facts_extracted_total} facts`}
+            />
             <PipelineArrow />
             {memory.scorer_enabled && memory.memory_scored && (
               <>
@@ -231,7 +362,11 @@ export function PipelinesTab({ pipelines, onRefresh }: Props) {
                 <PipelineArrow />
               </>
             )}
-            <PipelineStage label="Embedded" stream={null} />
+            <PipelineStage
+              label="Embedded"
+              stream={null}
+              throughputLabel={`${counters.embeddings_stored_total} stored`}
+            />
           </div>
         </div>
 
@@ -268,48 +403,42 @@ export function PipelinesTab({ pipelines, onRefresh }: Props) {
             </div>
           </div>
         </div>
-
-        {/* DLQ Messages detail */}
-        {dlq_messages.length > 0 && (
-          <div className="mt-4">
-            <p className="text-sm font-medium mb-2 text-destructive">Recent DLQ Messages</p>
-            <div className="overflow-x-auto rounded-xl border border-destructive/20 bg-card/50">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/50">
-                    <th className="px-4 py-2 text-left font-medium text-muted-foreground">Stream</th>
-                    <th className="px-4 py-2 text-left font-medium text-muted-foreground">Error</th>
-                    <th className="px-4 py-2 text-left font-medium text-muted-foreground">ID</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dlq_messages.slice(0, 10).map((msg) => (
-                    <tr key={msg.id} className="border-b border-border/30 last:border-0">
-                      <td className="px-4 py-2 font-mono text-xs">{msg.original_stream}</td>
-                      <td className="px-4 py-2 text-xs text-muted-foreground max-w-[300px] truncate">
-                        {msg.error}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                        {msg.id}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
       </section>
 
-      {/* ===== Knowledge Pipeline ===== */}
+      {/* ===== Document Processing Queue ===== */}
       <section>
         <h2 className="mb-4 text-lg font-semibold flex items-center gap-2">
           <Database className="h-5 w-5 text-info" />
-          Knowledge Pipeline
+          Document Processing Queue
         </h2>
 
+        {/* Stream depth card */}
+        <div className="rounded-xl border border-border/50 bg-card/50 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground font-mono">tasks:documents</p>
+              <p className="text-2xl font-bold mt-1">{knowledge.documents_stream.length}</p>
+              <p className="text-xs text-muted-foreground">messages in stream</p>
+            </div>
+            <div className="text-right space-y-1">
+              {knowledge.documents_stream.groups.length > 0 ? (
+                knowledge.documents_stream.groups.map((g) => (
+                  <div key={g.name} className="flex items-center justify-end gap-2">
+                    <span className={cn("h-1.5 w-1.5 rounded-full", g.consumers > 0 ? "bg-success" : "bg-muted-foreground")} />
+                    <span className="text-xs text-muted-foreground">
+                      <span className="font-mono">{g.name}</span>: {g.pending} pending, {g.consumers} consumer{g.consumers !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">No consumer groups</span>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Status Tiles */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatusTile
             label="Pending"
             count={knowledge.status_counts.pending}
@@ -364,7 +493,7 @@ export function PipelinesTab({ pipelines, onRefresh }: Props) {
               </thead>
               <tbody>
                 {knowledge.active_documents.map((doc) => (
-                  <tr key={doc.id} className="border-b border-border/30 last:border-0">
+                  <tr key={doc.id} className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs max-w-[200px] truncate">
                       {doc.filename}
                     </td>
@@ -375,14 +504,16 @@ export function PipelinesTab({ pipelines, onRefresh }: Props) {
                           "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
                           doc.status === "failed"
                             ? "bg-destructive/15 text-destructive"
-                            : "bg-info/15 text-info",
+                            : doc.status === "pending"
+                              ? "bg-muted text-muted-foreground"
+                              : "bg-info/15 text-info",
                         )}
                       >
                         {doc.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground max-w-[250px] truncate">
-                      {doc.error_message || "--"}
+                      {doc.error_message || "—"}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                       {new Date(doc.created_at).toLocaleString()}
@@ -417,6 +548,34 @@ export function PipelinesTab({ pipelines, onRefresh }: Props) {
             </p>
           )}
       </section>
+
+      {/* ===== DLQ Messages Detail ===== */}
+      {dlq_messages.length > 0 && (
+        <section>
+          <h2 className="mb-4 text-lg font-semibold flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-5 w-5" />
+            Dead Letter Queue — {dlq_messages.length} message{dlq_messages.length !== 1 ? "s" : ""}
+          </h2>
+          <div className="overflow-x-auto rounded-xl border border-destructive/20 bg-card/50">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/50">
+                  <th className="px-4 py-2 text-left font-medium text-muted-foreground">Stream</th>
+                  <th className="px-4 py-2 text-left font-medium text-muted-foreground">Error</th>
+                  <th className="px-4 py-2 text-left font-medium text-muted-foreground">ID</th>
+                  <th className="px-4 py-2 w-8"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {dlq_messages.slice(0, 20).map((msg) => (
+                  <DLQMessageRow key={msg.id} msg={msg} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Click a row to expand error details and data payload.</p>
+        </section>
+      )}
     </div>
   );
 }
