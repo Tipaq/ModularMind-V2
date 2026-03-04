@@ -6,7 +6,6 @@ and returns when done (or raises to trigger retry/DLQ).
 
 import json
 import logging
-from datetime import UTC
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -69,11 +68,10 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
         except Exception:
             logger.exception("Execution %s failed", execution_id)
             # Update status to FAILED
-            from datetime import datetime
-
             from sqlalchemy import update
 
             from src.executions.models import ExecutionRun, ExecutionStatus
+            from src.infra.utils import utcnow
 
             await session.execute(
                 update(ExecutionRun)
@@ -81,7 +79,7 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 .values(
                     status=ExecutionStatus.FAILED,
                     error_message="Worker task failed unexpectedly",
-                    completed_at=datetime.now(UTC).replace(tzinfo=None),
+                    completed_at=utcnow(),
                 )
             )
             await session.commit()

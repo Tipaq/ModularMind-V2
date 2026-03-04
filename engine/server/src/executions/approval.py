@@ -7,7 +7,7 @@ manual approve/reject and timeout checker.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from src.infra.utils import utcnow

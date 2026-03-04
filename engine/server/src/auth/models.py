@@ -6,7 +6,7 @@ SQLAlchemy models for authentication and authorization.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -19,6 +19,7 @@ from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infra.database import Base
+from src.infra.utils import utcnow
 
 
 class UserRole(str, Enum):
@@ -56,10 +57,10 @@ class User(Base):
     platform_user_id: Mapped[str | None] = mapped_column(
         String(36), unique=True, nullable=True, index=True
     )
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(UTC).replace(tzinfo=None),
-        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+        default=utcnow,
+        onupdate=utcnow,
     )
 
     group_memberships: Mapped[list[UserGroupMember]] = relationship(

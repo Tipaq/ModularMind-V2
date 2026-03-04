@@ -236,7 +236,11 @@ class FineTuningService:
                 if loss:
                     progress.loss = float(loss)
         except Exception:
-            pass  # Redis unavailable, return DB-only status
+            logger.warning(
+                "Redis unavailable for job progress %s",
+                job_id,
+                exc_info=True,
+            )
 
         return progress
 

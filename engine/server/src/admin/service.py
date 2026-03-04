@@ -3,7 +3,7 @@
 Shared query helpers for admin user management.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.models import User
 from src.executions.models import ExecutionRun, ExecutionStatus
 from src.infra.token_pricing import estimate_cost
+from src.infra.utils import utcnow
 
 
 async def compute_user_cost(db: AsyncSession, user_id: str) -> float | None:
@@ -49,7 +50,7 @@ async def get_user_or_404(db: AsyncSession, user_id: str) -> User:
 
 def get_range_start(range_param: str) -> datetime | None:
     """Convert range string to start datetime."""
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utcnow()
     if range_param == "24h":
         return now - timedelta(hours=24)
     elif range_param == "7d":

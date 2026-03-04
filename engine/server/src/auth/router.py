@@ -132,7 +132,7 @@ async def logout(request: Request, response: Response) -> dict[str, str]:
                     finally:
                         await redis_client.aclose()
         except Exception:
-            pass  # Best-effort; cookie deletion is the primary mechanism
+            logger.warning("Best-effort token blacklist failed", exc_info=True)
 
     # Delete cookies at all possible paths
     for path in ("/api", "/", "/api/v1/auth"):

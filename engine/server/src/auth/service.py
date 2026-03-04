@@ -14,7 +14,6 @@ import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.groups.models import UserGroup, UserGroupMember
 from src.infra.config import get_settings
 from src.infra.query_utils import escape_like
 
@@ -165,14 +164,15 @@ class AuthService:
         await self.db.flush()
 
     async def get_user_group_slugs(self, user_id: str) -> list[str]:
-        """Fetch group slugs for a user from the DB."""
-        query = (
-            select(UserGroup.slug)
-            .join(UserGroupMember, UserGroupMember.group_id == UserGroup.id)
-            .where(UserGroupMember.user_id == user_id)
+        """Fetch group slugs for a user from the DB.
+
+        Delegates to GroupService to avoid query duplication.
+        """
+        from src.groups.service import GroupService
+
+        return await GroupService(self.db).get_user_group_slugs(
+            user_id,
         )
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
 
     def create_access_token(self, user: User, groups: list[str] | None = None) -> str:
         """Create JWT access token.
