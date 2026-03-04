@@ -45,19 +45,20 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
         complete_event: dict[str, Any] | None = None
 
         try:
-            async for event in service.execute(execution_id):
-                # Publish events to Redis pub/sub for SSE relay
-                from src.infra.redis import get_redis_client
-                r = get_redis_client()
-                try:
-                    channel = f"execution:{execution_id}"
-                    await r.publish(channel, json.dumps(event, default=str))
-                finally:
-                    await r.aclose()
+            from src.infra.redis import get_redis_client
 
-                if event.get("type") == "complete":
-                    complete_event = event
-                    break
+            r = get_redis_client()
+            try:
+                channel = f"execution:{execution_id}"
+                async for event in service.execute(execution_id):
+                    # Publish events to Redis pub/sub for SSE relay
+                    await r.publish(channel, json.dumps(event, default=str))
+
+                    if event.get("type") == "complete":
+                        complete_event = event
+                        break
+            finally:
+                await r.aclose()
 
             # Persist assistant message to conversation
             await _persist_assistant_message(session, execution_id, complete_event)

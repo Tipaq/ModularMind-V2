@@ -7,6 +7,7 @@ API endpoints for memory operations.
 import logging
 
 from fastapi import APIRouter, HTTPException, Query, Response
+from src.infra.query_utils import raise_not_found
 from sqlalchemy import case, func, select
 
 from src.auth import CurrentUser, RequireAdmin
@@ -191,7 +192,7 @@ async def invalidate_memory(
     entry = await repo.get_entry(entry_id)
 
     if not entry:
-        raise HTTPException(status_code=404, detail="Memory entry not found")
+        raise_not_found("Memory entry")
 
     if entry.expired_at:
         raise HTTPException(status_code=400, detail="Entry already expired")
@@ -437,7 +438,7 @@ async def get_memory(
     entry = await repo.get_entry(entry_id)
 
     if not entry:
-        raise HTTPException(status_code=404, detail="Memory entry not found")
+        raise_not_found("Memory entry")
 
     return MemoryEntryResponse.model_validate(entry)
 
@@ -453,7 +454,7 @@ async def delete_memory(
     deleted = await repo.delete_entry(entry_id)
 
     if not deleted:
-        raise HTTPException(status_code=404, detail="Memory entry not found")
+        raise_not_found("Memory entry")
 
     await db.commit()
 

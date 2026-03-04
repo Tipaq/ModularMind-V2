@@ -126,7 +126,7 @@ async def get_dataset_progress(
                 examples_found=int(data.get(b"examples_found", 0)),
             )
     except Exception:
-        pass
+        pass  # Redis unavailable — fall back to DB-only status
 
     return DatasetProgress(status=dataset.status.value)
 

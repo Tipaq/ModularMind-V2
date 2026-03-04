@@ -41,7 +41,12 @@ async def list_groups(
     return [_group_response(g) for g in groups]
 
 
-@router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED, dependencies=[RequireAdmin])
+@router.post(
+    "",
+    response_model=GroupResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[RequireAdmin],
+)
 async def create_group(
     data: GroupCreate,
     user: CurrentUser,
@@ -113,7 +118,12 @@ async def delete_group(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/{group_id}/members", response_model=MemberResponse, status_code=status.HTTP_201_CREATED, dependencies=[RequireAdmin])
+@router.post(
+    "/{group_id}/members",
+    response_model=MemberResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[RequireAdmin],
+)
 async def add_member(
     group_id: str,
     data: MemberAdd,
@@ -134,7 +144,11 @@ async def add_member(
     )
 
 
-@router.delete("/{group_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[RequireAdmin])
+@router.delete(
+    "/{group_id}/members/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[RequireAdmin],
+)
 async def remove_member(
     group_id: str,
     user_id: str,

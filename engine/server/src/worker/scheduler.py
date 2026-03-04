@@ -180,7 +180,7 @@ async def memory_consolidation() -> None:
         try:
             await redis_client.delete(lock_key)
         except Exception:
-            logger.error("Failed to release consolidation lock")
+            logger.error("Failed to release consolidation lock", exc_info=True)
 
 
 async def _extract_new_messages(session, conv, now) -> None:

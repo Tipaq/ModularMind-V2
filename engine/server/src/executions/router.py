@@ -8,6 +8,7 @@ Supports distributed execution via Redis Streams and inline (legacy) mode.
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -17,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from src.auth import CurrentUser
 from src.infra.config import get_settings
 from src.infra.database import DbSession
+from src.infra.query_utils import raise_not_found
 from src.infra.rate_limit import RateLimitDependency
 
 from .feedback import FeedbackCreate, FeedbackResponse
@@ -91,7 +93,7 @@ router = APIRouter(prefix="/executions", tags=["Executions"])
 
 
 async def _safe_create_execution(
-    start_fn,
+    start_fn: Callable[[str, ExecutionCreate, str], Awaitable[ExecutionRun]],
     resource_id: str,
     data: ExecutionCreate,
     user_id: str,
@@ -106,7 +108,7 @@ async def _safe_create_execution(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Failed to create execution: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create execution")
@@ -164,7 +166,7 @@ async def stream_execution(
     )
     execution = result.scalar_one_or_none()
     if not execution:
-        raise HTTPException(status_code=404, detail="Execution not found")
+        raise_not_found("Execution")
     if execution.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -265,7 +267,7 @@ async def create_agent_execution(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Failed to create execution: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create execution")
@@ -312,7 +314,7 @@ async def get_execution(
     execution = result.scalar_one_or_none()
 
     if not execution:
-        raise HTTPException(status_code=404, detail="Execution not found")
+        raise_not_found("Execution")
 
     # Check access (user must own the execution)
     if execution.user_id != user.id:
@@ -371,7 +373,7 @@ async def stop_execution(
 
     execution = await service.get_execution(execution_id)
     if not execution:
-        raise HTTPException(status_code=404, detail="Execution not found")
+        raise_not_found("Execution")
 
     if execution.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -398,7 +400,7 @@ async def pause_execution(
 
     execution = await service.get_execution(execution_id)
     if not execution:
-        raise HTTPException(status_code=404, detail="Execution not found")
+        raise_not_found("Execution")
 
     if execution.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -425,7 +427,7 @@ async def resume_execution(
 
     execution = await service.get_execution(execution_id)
     if not execution:
-        raise HTTPException(status_code=404, detail="Execution not found")
+        raise_not_found("Execution")
 
     if execution.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -454,11 +456,11 @@ async def approve_execution(
     request: ApprovalRequest | None = None,
 ) -> ExecutionResponse:
     """Approve an execution that is awaiting approval."""
-    from src.infra.redis_utils import get_sync_redis_client
+    from src.infra.redis import get_redis_client
 
     from .approval import ApprovalService
 
-    redis_client = get_sync_redis_client()
+    redis_client = get_redis_client()
     try:
         approval_svc = ApprovalService(db, redis_client)
         success = await approval_svc.approve(
@@ -480,7 +482,7 @@ async def approve_execution(
         )
         execution = result.scalar_one_or_none()
         if not execution:
-            raise HTTPException(status_code=404, detail="Execution not found")
+            raise_not_found("Execution")
 
         # Dispatch task to resume execution
         service = ExecutionService(db)
@@ -490,7 +492,7 @@ async def approve_execution(
 
         return ExecutionResponse.model_validate(execution)
     finally:
-        redis_client.close()
+        await redis_client.aclose()
 
 
 @router.post("/{execution_id}/reject", response_model=ExecutionResponse)
@@ -501,11 +503,11 @@ async def reject_execution(
     request: ApprovalRequest | None = None,
 ) -> ExecutionResponse:
     """Reject an execution that is awaiting approval."""
-    from src.infra.redis_utils import get_sync_redis_client
+    from src.infra.redis import get_redis_client
 
     from .approval import ApprovalService
 
-    redis_client = get_sync_redis_client()
+    redis_client = get_redis_client()
     try:
         approval_svc = ApprovalService(db, redis_client)
         success = await approval_svc.reject(
@@ -527,7 +529,7 @@ async def reject_execution(
         execution = result.scalar_one_or_none()
         return ExecutionResponse.model_validate(execution)
     finally:
-        redis_client.close()
+        await redis_client.aclose()
 
 
 # ---------------------------------------------------------------------------

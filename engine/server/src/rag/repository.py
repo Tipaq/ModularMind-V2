@@ -59,6 +59,17 @@ class RAGRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_collections_by_ids(
+        self, collection_ids: list[str],
+    ) -> list[RAGCollection]:
+        """Get multiple collections by IDs in a single query."""
+        if not collection_ids:
+            return []
+        result = await self.db.execute(
+            select(RAGCollection).where(RAGCollection.id.in_(collection_ids))
+        )
+        return list(result.scalars().all())
+
     async def list_collections(self) -> list[RAGCollection]:
         """List all available collections."""
         result = await self.db.execute(

@@ -5,6 +5,8 @@ import re
 
 from fastapi import HTTPException
 from sqlalchemy import select
+
+from src.infra.query_utils import raise_not_found
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -69,7 +71,7 @@ class GroupService:
         )
         group = result.scalar_one_or_none()
         if not group:
-            raise HTTPException(status_code=404, detail="Group not found")
+            raise_not_found("Group")
         return group
 
     async def update_group(
@@ -104,7 +106,7 @@ class GroupService:
         # Verify user exists
         user = await self.db.get(User, user_id)
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise_not_found("User")
 
         # Check if already a member
         existing = await self.db.get(UserGroupMember, (user_id, group_id))

@@ -13,6 +13,8 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.infra.redis import RedisClient
+
 from .models import ExecutionRun, ExecutionStatus
 
 logger = logging.getLogger(__name__)
@@ -27,7 +29,7 @@ class ApprovalService:
     - handle_timeouts: Scheduler scans for expired approvals
     """
 
-    def __init__(self, db: AsyncSession, redis_client: Any):
+    def __init__(self, db: AsyncSession, redis_client: RedisClient):
         self.db = db
         self.redis = redis_client
 
@@ -66,7 +68,7 @@ class ApprovalService:
         await self.db.commit()
 
         # Publish event to Redis
-        self._publish_event(execution_id, {
+        await self._publish_event(execution_id, {
             "type": "approval_required",
             "execution_id": execution_id,
             "node_id": node_id,
@@ -128,7 +130,7 @@ class ApprovalService:
 
         _, node_id = row
 
-        self._publish_event(execution_id, {
+        await self._publish_event(execution_id, {
             "type": "approval_granted",
             "execution_id": execution_id,
             "approved_by": user_id,
@@ -185,7 +187,7 @@ class ApprovalService:
 
         _, node_id = row
 
-        self._publish_event(execution_id, {
+        await self._publish_event(execution_id, {
             "type": "approval_rejected",
             "execution_id": execution_id,
             "rejected_by": user_id,
@@ -251,7 +253,7 @@ class ApprovalService:
             if claimed is None:
                 continue  # Already approved/rejected by user
 
-            self._publish_event(str(run.id), {
+            await self._publish_event(str(run.id), {
                 "type": "approval_timeout",
                 "execution_id": str(run.id),
                 "node_id": run.approval_node_id,
@@ -289,21 +291,21 @@ class ApprovalService:
 
         return {}
 
-    def _publish_event(self, execution_id: str, event: dict[str, Any]) -> None:
+    async def _publish_event(self, execution_id: str, event: dict[str, Any]) -> None:
         """Publish event to Redis pub/sub and buffer with proper seq number.
 
         Uses atomic INCR on seq:{execution_id} so the SSE relay
         doesn't filter out the event as already-seen.
         """
         try:
-            seq = self.redis.incr(f"seq:{execution_id}")
+            seq = await self.redis.incr(f"seq:{execution_id}")
             event["seq"] = seq
             event_json = json.dumps(event, default=str)
             buf_key = f"buffer:{execution_id}"
-            listeners = self.redis.publish(f"execution:{execution_id}", event_json)
-            self.redis.rpush(buf_key, event_json)
-            self.redis.ltrim(buf_key, -2000, -1)
-            self.redis.expire(buf_key, 60)
+            listeners = await self.redis.publish(f"execution:{execution_id}", event_json)
+            await self.redis.rpush(buf_key, event_json)
+            await self.redis.ltrim(buf_key, -2000, -1)
+            await self.redis.expire(buf_key, 60)
             logger.info(
                 "Published approval event type=%s seq=%d for execution %s (listeners=%d)",
                 event.get("type"), seq, execution_id, listeners,

@@ -14,6 +14,7 @@ from sqlalchemy import select
 from src.auth import CurrentUser, RequireAdmin
 from src.domain_config import get_config_provider
 from src.infra.database import DbSession
+from src.infra.query_utils import raise_not_found
 from src.infra.schemas import PaginatedResponse
 
 from .models import Connector
@@ -198,7 +199,7 @@ async def get_connector(
     connector = result.scalar_one_or_none()
 
     if not connector:
-        raise HTTPException(status_code=404, detail="Connector not found")
+        raise_not_found("Connector")
 
     return to_response(connector)
 
@@ -217,7 +218,7 @@ async def update_connector(
     connector = result.scalar_one_or_none()
 
     if not connector:
-        raise HTTPException(status_code=404, detail="Connector not found")
+        raise_not_found("Connector")
 
     if data.name is not None:
         connector.name = data.name
@@ -249,7 +250,7 @@ async def delete_connector(
     connector = result.scalar_one_or_none()
 
     if not connector:
-        raise HTTPException(status_code=404, detail="Connector not found")
+        raise_not_found("Connector")
 
     await db.delete(connector)
     await db.commit()

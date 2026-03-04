@@ -107,7 +107,7 @@ class SidecarManager:
                     logger.info("Auto-detected Docker network: %s", name)
                     return name
         except Exception:
-            pass
+            logger.debug("Docker network detection failed", exc_info=True)
         logger.warning("Could not detect Docker network, sidecars may not be reachable")
         return None
 
@@ -370,7 +370,7 @@ class SidecarManager:
                 await asyncio.to_thread(container.stop, timeout=10)
                 logger.info("Stopped sidecar %s", info.container_name)
             except Exception:
-                pass
+                logger.warning("Failed to stop sidecar %s", info.container_name, exc_info=True)
 
     def _update_sidecar_gauge(self) -> None:
         """Update the Prometheus gauge for active sidecars."""

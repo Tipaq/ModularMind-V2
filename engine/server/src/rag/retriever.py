@@ -145,9 +145,11 @@ class RAGRetriever:
         self,
         collection_ids: list[UUID],
     ) -> dict[UUID, bool]:
-        """Check which collections are available."""
-        available = {}
-        for cid in collection_ids:
-            collection = await self.repository.get_collection(cid)
-            available[cid] = collection is not None
-        return available
+        """Check which collections are available (single batch query)."""
+        if not collection_ids:
+            return {}
+        existing = await self.repository.get_collections_by_ids(
+            [str(cid) for cid in collection_ids]
+        )
+        existing_ids = {UUID(c.id) for c in existing}
+        return {cid: cid in existing_ids for cid in collection_ids}

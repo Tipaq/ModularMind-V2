@@ -10,6 +10,7 @@ import os
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile
+from src.infra.query_utils import raise_not_found
 from sqlalchemy import update
 
 from src.auth import CurrentUser, CurrentUserGroups, UserRole
@@ -113,11 +114,11 @@ async def get_collection(
     collection = await repo.get_collection(collection_id)
 
     if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
+        raise_not_found("Collection")
 
     # Single-query access check (avoids fetching all collections)
     if not await repo.can_access_collection(collection_id, user.id, user_groups):
-        raise HTTPException(status_code=404, detail="Collection not found")
+        raise_not_found("Collection")
 
     return CollectionResponse.model_validate(collection)
 
@@ -134,10 +135,10 @@ async def delete_collection(
     collection = await repo.get_collection(collection_id)
 
     if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
+        raise_not_found("Collection")
 
     if not await repo.can_access_collection(collection_id, user.id, user_groups):
-        raise HTTPException(status_code=404, detail="Collection not found")
+        raise_not_found("Collection")
 
     await db.delete(collection)
     await db.commit()
@@ -166,10 +167,10 @@ async def list_documents(
 
     collection = await repo.get_collection(collection_id)
     if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
+        raise_not_found("Collection")
 
     if not await repo.can_access_collection(collection_id, user.id, user_groups):
-        raise HTTPException(status_code=404, detail="Collection not found")
+        raise_not_found("Collection")
 
     documents = await repo.list_documents(collection_id)
 
@@ -201,10 +202,10 @@ async def upload_document_endpoint(
     # Verify collection exists and user has access
     collection = await repo.get_collection(collection_id)
     if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
+        raise_not_found("Collection")
 
     if not await repo.can_access_collection(collection_id, user.id, user_groups):
-        raise HTTPException(status_code=404, detail="Collection not found")
+        raise_not_found("Collection")
 
     # Validate file
     filename = file.filename or "unknown"
@@ -296,11 +297,11 @@ async def get_document(
     document = await repo.get_document(document_id)
 
     if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise_not_found("Document")
 
     # Verify user has access to the parent collection (IDOR prevention)
     if not await repo.can_access_collection(document.collection_id, user.id, user_groups):
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise_not_found("Document")
 
     return DocumentResponse.model_validate(document)
 
@@ -318,14 +319,14 @@ async def delete_document(
     document = await repo.get_document(document_id)
 
     if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise_not_found("Document")
 
     if document.collection_id != collection_id:
-        raise HTTPException(status_code=404, detail="Document not found in this collection")
+        raise_not_found("Document")
 
     # Verify collection access
     if not await repo.can_access_collection(collection_id, user.id, user_groups):
-        raise HTTPException(status_code=404, detail="Collection not found")
+        raise_not_found("Collection")
 
     doc_chunk_count = document.chunk_count
     await db.delete(document)

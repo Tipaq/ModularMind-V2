@@ -8,6 +8,8 @@ from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
+from typing import Any
+
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -67,8 +69,8 @@ class ExecutionRun(Base):
     )
 
     input_prompt: Mapped[str] = mapped_column(Text)
-    input_data: Mapped[dict] = mapped_column(JSONB, default=dict)
-    output_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    input_data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    output_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -102,6 +104,8 @@ class ExecutionRun(Base):
     __table_args__ = (
         Index("ix_execution_approval_status", "status"),
         Index("ix_execution_runs_experiment", "experiment_id", "experiment_variant"),
+        Index("ix_execution_runs_user_status", "user_id", "status"),
+        Index("ix_execution_runs_session_created", "session_id", "created_at"),
     )
 
     def __repr__(self) -> str:
@@ -132,8 +136,8 @@ class ExecutionStep(Base):
         SQLEnum(ExecutionStatus, values_callable=lambda x: [e.value for e in x]),
         default=ExecutionStatus.PENDING
     )
-    input_data: Mapped[dict] = mapped_column(JSONB, default=dict)
-    output_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    input_data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    output_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     tokens_prompt: Mapped[int] = mapped_column(default=0)
