@@ -11,6 +11,9 @@ export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTi
 // Color constants
 export { ACTIVITY_COLORS, CHANNEL_COLORS, STATUS_COLORS, ROLE_COLORS, HEALTH_COLORS } from "./lib/colors";
 
+// Chat types
+export type { ActivityType, ActivityStatus, ToolCallData, ExecutionActivity } from "./types/chat";
+
 // Theme
 export { ThemeProvider } from "./theme/ThemeProvider";
 export type { ThemeMode, ThemeConfig, ThemeContextValue } from "./theme/ThemeProvider";
@@ -52,3 +55,7 @@ export { ThemeToggle } from "./components/theme-toggle";
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/tooltip";
 export { UserButton } from "./components/user-button";
 export type { UserButtonUser } from "./components/user-button";
+export { ChatMessages } from "./components/chat-messages";
+export type { ChatMessagesProps, ChatMessage } from "./components/chat-messages";
+export { ExecutionActivityList } from "./components/execution-activity";
+export type { ExecutionActivityListProps } from "./components/execution-activity";
