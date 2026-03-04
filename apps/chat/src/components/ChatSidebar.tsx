@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import type { ConversationConfig } from "@modularmind/api-client";
+import type { Conversation } from "@modularmind/api-client";
 import { useNavigate } from "react-router-dom";
 import { Plus, Trash2, MessageSquare, Check, X } from "lucide-react";
 import {
@@ -17,16 +17,7 @@ import {
 } from "@modularmind/ui";
 import { useAuthStore } from "@modularmind/ui";
 
-export interface Conversation {
-  id: string;
-  title: string | null;
-  agent_id: string | null;
-  message_count: number;
-  supervisor_mode?: boolean;
-  config?: ConversationConfig;
-  created_at: string;
-  updated_at: string;
-}
+export type { Conversation };
 
 interface ChatSidebarProps {
   conversations: Conversation[];

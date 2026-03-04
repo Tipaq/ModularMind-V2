@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, memo } from "react";
 import {
   Bot,
   FileUp,
@@ -32,6 +32,8 @@ const ALLOWED_FILE_TYPES = [
 ];
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+const MAX_TEXTAREA_HEIGHT = 200;
+const OVERFLOW_ROW_THRESHOLD = 6;
 
 export interface AttachedFile {
   file: File;
@@ -60,7 +62,7 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-export function ChatInput({
+export const ChatInput = memo(function ChatInput({
   value,
   onChange,
   onSend,
@@ -404,12 +406,12 @@ export function ChatInput({
             disabled={isStreaming}
             style={{
               height: "auto",
-              overflowY: value.split("\n").length > 6 ? "auto" : "hidden",
+              overflowY: value.split("\n").length > OVERFLOW_ROW_THRESHOLD ? "auto" : "hidden",
             }}
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;
               target.style.height = "auto";
-              target.style.height = `${Math.min(target.scrollHeight, 200)}px`;
+              target.style.height = `${Math.min(target.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
             }}
           />
 
@@ -442,4 +444,4 @@ export function ChatInput({
       </div>
     </div>
   );
-}
+});

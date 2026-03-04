@@ -248,8 +248,8 @@ export function useChat(conversationId: string | null) {
             setIsStreaming(false);
             cleanup();
           }
-        } catch {
-          // Ignore parse errors
+        } catch (err) {
+          console.error("[useChat] Failed to parse SSE event:", err);
         }
       };
 

@@ -57,8 +57,8 @@ export function useChatConfig() {
 
       loadedRef.current = true;
       setLoaded(true);
-    } catch {
-      // Silently fail — config is optional
+    } catch (err) {
+      console.error("[useChatConfig] Failed to load config:", err);
     } finally {
       loadingRef.current = false;
       setLoading(false);
@@ -83,8 +83,8 @@ export function useChatConfig() {
 
       loadedRef.current = true;
       setLoaded(true);
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error("[useChatConfig] Failed to reload config:", err);
     } finally {
       loadingRef.current = false;
       setLoading(false);
