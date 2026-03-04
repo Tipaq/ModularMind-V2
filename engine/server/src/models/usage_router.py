@@ -412,7 +412,7 @@ async def get_catalog_model(model_id: str, user: CurrentUser) -> CatalogModelRes
 
 
 @usage_router.delete("/catalog/{model_id}", dependencies=[RequireOwner])
-async def remove_catalog_model(model_id: str, user: CurrentUser) -> dict:
+async def remove_catalog_model(model_id: str, user: CurrentUser) -> dict[str, str]:
     """Remove a model from the catalog, Ollama, and Redis."""
     svc = get_model_service()
     m = svc.get_model(model_id)
@@ -544,7 +544,7 @@ async def browse_models(
 
 
 @usage_router.get("/pull/{model_name}/status")
-async def pull_status(model_name: str, user: CurrentUser) -> dict:
+async def pull_status(model_name: str, user: CurrentUser) -> dict[str, str]:
     """Get pull progress for a model."""
     svc = get_model_service()
     progress = await svc.get_pull_progress(model_name)

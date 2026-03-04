@@ -6,6 +6,7 @@ Available in the runtime dashboard under /api/v1/internal/mcp/.
 
 import logging
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -240,7 +241,7 @@ async def deploy_from_catalog(body: MCPDeployFromCatalogRequest, user: CurrentUs
 
 
 @router.get("/sidecar-status", dependencies=[RequireOwner])
-async def get_sidecar_availability(user: CurrentUser) -> dict:
+async def get_sidecar_availability(user: CurrentUser) -> dict[str, Any]:
     """Check if Docker sidecar auto-provisioning is available."""
     manager = _get_sidecar_manager()
     return {
@@ -257,7 +258,7 @@ async def get_server_logs(
     server_id: str,
     user: CurrentUser,
     tail: int = DEFAULT_LOG_TAIL,
-) -> dict:
+) -> dict[str, str]:
     """Read recent logs from a managed sidecar container.
 
     Used by the QR code setup flow to extract the WhatsApp QR code
@@ -427,7 +428,7 @@ async def update_mcp_server(
 
 
 @router.delete("/servers/{server_id}", dependencies=[RequireOwner])
-async def delete_mcp_server(server_id: str, user: CurrentUser) -> dict:
+async def delete_mcp_server(server_id: str, user: CurrentUser) -> dict[str, str]:
     """Remove an MCP server. If managed, also removes the sidecar container."""
     from src.infra.secrets import secrets_store
 
@@ -455,7 +456,7 @@ async def delete_mcp_server(server_id: str, user: CurrentUser) -> dict:
 
 
 @router.post("/servers/{server_id}/test", dependencies=[RequireOwner])
-async def test_mcp_connection(server_id: str, user: CurrentUser) -> dict:
+async def test_mcp_connection(server_id: str, user: CurrentUser) -> dict[str, Any]:
     """Test connectivity to an MCP server."""
     registry = _get_registry()
     if not registry.get_server(server_id):
@@ -471,7 +472,7 @@ async def test_mcp_connection(server_id: str, user: CurrentUser) -> dict:
 
 
 @router.get("/servers/{server_id}/tools", dependencies=[RequireOwner])
-async def list_server_tools(server_id: str, user: CurrentUser) -> list[dict]:
+async def list_server_tools(server_id: str, user: CurrentUser) -> list[dict[str, Any]]:
     """Discover tools available on an MCP server."""
     registry = _get_registry()
     if not registry.get_server(server_id):

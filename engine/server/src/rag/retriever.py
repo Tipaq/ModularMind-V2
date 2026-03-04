@@ -60,12 +60,19 @@ class RAGRetriever:
                 query,
             )
 
+            # Ensure collection IDs are strings (callers may pass UUIDs)
+            str_ids = (
+                [str(c) for c in collection_ids]
+                if collection_ids
+                else None
+            )
+
             results = await self.repository.search_hybrid(
                 query_embedding=query_embedding,
                 query_text=query,
                 user_id=user_id,
                 user_groups=user_groups or [],
-                collection_ids=collection_ids,
+                collection_ids=str_ids,
                 limit=limit,
                 threshold=threshold,
             )
@@ -101,12 +108,18 @@ class RAGRetriever:
                 query,
             )
 
+            str_ids = (
+                [str(c) for c in collection_ids]
+                if collection_ids
+                else None
+            )
+
             return await self.repository.search_hybrid(
                 query_embedding=query_embedding,
                 query_text=query,
                 user_id=user_id,
                 user_groups=user_groups or [],
-                collection_ids=collection_ids,
+                collection_ids=str_ids,
                 limit=limit,
                 threshold=threshold,
             )

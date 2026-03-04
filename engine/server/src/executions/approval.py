@@ -10,12 +10,11 @@ import logging
 from datetime import timedelta
 from typing import Any
 
-from src.infra.utils import utcnow
-
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infra.redis import RedisClient
+from src.infra.utils import utcnow
 
 from .models import ExecutionRun, ExecutionStatus
 

@@ -102,7 +102,7 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
 
 
 async def _persist_assistant_message(
-    session: Any,
+    session: "AsyncSession",
     execution_id: str,
     complete_event: dict[str, Any] | None,
 ) -> None:
