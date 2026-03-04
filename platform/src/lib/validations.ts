@@ -19,7 +19,7 @@ export const createAgentSchema = z.object({
   description: z.string().max(2000).optional().default(""),
   model: z.string().min(1),
   provider: z.string().min(1),
-  config: z.record(z.unknown()).optional().default({}),
+  config: z.record(z.string(), z.unknown()).optional().default({}),
   tags: z.array(z.string()).optional().default([]),
 });
 
@@ -28,7 +28,7 @@ export const updateAgentSchema = z.object({
   description: z.string().max(2000).optional(),
   model: z.string().min(1).optional(),
   provider: z.string().min(1).optional(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
   tags: z.array(z.string()).optional(),
 });
 
@@ -37,15 +37,15 @@ export const updateAgentSchema = z.object({
 export const createGraphSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(2000).optional().default(""),
-  nodes: z.array(z.record(z.unknown())).optional().default([]),
-  edges: z.array(z.record(z.unknown())).optional().default([]),
+  nodes: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  edges: z.array(z.record(z.string(), z.unknown())).optional().default([]),
 });
 
 export const updateGraphSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().max(2000).optional(),
-  nodes: z.array(z.record(z.unknown())).optional(),
-  edges: z.array(z.record(z.unknown())).optional(),
+  nodes: z.array(z.record(z.string(), z.unknown())).optional(),
+  edges: z.array(z.record(z.string(), z.unknown())).optional(),
 });
 
 // ─── Report schemas ─────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ export const reportSchema = z.object({
   status: z.object({
     health: z.string(),
   }),
-  models: z.array(z.record(z.unknown())),
+  models: z.array(z.record(z.string(), z.unknown())),
 });
 
 // ─── Chat proxy schemas ─────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ export const conversationPatchSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   supervisor_mode: z.boolean().optional(),
   agent_id: z.string().optional(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const supervisorLayerPatchSchema = z.object({
