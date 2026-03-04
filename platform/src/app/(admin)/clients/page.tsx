@@ -1,154 +1,275 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Building2, Plus, Trash2, Server } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { Building2, Plus, Trash2 } from "lucide-react";
+import {
+  Button,
+  Badge,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  Input,
+  PageHeader,
+} from "@modularmind/ui";
+import { EmptyState } from "@/components/studio/shared/EmptyState";
+import { ResourceTable } from "@/components/studio/shared/ResourceTable";
+import { ResourceFilters } from "@/components/studio/shared/ResourceFilters";
+import { useClientsStore, type PlatformClient } from "@/stores/clients";
+import type { ResourceColumn, ResourceFilterConfig, SortState } from "@/lib/types";
 
-type Client = {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  engines?: { id: string; name: string; status: string; apiKey: string }[];
-  _count?: { engines: number };
-};
+const filterConfigs: ResourceFilterConfig[] = [
+  { key: "search", label: "Search", type: "search", placeholder: "Search clients..." },
+];
 
 export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newUrl, setNewUrl] = useState("http://localhost:8000");
+  const router = useRouter();
+  const {
+    clients,
+    loading,
+    page,
+    totalPages,
+    total,
+    fetchClients,
+    createClient,
+    deleteClient,
+  } = useClientsStore();
+
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ name: "", engineUrl: "http://localhost:8000" });
 
-  async function load() {
-    const res = await fetch("/api/clients");
-    if (res.ok) setClients(await res.json());
-    setLoading(false);
-  }
+  useEffect(() => {
+    fetchClients(1);
+  }, [fetchClients]);
 
-  useEffect(() => { load(); }, []);
+  const filtered = useMemo(() => {
+    let result = clients;
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setCreating(true);
-    const res = await fetch("/api/clients", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName, engineUrl: newUrl }),
-    });
-    if (res.ok) {
-      setNewName("");
-      setNewUrl("http://localhost:8000");
-      setShowCreate(false);
-      load();
+    if (filterValues.search) {
+      const s = filterValues.search.toLowerCase();
+      result = result.filter((c) => c.name.toLowerCase().includes(s));
     }
-    setCreating(false);
-  }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this client and all its engines?")) return;
-    await fetch(`/api/clients/${id}`, { method: "DELETE" });
-    load();
-  }
+    if (filterValues.sort) {
+      result = [...result].sort((a, b) => {
+        switch (filterValues.sort) {
+          case "name_asc":
+            return a.name.localeCompare(b.name);
+          case "name_desc":
+            return b.name.localeCompare(a.name);
+          default:
+            return 0;
+        }
+      });
+    }
 
-  if (loading) {
-    return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading...</div>;
-  }
+    return result;
+  }, [clients, filterValues]);
+
+  const handleFilterChange = useCallback((key: string, value: string) => {
+    setFilterValues((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const sortState = useMemo((): SortState | null => {
+    const s = filterValues.sort;
+    if (!s) return null;
+    if (s.endsWith("_asc")) return { key: s.replace(/_asc$/, ""), direction: "asc" };
+    if (s.endsWith("_desc")) return { key: s.replace(/_desc$/, ""), direction: "desc" };
+    return { key: s, direction: "asc" };
+  }, [filterValues.sort]);
+
+  const handleColumnSort = useCallback((sortKey: string) => {
+    setFilterValues((prev) => {
+      const current = prev.sort || "";
+      if (current === `${sortKey}_asc` || current === sortKey) {
+        return { ...prev, sort: `${sortKey}_desc` };
+      }
+      if (current === `${sortKey}_desc`) {
+        return { ...prev, sort: "" };
+      }
+      return { ...prev, sort: `${sortKey}_asc` };
+    });
+  }, []);
+
+  const handleRowClick = useCallback(
+    (client: PlatformClient) => {
+      router.push(`/clients/${client.id}`);
+    },
+    [router],
+  );
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    setCreating(true);
+    try {
+      const client = await createClient({
+        name: form.name.trim(),
+        engineUrl: form.engineUrl.trim() || undefined,
+      });
+      setShowCreateDialog(false);
+      setForm({ name: "", engineUrl: "http://localhost:8000" });
+      router.push(`/clients/${client.id}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDelete = useCallback(
+    async (client: PlatformClient) => {
+      if (!confirm(`Delete "${client.name}" and all its engines?`)) return;
+      try {
+        await deleteClient(client.id);
+      } catch {
+        // Error handled in store
+      }
+    },
+    [deleteClient],
+  );
+
+  const columns: ResourceColumn<PlatformClient>[] = [
+    {
+      key: "name",
+      header: "Client",
+      sortKey: "name",
+      render: (c) => (
+        <div className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-primary shrink-0" />
+          <span className="font-medium text-sm">{c.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: "engines",
+      header: "Engines",
+      className: "hidden md:table-cell",
+      render: (c) => (
+        <Badge variant="outline" className="text-xs font-mono">
+          {c._count?.engines ?? 0}
+        </Badge>
+      ),
+    },
+    {
+      key: "created",
+      header: "Created",
+      className: "hidden lg:table-cell",
+      render: (c) => (
+        <span className="text-sm text-muted-foreground">
+          {new Date(c.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Clients</h1>
-          <p className="text-sm text-muted-foreground">Manage client organizations and their engines</p>
-        </div>
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          New Client
-        </button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        icon={Building2}
+        gradient="from-primary to-primary/70"
+        title="Clients"
+        description="Manage client organizations and their engines"
+        actions={
+          <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Client
+          </Button>
+        }
+      />
 
-      {showCreate && (
-        <form onSubmit={handleCreate} className="mb-6 rounded-lg border bg-card p-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Client Name</label>
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                placeholder="Acme Corp"
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Engine URL</label>
-              <input
-                value={newUrl}
-                onChange={(e) => setNewUrl(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                placeholder="http://localhost:8000"
-              />
-            </div>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <button
-              type="submit"
-              disabled={creating}
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {creating ? "Creating..." : "Create Client"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCreate(false)}
-              className="rounded-md border px-4 py-2 text-sm hover:bg-muted"
-            >
-              Cancel
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            An API key will be auto-generated for the first engine.
-          </p>
-        </form>
-      )}
+      <ResourceFilters
+        filters={filterConfigs}
+        values={filterValues}
+        onChange={handleFilterChange}
+      />
 
-      {clients.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-muted-foreground">
-          <Building2 className="mb-2 h-10 w-10" />
-          <p>No clients yet</p>
-          <p className="text-sm">Create your first client to get started</p>
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {clients.map((client) => (
-            <div key={client.id} className="rounded-lg border bg-card p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-primary" />
-                  <h3 className="font-medium">{client.name}</h3>
-                </div>
-                <button
-                  onClick={() => handleDelete(client.id)}
-                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="mt-3 flex items-center gap-1 text-sm text-muted-foreground">
-                <Server className="h-3.5 w-3.5" />
-                {client._count?.engines ?? client.engines?.length ?? 0} engine(s)
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Created {new Date(client.createdAt).toLocaleDateString()}
-              </p>
+      <ResourceTable<PlatformClient>
+        items={filtered}
+        columns={columns}
+        pagination={{
+          page,
+          totalPages,
+          totalItems: total,
+        }}
+        onPageChange={(p) => fetchClients(p)}
+        onRowClick={handleRowClick}
+        isLoading={loading}
+        emptyState={
+          <EmptyState
+            icon={Building2}
+            title="No clients yet"
+            description="Create your first client to get started."
+            action={
+              <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Create Client
+              </Button>
+            }
+          />
+        }
+        keyExtractor={(c) => c.id}
+        sortState={sortState}
+        onSort={handleColumnSort}
+        rowActions={(c) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                ...
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => handleDelete(c)}
+                className="text-destructive"
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      />
+
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create Client</DialogTitle>
+            <DialogDescription>
+              Create a new client organization. An API key will be auto-generated for the first engine.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4 py-2">
+            <Input
+              label="Client Name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Acme Corp"
+              required
+            />
+            <Input
+              label="Engine URL"
+              value={form.engineUrl}
+              onChange={(e) => setForm({ ...form, engineUrl: e.target.value })}
+              placeholder="http://localhost:8000"
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" onClick={() => setShowCreateDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating || !form.name.trim()}>
+                {creating ? "Creating..." : "Create"}
+              </Button>
             </div>
-          ))}
-        </div>
-      )}
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
