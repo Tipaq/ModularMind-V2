@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Box, Plus, Cloud, Download, HardDrive, Settings, Square, Trash2 } from "lucide-react";
 import { Button, PageHeader, cn } from "@modularmind/ui";
 import { PROVIDER_INFO } from "@modularmind/api-client";
-import type { UnifiedCatalogModel, ModelProvider } from "@modularmind/api-client";
+import type { UnifiedCatalogModel } from "@modularmind/api-client";
 import { EmptyState } from "../components/shared/EmptyState";
 import { ResourceTable } from "../components/shared/ResourceTable";
 import { ResourceFilters } from "../components/shared/ResourceFilters";

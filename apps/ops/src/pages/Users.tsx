@@ -46,8 +46,28 @@ export default function Users() {
   }, [search, roleFilter, activeFilter, page]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    let active = true;
+    async function fetchData() {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ page: String(page), page_size: "20" });
+        if (search) params.set("search", search);
+        if (roleFilter) params.set("role", roleFilter);
+        if (activeFilter) params.set("is_active", activeFilter);
+
+        const res = await api.get<UserStatsListResponse>(`/admin/users?${params}`);
+        if (active) {
+          setUsers(res.items);
+          setTotal(res.total);
+        }
+      } catch {
+        if (active) setUsers([]);
+      }
+      if (active) setLoading(false);
+    }
+    fetchData();
+    return () => { active = false; };
+  }, [search, roleFilter, activeFilter, page]);
 
   // Debounced search
   useEffect(() => {

@@ -78,7 +78,8 @@ export default function ModelDetail() {
 
   // Playground parameter state
   const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(4096);
+  const [maxTokensOverride, setMaxTokensOverride] = useState<number | null>(null);
+  const maxTokens = maxTokensOverride ?? model?.max_output_tokens ?? 4096;
   const [systemPrompt, setSystemPrompt] = useState("");
 
   // Load model
@@ -111,14 +112,7 @@ export default function ModelDetail() {
       setIsLoading(false);
     }
     load();
-  }, [modelId, catalogModels.length, fetchCatalog]);
-
-  // Initialize maxTokens when model loads
-  useEffect(() => {
-    if (model?.max_output_tokens) {
-      setMaxTokens(model.max_output_tokens);
-    }
-  }, [model?.max_output_tokens]);
+  }, [modelId, catalogModels, fetchCatalog]);
 
   // Auto-refresh while pulling to track progress
   useEffect(() => {
@@ -135,7 +129,7 @@ export default function ModelDetail() {
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [model?.pull_status, modelId]);
+  }, [model, modelId]);
 
   const handlePull = useCallback(async () => {
     if (!model) return;
@@ -431,7 +425,7 @@ export default function ModelDetail() {
                     </div>
                     <Slider
                       value={[maxTokens]}
-                      onValueChange={([v]) => setMaxTokens(v)}
+                      onValueChange={([v]) => setMaxTokensOverride(v)}
                       min={1}
                       max={maxOutputTokens}
                       step={tokenStep}

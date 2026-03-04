@@ -61,7 +61,20 @@ export default function UserDetail() {
   };
 
   useEffect(() => {
-    if (userId) fetchUser();
+    if (!userId) return;
+    let active = true;
+    async function load() {
+      setLoading(true);
+      try {
+        const res = await api.get<UserStats>(`/admin/users/${userId}`);
+        if (active) setUser(res);
+      } catch {
+        if (active) setUser(null);
+      }
+      if (active) setLoading(false);
+    }
+    load();
+    return () => { active = false; };
   }, [userId]);
 
   const handleSaveUser = async (data: { role?: string; is_active?: boolean }) => {

@@ -33,6 +33,41 @@ function SkeletonGrid() {
   );
 }
 
+function CollectionGrid({
+  items,
+  emptyLabel,
+  loading,
+  selectedCollectionId,
+  onSelect,
+  onDelete,
+  canDelete,
+}: {
+  items: Collection[];
+  emptyLabel: string;
+  loading: boolean;
+  selectedCollectionId: string | null;
+  onSelect: (id: string | null) => void;
+  onDelete: (id: string) => void;
+  canDelete: (c: Collection) => boolean;
+}) {
+  if (loading) return <SkeletonGrid />;
+  if (!items.length) return <EmptyCollections label={emptyLabel} />;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {items.map((col) => (
+        <CollectionCard
+          key={col.id}
+          collection={col}
+          isSelected={col.id === selectedCollectionId}
+          onClick={() => onSelect(col.id === selectedCollectionId ? null : col.id)}
+          onDelete={() => onDelete(col.id)}
+          canDelete={canDelete(col)}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function Knowledge() {
   const {
     collections, collectionsLoading, collectionsError,
@@ -68,25 +103,6 @@ export default function Knowledge() {
 
   const canDelete = (c: Collection) =>
     isAdmin || (c.scope === "agent" && c.owner_user_id === user?.id);
-
-  const CollectionGrid = ({ items, emptyLabel }: { items: Collection[]; emptyLabel: string }) => {
-    if (collectionsLoading) return <SkeletonGrid />;
-    if (!items.length) return <EmptyCollections label={emptyLabel} />;
-    return (
-      <div className="grid gap-3 sm:grid-cols-2">
-        {items.map((col) => (
-          <CollectionCard
-            key={col.id}
-            collection={col}
-            isSelected={col.id === selectedCollectionId}
-            onClick={() => selectCollection(col.id === selectedCollectionId ? null : col.id)}
-            onDelete={() => deleteCollection(col.id)}
-            canDelete={canDelete(col)}
-          />
-        ))}
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-6">
@@ -192,6 +208,11 @@ export default function Knowledge() {
                       ? "No company-wide collections yet — create one to share knowledge with all users"
                       : "No company-wide collections available"
                   }
+                  loading={collectionsLoading}
+                  selectedCollectionId={selectedCollectionId}
+                  onSelect={selectCollection}
+                  onDelete={deleteCollection}
+                  canDelete={canDelete}
                 />
               </TabsContent>
 
@@ -213,6 +234,11 @@ export default function Knowledge() {
                 <CollectionGrid
                   items={projectCollections}
                   emptyLabel="No project collections yet — create one and tag it as a project"
+                  loading={collectionsLoading}
+                  selectedCollectionId={selectedCollectionId}
+                  onSelect={selectCollection}
+                  onDelete={deleteCollection}
+                  canDelete={canDelete}
                 />
               </TabsContent>
 
@@ -235,6 +261,11 @@ export default function Knowledge() {
                 <CollectionGrid
                   items={groupCollections}
                   emptyLabel="No group collections yet — create one and assign it to one or more groups"
+                  loading={collectionsLoading}
+                  selectedCollectionId={selectedCollectionId}
+                  onSelect={selectCollection}
+                  onDelete={deleteCollection}
+                  canDelete={canDelete}
                 />
               </TabsContent>
 
@@ -242,6 +273,11 @@ export default function Knowledge() {
                 <CollectionGrid
                   items={personalCollections}
                   emptyLabel="No personal collections yet — upload your own documents here"
+                  loading={collectionsLoading}
+                  selectedCollectionId={selectedCollectionId}
+                  onSelect={selectCollection}
+                  onDelete={deleteCollection}
+                  canDelete={canDelete}
                 />
               </TabsContent>
             </div>

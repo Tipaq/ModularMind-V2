@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
 import type {
@@ -47,36 +47,20 @@ export default function Monitoring() {
 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Track first successful load
-  useEffect(() => {
-    if (monitoring && !lastUpdated) setLastUpdated(new Date());
-  }, [monitoring, lastUpdated]);
-
-  // Auto-refresh every 10s using refs to avoid stale closures
-  const refetchMonitoringRef = useRef(refetchMonitoring);
-  const refetchPipelineRef = useRef(refetchPipeline);
-  const refetchLlmGpuRef = useRef(refetchLlmGpu);
-  const refetchLiveExecutionsRef = useRef(refetchLiveExecutions);
-  const refetchPipelinesRef = useRef(refetchPipelines);
-  refetchMonitoringRef.current = refetchMonitoring;
-  refetchPipelineRef.current = refetchPipeline;
-  refetchLlmGpuRef.current = refetchLlmGpu;
-  refetchLiveExecutionsRef.current = refetchLiveExecutions;
-  refetchPipelinesRef.current = refetchPipelines;
-
+  // Auto-refresh every 10s — refetch functions are stable (useCallback in useApi)
   useEffect(() => {
     const id = setInterval(async () => {
       await Promise.all([
-        refetchMonitoringRef.current(),
-        refetchPipelineRef.current(),
-        refetchLlmGpuRef.current(),
-        refetchLiveExecutionsRef.current(),
-        refetchPipelinesRef.current(),
+        refetchMonitoring(),
+        refetchPipeline(),
+        refetchLlmGpu(),
+        refetchLiveExecutions(),
+        refetchPipelines(),
       ]);
       setLastUpdated(new Date());
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [refetchMonitoring, refetchPipeline, refetchLlmGpu, refetchLiveExecutions, refetchPipelines]);
 
   const handleManualRefresh = async () => {
     await Promise.all([
