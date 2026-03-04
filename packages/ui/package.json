@@ -9,7 +9,7 @@
     "./styles/*": "./src/styles/*"
   },
   "scripts": {
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && eslint src/"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.0",
