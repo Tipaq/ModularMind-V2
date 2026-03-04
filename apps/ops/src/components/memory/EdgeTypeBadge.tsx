@@ -1,4 +1,4 @@
-import { Badge } from "@modularmind/ui";
+import { Badge, cn } from "@modularmind/ui";
 
 const EDGE_STYLES: Record<string, string> = {
   entity_overlap: "bg-primary/15 text-primary border-primary/30",
@@ -16,7 +16,7 @@ export function EdgeTypeBadge({ type }: { type: string }) {
   return (
     <Badge
       variant="outline"
-      className={`text-[10px] font-medium ${EDGE_STYLES[type] || ""}`}
+      className={cn("text-[10px] font-medium", EDGE_STYLES[type])}
     >
       {EDGE_LABELS[type] || type}
     </Badge>

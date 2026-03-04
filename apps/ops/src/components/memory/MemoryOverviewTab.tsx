@@ -8,7 +8,7 @@ import {
   Activity,
   AlertCircle,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@modularmind/ui";
+import { Card, CardContent, CardHeader, CardTitle, cn } from "@modularmind/ui";
 import { useMemoryStore } from "../../stores/memory";
 
 function StatCard({
@@ -64,7 +64,7 @@ function DistributionRow({
       </div>
       <div className="h-1.5 rounded-full bg-muted overflow-hidden">
         <div
-          className={`h-full rounded-full ${color}`}
+          className={cn("h-full rounded-full", color)}
           style={{ width: `${pct}%` }}
         />
       </div>

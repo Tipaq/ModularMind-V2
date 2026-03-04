@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Plus, Cloud, Download, HardDrive, Settings, Square, Trash2 } from "lucide-react";
-import { Button, PageHeader } from "@modularmind/ui";
+import { Button, PageHeader, cn } from "@modularmind/ui";
 import { PROVIDER_INFO } from "@modularmind/api-client";
 import type { UnifiedCatalogModel, ModelProvider } from "@modularmind/api-client";
 import { EmptyState } from "../components/shared/EmptyState";
@@ -307,7 +307,7 @@ export default function Models() {
                 {tags.map((tag) => (
                   <span
                     key={tag}
-                    className={`inline-flex items-center rounded-full text-[10px] px-1.5 py-0 h-4 font-medium ${TAG_COLORS[tag] || ""}`}
+                    className={cn("inline-flex items-center rounded-full text-[10px] px-1.5 py-0 h-4 font-medium", TAG_COLORS[tag])}
                   >
                     {tag}
                   </span>
@@ -326,7 +326,7 @@ export default function Models() {
         const info = PROVIDER_INFO[m.provider];
         return (
           <div className="flex items-center gap-2">
-            <span className={`h-2 w-2 rounded-full ${info?.color || "bg-muted-foreground"}`} />
+            <span className={cn("h-2 w-2 rounded-full", info?.color || "bg-muted-foreground")} />
             <span className="text-sm">{info?.name || m.provider}</span>
           </div>
         );

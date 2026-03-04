@@ -47,6 +47,7 @@ import {
   Input,
   Label,
   Switch,
+  cn,
 } from "@modularmind/ui";
 import type {
   MCPServer,
@@ -410,11 +411,10 @@ export default function McpServersTab() {
                         <div className="relative shrink-0">
                           <IconComp className="h-5 w-5 text-muted-foreground" />
                           <span
-                            className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-background ${
-                              server.connected
-                                ? "bg-success"
-                                : "bg-muted-foreground"
-                            }`}
+                            className={cn(
+                              "absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-background",
+                              server.connected ? "bg-success" : "bg-muted-foreground",
+                            )}
                           />
                         </div>
                         <div className="min-w-0">
@@ -803,7 +803,7 @@ export default function McpServersTab() {
                   disabled={settingsToolsLoading}
                 >
                   <RefreshCw
-                    className={`h-3 w-3 mr-1 ${settingsToolsLoading ? "animate-spin" : ""}`}
+                    className={cn("h-3 w-3 mr-1", settingsToolsLoading && "animate-spin")}
                   />
                   Refresh
                 </Button>

@@ -11,6 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  cn,
 } from "@modularmind/ui";
 import type { LocalSettings } from "@modularmind/api-client";
 import { api } from "../../lib/api";
@@ -113,14 +114,16 @@ export default function SystemTab() {
             </div>
             <button
               onClick={() => toggleSetting("auto_sync")}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                settings?.auto_sync ? "bg-primary" : "bg-muted"
-              }`}
+              className={cn(
+                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                settings?.auto_sync ? "bg-primary" : "bg-muted",
+              )}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  settings?.auto_sync ? "translate-x-6" : "translate-x-1"
-                }`}
+                className={cn(
+                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                  settings?.auto_sync ? "translate-x-6" : "translate-x-1",
+                )}
               />
             </button>
           </div>
@@ -210,16 +213,16 @@ export default function SystemTab() {
             </div>
             <button
               onClick={() => toggleSetting("telemetry_enabled")}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                settings?.telemetry_enabled ? "bg-primary" : "bg-muted"
-              }`}
+              className={cn(
+                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                settings?.telemetry_enabled ? "bg-primary" : "bg-muted",
+              )}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  settings?.telemetry_enabled
-                    ? "translate-x-6"
-                    : "translate-x-1"
-                }`}
+                className={cn(
+                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                  settings?.telemetry_enabled ? "translate-x-6" : "translate-x-1",
+                )}
               />
             </button>
           </div>

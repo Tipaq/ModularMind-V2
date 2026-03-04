@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { Settings2, Key, Plug, Webhook, Layers, Cog } from "lucide-react";
-import { PageHeader } from "@modularmind/ui";
+import { PageHeader, cn } from "@modularmind/ui";
 import ProvidersTab from "../components/configuration/ProvidersTab";
 import McpServersTab from "../components/configuration/McpServersTab";
 import IntegrationsTab from "../components/configuration/IntegrationsTab";
@@ -41,11 +41,12 @@ export default function Configuration() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
                 activeTab === tab.id
                   ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
             >
               <Icon className="h-4 w-4" />
               {tab.label}

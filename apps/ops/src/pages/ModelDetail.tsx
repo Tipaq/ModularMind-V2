@@ -13,7 +13,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { Badge, Button, Separator, Slider } from "@modularmind/ui";
+import { Badge, Button, Separator, Slider, cn } from "@modularmind/ui";
 import { PROVIDER_INFO } from "@modularmind/api-client";
 import type { CatalogModel } from "@modularmind/api-client";
 import { DetailHeader } from "../components/shared/DetailHeader";
@@ -229,7 +229,7 @@ export default function ModelDetail() {
         badges={
           <>
             <div className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${providerInfo.color}`} />
+              <span className={cn("h-2 w-2 rounded-full", providerInfo.color)} />
               <span className="text-xs text-muted-foreground">
                 {providerInfo.name}
               </span>

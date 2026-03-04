@@ -1,4 +1,4 @@
-import { Badge } from "@modularmind/ui";
+import { Badge, cn } from "@modularmind/ui";
 
 const TYPE_STYLES: Record<string, string> = {
   episodic: "bg-info/15 text-info border-info/30",
@@ -16,7 +16,7 @@ export function MemoryTypeBadge({ type }: { type: string }) {
   return (
     <Badge
       variant="outline"
-      className={`text-[10px] font-medium ${TYPE_STYLES[type] || ""}`}
+      className={cn("text-[10px] font-medium", TYPE_STYLES[type])}
     >
       {TYPE_LABELS[type] || type}
     </Badge>

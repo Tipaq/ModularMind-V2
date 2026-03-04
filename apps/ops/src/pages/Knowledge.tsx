@@ -5,7 +5,7 @@ import {
 import {
   Button, Input, Badge,
   Tabs, TabsContent, TabsList, TabsTrigger,
-  PageHeader,
+  PageHeader, cn,
 } from "@modularmind/ui";
 import type { Collection } from "@modularmind/api-client";
 import { useKnowledgeStore } from "../stores/knowledge";
@@ -103,7 +103,7 @@ export default function Knowledge() {
               onClick={fetchCollections}
               disabled={collectionsLoading}
             >
-              <RefreshCw className={`h-4 w-4 ${collectionsLoading ? "animate-spin" : ""}`} />
+              <RefreshCw className={cn("h-4 w-4", collectionsLoading && "animate-spin")} />
             </Button>
             <Button size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4 mr-1.5" />

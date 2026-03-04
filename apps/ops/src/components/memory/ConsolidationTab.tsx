@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useCallback } from "react";
 import { Clock } from "lucide-react";
-import { Badge } from "@modularmind/ui";
+import { Badge, cn } from "@modularmind/ui";
 import { useMemoryStore, type ConsolidationLog } from "../../stores/memory";
 import { ResourceTable } from "../shared/ResourceTable";
 import { EmptyState } from "../shared/EmptyState";
@@ -48,7 +48,7 @@ export function ConsolidationTab() {
         render: (log) => (
           <Badge
             variant="outline"
-            className={`text-[10px] font-medium capitalize ${ACTION_STYLES[log.action] || ""}`}
+            className={cn("text-[10px] font-medium capitalize", ACTION_STYLES[log.action])}
           >
             {log.action.replace("_", " ")}
           </Badge>
