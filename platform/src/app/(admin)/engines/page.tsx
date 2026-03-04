@@ -1,124 +1,261 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Server, Wifi, WifiOff, Clock, Key } from "lucide-react";
-import { STATUS_COLORS, relativeTime } from "@modularmind/ui";
-
-type Engine = {
-  id: string;
-  name: string;
-  url: string;
-  apiKey: string;
-  status: string;
-  lastSeen: string | null;
-  version: number;
-  createdAt: string;
-  client: { id: string; name: string };
-};
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { Server, Trash2, Key, Wifi, WifiOff } from "lucide-react";
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  PageHeader,
+  STATUS_COLORS,
+  relativeTime,
+} from "@modularmind/ui";
+import { EmptyState } from "@/components/studio/shared/EmptyState";
+import { ResourceTable } from "@/components/studio/shared/ResourceTable";
+import { ResourceFilters } from "@/components/studio/shared/ResourceFilters";
+import { useEnginesStore, type PlatformEngineListItem } from "@/stores/engines";
+import type { ResourceColumn, ResourceFilterConfig, SortState } from "@/lib/types";
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? STATUS_COLORS.offline}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? STATUS_COLORS.offline}`}
+    >
       {status === "synced" ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
       {status}
     </span>
   );
 }
 
+const filterConfigs: ResourceFilterConfig[] = [
+  { key: "search", label: "Search", type: "search", placeholder: "Search engines..." },
+  {
+    key: "status",
+    label: "Status",
+    type: "select",
+    placeholder: "All statuses",
+    options: [
+      { value: "registered", label: "Registered" },
+      { value: "synced", label: "Synced" },
+      { value: "offline", label: "Offline" },
+    ],
+  },
+];
+
 export default function EnginesPage() {
-  const [engines, setEngines] = useState<Engine[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const router = useRouter();
+  const {
+    engines,
+    loading,
+    page,
+    totalPages,
+    total,
+    fetchEngines,
+    deleteEngine,
+    setStatusFilter,
+  } = useEnginesStore();
+
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    async function load() {
-      // Single request: fetch all clients with engines included
-      const res = await fetch("/api/clients?include=engines");
-      if (!res.ok) { setLoading(false); return; }
-      const clients = await res.json();
+    fetchEngines(1);
+  }, [fetchEngines]);
 
-      const allEngines: Engine[] = [];
-      for (const client of clients) {
-        for (const eng of client.engines ?? []) {
-          allEngines.push({ ...eng, client: { id: client.id, name: client.name } });
-        }
-      }
-      setEngines(allEngines);
-      setLoading(false);
+  const filtered = useMemo(() => {
+    let result = engines;
+
+    if (filterValues.search) {
+      const s = filterValues.search.toLowerCase();
+      result = result.filter(
+        (e) =>
+          e.name.toLowerCase().includes(s) ||
+          e.client.name.toLowerCase().includes(s),
+      );
     }
-    load();
+
+    if (filterValues.sort) {
+      result = [...result].sort((a, b) => {
+        switch (filterValues.sort) {
+          case "name_asc":
+            return a.name.localeCompare(b.name);
+          case "name_desc":
+            return b.name.localeCompare(a.name);
+          case "status_asc":
+            return a.status.localeCompare(b.status);
+          case "status_desc":
+            return b.status.localeCompare(a.status);
+          default:
+            return 0;
+        }
+      });
+    }
+
+    return result;
+  }, [engines, filterValues]);
+
+  const handleFilterChange = useCallback(
+    (key: string, value: string) => {
+      setFilterValues((prev) => ({ ...prev, [key]: value }));
+      if (key === "status") {
+        setStatusFilter(value);
+        fetchEngines(1);
+      }
+    },
+    [setStatusFilter, fetchEngines],
+  );
+
+  const sortState = useMemo((): SortState | null => {
+    const s = filterValues.sort;
+    if (!s) return null;
+    if (s.endsWith("_asc")) return { key: s.replace(/_asc$/, ""), direction: "asc" };
+    if (s.endsWith("_desc")) return { key: s.replace(/_desc$/, ""), direction: "desc" };
+    return { key: s, direction: "asc" };
+  }, [filterValues.sort]);
+
+  const handleColumnSort = useCallback((sortKey: string) => {
+    setFilterValues((prev) => {
+      const current = prev.sort || "";
+      if (current === `${sortKey}_asc` || current === sortKey) {
+        return { ...prev, sort: `${sortKey}_desc` };
+      }
+      if (current === `${sortKey}_desc`) {
+        return { ...prev, sort: "" };
+      }
+      return { ...prev, sort: `${sortKey}_asc` };
+    });
   }, []);
 
-  function toggleKey(id: string) {
-    setRevealedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
+  const handleDelete = useCallback(
+    async (engine: PlatformEngineListItem) => {
+      if (!confirm(`Delete engine "${engine.name}"?`)) return;
+      try {
+        await deleteEngine(engine.id);
+      } catch {
+        // Error handled in store
+      }
+    },
+    [deleteEngine],
+  );
 
-  if (loading) {
-    return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading...</div>;
-  }
+  const handleCopyKey = useCallback((apiKey: string) => {
+    navigator.clipboard.writeText(apiKey);
+  }, []);
+
+  const columns: ResourceColumn<PlatformEngineListItem>[] = [
+    {
+      key: "name",
+      header: "Engine",
+      sortKey: "name",
+      render: (e) => (
+        <div className="flex items-center gap-2">
+          <Server className="h-4 w-4 text-primary shrink-0" />
+          <span className="font-medium text-sm">{e.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: "client",
+      header: "Client",
+      className: "hidden md:table-cell",
+      render: (e) => (
+        <button
+          onClick={(ev) => {
+            ev.stopPropagation();
+            router.push(`/clients/${e.client.id}`);
+          }}
+          className="text-sm text-primary hover:underline"
+        >
+          {e.client.name}
+        </button>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortKey: "status",
+      render: (e) => <StatusBadge status={e.status} />,
+    },
+    {
+      key: "lastSeen",
+      header: "Last Seen",
+      className: "hidden md:table-cell",
+      render: (e) => (
+        <span className="text-sm text-muted-foreground">
+          {e.lastSeen ? relativeTime(e.lastSeen) : "Never"}
+        </span>
+      ),
+    },
+    {
+      key: "version",
+      header: "Version",
+      className: "hidden lg:table-cell",
+      render: (e) => (
+        <span className="text-sm font-mono">v{e.version}</span>
+      ),
+    },
+  ];
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Engines</h1>
-        <p className="text-sm text-muted-foreground">Registered engine instances and their sync status</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        icon={Server}
+        gradient="from-info to-info/70"
+        title="Engines"
+        description="Registered engine instances and their sync status"
+      />
 
-      {engines.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-muted-foreground">
-          <Server className="mb-2 h-10 w-10" />
-          <p>No engines registered</p>
-          <p className="text-sm">Create a client to generate an engine API key</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {engines.map((engine) => (
-            <div key={engine.id} className="rounded-lg border bg-card p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Server className="h-5 w-5 text-primary" />
-                    <h3 className="font-medium">{engine.name}</h3>
-                    <StatusBadge status={engine.status} />
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Client: {engine.client.name}
-                  </p>
-                </div>
-                <div className="text-right text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" />
-                    Last seen: {engine.lastSeen ? relativeTime(engine.lastSeen) : "Never"}
-                  </div>
-                  <div className="mt-0.5">v{engine.version}</div>
-                </div>
-              </div>
+      <ResourceFilters
+        filters={filterConfigs}
+        values={filterValues}
+        onChange={handleFilterChange}
+      />
 
-              <div className="mt-3 flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">URL:</span>
-                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{engine.url}</code>
-              </div>
-
-              <div className="mt-2 flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">API Key:</span>
-                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                  {revealedKeys.has(engine.id) ? engine.apiKey : `${engine.apiKey.slice(0, 8)}...`}
-                </code>
-                <button
-                  onClick={() => toggleKey(engine.id)}
-                  className="text-xs text-primary hover:underline"
-                >
-                  <Key className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <ResourceTable<PlatformEngineListItem>
+        items={filtered}
+        columns={columns}
+        pagination={{
+          page,
+          totalPages,
+          totalItems: total,
+        }}
+        onPageChange={(p) => fetchEngines(p)}
+        isLoading={loading}
+        emptyState={
+          <EmptyState
+            icon={Server}
+            title="No engines registered"
+            description="Create a client to generate an engine API key."
+          />
+        }
+        keyExtractor={(e) => e.id}
+        sortState={sortState}
+        onSort={handleColumnSort}
+        rowActions={(e) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                ...
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleCopyKey(e.apiKey)}>
+                <Key className="mr-2 h-3.5 w-3.5" />
+                Copy API Key
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleDelete(e)}
+                className="text-destructive"
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      />
     </div>
   );
 }
