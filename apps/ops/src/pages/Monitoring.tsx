@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
 import type {
+  AgentMetrics,
   LiveExecutionsData,
   LlmGpuData,
+  MetricsHistory,
+  MetricSeries,
   MonitoringData,
   PipelineData,
   PipelinesData,
@@ -17,6 +20,18 @@ import { ActiveInstancesTab } from "../components/monitoring/ActiveInstancesTab"
 import { PipelinesTab } from "../components/monitoring/PipelinesTab";
 
 const POLL_INTERVAL_MS = 10_000;
+
+/** Extract a specific metric series into sparkline-ready data. */
+function extractSeries(
+  history: MetricsHistory | null,
+  metricName: string,
+  valueKey: string = "v",
+): Array<{ ts: number; value: number }> {
+  if (!history) return [];
+  const series = history.series.find((s: MetricSeries) => s.name === metricName);
+  if (!series) return [];
+  return series.points.map((p) => ({ ts: p.ts, value: p.value[valueKey] ?? 0 }));
+}
 
 export default function Monitoring() {
   const { data: monitoring, refetch: refetchMonitoring } = useApi<MonitoringData>(
@@ -44,6 +59,16 @@ export default function Monitoring() {
     [],
     { keepDataOnError: true },
   );
+  const { data: metricsHistory, refetch: refetchMetricsHistory } = useApi<MetricsHistory>(
+    () => api.get("/internal/metrics/history?range=1h&metrics=cpu,memory,queue,latency,llm_latency,llm_tps,llm_ttft"),
+    [],
+    { keepDataOnError: true },
+  );
+  const { data: agentMetrics, refetch: refetchAgentMetrics } = useApi<AgentMetrics[]>(
+    () => api.get("/internal/metrics/agents"),
+    [],
+    { keepDataOnError: true },
+  );
 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -56,11 +81,13 @@ export default function Monitoring() {
         refetchLlmGpu(),
         refetchLiveExecutions(),
         refetchPipelines(),
+        refetchMetricsHistory(),
+        refetchAgentMetrics(),
       ]);
       setLastUpdated(new Date());
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [refetchMonitoring, refetchPipeline, refetchLlmGpu, refetchLiveExecutions, refetchPipelines]);
+  }, [refetchMonitoring, refetchPipeline, refetchLlmGpu, refetchLiveExecutions, refetchPipelines, refetchMetricsHistory, refetchAgentMetrics]);
 
   const handleManualRefresh = async () => {
     await Promise.all([
@@ -69,6 +96,8 @@ export default function Monitoring() {
       refetchLlmGpu(),
       refetchLiveExecutions(),
       refetchPipelines(),
+      refetchMetricsHistory(),
+      refetchAgentMetrics(),
     ]);
     setLastUpdated(new Date());
   };
@@ -76,6 +105,17 @@ export default function Monitoring() {
   const alertCount = monitoring?.alerts.active_count ?? 0;
   const activeCount = liveExecutions?.total_active ?? 0;
   const failedDocs = pipelinesDetail?.knowledge.status_counts.failed ?? 0;
+
+  // Pre-extract sparkline series for child tabs
+  const sparklines = {
+    cpu: extractSeries(metricsHistory, "cpu"),
+    memory: extractSeries(metricsHistory, "memory"),
+    queue: extractSeries(metricsHistory, "queue", "total"),
+    latency: extractSeries(metricsHistory, "latency"),
+    llm_latency: extractSeries(metricsHistory, "llm_latency"),
+    llm_tps: extractSeries(metricsHistory, "llm_tps"),
+    llm_ttft: extractSeries(metricsHistory, "llm_ttft"),
+  };
 
   return (
     <div className="space-y-6">
@@ -131,19 +171,19 @@ export default function Monitoring() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
-          <OverviewTab monitoring={monitoring} pipeline={pipeline} />
+          <OverviewTab monitoring={monitoring} pipeline={pipeline} sparklines={sparklines} />
         </TabsContent>
 
         <TabsContent value="instances" className="mt-6">
-          <ActiveInstancesTab liveExecutions={liveExecutions} />
+          <ActiveInstancesTab liveExecutions={liveExecutions} agentMetrics={agentMetrics ?? null} />
         </TabsContent>
 
         <TabsContent value="llm" className="mt-6">
-          <LlmGpuTab llmGpu={llmGpu} />
+          <LlmGpuTab llmGpu={llmGpu} sparklines={sparklines} />
         </TabsContent>
 
         <TabsContent value="infra" className="mt-6">
-          <InfraTab monitoring={monitoring} />
+          <InfraTab monitoring={monitoring} sparklines={sparklines} />
         </TabsContent>
 
         <TabsContent value="pipelines" className="mt-6">

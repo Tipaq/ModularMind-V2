@@ -1,7 +1,11 @@
 "use client";
 
+import { Info } from "lucide-react";
 import { cn } from "@modularmind/ui";
 import type { LlmGpuData, LoadedModel, ModelEvent } from "@modularmind/api-client";
+import { Sparkline } from "./Sparkline";
+
+type SparklineData = Array<{ ts: number; value: number }>;
 
 function ProgressBar({ value, color }: { value: number; color: string }) {
   return (
@@ -33,11 +37,22 @@ function formatEventTime(ts: string): string {
   return new Date(ts).toLocaleTimeString("en-US", { hour12: false });
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({
+  label,
+  value,
+  sparkline,
+}: {
+  label: string;
+  value: string;
+  sparkline?: React.ReactNode;
+}) {
   return (
     <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-2">
       <p className="text-sm font-medium text-muted-foreground">{label}</p>
-      <p className="text-2xl font-bold">{value}</p>
+      <div className="flex items-end justify-between gap-3">
+        <p className="text-2xl font-bold">{value}</p>
+        {sparkline && <div className="w-24 shrink-0">{sparkline}</div>}
+      </div>
     </div>
   );
 }
@@ -70,9 +85,10 @@ function ModelEventRow({ event }: { event: ModelEvent }) {
 
 interface Props {
   llmGpu: LlmGpuData | null;
+  sparklines?: Record<string, SparklineData>;
 }
 
-export function LlmGpuTab({ llmGpu }: Props) {
+export function LlmGpuTab({ llmGpu, sparklines }: Props) {
   const hasRequests = (llmGpu?.llm_performance.total_requests_last_hour ?? 0) > 0;
   const showVram = (llmGpu?.gpu_vram.total_vram_gb ?? 0) > 0;
   const recentEvents = llmGpu?.model_events.slice(-5).reverse() ?? [];
@@ -86,14 +102,29 @@ export function LlmGpuTab({ llmGpu }: Props) {
           <StatTile
             label="Avg Latency"
             value={hasRequests && llmGpu ? `${llmGpu.llm_performance.avg_latency_ms.toFixed(0)} ms` : "—"}
+            sparkline={
+              sparklines?.llm_latency && sparklines.llm_latency.length > 1
+                ? <Sparkline data={sparklines.llm_latency} color="hsl(var(--warning))" name="llm-lat" />
+                : undefined
+            }
           />
           <StatTile
             label="Tokens / sec"
             value={hasRequests && llmGpu ? `${llmGpu.llm_performance.avg_tokens_per_second.toFixed(1)}` : "—"}
+            sparkline={
+              sparklines?.llm_tps && sparklines.llm_tps.length > 1
+                ? <Sparkline data={sparklines.llm_tps} color="hsl(var(--success))" name="llm-tps" />
+                : undefined
+            }
           />
           <StatTile
             label="TTFT"
             value={hasRequests && llmGpu ? `${llmGpu.llm_performance.avg_ttft_ms.toFixed(0)} ms` : "—"}
+            sparkline={
+              sparklines?.llm_ttft && sparklines.llm_ttft.length > 1
+                ? <Sparkline data={sparklines.llm_ttft} color="hsl(var(--info))" name="llm-ttft" />
+                : undefined
+            }
           />
           <StatTile
             label="Requests / hour"
@@ -106,6 +137,14 @@ export function LlmGpuTab({ llmGpu }: Props) {
           </p>
         )}
       </section>
+
+      {/* GPU info banner */}
+      {llmGpu && !showVram && (
+        <div className="flex items-center gap-2 rounded-lg bg-info/10 px-4 py-3 text-sm text-info">
+          <Info className="h-4 w-4 shrink-0" />
+          GPU not detected — LLM performance stats are from CPU-based inference.
+        </div>
+      )}
 
       {/* VRAM */}
       {showVram && llmGpu && (

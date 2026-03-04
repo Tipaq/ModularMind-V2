@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import { cn } from "@modularmind/ui";
-import type { ExecutionSummary, LiveExecutionsData } from "@modularmind/api-client";
+import type { AgentMetrics, ExecutionSummary, LiveExecutionsData } from "@modularmind/api-client";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -19,6 +19,19 @@ function formatTokens(prompt: number, completion: number): string {
   if (total === 0) return "—";
   if (total >= 1000) return `${(total / 1000).toFixed(1)}k`;
   return String(total);
+}
+
+function formatTokensShort(total: number): string {
+  if (total === 0) return "—";
+  if (total >= 1_000_000) return `${(total / 1_000_000).toFixed(1)}M`;
+  if (total >= 1000) return `${(total / 1000).toFixed(1)}k`;
+  return String(total);
+}
+
+function formatDurationMs(ms: number): string {
+  if (ms === 0) return "—";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function abbreviateEmail(email: string): string {
@@ -68,7 +81,7 @@ const TypeBadge = memo(function TypeBadge({ type }: { type: ExecutionSummary["ex
   );
 });
 
-// ─── Table ────────────────────────────────────────────────────────────────────
+// ─── Execution Table ─────────────────────────────────────────────────────────
 
 const ExecutionRow = memo(function ExecutionRow({ exec }: { exec: ExecutionSummary }) {
   return (
@@ -135,15 +148,91 @@ function ExecutionTable({
   );
 }
 
+// ─── Agent Performance ──────────────────────────────────────────────────────
+
+function errorRateColor(rate: number): string {
+  if (rate > 15) return "text-destructive";
+  if (rate > 5) return "text-warning";
+  return "text-success";
+}
+
+function AgentPerformanceTable({ agents }: { agents: AgentMetrics[] }) {
+  const sorted = [...agents].sort((a, b) => b.total_executions - a.total_executions);
+
+  if (sorted.length === 0) {
+    return <p className="text-sm text-muted-foreground">No agent execution data in the last 24 hours.</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border/50 bg-card/50">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border/50">
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Agent</th>
+            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Runs</th>
+            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Tokens</th>
+            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Avg Duration</th>
+            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Errors</th>
+            <th className="px-4 py-3 text-right font-medium text-muted-foreground">Error Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((agent) => (
+            <tr key={agent.agent_id} className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors">
+              <td className="px-4 py-3">
+                <span className="text-xs font-medium">{agent.agent_name}</span>
+              </td>
+              <td className="px-4 py-3 text-right text-xs tabular-nums font-medium">
+                {agent.total_executions}
+              </td>
+              <td className="px-4 py-3 text-right text-xs tabular-nums text-muted-foreground">
+                {formatTokensShort(agent.total_tokens)}
+              </td>
+              <td className="px-4 py-3 text-right text-xs tabular-nums text-muted-foreground">
+                {formatDurationMs(agent.avg_duration_ms)}
+              </td>
+              <td className="px-4 py-3 text-right text-xs tabular-nums">
+                {agent.error_count > 0 ? (
+                  <span className="text-destructive">{agent.error_count}</span>
+                ) : (
+                  <span className="text-muted-foreground">0</span>
+                )}
+              </td>
+              <td className="px-4 py-3 text-right">
+                <span className={cn("text-xs tabular-nums font-medium", errorRateColor(agent.error_rate))}>
+                  {agent.error_rate.toFixed(1)}%
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Tab ─────────────────────────────────────────────────────────────────────
 
 interface Props {
   liveExecutions: LiveExecutionsData | null;
+  agentMetrics: AgentMetrics[] | null;
 }
 
-export function ActiveInstancesTab({ liveExecutions }: Props) {
+export function ActiveInstancesTab({ liveExecutions, agentMetrics }: Props) {
   return (
     <div className="space-y-8">
+      {/* Agent Performance (24h) */}
+      <section>
+        <h2 className="mb-4 text-lg font-semibold">Agent Performance — 24h</h2>
+        {agentMetrics === null ? (
+          <div className="rounded-xl border border-border/50 bg-card/50 p-5 text-sm text-muted-foreground">
+            Loading...
+          </div>
+        ) : (
+          <AgentPerformanceTable agents={agentMetrics} />
+        )}
+      </section>
+
       {/* Active */}
       <section>
         <div className="mb-4 flex items-center gap-3">
