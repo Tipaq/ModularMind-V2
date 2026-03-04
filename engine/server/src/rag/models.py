@@ -5,7 +5,7 @@ SQLAlchemy models for RAG collections.
 Supports both synced-from-platform and locally-created collections/documents.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infra.database import Base
+from src.infra.utils import utcnow
 
 
 class DocumentStatus(str, Enum):
@@ -50,7 +51,7 @@ class RAGCollection(Base):
     chunk_overlap: Mapped[int] = mapped_column(default=50)
     last_sync: Mapped[datetime | None] = mapped_column(nullable=True)
     meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Scoping fields
     scope: Mapped[RAGScope] = mapped_column(
@@ -92,7 +93,7 @@ class RAGDocument(Base):
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     collection: Mapped["RAGCollection"] = relationship(back_populates="documents")
@@ -117,7 +118,7 @@ class RAGChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     chunk_index: Mapped[int] = mapped_column()
     meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     document: Mapped["RAGDocument"] = relationship(back_populates="chunks")

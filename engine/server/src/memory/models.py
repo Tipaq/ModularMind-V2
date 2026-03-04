@@ -4,7 +4,7 @@ Memory models.
 SQLAlchemy models for agent memory storage.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
@@ -14,6 +14,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infra.database import Base
+from src.infra.utils import utcnow
 
 
 class MemoryScope(str, Enum):
@@ -81,7 +82,7 @@ class MemoryEntry(Base):
 
     meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(UTC).replace(tzinfo=None)
+        default=utcnow
     )
 
     __table_args__ = (
@@ -110,7 +111,7 @@ class ConsolidationLog(Base):
     result_entry_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     details: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        default=utcnow,
         index=True,
     )
 
@@ -133,7 +134,7 @@ class MemoryEdge(Base):
     weight: Mapped[float] = mapped_column(default=0.5)
     shared_entities: Mapped[list] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(UTC).replace(tzinfo=None)
+        default=utcnow
     )
 
     __table_args__ = (

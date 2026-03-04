@@ -9,11 +9,11 @@ Configures interval and cron jobs for:
 """
 
 import logging
-from datetime import UTC
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.infra.config import settings
+from src.infra.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +260,7 @@ async def memory_extraction_scan() -> None:
         return
 
     try:
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = utcnow()
         idle_cutoff = now - timedelta(seconds=settings.MEMORY_EXTRACTION_IDLE_SECONDS)
         min_messages = settings.FACT_EXTRACTION_MIN_MESSAGES
         batch_size = settings.MEMORY_EXTRACTION_BATCH_SIZE
@@ -336,7 +336,7 @@ async def cleanup_stale_executions() -> None:
     from src.infra.database import async_session_maker
 
     timeout = timedelta(seconds=settings.MAX_EXECUTION_TIMEOUT + 60)
-    cutoff = datetime.now(UTC).replace(tzinfo=None) - timeout
+    cutoff = utcnow() - timeout
 
     try:
         async with async_session_maker() as session:
@@ -349,7 +349,7 @@ async def cleanup_stale_executions() -> None:
                 .values(
                     status=ExecutionStatus.FAILED,
                     error_message=f"Execution timed out after {settings.MAX_EXECUTION_TIMEOUT}s (cleanup)",
-                    completed_at=datetime.now(UTC).replace(tzinfo=None),
+                    completed_at=utcnow(),
                 )
             )
             if result.rowcount:

@@ -7,11 +7,11 @@ and context formatting.
 
 import logging
 import math
-from datetime import UTC, datetime
 from uuid import UUID
 
 from src.embedding.base import IEmbeddingProvider
 from src.infra.config import get_settings
+from src.infra.utils import utcnow
 
 from .interfaces import IMemoryRepository, MemoryStats
 from .models import MemoryEntry, MemoryScope, MemoryTier
@@ -120,7 +120,7 @@ class MemoryManager:
             beta = settings.MEMORY_SCORE_WEIGHT_IMPORTANCE
             gamma = settings.MEMORY_SCORE_WEIGHT_RELEVANCE
             delta = settings.MEMORY_SCORE_WEIGHT_FREQUENCY
-            now = datetime.now(UTC).replace(tzinfo=None)
+            now = utcnow()
 
             scored_entries: list[tuple[MemoryEntry, float]] = []
             for entry, qdrant_score in results:

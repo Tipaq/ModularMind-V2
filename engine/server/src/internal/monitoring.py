@@ -8,7 +8,7 @@ scheduler status, infrastructure health, and metrics history.
 import json
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import datetime
 
 import httpx
 import psutil
@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from src.auth import CurrentUser, RequireAdmin
 from src.infra.config import get_settings
+from src.infra.utils import utcnow
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -284,7 +285,7 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
             finally:
                 await r.aclose()
     except Exception:
-        pass
+        logger.debug("Redis stream depth check failed", exc_info=True)
 
     from src.infra.sse import get_active_streams
     streaming_data = StreamingMonitoring(active_streams=get_active_streams())
@@ -317,9 +318,9 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
                 if ps_resp.status_code == 200:
                     ollama_running = [m["name"] for m in ps_resp.json().get("models", [])]
             except Exception:
-                pass
+                logger.debug("Ollama /api/ps check failed")
     except Exception:
-        pass
+        logger.debug("Ollama connectivity check failed")
 
     infra = InfraMonitoring(
         db_pool_size=settings.DB_POOL_SIZE,
@@ -349,14 +350,14 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
                                 AlertItem(**json.loads(raw))
                             )
                         except Exception:
-                            pass
+                            logger.debug("Malformed alert entry skipped")
             finally:
                 await r.aclose()
     except Exception as e:
         logger.debug("Alert summary fetch failed: %s", e)
 
     return MonitoringResponse(
-        timestamp=datetime.now(UTC).isoformat(),
+        timestamp=utcnow().isoformat(),
         uptime_seconds=int(time.time() - get_start_time()),
         system=system,
         worker=worker_data,
@@ -452,7 +453,7 @@ async def get_llm_gpu_monitoring(user: CurrentUser) -> LlmGpuMonitoring:
                         family=details.get("family", ""),
                     ))
     except Exception:
-        pass
+        logger.debug("Ollama model list failed", exc_info=True)
 
     # --- VRAM totals ---
     total_vram_gb = settings.GPU_TOTAL_VRAM_GB
@@ -504,8 +505,8 @@ async def get_llm_gpu_monitoring(user: CurrentUser) -> LlmGpuMonitoring:
                 try:
                     val = json.loads(entry)
                     total_requests_last_hour += val.get("count", 0)
-                except Exception:
-                    pass
+                except (json.JSONDecodeError, TypeError):
+                    logger.debug("Malformed latency metric entry")
 
             # Model events
             raw_events = await r.lrange("metrics:model_events", 0, -1)
@@ -513,8 +514,8 @@ async def get_llm_gpu_monitoring(user: CurrentUser) -> LlmGpuMonitoring:
                 try:
                     evt = json.loads(raw)
                     model_events.append(ModelEvent(**evt))
-                except Exception:
-                    pass
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    logger.debug("Malformed model event entry")
         finally:
             await r.aclose()
 
@@ -563,7 +564,7 @@ async def get_agent_metrics(user: CurrentUser) -> list[AgentMetricsItem]:
                 ).label("error_count"),
             )
             .where(
-                ExecutionRun.started_at >= datetime.now(UTC) - timedelta(hours=24),
+                ExecutionRun.started_at >= utcnow() - timedelta(hours=24),
                 ExecutionRun.agent_id.isnot(None),
                 ExecutionRun.completed_at.isnot(None),
             )
@@ -582,7 +583,7 @@ async def get_agent_metrics(user: CurrentUser) -> list[AgentMetricsItem]:
                 if cfg and hasattr(cfg, "name"):
                     agent_name_map[aid] = cfg.name
         except Exception:
-            pass
+            logger.debug("Agent name resolution failed", exc_info=True)
 
         for row in rows:
             total_exec = row.total_executions or 0
@@ -662,7 +663,7 @@ async def get_live_executions(user: CurrentUser) -> LiveExecutionsResponse:
     recent_summaries: list[ExecutionSummary] = []
 
     async for db in get_db_readonly():
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = utcnow()
         one_hour_ago = now - timedelta(hours=1)
 
         # Query execution runs directly (no JOIN) to avoid silent row elimination

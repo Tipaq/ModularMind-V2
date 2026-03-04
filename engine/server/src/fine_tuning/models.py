@@ -5,7 +5,7 @@ SQLAlchemy models for fine-tuning datasets, jobs, curation, A/B experiments,
 and per-agent fine-tuning configuration.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
@@ -21,11 +21,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infra.database import Base
-
-
-def utcnow() -> datetime:
-    """Return a timezone-naive UTC datetime (required by asyncpg for TIMESTAMP WITHOUT TIME ZONE)."""
-    return datetime.now(UTC).replace(tzinfo=None)
+from src.infra.utils import utcnow
 
 
 # ---------------------------------------------------------------------------

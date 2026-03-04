@@ -8,12 +8,12 @@ Handles:
 """
 
 import logging
-from datetime import UTC, datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infra.config import Settings
+from src.infra.utils import utcnow
 
 from .models import MemoryEntry, MemoryType
 from .vector_store import QdrantMemoryVectorStore
@@ -40,7 +40,7 @@ async def apply_exponential_decay(
     Returns:
         Tuple of (decayed_count, invalidated_count).
     """
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utcnow()
     prune_threshold = settings.MEMORY_DECAY_PRUNE_THRESHOLD
     vector_store = QdrantMemoryVectorStore()
 
