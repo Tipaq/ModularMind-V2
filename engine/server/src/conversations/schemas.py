@@ -5,10 +5,27 @@ Pydantic models for conversation requests and responses.
 """
 
 from datetime import datetime
+from typing import Any, TypedDict
 
 from pydantic import BaseModel, Field
 
 from src.infra.schemas import PaginatedResponse
+
+
+class ConversationConfig(TypedDict, total=False):
+    """Known keys for conversation config (JSONB).
+
+    All fields are optional — the config dict may contain a subset of these.
+    """
+
+    enabled_agent_ids: list[str]
+    enabled_graph_ids: list[str]
+    model_id: str
+    model_override: bool
+    enabled_mcp_servers: list[str]
+    enabled_agents: list[str]
+    enabled_graphs: list[str]
+    supervisor_prompt: str
 
 
 class ConversationCreate(BaseModel):
@@ -17,7 +34,7 @@ class ConversationCreate(BaseModel):
     agent_id: str | None = None
     title: str | None = None
     supervisor_mode: bool = False
-    config: dict | None = None
+    config: dict[str, Any] | None = None
 
 
 class ConversationUpdate(BaseModel):
@@ -25,7 +42,7 @@ class ConversationUpdate(BaseModel):
 
     title: str | None = None
     supervisor_mode: bool | None = None
-    config: dict | None = None
+    config: dict[str, Any] | None = None
 
 
 class MessageResponse(BaseModel):
@@ -34,7 +51,7 @@ class MessageResponse(BaseModel):
     id: str
     role: str
     content: str
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -49,7 +66,7 @@ class ConversationResponse(BaseModel):
     title: str | None
     is_active: bool
     supervisor_mode: bool = False
-    config: dict = Field(default_factory=dict)
+    config: dict[str, Any] = Field(default_factory=dict)
     message_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -114,6 +131,13 @@ class KnowledgeDataResponse(BaseModel):
     total_results: int = 0
 
 
+class EphemeralAgent(BaseModel):
+    """Ephemeral agent reference returned in supervisor responses."""
+
+    id: str
+    name: str
+
+
 class SendMessageResponse(BaseModel):
     """Send message response with execution info."""
 
@@ -125,7 +149,7 @@ class SendMessageResponse(BaseModel):
     routing_strategy: str | None = None
     delegated_to: str | None = None
     is_ephemeral: bool | None = None
-    ephemeral_agent: dict | None = None
+    ephemeral_agent: EphemeralAgent | None = None
     memory_entries: list[MemoryEntryResponse] = Field(default_factory=list)
     knowledge_data: KnowledgeDataResponse | None = None
 

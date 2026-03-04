@@ -13,6 +13,8 @@ def utcnow() -> datetime:
     """Return a timezone-naive UTC datetime (required by asyncpg for TIMESTAMP WITHOUT TIME ZONE)."""
     return datetime.now(UTC).replace(tzinfo=None)
 
+from typing import Any
+
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -46,7 +48,7 @@ class Conversation(Base):
 
     is_active: Mapped[bool] = mapped_column(default=True)
     supervisor_mode: Mapped[bool] = mapped_column(default=False)
-    config: Mapped[dict] = mapped_column("config", JSONB, default=dict)
+    config: Mapped[dict[str, Any]] = mapped_column("config", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         default=utcnow, onupdate=utcnow
@@ -86,7 +88,7 @@ class ConversationMessage(Base):
         SQLEnum(MessageRole, values_callable=lambda e: [m.value for m in e])
     )
     content: Mapped[str] = mapped_column(Text)
-    meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    meta: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
