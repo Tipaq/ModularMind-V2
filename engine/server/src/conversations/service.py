@@ -5,7 +5,6 @@ Business logic for conversation management and message handling.
 """
 
 import logging
-from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -13,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.infra.query_utils import escape_like
+from src.infra.utils import utcnow
 
 from .models import Conversation, ConversationMessage, MessageRole
 
@@ -146,11 +146,18 @@ class ConversationService:
         return [(row[0], row[1]) for row in rows], total
 
     async def get_conversation(self, conversation_id: str) -> Conversation | None:
-        """Get a conversation with its messages."""
+        """Get a conversation with its messages (detail endpoint only)."""
         result = await self.db.execute(
             select(Conversation)
             .where(Conversation.id == conversation_id)
             .options(selectinload(Conversation.messages))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_conversation_by_id(self, conversation_id: str) -> Conversation | None:
+        """Get a conversation without loading messages."""
+        result = await self.db.execute(
+            select(Conversation).where(Conversation.id == conversation_id)
         )
         return result.scalar_one_or_none()
 
@@ -169,7 +176,7 @@ class ConversationService:
 
         from src.executions.models import ExecutionRun, ExecutionStep
 
-        conversation = await self.get_conversation(conversation_id)
+        conversation = await self.get_conversation_by_id(conversation_id)
         if not conversation:
             return False
 
@@ -210,7 +217,7 @@ class ConversationService:
         if supervisor_mode is not None:
             values["supervisor_mode"] = supervisor_mode
         if not values:
-            return await self.get_conversation(conversation_id)
+            return await self.get_conversation_by_id(conversation_id)
 
         await self.db.execute(
             update(Conversation)
@@ -218,7 +225,7 @@ class ConversationService:
             .values(**values)
         )
         await self.db.flush()
-        return await self.get_conversation(conversation_id)
+        return await self.get_conversation_by_id(conversation_id)
 
     async def add_message(
         self,
@@ -245,7 +252,7 @@ class ConversationService:
         await self.db.execute(
             update(Conversation)
             .where(Conversation.id == conversation_id)
-            .values(updated_at=datetime.now(UTC).replace(tzinfo=None))
+            .values(updated_at=utcnow())
         )
 
         await self.db.flush()

@@ -315,7 +315,7 @@ async def update_conversation(
 ) -> ConversationResponse:
     """Update conversation config and/or supervisor_mode."""
     service = ConversationService(db)
-    conversation = await service.get_conversation(conversation_id)
+    conversation = await service.get_conversation_by_id(conversation_id)
 
     if not conversation:
         raise_not_found("Conversation")
@@ -342,7 +342,7 @@ async def delete_conversation(
 ) -> None:
     """Delete a conversation."""
     service = ConversationService(db)
-    conversation = await service.get_conversation(conversation_id)
+    conversation = await service.get_conversation_by_id(conversation_id)
 
     if not conversation:
         raise_not_found("Conversation")
@@ -353,136 +353,109 @@ async def delete_conversation(
     await db.commit()
 
 
-async def _handle_supervisor_message(
-    conversation_id: str,
-    conversation,
-    data: SendMessageRequest,
-    user_msg_response: MessageResponse,
-    user: CurrentUser,
+def _get_model_override(conv_config: dict) -> str | None:
+    """Return the model override ID if configured, else None."""
+    if conv_config.get("model_override") and conv_config.get("model_id"):
+        return conv_config["model_id"]
+    return None
+
+
+async def _dispatch_supervisor_executions(
+    result: dict,
+    user_id: str,
     db: DbSession,
     exec_service: ExecutionService,
-) -> SendMessageResponse:
-    """Handle message routing via supervisor (multi-agent orchestration)."""
+    redis_client,
+    model_override: str | None,
+) -> None:
+    """Dispatch delegated executions from supervisor to Redis Streams."""
     import json as _json
 
-    from sqlalchemy import select as sa_select
+    from src.executions.scheduler import fair_scheduler
 
-    from src.infra.constants import parse_model_id
-    from src.infra.redis import get_redis_client
-    from src.llm.provider_factory import LLMProviderFactory
-    from src.supervisor import SuperSupervisorService
-
-    from .models import ConversationMessage
-
-    conv_config: dict = getattr(conversation, "config", None) or {}
-    model_id = conv_config.get("model_id")
-    if not model_id:
-        raise HTTPException(
-            status_code=400,
-            detail="No model selected — choose a model before sending a message",
-        )
-    provider_name, _ = parse_model_id(model_id)
-    llm_provider = LLMProviderFactory.get_provider(provider_name)
-
-    redis_client = await get_redis_client()
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis unavailable — supervisor requires Redis")
-
-    supervisor = SuperSupervisorService(
-        db, get_config_provider(), llm_provider, redis_client,
-    )
-
-    # Get recent messages for context (bounded SQL query)
-    recent_rows = (await db.execute(
-        sa_select(ConversationMessage)
-        .where(ConversationMessage.conversation_id == conversation_id)
-        .order_by(ConversationMessage.created_at.desc())
-        .limit(MAX_RECENT_MESSAGES)
-    )).scalars().all()
-    recent_messages = [
-        {"role": m.role.value if hasattr(m.role, "value") else m.role, "content": m.content, "meta": m.meta}
-        for m in reversed(recent_rows)
-    ]
-
-    result = await supervisor.process_message(
-        conversation_id=conversation_id,
-        content=data.content,
-        user_id=user.id,
-        messages=recent_messages,
-        conv_config=conv_config,
-    )
-
-    # Dispatch delegated executions to Redis Streams worker
     exec_id = result.get("execution_id")
     exec_ids = result.get("execution_ids")
     first_exec_id = exec_id or (exec_ids[0] if exec_ids else None)
     tool_response_inline = result.get("tool_response_inline", False)
 
-    _model_override_id = None
-    if conv_config.get("model_override") and conv_config.get("model_id"):
-        _model_override_id = conv_config["model_id"]
-
-    if first_exec_id and not tool_response_inline:
-        from src.executions.scheduler import fair_scheduler
-
-        await db.commit()
-        execution = await exec_service.get_execution(first_exec_id)
-        if execution:
-            acquired = await fair_scheduler.acquire(user.id, execution.id)
-            if not acquired:
-                await db.rollback()
-                raise HTTPException(
-                    status_code=429, detail="Too many concurrent executions",
-                    headers={"Retry-After": "10"},
-                )
-            await exec_service.dispatch_execution(execution, ab_model_override=_model_override_id)
-
-            if result.get("routing_metadata"):
-                await redis_client.publish(
-                    f"execution:{first_exec_id}",
-                    _json.dumps(result["routing_metadata"]),
-                )
-
-            # MULTI_ACTION: dispatch remaining executions
-            if exec_ids and len(exec_ids) > 1:
-                for eid in exec_ids[1:]:
-                    sub_exec = await exec_service.get_execution(eid)
-                    if sub_exec:
-                        await exec_service.dispatch_execution(sub_exec, ab_model_override=_model_override_id)
+    if not first_exec_id or tool_response_inline:
+        return
 
     await db.commit()
-    asyncio.ensure_future(_maybe_enqueue_marathon_extraction(conversation_id))
+    execution = await exec_service.get_execution(first_exec_id)
+    if not execution:
+        return
 
-    # Resolve delegated agent metadata for frontend
+    acquired = await fair_scheduler.acquire(user_id, execution.id)
+    if not acquired:
+        await db.rollback()
+        raise HTTPException(
+            status_code=429, detail="Too many concurrent executions",
+            headers={"Retry-After": "10"},
+        )
+    await exec_service.dispatch_execution(
+        execution, ab_model_override=model_override,
+    )
+
+    if result.get("routing_metadata"):
+        await redis_client.publish(
+            f"execution:{first_exec_id}",
+            _json.dumps(result["routing_metadata"]),
+        )
+
+    # MULTI_ACTION: dispatch remaining executions
+    if exec_ids and len(exec_ids) > 1:
+        for eid in exec_ids[1:]:
+            sub_exec = await exec_service.get_execution(eid)
+            if sub_exec:
+                await exec_service.dispatch_execution(
+                    sub_exec, ab_model_override=model_override,
+                )
+
+
+async def _build_supervisor_response(
+    result: dict,
+    user_msg_response: MessageResponse,
+) -> SendMessageResponse:
+    """Build the SendMessageResponse from supervisor result."""
+    from src.conversations.schemas import KnowledgeDataResponse
+
     routing_meta = result.get("routing_metadata", {})
     routing_strategy = routing_meta.get("strategy")
     delegated_to = None
     is_ephemeral = None
+
     if routing_meta.get("agent_id"):
-        _agent = await get_config_provider().get_agent_config(routing_meta["agent_id"])
+        _agent = await get_config_provider().get_agent_config(
+            routing_meta["agent_id"],
+        )
         if _agent:
             delegated_to = _agent.name
-            is_ephemeral = bool(_agent.routing_metadata.get("ephemeral")) if _agent.routing_metadata else False
+            is_ephemeral = (
+                bool(_agent.routing_metadata.get("ephemeral"))
+                if _agent.routing_metadata
+                else False
+            )
 
-    ephemeral_agent = result.get("ephemeral_agent")
     memory_entries = result.get("memory_entries", [])
-
     knowledge_data_response = None
     raw_knowledge = result.get("knowledge_data")
     if raw_knowledge:
-        from src.conversations.schemas import KnowledgeDataResponse
         knowledge_data_response = KnowledgeDataResponse(
             collections=raw_knowledge.get("collections", []),
             chunks=raw_knowledge.get("chunks", []),
             total_results=raw_knowledge.get("total_results", 0),
         )
 
-    # Build response based on result type
     base_kwargs = dict(
         user_message=user_msg_response,
         routing_strategy=routing_strategy,
         memory_entries=memory_entries,
     )
+
+    exec_id = result.get("execution_id")
+    exec_ids = result.get("execution_ids")
+
     if result.get("direct_response"):
         return SendMessageResponse(
             **base_kwargs,
@@ -499,22 +472,106 @@ async def _handle_supervisor_message(
             stream_url=f"/api/v1/executions/{exec_ids[0]}/stream",
             delegated_to=delegated_to,
             is_ephemeral=is_ephemeral,
-            ephemeral_agent=ephemeral_agent,
+            ephemeral_agent=result.get("ephemeral_agent"),
         )
     else:
         return SendMessageResponse(
             **base_kwargs,
             execution_id=exec_id,
-            stream_url=f"/api/v1/executions/{exec_id}/stream" if exec_id else None,
+            stream_url=(
+                f"/api/v1/executions/{exec_id}/stream"
+                if exec_id
+                else None
+            ),
             delegated_to=delegated_to,
             is_ephemeral=is_ephemeral,
-            ephemeral_agent=ephemeral_agent,
+            ephemeral_agent=result.get("ephemeral_agent"),
         )
+
+
+async def _handle_supervisor_message(
+    conversation_id: str,
+    conversation: Conversation,
+    data: SendMessageRequest,
+    user_msg_response: MessageResponse,
+    user: CurrentUser,
+    db: DbSession,
+    exec_service: ExecutionService,
+) -> SendMessageResponse:
+    """Handle message routing via supervisor (multi-agent orchestration)."""
+    from sqlalchemy import select as sa_select
+
+    from src.infra.constants import parse_model_id
+    from src.infra.redis import get_redis_client
+    from src.llm.provider_factory import LLMProviderFactory
+    from src.supervisor import SuperSupervisorService
+
+    from .models import ConversationMessage
+
+    conv_config: dict = getattr(conversation, "config", None) or {}
+    model_id = conv_config.get("model_id")
+    if not model_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No model selected — choose a model before sending",
+        )
+    provider_name, _ = parse_model_id(model_id)
+    llm_provider = LLMProviderFactory.get_provider(provider_name)
+
+    redis_client = await get_redis_client()
+    if not redis_client:
+        raise HTTPException(
+            status_code=503,
+            detail="Redis unavailable — supervisor requires Redis",
+        )
+
+    supervisor = SuperSupervisorService(
+        db, get_config_provider(), llm_provider, redis_client,
+    )
+
+    # Get recent messages for context (bounded SQL query)
+    recent_rows = (await db.execute(
+        sa_select(ConversationMessage)
+        .where(ConversationMessage.conversation_id == conversation_id)
+        .order_by(ConversationMessage.created_at.desc())
+        .limit(MAX_RECENT_MESSAGES)
+    )).scalars().all()
+    recent_messages = [
+        {
+            "role": (
+                m.role.value if hasattr(m.role, "value") else m.role
+            ),
+            "content": m.content,
+            "meta": m.meta,
+        }
+        for m in reversed(recent_rows)
+    ]
+
+    result = await supervisor.process_message(
+        conversation_id=conversation_id,
+        content=data.content,
+        user_id=user.id,
+        messages=recent_messages,
+        conv_config=conv_config,
+    )
+
+    model_override = _get_model_override(conv_config)
+
+    await _dispatch_supervisor_executions(
+        result, user.id, db, exec_service, redis_client, model_override,
+    )
+
+    await db.commit()
+    asyncio.ensure_future(
+        _maybe_enqueue_marathon_extraction(conversation_id),
+    )
+
+    return await _build_supervisor_response(result, user_msg_response)
 
 
 async def _handle_direct_execution(
     conversation_id: str,
-    conversation,
+    conversation: Conversation,
     data: SendMessageRequest,
     user_msg_response: MessageResponse,
     user: CurrentUser,
@@ -531,9 +588,16 @@ async def _handle_direct_execution(
             settings = get_settings()
             if settings.MCP_AUTO_ENABLE:
                 from src.mcp.service import get_mcp_registry
-                _mcp_ids = [s.id for s in get_mcp_registry().list_servers() if s.enabled]
+                _mcp_ids = [
+                    s.id
+                    for s in get_mcp_registry().list_servers()
+                    if s.enabled
+                ]
         except Exception:
-            logger.debug("MCP auto-enable failed, continuing without MCP servers", exc_info=True)
+            logger.debug(
+                "MCP auto-enable failed, continuing without MCP",
+                exc_info=True,
+            )
 
     execution_data = ExecutionCreate(
         prompt=data.content,
@@ -545,23 +609,28 @@ async def _handle_direct_execution(
         raise ValueError("Conversation has no agent configured")
 
     execution = await exec_service.start_agent_execution(
-        agent_id=conversation.agent_id, data=execution_data, user_id=user.id,
+        agent_id=conversation.agent_id,
+        data=execution_data,
+        user_id=user.id,
     )
     await db.commit()
 
-    asyncio.ensure_future(_maybe_enqueue_marathon_extraction(conversation_id))
+    asyncio.ensure_future(
+        _maybe_enqueue_marathon_extraction(conversation_id),
+    )
 
     acquired = await fair_scheduler.acquire(user.id, execution.id)
     if not acquired:
         raise HTTPException(
-            status_code=429, detail="Too many concurrent executions. Try again later.",
+            status_code=429,
+            detail="Too many concurrent executions. Try again later.",
             headers={"Retry-After": "10"},
         )
 
-    _direct_override = None
-    if conv_config.get("model_override") and conv_config.get("model_id"):
-        _direct_override = conv_config["model_id"]
-    await exec_service.dispatch_execution(execution, ab_model_override=_direct_override)
+    model_override = _get_model_override(conv_config)
+    await exec_service.dispatch_execution(
+        execution, ab_model_override=model_override,
+    )
     await db.commit()
 
     return SendMessageResponse(
@@ -580,7 +649,7 @@ async def send_message(
 ) -> SendMessageResponse:
     """Send a message and trigger agent execution."""
     conv_service = ConversationService(db)
-    conversation = await conv_service.get_conversation(conversation_id)
+    conversation = await conv_service.get_conversation_by_id(conversation_id)
 
     if not conversation:
         raise_not_found("Conversation")
