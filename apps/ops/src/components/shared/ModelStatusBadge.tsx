@@ -4,7 +4,6 @@ import {
   Cloud,
   Download,
   KeyRound,
-  Loader2,
 } from "lucide-react";
 
 interface ModelStatusBadgeProps {

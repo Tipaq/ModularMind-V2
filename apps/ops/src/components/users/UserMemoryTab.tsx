@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { RefreshCw, Brain, Search, Trash2 } from "lucide-react";
-import { Card, CardContent, Badge, Button, Input, cn } from "@modularmind/ui";
+import { Card, CardContent, Badge, Button, Input } from "@modularmind/ui";
 import { api } from "../../lib/api";
 import { Pagination } from "../shared/Pagination";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
@@ -40,28 +40,30 @@ export function UserMemoryTab({ userId }: { userId: string }) {
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
 
-  const fetchMemory = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ page: String(page), page_size: "20" });
-      if (scopeFilter) params.set("scope", scopeFilter);
-      if (tierFilter) params.set("tier", tierFilter);
-      if (search) params.set("search", search);
-
-      const res = await api.get<MemoryListResponse>(
-        `/admin/users/${userId}/memory?${params}`,
-      );
-      setEntries(res.items);
-      setTotal(res.total);
-    } catch {
-      setEntries([]);
-    }
-    setLoading(false);
-  }, [userId, page, scopeFilter, tierFilter, search]);
-
   useEffect(() => {
-    fetchMemory();
-  }, [fetchMemory]);
+    let active = true;
+    async function fetchData() {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ page: String(page), page_size: "20" });
+        if (scopeFilter) params.set("scope", scopeFilter);
+        if (tierFilter) params.set("tier", tierFilter);
+        if (search) params.set("search", search);
+        const res = await api.get<MemoryListResponse>(
+          `/admin/users/${userId}/memory?${params}`,
+        );
+        if (active) {
+          setEntries(res.items);
+          setTotal(res.total);
+        }
+      } catch {
+        if (active) setEntries([]);
+      }
+      if (active) setLoading(false);
+    }
+    fetchData();
+    return () => { active = false; };
+  }, [userId, page, scopeFilter, tierFilter, search]);
 
   const handleClearAll = async () => {
     setClearing(true);
