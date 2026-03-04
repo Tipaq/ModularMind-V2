@@ -66,7 +66,7 @@ function graphToFlow(graph: PlatformGraph): { nodes: Node[]; edges: Edge[] } {
   return { nodes, edges };
 }
 
-export function GraphCanvas({ graph, onSave, saving }: GraphCanvasProps) {
+export function GraphCanvas({ graph, onSave }: GraphCanvasProps) {
   const initial = useMemo(() => graphToFlow(graph), [graph]);
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
