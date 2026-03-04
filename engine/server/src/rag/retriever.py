@@ -5,11 +5,15 @@ Retrieves relevant context from RAG collections for agent prompts.
 Uses Qdrant hybrid search (dense + BM25 sparse) with double-gate ACL.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any
-from uuid import UUID
+from typing import TYPE_CHECKING, Any
 
 from src.embedding.base import IEmbeddingProvider
+
+if TYPE_CHECKING:
+    from src.rag.repository import RAGSearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +42,7 @@ class RAGRetriever:
         query: str,
         user_id: str = "",
         user_groups: list[str] | None = None,
-        collection_ids: list[UUID] | None = None,
+        collection_ids: list[str] | None = None,
         limit: int | None = None,
         threshold: float | None = None,
     ) -> str:
@@ -47,13 +51,13 @@ class RAGRetriever:
         Returns formatted context string for inclusion in prompt.
         """
         limit = limit or self.default_limit
-        threshold = threshold if threshold is not None else self.default_threshold
+        threshold = (
+            threshold if threshold is not None else self.default_threshold
+        )
 
         try:
-            query_embedding = await self.embedding_provider.embed_text(query)
-
-            str_collection_ids = (
-                [str(cid) for cid in collection_ids] if collection_ids else None
+            query_embedding = await self.embedding_provider.embed_text(
+                query,
             )
 
             results = await self.repository.search_hybrid(
@@ -61,7 +65,7 @@ class RAGRetriever:
                 query_text=query,
                 user_id=user_id,
                 user_groups=user_groups or [],
-                collection_ids=str_collection_ids,
+                collection_ids=collection_ids,
                 limit=limit,
                 threshold=threshold,
             )
@@ -82,19 +86,19 @@ class RAGRetriever:
         query: str,
         user_id: str = "",
         user_groups: list[str] | None = None,
-        collection_ids: list[UUID] | None = None,
+        collection_ids: list[str] | None = None,
         limit: int | None = None,
         threshold: float | None = None,
-    ) -> list:
+    ) -> list[RAGSearchResult]:
         """Retrieve raw search results without formatting."""
         limit = limit or self.default_limit
-        threshold = threshold if threshold is not None else self.default_threshold
+        threshold = (
+            threshold if threshold is not None else self.default_threshold
+        )
 
         try:
-            query_embedding = await self.embedding_provider.embed_text(query)
-
-            str_collection_ids = (
-                [str(cid) for cid in collection_ids] if collection_ids else None
+            query_embedding = await self.embedding_provider.embed_text(
+                query,
             )
 
             return await self.repository.search_hybrid(
@@ -102,7 +106,7 @@ class RAGRetriever:
                 query_text=query,
                 user_id=user_id,
                 user_groups=user_groups or [],
-                collection_ids=str_collection_ids,
+                collection_ids=collection_ids,
                 limit=limit,
                 threshold=threshold,
             )
@@ -113,7 +117,7 @@ class RAGRetriever:
 
     def format_context(
         self,
-        results: list,
+        results: list[RAGSearchResult],
         include_scores: bool = False,
         max_chars_per_chunk: int | None = None,
     ) -> str:
@@ -143,13 +147,13 @@ class RAGRetriever:
 
     async def check_collections_available(
         self,
-        collection_ids: list[UUID],
-    ) -> dict[UUID, bool]:
-        """Check which collections are available (single batch query)."""
+        collection_ids: list[str],
+    ) -> dict[str, bool]:
+        """Check which collections are available (batch query)."""
         if not collection_ids:
             return {}
         existing = await self.repository.get_collections_by_ids(
-            [str(cid) for cid in collection_ids]
+            collection_ids,
         )
-        existing_ids = {UUID(c.id) for c in existing}
+        existing_ids = {c.id for c in existing}
         return {cid: cid in existing_ids for cid in collection_ids}

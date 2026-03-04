@@ -77,14 +77,15 @@ class RAGRepository:
         )
         return list(result.scalars().all())
 
-    async def list_collections_for_user(
-        self, user_id: str, user_groups: list[str],
-    ) -> list[RAGCollection]:
-        """Return collections accessible to this user based on scope.
+    @staticmethod
+    def _build_collection_acl(
+        user_id: str, user_groups: list[str],
+    ) -> list:
+        """Build scope-based ACL conditions for collections.
 
-        GLOBAL — everyone can access.
-        GROUP  — only users whose groups overlap with allowed_groups.
-        AGENT  — only the owner user.
+        GLOBAL -- everyone can access.
+        GROUP  -- only users whose groups overlap with allowed_groups.
+        AGENT  -- only the owner user.
         """
         conditions = [RAGCollection.scope == RAGScope.GLOBAL]
 
@@ -92,7 +93,9 @@ class RAGRepository:
             conditions.append(
                 and_(
                     RAGCollection.scope == RAGScope.GROUP,
-                    RAGCollection.allowed_groups.overlap(user_groups),
+                    RAGCollection.allowed_groups.overlap(
+                        user_groups,
+                    ),
                 )
             )
 
@@ -102,7 +105,15 @@ class RAGRepository:
                 RAGCollection.owner_user_id == user_id,
             )
         )
+        return conditions
 
+    async def list_collections_for_user(
+        self, user_id: str, user_groups: list[str],
+    ) -> list[RAGCollection]:
+        """Return collections accessible to this user."""
+        conditions = self._build_collection_acl(
+            user_id, user_groups,
+        )
         query = (
             select(RAGCollection)
             .where(or_(*conditions))
@@ -112,25 +123,19 @@ class RAGRepository:
         return list(result.scalars().all())
 
     async def can_access_collection(
-        self, collection_id: str, user_id: str, user_groups: list[str],
+        self,
+        collection_id: str,
+        user_id: str,
+        user_groups: list[str],
     ) -> bool:
-        """Check if a user can access a specific collection (single query)."""
-        conditions = [RAGCollection.scope == RAGScope.GLOBAL]
-        if user_groups:
-            conditions.append(
-                and_(
-                    RAGCollection.scope == RAGScope.GROUP,
-                    RAGCollection.allowed_groups.overlap(user_groups),
-                )
-            )
-        conditions.append(
-            and_(
-                RAGCollection.scope == RAGScope.AGENT,
-                RAGCollection.owner_user_id == user_id,
-            )
+        """Check if user can access a collection (single query)."""
+        conditions = self._build_collection_acl(
+            user_id, user_groups,
         )
         result = await self.db.execute(
-            select(func.count()).select_from(RAGCollection).where(
+            select(func.count())
+            .select_from(RAGCollection)
+            .where(
                 RAGCollection.id == collection_id,
                 or_(*conditions),
             )
