@@ -197,7 +197,7 @@ async def get_pipelines(user: CurrentUser, db: DbSession) -> PipelinesResponse:
             RAGDocument.created_at,
         )
         .join(RAGCollection, RAGCollection.id == RAGDocument.collection_id)
-        .where(RAGDocument.status.in_(["processing", "failed"]))
+        .where(RAGDocument.status.in_(["pending", "processing", "failed"]))
         .order_by(RAGDocument.created_at.desc())
         .limit(100)
     )

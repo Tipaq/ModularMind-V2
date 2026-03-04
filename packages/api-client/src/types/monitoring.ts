@@ -53,6 +53,9 @@ export interface InfraMonitoring {
   ollama_status: string;
   ollama_models: string[];
   ollama_running_models: string[];
+  qdrant_status: string;
+  qdrant_latency_ms: number | null;
+  qdrant_collections: number;
 }
 
 // ─── Alerts ──────────────────────────────────────────────────────────────────

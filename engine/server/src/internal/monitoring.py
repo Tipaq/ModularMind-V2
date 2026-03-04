@@ -85,6 +85,9 @@ class InfraMonitoring(BaseModel):
     ollama_status: str
     ollama_models: list[str]
     ollama_running_models: list[str] = Field(default_factory=list)
+    qdrant_status: str = "unknown"
+    qdrant_latency_ms: float | None = None
+    qdrant_collections: int = 0
 
 
 class AlertItem(BaseModel):
@@ -322,6 +325,22 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
     except Exception:
         logger.debug("Ollama connectivity check failed")
 
+    # === Qdrant ===
+    qdrant_status = "unavailable"
+    qdrant_latency_ms: float | None = None
+    qdrant_collections = 0
+    try:
+        from src.infra.qdrant import qdrant_factory
+
+        q_start = time.monotonic()
+        qclient = await qdrant_factory.get_client()
+        collections = await qclient.get_collections()
+        qdrant_latency_ms = round((time.monotonic() - q_start) * 1000, 2)
+        qdrant_status = "ok"
+        qdrant_collections = len(collections.collections)
+    except Exception:
+        logger.debug("Qdrant health check failed")
+
     infra = InfraMonitoring(
         db_pool_size=settings.DB_POOL_SIZE,
         db_pool_max_overflow=settings.DB_MAX_OVERFLOW,
@@ -331,6 +350,9 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
         ollama_status=ollama_status,
         ollama_models=ollama_models,
         ollama_running_models=ollama_running,
+        qdrant_status=qdrant_status,
+        qdrant_latency_ms=qdrant_latency_ms,
+        qdrant_collections=qdrant_collections,
     )
 
     # === Alerts ===
