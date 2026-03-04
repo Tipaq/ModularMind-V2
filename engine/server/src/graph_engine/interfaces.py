@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
-from uuid import UUID
+from uuid import UUID  # noqa: F401  (used in RAGConfig type annotation)
 
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field, field_validator
