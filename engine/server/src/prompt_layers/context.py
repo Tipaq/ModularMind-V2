@@ -45,6 +45,7 @@ class AgentContextBuilder:
         user_id: str | None = None,
         conversation_id: str | None = None,
         model_id: str | None = None,
+        system_prompt_chars: int = 0,
     ) -> list[SystemMessage]:
         """Build context SystemMessages for an agent.
 
@@ -76,11 +77,13 @@ class AgentContextBuilder:
         history_budget = int(effective_context * settings.CONTEXT_BUDGET_HISTORY_PCT / 100)
         memory_budget = int(effective_context * settings.CONTEXT_BUDGET_MEMORY_PCT / 100)
         rag_budget = int(effective_context * settings.CONTEXT_BUDGET_RAG_PCT / 100)
+        system_budget = int(effective_context * settings.CONTEXT_BUDGET_SYSTEM_PCT / 100)
 
         # Track actual token usage per layer
         history_used = 0
         memory_used = 0
         rag_used = 0
+        system_used = system_prompt_chars // 4
 
         # Inject recent conversation history for continuity
         if conversation_id:
@@ -132,6 +135,11 @@ class AgentContextBuilder:
                     "pct": settings.CONTEXT_BUDGET_RAG_PCT,
                     "allocated": rag_budget,
                     "used": rag_used,
+                },
+                "system": {
+                    "pct": settings.CONTEXT_BUDGET_SYSTEM_PCT,
+                    "allocated": system_budget,
+                    "used": system_used,
                 },
             },
         }

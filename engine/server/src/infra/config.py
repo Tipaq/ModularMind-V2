@@ -239,6 +239,10 @@ class Settings(BaseSettings):
         default=100.0, ge=10.0, le=100.0,
         description="Soft limit: max total % of context_window usable by all layers combined",
     )
+    CONTEXT_BUDGET_SYSTEM_PCT: float = Field(
+        default=10.0, ge=0.0, le=30.0,
+        description="Percentage of model context_window allocated to system/supervisor prompt layers",
+    )
     # ---- Conversation Indexing ----------------------------------------------
     CONVERSATION_INDEX_MODE: str = Field(
         default="summary",

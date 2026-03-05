@@ -475,6 +475,7 @@ class ExecutionService:
         from src.prompt_layers.context import AgentContextBuilder
 
         context_builder = AgentContextBuilder()
+        system_prompt_chars = len(agent.system_prompt or "")
         context_messages = await context_builder.build_context_messages(
             agent=agent,
             query=execution.input_prompt,
@@ -482,6 +483,7 @@ class ExecutionService:
             user_id=execution.user_id,
             conversation_id=execution.session_id,
             model_id=agent.model_id,
+            system_prompt_chars=system_prompt_chars,
         )
 
         input_data = dict(execution.input_data or {})
@@ -514,6 +516,7 @@ class ExecutionService:
             "type": "trace:memory",
             "history": context_details["history"],
             "memory_entries": context_details["memory_entries"],
+            "budget_overview": context_details["budget_overview"],
         }
 
         # Create initial state

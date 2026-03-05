@@ -155,6 +155,15 @@ class SuperSupervisorService:
         _max_chars = _hist_budget * 4
         _mem_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_MEMORY_PCT / 100)
         _rag_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_RAG_PCT / 100)
+        _sys_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_SYSTEM_PCT / 100)
+        # Count supervisor prompt layer token usage
+        from src.prompt_layers.loader import get_supervisor_identity, get_supervisor_personality, get_tool_task
+        _sys_chars = (
+            len(get_supervisor_identity())
+            + len((conv_config or {}).get("supervisor_prompt") or get_supervisor_personality())
+            + len(get_tool_task())
+        )
+        _sys_used = _sys_chars // 4
         _history_used = _total_chars // 4
         _mem_entries = getattr(self, "_last_memory_entries", [])
         _mem_used = sum(len(e.get("content", "")) for e in _mem_entries) // 4
@@ -203,6 +212,11 @@ class SuperSupervisorService:
                         "pct": _settings.CONTEXT_BUDGET_RAG_PCT,
                         "allocated": _rag_budget,
                         "used": _rag_used,
+                    },
+                    "system": {
+                        "pct": _settings.CONTEXT_BUDGET_SYSTEM_PCT,
+                        "allocated": _sys_budget,
+                        "used": _sys_used,
                     },
                 },
             },
