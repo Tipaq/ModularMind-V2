@@ -6,10 +6,11 @@ import type {
   MemoryGraphEdge,
   MemoryGraphData,
   MemoryUser,
+  ConsolidationLog,
 } from "@modularmind/api-client";
 import { api } from "../lib/api";
 
-export type { MemoryEntry, MemoryGraphNode, MemoryGraphEdge, MemoryGraphData, MemoryUser };
+export type { MemoryEntry, MemoryGraphNode, MemoryGraphEdge, MemoryGraphData, MemoryUser, ConsolidationLog };
 
 /** @deprecated Use MemoryGraphNode from @modularmind/api-client instead. */
 export type GraphNode = MemoryGraphNode;
@@ -27,17 +28,6 @@ export interface GlobalMemoryStats {
   total_accesses: number;
   last_consolidation: string | null;
   entries_decayed_last_cycle: number;
-}
-
-export interface ConsolidationLog {
-  id: string;
-  scope: string;
-  scope_id: string;
-  action: string;
-  source_entry_ids: string[];
-  result_entry_id: string | null;
-  details: Record<string, unknown>;
-  created_at: string;
 }
 
 export interface ConsolidationTriggerResult {
