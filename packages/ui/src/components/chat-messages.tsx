@@ -5,6 +5,7 @@ import { ArrowRight, Bot, Loader2, User } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { ExecutionActivity } from "../types/chat";
 import { ExecutionActivityList } from "./execution-activity";
+import { AttachmentChip, type AttachmentChipData } from "./attachment-chip";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 const EMPTY_ACTIVITIES: ExecutionActivity[] = [];
@@ -12,13 +13,20 @@ const EMPTY_ACTIVITIES: ExecutionActivity[] = [];
 /** Minutes threshold — if two consecutive messages are closer than this, hide the timestamp. */
 const TIMESTAMP_GAP_MINUTES = 5;
 
-/** Minimal message shape — compatible with @modularmind/api-client Message. */
+/**
+ * Minimal message shape for the ChatMessages UI component.
+ *
+ * Structurally compatible with `Message` from `@modularmind/api-client` —
+ * any api-client Message satisfies this interface.  `attachments` uses
+ * `AttachmentChipData` which is structurally identical to `MessageAttachment`.
+ */
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   created_at: string;
   metadata?: Record<string, unknown>;
+  attachments?: AttachmentChipData[];
 }
 
 function formatTime(iso: string): string {
@@ -71,6 +79,8 @@ interface MessageBubbleProps {
   onSelect?: () => void;
   /** Whether to show the Messenger-style timestamp above the bubble. */
   showTimestamp: boolean;
+  /** Base URL for attachment download links. */
+  attachmentBaseUrl?: string;
 }
 
 const MessageBubble = memo(function MessageBubble({
@@ -83,6 +93,7 @@ const MessageBubble = memo(function MessageBubble({
   selectable,
   onSelect,
   showTimestamp,
+  attachmentBaseUrl,
 }: MessageBubbleProps) {
   const isUser = msg.role === "user";
   const isAssistant = msg.role === "assistant";
@@ -115,7 +126,6 @@ const MessageBubble = memo(function MessageBubble({
           <ExecutionActivityList
             activities={activities}
             isStreaming={isStreaming}
-            hasContent={true}
           />
         </div>
       )}
@@ -139,7 +149,6 @@ const MessageBubble = memo(function MessageBubble({
             <ExecutionActivityList
               activities={activities}
               isStreaming={isStreaming}
-              hasContent={false}
             />
           </div>
         ) : (
@@ -166,6 +175,15 @@ const MessageBubble = memo(function MessageBubble({
                     Thinking...
                   </div>
                 ) : null}
+
+                {/* Attachments */}
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {msg.attachments.map((att) => (
+                      <AttachmentChip key={att.id} attachment={att} downloadBaseUrl={attachmentBaseUrl} />
+                    ))}
+                  </div>
+                )}
 
                 {/* Routing metadata — stays inside the bubble */}
                 {msg.content && showRoutingMetadata && !isUser && routingStrategy && (
@@ -201,6 +219,8 @@ export interface ChatMessagesProps {
   selectedMessageId?: string | null;
   /** Callback when an assistant message bubble is clicked. */
   onSelectMessage?: (id: string) => void;
+  /** Base URL for attachment download links. Default: "/api/v1/conversations". */
+  attachmentBaseUrl?: string;
 }
 
 export const ChatMessages = memo(function ChatMessages({
@@ -210,6 +230,7 @@ export const ChatMessages = memo(function ChatMessages({
   showRoutingMetadata,
   selectedMessageId,
   onSelectMessage,
+  attachmentBaseUrl,
 }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -259,6 +280,7 @@ export const ChatMessages = memo(function ChatMessages({
                     selected={isAssistant && msg.id === selectedMessageId}
                     onSelect={isAssistant && onSelectMessage ? () => onSelectMessage(msg.id) : undefined}
                     showTimestamp={showTimestamp}
+                    attachmentBaseUrl={attachmentBaseUrl}
                   />
                 </div>
               );

@@ -12,7 +12,10 @@ export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTi
 export { ACTIVITY_COLORS, CHANNEL_COLORS, STATUS_COLORS, ROLE_COLORS, HEALTH_COLORS } from "./lib/colors";
 
 // Chat types
-export type { ActivityType, ActivityStatus, ToolCallData, ExecutionActivity } from "./types/chat";
+export type { ActivityType, ActivityStatus, ToolCallData, ExecutionActivity, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, SupervisorData } from "./types/chat";
+
+// Resource types (shared table/filter/pagination primitives)
+export type { ResourceColumn, ResourceFilterConfig, PaginationState, SortState } from "./types/resource";
 
 // Theme
 export { ThemeProvider } from "./theme/ThemeProvider";
@@ -55,6 +58,8 @@ export { ThemeToggle } from "./components/theme-toggle";
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/tooltip";
 export { UserButton } from "./components/user-button";
 export type { UserButtonUser } from "./components/user-button";
+export { AttachmentChip } from "./components/attachment-chip";
+export type { AttachmentChipData } from "./components/attachment-chip";
 export { ChatMessages } from "./components/chat-messages";
 export type { ChatMessagesProps, ChatMessage } from "./components/chat-messages";
 export { ExecutionActivityList } from "./components/execution-activity";

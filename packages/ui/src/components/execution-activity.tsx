@@ -91,7 +91,6 @@ const ActivityItem = memo(function ActivityItem({ activity }: { activity: Execut
 export interface ExecutionActivityListProps {
   activities: ExecutionActivity[];
   isStreaming: boolean;
-  hasContent?: boolean;
   /** When true, skip the collapsible summary and always show all items (used inside panels). */
   flat?: boolean;
 }
