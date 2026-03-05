@@ -122,6 +122,10 @@ async def memory_consolidation() -> None:
     from src.memory.consolidator import apply_exponential_decay
     from src.memory.models import ConsolidationLog
     from src.memory.repository import MemoryRepository
+    from src.memory.router import reload_memory_config
+
+    # Sync latest config from secrets_store (picks up admin API changes)
+    reload_memory_config()
 
     # Acquire Redis lock to prevent concurrent runs
     lock_key = "memory:consolidation:lock"
@@ -194,6 +198,10 @@ async def _extract_new_messages(session, conv, now) -> None:
     from src.infra.metrics import memory_extraction_enqueued
     from src.infra.publish import enqueue_memory_raw
 
+    from src.infra.config import get_settings
+    from src.infra.token_counter import count_tokens
+
+    settings = get_settings()
     cutoff = conv.last_memory_extracted_at or datetime(2000, 1, 1)
     result = await session.execute(
         select(ConversationMessage)
@@ -205,6 +213,18 @@ async def _extract_new_messages(session, conv, now) -> None:
     )
     messages = list(result.scalars().all())
     if not messages:
+        return
+
+    # Check both message count and token thresholds
+    total_tokens = sum(count_tokens(m.content or "") for m in messages)
+    batch_ok = len(messages) >= settings.MEMORY_EXTRACTION_BATCH_SIZE
+    token_ok = total_tokens >= settings.MEMORY_BUFFER_TOKEN_THRESHOLD
+
+    if not batch_ok and not token_ok:
+        logger.debug(
+            "Skipping extraction for %s: %d msgs / %d tokens (below thresholds)",
+            conv.id, len(messages), total_tokens,
+        )
         return
 
     messages_json = json.dumps([
@@ -248,6 +268,10 @@ async def memory_extraction_scan() -> None:
     from src.infra.config import get_settings
     from src.infra.database import async_session_maker
     from src.infra.redis import redis_client
+    from src.memory.router import reload_memory_config
+
+    # Sync latest config from secrets_store (picks up admin API changes)
+    reload_memory_config()
 
     settings = get_settings()
 

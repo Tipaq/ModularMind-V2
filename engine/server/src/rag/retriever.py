@@ -133,12 +133,15 @@ class RAGRetriever:
         results: list[RAGSearchResult],
         include_scores: bool = False,
         max_chars_per_chunk: int | None = None,
+        max_total_chars: int | None = None,
     ) -> str:
         """Format search results into context string."""
         if not results:
             return ""
 
-        lines = ["### Relevant Context from Documents", ""]
+        header = "### Relevant Context from Documents\n"
+        lines = [header]
+        total_chars = len(header)
 
         for i, result in enumerate(results, 1):
             content = result.content
@@ -152,9 +155,11 @@ class RAGRetriever:
             if include_scores:
                 header_parts.append(f"[score: {result.score:.3f}]")
 
-            lines.append(" ".join(header_parts) + ":")
-            lines.append(content)
-            lines.append("")
+            entry = " ".join(header_parts) + ":\n" + content + "\n"
+            if max_total_chars and total_chars + len(entry) > max_total_chars:
+                break
+            lines.append(entry)
+            total_chars += len(entry)
 
         return "\n".join(lines)
 

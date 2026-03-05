@@ -60,6 +60,7 @@ async def main() -> None:
 
     from src.pipeline.handlers.embedder import embedder_handler
     from src.pipeline.handlers.extractor import extractor_handler
+    from src.pipeline.handlers.summarizer import summarizer_handler
 
     tasks = [
         # Task queues
@@ -68,6 +69,8 @@ async def main() -> None:
         bus.subscribe("tasks:documents", "doc-processors", "dp-1", document_process_handler),
         # Memory pipeline: raw -> extractor -> [scorer ->] embedder
         bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
+        # Summarizer: raw -> summary (parallel with extractor, own consumer group)
+        bus.subscribe("memory:raw", "summarizers", "sum-1", summarizer_handler),
     ]
 
     # Conditional scorer wiring based on settings
