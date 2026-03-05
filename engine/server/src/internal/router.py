@@ -10,7 +10,6 @@ import time
 
 import psutil
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
 from sqlalchemy import select
 
 from src.auth import CurrentUser, RequireAdmin
@@ -19,6 +18,7 @@ from src.domain_config import get_config_provider
 from src.infra.constants import RATE_LIMIT_INTERNAL
 from src.infra.database import DbSession
 from src.infra.rate_limit import RateLimitDependency
+from src.internal.schemas import UserSyncItem, UserSyncRequest
 
 # Sub-routers
 from src.internal import (
@@ -172,22 +172,6 @@ async def import_configs(request: Request, db: DbSession) -> dict:
 
 
 # ==================== User Sync ====================
-
-
-class UserSyncItem(BaseModel):
-    """A single user from the platform sync payload."""
-
-    id: str
-    email: str
-    hashed_password: str
-    role: str
-    is_active: bool
-
-
-class UserSyncRequest(BaseModel):
-    """Request body for user sync from platform."""
-
-    users: list[UserSyncItem]
 
 
 @router.post("/users/sync", dependencies=[Depends(_sync_rate_limit)])

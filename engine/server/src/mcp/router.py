@@ -9,9 +9,15 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
 
 from src.auth import CurrentUser, RequireOwner
+from src.mcp.schemas import (
+    MCPCatalogEntryResponse,
+    MCPDeployFromCatalogRequest,
+    MCPServerCreateRequest,
+    MCPServerResponse,
+    MCPServerUpdateRequest,
+)
 from src.mcp.validation import validate_mcp_url
 
 logger = logging.getLogger(__name__)
@@ -20,64 +26,6 @@ router = APIRouter(prefix="/mcp", tags=["MCP"])
 
 DEFAULT_LOG_TAIL = 100
 MAX_LOG_TAIL = 500
-
-
-# --- Request/Response schemas ---
-
-
-class MCPServerCreateRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
-    description: str | None = None
-    url: str = Field(..., description="MCP server URL (Streamable HTTP)")
-    headers: dict[str, str] = Field(default_factory=dict)
-    api_key: str | None = Field(None, description="API key/token (stored encrypted)")
-    enabled: bool = True
-    timeout_seconds: int = Field(default=30, ge=5, le=120)
-    project_id: str | None = None
-
-
-class MCPServerUpdateRequest(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=255)
-    description: str | None = None
-    url: str | None = None
-    headers: dict[str, str] | None = None
-    api_key: str | None = None
-    enabled: bool | None = None
-    timeout_seconds: int | None = Field(None, ge=5, le=120)
-
-
-class MCPServerResponse(BaseModel):
-    id: str
-    name: str
-    description: str | None
-    url: str | None
-    enabled: bool
-    connected: bool
-    tools_count: int
-    timeout_seconds: int
-    project_id: str | None
-    managed: bool = False
-    catalog_id: str | None = None
-    transport: str = "http"
-
-
-class MCPCatalogEntryResponse(BaseModel):
-    id: str
-    name: str
-    description: str
-    category: str
-    icon: str
-    required_secrets: list[dict]
-    documentation_url: str | None
-    npm_package: str | None = None
-    docker_image: str | None = None
-    setup_flow: str | None = None
-
-
-class MCPDeployFromCatalogRequest(BaseModel):
-    catalog_id: str = Field(..., description="Catalog entry ID (e.g., 'brave-search')")
-    secrets: dict[str, str] = Field(..., description="Required secrets/env vars")
-    project_id: str | None = None
 
 
 # --- Helpers ---

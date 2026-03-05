@@ -8,29 +8,19 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
 
 from src.auth import CurrentUser
-from src.mcp.schemas import MCPToolDefinition
+from src.mcp.schemas import (
+    MCPToolCallRequestBody,
+    MCPToolCallResponseBody,
+    MCPToolDefinition,
+)
 
 logger = logging.getLogger(__name__)
 
 usage_router = APIRouter(prefix="/mcp", tags=["MCP Usage"])
 
-
-# --- Schemas ---
-
 MCPToolResponse = MCPToolDefinition
-
-
-class MCPToolCallRequestBody(BaseModel):
-    tool_name: str
-    arguments: dict = Field(default_factory=dict)
-
-
-class MCPToolCallResponseBody(BaseModel):
-    content: list[dict]
-    is_error: bool
 
 
 # --- Helpers ---

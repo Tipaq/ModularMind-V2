@@ -180,3 +180,24 @@ class PipelinesResponse(BaseModel):
     knowledge: KnowledgePipelineData
     dlq_messages: list[DLQMessage] = Field(default_factory=list)
     counters: PipelineCounters
+
+
+# ---------------------------------------------------------------------------
+# User Sync Schemas
+# ---------------------------------------------------------------------------
+
+
+class UserSyncItem(BaseModel):
+    """A single user from the platform sync payload."""
+
+    id: str
+    email: str
+    hashed_password: str
+    role: str
+    is_active: bool
+
+
+class UserSyncRequest(BaseModel):
+    """Request body for user sync from platform."""
+
+    users: list[UserSyncItem]
