@@ -8,29 +8,6 @@ from pydantic import BaseModel, Field
 from .models import MemoryEntry, MemoryScope, MemoryTier, MemoryType
 
 
-class MemoryEntrySchema(BaseModel):
-    """Pydantic schema for memory entries (data transfer)."""
-
-    id: str
-    scope: MemoryScope
-    scope_id: str
-    tier: MemoryTier = MemoryTier.BUFFER
-    memory_type: MemoryType = MemoryType.EPISODIC
-
-    content: str
-
-    importance: float = Field(default=0.5, ge=0.0, le=1.0)
-    access_count: int = 0
-    last_accessed: datetime | None = None
-    last_scored_at: datetime | None = None
-    expired_at: datetime | None = None
-
-    metadata: dict = Field(default_factory=dict, validation_alias="meta")
-    created_at: datetime
-
-    model_config = {"populate_by_name": True}
-
-
 class MemoryStats(BaseModel):
     """Statistics about memory for a scope."""
 
