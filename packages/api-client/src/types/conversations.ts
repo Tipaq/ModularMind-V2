@@ -129,6 +129,7 @@ export interface SendMessageResponse {
         history: { pct: number; allocated: number; used: number };
         memory: { pct: number; allocated: number; used: number };
         rag: { pct: number; allocated: number; used: number };
+        system?: { pct: number; allocated: number; used: number };
       };
     };
   };

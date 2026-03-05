@@ -137,6 +137,7 @@ export interface BudgetOverview {
     history: BudgetLayerInfo;
     memory: BudgetLayerInfo;
     rag: BudgetLayerInfo;
+    system?: BudgetLayerInfo;
   };
 }
 
@@ -145,6 +146,12 @@ export interface ContextData {
   history: ContextHistory | null;
   memoryEntries: InsightsMemoryEntry[];
   budgetOverview: BudgetOverview | null;
+}
+
+/** File attached to a chat message (before upload). */
+export interface AttachedFile {
+  file: File;
+  id: string;
 }
 
 /** Execution data associated with a specific message. */

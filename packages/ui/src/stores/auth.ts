@@ -61,7 +61,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: () => {
     sessionStorage.removeItem(USER_KEY);
-    fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" }).catch((e) => console.warn("[auth] logout request failed", e));
     set({ user: null, isLoading: false });
   },
 }));
