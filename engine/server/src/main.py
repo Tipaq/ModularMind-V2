@@ -88,6 +88,16 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("Qdrant initialization failed (non-fatal): %s", exc)
 
+    # 3b. Initialize S3/MinIO buckets
+    from src.infra.object_store import get_object_store
+
+    try:
+        store = get_object_store()
+        await store.ensure_buckets([settings.S3_BUCKET_RAG, settings.S3_BUCKET_ATTACHMENTS])
+        logger.info("S3 buckets initialized")
+    except Exception as exc:
+        logger.warning("S3 bucket initialization failed (non-fatal): %s", exc)
+
     # 4. Load seed model catalog
     from src.models.service import get_model_service
 

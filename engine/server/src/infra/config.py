@@ -111,6 +111,27 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---- Object Storage (S3 / MinIO) ----------------------------------------
+    S3_ENDPOINT: str = Field(
+        default="http://localhost:9000",
+        description="S3-compatible endpoint URL (MinIO or AWS S3)",
+    )
+    S3_ACCESS_KEY: str = Field(default="modularmind")
+    S3_SECRET_KEY: str = Field(default="modularmind")
+    S3_REGION: str = Field(default="us-east-1")
+    S3_BUCKET_RAG: str = Field(
+        default="rag-documents",
+        description="Bucket for RAG document originals",
+    )
+    S3_BUCKET_ATTACHMENTS: str = Field(
+        default="chat-attachments",
+        description="Bucket for chat message attachments",
+    )
+    S3_PRESIGNED_EXPIRY: int = Field(
+        default=3600, ge=60, le=86400,
+        description="Presigned URL expiry in seconds",
+    )
+
     # ---- Supervisor ---------------------------------------------------------
     SUPERVISOR_MODEL_ID: str = Field(
         default="ollama:qwen3:8b",
@@ -218,11 +239,6 @@ class Settings(BaseSettings):
         default=100.0, ge=10.0, le=100.0,
         description="Soft limit: max total % of context_window usable by all layers combined",
     )
-    CONVERSATION_HISTORY_MAX_MESSAGES: int = Field(
-        default=20, ge=5, le=50,
-        description="Max recent messages to load for conversation history context",
-    )
-
     # ---- Conversation Indexing ----------------------------------------------
     CONVERSATION_INDEX_MODE: str = Field(
         default="summary",
