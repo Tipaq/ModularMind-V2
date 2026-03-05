@@ -12,7 +12,7 @@ import { api } from "../lib/api";
 import { roleConfig } from "../lib/constants";
 import { Pagination } from "../components/shared/Pagination";
 import { EditUserDialog } from "../components/users/EditUserDialog";
-import type { UserStats, UserStatsListResponse } from "../components/users/types";
+import type { UserStats, UserStatsListResponse } from "@modularmind/api-client";
 
 export default function Users() {
   const navigate = useNavigate();
@@ -39,7 +39,8 @@ export default function Users() {
       const res = await api.get<UserStatsListResponse>(`/admin/users?${params}`);
       setUsers(res.items);
       setTotal(res.total);
-    } catch {
+    } catch (err) {
+      console.error("[Users] fetch:", err);
       setUsers([]);
     }
     setLoading(false);
@@ -60,7 +61,8 @@ export default function Users() {
           setUsers(res.items);
           setTotal(res.total);
         }
-      } catch {
+      } catch (err) {
+        console.error("[Users] fetch:", err);
         if (active) setUsers([]);
       }
       if (active) setLoading(false);

@@ -9,7 +9,7 @@ import type {
   AdminConversationListResponse,
   AdminMessage,
   AdminConversationMessagesResponse,
-} from "./types";
+} from "@modularmind/api-client";
 
 interface ExpandedConversation {
   messages: AdminMessage[];
@@ -32,7 +32,8 @@ export function UserConversationsTab({ userId }: { userId: string }) {
         );
         setConversations(res.items);
         setTotal(res.total);
-      } catch {
+      } catch (err) {
+        console.error("[UserConversations] fetch:", err);
         setConversations([]);
       }
       setLoading(false);
@@ -62,7 +63,8 @@ export function UserConversationsTab({ userId }: { userId: string }) {
         ...prev,
         [convId]: { messages: res.messages, loading: false },
       }));
-    } catch {
+    } catch (err) {
+      console.error("[UserConversations] messages:", err);
       setExpanded((prev) => ({
         ...prev,
         [convId]: { messages: [], loading: false },

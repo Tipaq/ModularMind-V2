@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { RefreshCw, BookOpen } from "lucide-react";
 import { Card, CardContent, Badge } from "@modularmind/ui";
 import { api } from "../../lib/api";
-import type { UserCollection } from "./types";
+import type { UserCollection } from "@modularmind/api-client";
 
 const SCOPE_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   global: "default",
@@ -22,7 +22,8 @@ export function UserKnowledgeTab({ userId }: { userId: string }) {
           `/admin/users/${userId}/collections`,
         );
         setCollections(res);
-      } catch {
+      } catch (err) {
+        console.error("[UserKnowledge] fetch:", err);
         setCollections([]);
       }
       setLoading(false);

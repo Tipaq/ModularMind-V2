@@ -12,7 +12,7 @@ import {
   Legend,
 } from "recharts";
 import { api } from "../../lib/api";
-import type { TokenUsageResponse } from "./types";
+import type { TokenUsageResponse } from "@modularmind/api-client";
 
 const RANGES = [
   { value: "24h", label: "24h" },
@@ -34,7 +34,8 @@ export function UserTokenUsageTab({ userId }: { userId: string }) {
           `/admin/users/${userId}/token-usage?range=${range}`,
         );
         setData(res);
-      } catch {
+      } catch (err) {
+        console.error("[UserTokenUsage] fetch:", err);
         setData(null);
       }
       setLoading(false);

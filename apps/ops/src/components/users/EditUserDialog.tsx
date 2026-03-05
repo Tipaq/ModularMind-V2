@@ -11,7 +11,7 @@ import {
   cn,
 } from "@modularmind/ui";
 import type { Role } from "@modularmind/ui";
-import type { UserStats } from "./types";
+import type { UserStats } from "@modularmind/api-client";
 
 const ROLES: { value: Role; label: string; level: number }[] = [
   { value: "owner", label: "Owner", level: 2 },

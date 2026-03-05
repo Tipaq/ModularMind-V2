@@ -4,7 +4,7 @@ import { Card, CardContent, Badge, Button, Input } from "@modularmind/ui";
 import { api } from "../../lib/api";
 import { Pagination } from "../shared/Pagination";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
-import type { MemoryEntry, MemoryListResponse } from "./types";
+import type { AdminMemoryEntry, AdminMemoryListResponse } from "@modularmind/api-client";
 
 const TIER_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   buffer: "default",
@@ -30,7 +30,7 @@ const TIER_OPTIONS = [
 ];
 
 export function UserMemoryTab({ userId }: { userId: string }) {
-  const [entries, setEntries] = useState<MemoryEntry[]>([]);
+  const [entries, setEntries] = useState<AdminMemoryEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -49,14 +49,15 @@ export function UserMemoryTab({ userId }: { userId: string }) {
         if (scopeFilter) params.set("scope", scopeFilter);
         if (tierFilter) params.set("tier", tierFilter);
         if (search) params.set("search", search);
-        const res = await api.get<MemoryListResponse>(
+        const res = await api.get<AdminMemoryListResponse>(
           `/admin/users/${userId}/memory?${params}`,
         );
         if (active) {
           setEntries(res.items);
           setTotal(res.total);
         }
-      } catch {
+      } catch (err) {
+        console.error("[UserMemory] fetch:", err);
         if (active) setEntries([]);
       }
       if (active) setLoading(false);
@@ -71,8 +72,8 @@ export function UserMemoryTab({ userId }: { userId: string }) {
       await api.delete(`/admin/users/${userId}/memory`);
       setEntries([]);
       setTotal(0);
-    } catch {
-      // handled silently
+    } catch (err) {
+      console.error("[UserMemory] clear:", err);
     }
     setClearing(false);
     setClearOpen(false);

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Plus, Cloud, Download, HardDrive, Settings, Square, Trash2 } from "lucide-react";
 import { Button, PageHeader, cn } from "@modularmind/ui";
+import type { ResourceColumn, ResourceFilterConfig, SortState } from "@modularmind/ui";
 import { PROVIDER_INFO } from "@modularmind/api-client";
 import type { UnifiedCatalogModel } from "@modularmind/api-client";
 import { EmptyState } from "../components/shared/EmptyState";
@@ -9,7 +10,6 @@ import { ResourceTable } from "../components/shared/ResourceTable";
 import { ResourceFilters } from "../components/shared/ResourceFilters";
 import { ModelStatusBadge } from "../components/shared/ModelStatusBadge";
 import { useModelsStore } from "../stores/models";
-import type { ResourceColumn, ResourceFilterConfig, SortState } from "../lib/types";
 
 const PAGE_SIZE = 20;
 

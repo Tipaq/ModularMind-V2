@@ -93,8 +93,8 @@ export default function ModelDetail() {
       if (!found) {
         try {
           await fetchCatalog(1);
-        } catch {
-          // Ignore — try direct fetch next
+        } catch (err) {
+          console.warn("[ModelDetail] catalog fetch:", err);
         }
         found =
           useModelsStore.getState().catalogModels.find((m) => m.id === modelId) ?? null;
@@ -103,7 +103,8 @@ export default function ModelDetail() {
       if (!found) {
         try {
           found = await api.get<CatalogModel>(`/models/catalog/${modelId}`);
-        } catch {
+        } catch (err) {
+          console.error("[ModelDetail] model not found:", err);
           setError("Model not found");
         }
       }
@@ -124,8 +125,8 @@ export default function ModelDetail() {
         if (refreshed.pull_status !== "downloading") {
           setIsPulling(false);
         }
-      } catch {
-        // Ignore refresh errors
+      } catch (err) {
+        console.warn("[ModelDetail] refresh:", err);
       }
     }, 3000);
     return () => clearInterval(interval);
@@ -144,7 +145,8 @@ export default function ModelDetail() {
       });
       const refreshed = await api.get<CatalogModel>(`/models/catalog/${modelId}`);
       setModel(refreshed);
-    } catch {
+    } catch (err) {
+      console.error("[ModelDetail] pull:", err);
       setIsPulling(false);
     }
   }, [model, modelId, triggerPull]);
@@ -160,8 +162,8 @@ export default function ModelDetail() {
     try {
       await removeFromCatalog(model.id);
       navigate("/models");
-    } catch {
-      // Error handled in store
+    } catch (err) {
+      console.error("[ModelDetail] remove:", err);
     }
   }, [model, removeFromCatalog, navigate]);
 

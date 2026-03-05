@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { Button, cn } from "@modularmind/ui";
-import type { ResourceColumn, PaginationState, SortState } from "../../lib/types";
+import type { ResourceColumn, PaginationState, SortState } from "@modularmind/ui";
 
 interface ResourceTableProps<T> {
   items: T[];

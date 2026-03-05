@@ -35,7 +35,7 @@ import { UserConversationsTab } from "../components/users/UserConversationsTab";
 import { UserTokenUsageTab } from "../components/users/UserTokenUsageTab";
 import { UserMemoryTab } from "../components/users/UserMemoryTab";
 import { UserKnowledgeTab } from "../components/users/UserKnowledgeTab";
-import type { UserStats } from "../components/users/types";
+import type { UserStats } from "@modularmind/api-client";
 
 export default function UserDetail() {
   const { userId } = useParams();
@@ -86,8 +86,8 @@ export default function UserDetail() {
     setActionLoading(true);
     try {
       await api.delete(`/admin/users/${userId}/conversations`);
-    } catch {
-      // handled silently
+    } catch (err) {
+      console.error("[UserDetail] Failed to delete conversations:", err);
     }
     setActionLoading(false);
     setDeleteConvOpen(false);
@@ -98,8 +98,8 @@ export default function UserDetail() {
     setActionLoading(true);
     try {
       await api.delete(`/admin/users/${userId}/memory`);
-    } catch {
-      // handled silently
+    } catch (err) {
+      console.error("[UserDetail] Failed to delete memory:", err);
     }
     setActionLoading(false);
     setDeleteMemOpen(false);
