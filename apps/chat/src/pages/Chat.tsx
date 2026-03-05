@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Bot, Zap, PanelRight } from "lucide-react";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
 import type { ConversationDetail, ConversationCreate } from "@modularmind/api-client";
 import { useChat, type Message } from "../hooks/useChat";
 import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
@@ -295,25 +294,6 @@ export default function Chat() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Model dropdown */}
-            {availableModels.length > 0 && (
-              <Select
-                value={effectiveModelId ?? ""}
-                onValueChange={(v) => handleModelChange(v)}
-              >
-                <SelectTrigger className="w-[200px] h-8 text-xs">
-                  <SelectValue placeholder="Select a model..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableModels.map((m) => (
-                    <SelectItem key={m.id} value={toEngineModelId(m)} className="text-xs">
-                      {m.display_name || m.name} ({m.provider})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
             {/* Token usage */}
             {tokenUsage && (
               <span className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground">
@@ -359,6 +339,12 @@ export default function Chat() {
           onToggleAgent={handleToggleAgent}
           onToggleGraph={handleToggleGraph}
           disabledReason={sendDisabledReason}
+          models={models}
+          selectedModelId={effectiveModelId}
+          onModelChange={(id) => handleModelChange(id)}
+          modelLabel={(m) => `${m.display_name || m.name} (${m.provider})`}
+          onCompact={() => {/* TODO: implement conversation compaction */}}
+          compactDisabled={messages.length < 4}
         />
       </div>
 

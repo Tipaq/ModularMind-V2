@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback, useEffect, useMemo, memo } from "react";
+import { useState, useRef, useCallback, useLayoutEffect, useMemo, memo } from "react";
 import {
   Bot,
+  ChevronDown,
   FileUp,
   Paperclip,
   Plus,
@@ -20,7 +21,7 @@ import {
   DropdownMenuSeparator,
   cn,
 } from "@modularmind/ui";
-import type { EngineAgent, EngineGraph } from "../hooks/useChatConfig";
+import type { EngineAgent, EngineGraph, EngineModel } from "../hooks/useChatConfig";
 
 const ALLOWED_FILE_TYPES = [
   "application/pdf",
@@ -33,7 +34,6 @@ const ALLOWED_FILE_TYPES = [
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 const MAX_TEXTAREA_HEIGHT = 200;
-const OVERFLOW_ROW_THRESHOLD = 6;
 
 export interface AttachedFile {
   file: File;
@@ -54,6 +54,40 @@ interface ChatInputProps {
   onToggleGraph: (graphId: string) => void;
   onFilesChange?: (files: AttachedFile[]) => void;
   disabledReason?: string | null;
+  // Model selector
+  models?: EngineModel[];
+  selectedModelId?: string | null;
+  onModelChange?: (modelId: string) => void;
+  modelLabel?: (m: EngineModel) => string;
+  // Context / Compact
+  onCompact?: () => void;
+  compactDisabled?: boolean;
+  contextPercent?: number | null;
+}
+
+function ContextMiniDonut({ percent }: { percent: number }) {
+  const size = 18;
+  const strokeWidth = 2.5;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const filled = (percent / 100) * circumference;
+  const color = percent >= 90 ? "hsl(var(--destructive))" : percent >= 70 ? "hsl(var(--warning))" : "hsl(var(--primary))";
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth={strokeWidth} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray={`${filled} ${circumference}`}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 function formatFileSize(bytes: number) {
@@ -76,6 +110,13 @@ export const ChatInput = memo(function ChatInput({
   onToggleGraph,
   onFilesChange,
   disabledReason,
+  models,
+  selectedModelId,
+  onModelChange,
+  modelLabel,
+  onCompact,
+  compactDisabled,
+  contextPercent,
 }: ChatInputProps) {
   const isSendDisabled = !!disabledReason;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -85,11 +126,14 @@ export const ChatInput = memo(function ChatInput({
   const [isDragOver, setIsDragOver] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
 
-  // Reset textarea height when value is cleared (e.g. after send)
-  useEffect(() => {
-    if (!value && textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
+  // Auto-resize textarea whenever value changes (synchronous to avoid flicker)
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    const sh = el.scrollHeight;
+    el.style.height = `${Math.min(sh, MAX_TEXTAREA_HEIGHT)}px`;
+    el.style.overflowY = sh > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden";
   }, [value]);
 
   const handleKeyDown = useCallback(
@@ -201,6 +245,19 @@ export const ChatInput = memo(function ChatInput({
   const activeCount = enabledAgentIds.length + enabledGraphIds.length;
   const hasAgentsOrGraphs = agents.length > 0 || graphs.length > 0;
 
+  // Available (non-embedding) models for the selector
+  const chatModels = useMemo(
+    () => (models ?? []).filter((m) => !m.is_embedding && m.is_available),
+    [models],
+  );
+  const selectedModel = chatModels.find((m) => {
+    if (!selectedModelId) return false;
+    // Support both raw id and "provider:model_id" format
+    return m.id === selectedModelId || `${m.provider}:${m.model_id}` === selectedModelId;
+  });
+  const getLabel = (m: EngineModel) =>
+    modelLabel ? modelLabel(m) : (m.display_name || m.name);
+
   return (
     <div
       className={cn(
@@ -242,156 +299,27 @@ export const ChatInput = memo(function ChatInput({
         </div>
       )}
 
-      {/* Input area */}
+      {/* Input area — Claude-style: textarea on top, toolbar below */}
       <div className="p-4 pt-2">
         <div
           className={cn(
-            "relative flex items-end rounded-xl border bg-background transition-all",
+            "relative flex flex-col rounded-xl border bg-background transition-all",
             isDragOver
               ? "border-primary ring-2 ring-primary/20"
               : "focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50",
           )}
         >
-          {/* Left action buttons */}
-          <div className="flex items-center shrink-0 ml-1 mb-0.5">
-            {/* Agent/Graph dropdown */}
-            {hasAgentsOrGraphs && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 text-muted-foreground hover:text-foreground relative"
-                    disabled={isStreaming}
-                    title="Add agents or graphs"
-                  >
-                    <Plus className="h-4 w-4" />
-                    {activeCount > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground">
-                        {activeCount}
-                      </span>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  side="top"
-                  className="w-72"
-                  onCloseAutoFocus={() => setSearch("")}
-                >
-                  {/* Search input */}
-                  <div className="flex items-center gap-2 px-2 pb-2 border-b">
-                    <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <input
-                      type="text"
-                      placeholder="Search agents & graphs..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-                      autoFocus
-                    />
-                    {search && (
-                      <button
-                        onClick={() => setSearch("")}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
+          {/* Textarea */}
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask anything..."
+            className="resize-none bg-transparent px-4 pt-3 pb-2 text-sm focus:outline-none min-h-[44px]"
+            rows={1}
+          />
 
-                  {/* Scrollable list */}
-                  <div className="max-h-[300px] overflow-y-auto overflow-x-hidden">
-                    {filteredAgents.length > 0 && (
-                      <>
-                        <DropdownMenuLabel className="flex items-center gap-1.5 text-xs">
-                          <Bot className="h-3.5 w-3.5" />
-                          Agents
-                          {enabledAgentIds.length > 0 && (
-                            <span className="ml-auto text-[10px] font-normal text-primary">
-                              {enabledAgentIds.length} selected
-                            </span>
-                          )}
-                        </DropdownMenuLabel>
-                        {filteredAgents.map((agent) => (
-                          <DropdownMenuCheckboxItem
-                            key={agent.id}
-                            checked={enabledAgentIds.includes(agent.id)}
-                            onCheckedChange={() => onToggleAgent(agent.id)}
-                            onSelect={(e) => e.preventDefault()}
-                            className="text-xs"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <span className="truncate">{agent.name}</span>
-                              {agent.description && (
-                                <p className="text-[10px] text-muted-foreground truncate">
-                                  {agent.description}
-                                </p>
-                              )}
-                            </div>
-                          </DropdownMenuCheckboxItem>
-                        ))}
-                      </>
-                    )}
-                    {filteredAgents.length > 0 && filteredGraphs.length > 0 && (
-                      <DropdownMenuSeparator />
-                    )}
-                    {filteredGraphs.length > 0 && (
-                      <>
-                        <DropdownMenuLabel className="flex items-center gap-1.5 text-xs">
-                          <Workflow className="h-3.5 w-3.5" />
-                          Graphs
-                          {enabledGraphIds.length > 0 && (
-                            <span className="ml-auto text-[10px] font-normal text-primary">
-                              {enabledGraphIds.length} selected
-                            </span>
-                          )}
-                        </DropdownMenuLabel>
-                        {filteredGraphs.map((graph) => (
-                          <DropdownMenuCheckboxItem
-                            key={graph.id}
-                            checked={enabledGraphIds.includes(graph.id)}
-                            onCheckedChange={() => onToggleGraph(graph.id)}
-                            onSelect={(e) => e.preventDefault()}
-                            className="text-xs"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <span className="truncate">{graph.name}</span>
-                              {graph.description && (
-                                <p className="text-[10px] text-muted-foreground truncate">
-                                  {graph.description}
-                                </p>
-                              )}
-                            </div>
-                          </DropdownMenuCheckboxItem>
-                        ))}
-                      </>
-                    )}
-                    {filteredAgents.length === 0 && filteredGraphs.length === 0 && (
-                      <div className="py-4 text-center text-xs text-muted-foreground">
-                        No results found
-                      </div>
-                    )}
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-            {/* File upload button */}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 text-muted-foreground hover:text-foreground"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isStreaming}
-              title="Attach files (PDF, TXT, CSV, MD, JSON, DOCX)"
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
-          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -401,41 +329,229 @@ export const ChatInput = memo(function ChatInput({
             onChange={handleFileInputChange}
           />
 
-          {/* Textarea */}
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask anything..."
-            className="flex-1 resize-none bg-transparent px-1 py-3 text-sm focus:outline-none min-h-[44px] max-h-[200px]"
-            rows={1}
-            style={{
-              height: "auto",
-              overflowY: value.split("\n").length > OVERFLOW_ROW_THRESHOLD ? "auto" : "hidden",
-            }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = "auto";
-              target.style.height = `${Math.min(target.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
-            }}
-          />
+          {/* Bottom toolbar */}
+          <div className="flex items-center justify-between px-2 pb-2 pt-0.5">
+            {/* Left actions */}
+            <div className="flex items-center gap-0.5">
+              {/* Agent/Graph dropdown */}
+              {hasAgentsOrGraphs && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground relative"
+                      disabled={isStreaming}
+                      title="Add agents or graphs"
+                    >
+                      <Plus className="h-4 w-4" />
+                      {activeCount > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground">
+                          {activeCount}
+                        </span>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    side="top"
+                    className="w-72"
+                    onCloseAutoFocus={() => setSearch("")}
+                  >
+                    {/* Search input */}
+                    <div className="flex items-center gap-2 px-2 pb-2 border-b">
+                      <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <input
+                        type="text"
+                        placeholder="Search agents & graphs..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                        autoFocus
+                      />
+                      {search && (
+                        <button
+                          onClick={() => setSearch("")}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
 
-          {/* Send / Cancel button */}
-          <Button
-            onClick={isStreaming ? onCancel : onSend}
-            disabled={isSendDisabled || (!isStreaming && !value.trim() && attachedFiles.length === 0)}
-            size="icon"
-            variant={isStreaming ? "destructive" : "default"}
-            className="h-10 w-10 shrink-0 mr-1 mb-0.5 rounded-lg"
-            title={disabledReason || undefined}
-          >
-            {isStreaming ? (
-              <Square className="h-4 w-4 fill-current" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
+                    {/* Scrollable list */}
+                    <div className="max-h-[300px] overflow-y-auto overflow-x-hidden">
+                      {filteredAgents.length > 0 && (
+                        <>
+                          <DropdownMenuLabel className="flex items-center gap-1.5 text-xs">
+                            <Bot className="h-3.5 w-3.5" />
+                            Agents
+                            {enabledAgentIds.length > 0 && (
+                              <span className="ml-auto text-[10px] font-normal text-primary">
+                                {enabledAgentIds.length} selected
+                              </span>
+                            )}
+                          </DropdownMenuLabel>
+                          {filteredAgents.map((agent) => (
+                            <DropdownMenuCheckboxItem
+                              key={agent.id}
+                              checked={enabledAgentIds.includes(agent.id)}
+                              onCheckedChange={() => onToggleAgent(agent.id)}
+                              onSelect={(e) => e.preventDefault()}
+                              className="text-xs"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <span className="truncate">{agent.name}</span>
+                                {agent.description && (
+                                  <p className="text-[10px] text-muted-foreground truncate">
+                                    {agent.description}
+                                  </p>
+                                )}
+                              </div>
+                            </DropdownMenuCheckboxItem>
+                          ))}
+                        </>
+                      )}
+                      {filteredAgents.length > 0 && filteredGraphs.length > 0 && (
+                        <DropdownMenuSeparator />
+                      )}
+                      {filteredGraphs.length > 0 && (
+                        <>
+                          <DropdownMenuLabel className="flex items-center gap-1.5 text-xs">
+                            <Workflow className="h-3.5 w-3.5" />
+                            Graphs
+                            {enabledGraphIds.length > 0 && (
+                              <span className="ml-auto text-[10px] font-normal text-primary">
+                                {enabledGraphIds.length} selected
+                              </span>
+                            )}
+                          </DropdownMenuLabel>
+                          {filteredGraphs.map((graph) => (
+                            <DropdownMenuCheckboxItem
+                              key={graph.id}
+                              checked={enabledGraphIds.includes(graph.id)}
+                              onCheckedChange={() => onToggleGraph(graph.id)}
+                              onSelect={(e) => e.preventDefault()}
+                              className="text-xs"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <span className="truncate">{graph.name}</span>
+                                {graph.description && (
+                                  <p className="text-[10px] text-muted-foreground truncate">
+                                    {graph.description}
+                                  </p>
+                                )}
+                              </div>
+                            </DropdownMenuCheckboxItem>
+                          ))}
+                        </>
+                      )}
+                      {filteredAgents.length === 0 && filteredGraphs.length === 0 && (
+                        <div className="py-4 text-center text-xs text-muted-foreground">
+                          No results found
+                        </div>
+                      )}
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              {/* File upload button */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isStreaming}
+                title="Attach files"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+
+              {/* Context donut / Compact */}
+              {onCompact && contextPercent != null && contextPercent > 0 && (
+                <button
+                  type="button"
+                  onClick={onCompact}
+                  disabled={compactDisabled || isStreaming}
+                  title="Compact conversation"
+                  className="flex items-center gap-1 h-8 px-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  <ContextMiniDonut percent={contextPercent} />
+                  <span className="text-[11px] font-mono tabular-nums">{contextPercent}%</span>
+                </button>
+              )}
+            </div>
+
+            {/* Right: Model selector + Send / Cancel */}
+            <div className="flex items-center gap-1">
+              {/* Model selector */}
+              {chatModels.length > 0 && onModelChange && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-8 px-2.5 text-muted-foreground hover:text-foreground gap-1 text-xs"
+                      disabled={isStreaming}
+                    >
+                      <span className="max-w-[140px] truncate">
+                        {selectedModel ? getLabel(selectedModel) : "Select model"}
+                      </span>
+                      <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" side="top" className="w-64">
+                    <div className="max-h-[300px] overflow-y-auto">
+                      {Object.entries(
+                        chatModels.reduce<Record<string, EngineModel[]>>((acc, m) => {
+                          (acc[m.provider] ??= []).push(m);
+                          return acc;
+                        }, {}),
+                      ).map(([provider, providerModels]) => (
+                        <div key={provider}>
+                          <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            {provider}
+                          </DropdownMenuLabel>
+                          {providerModels.map((m) => (
+                            <DropdownMenuCheckboxItem
+                              key={m.id}
+                              checked={
+                                selectedModelId === m.id ||
+                                selectedModelId === `${m.provider}:${m.model_id}`
+                              }
+                              onCheckedChange={() => onModelChange(m.id)}
+                              className="text-xs"
+                            >
+                              {getLabel(m)}
+                            </DropdownMenuCheckboxItem>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              <Button
+                onClick={isStreaming ? onCancel : onSend}
+                disabled={isSendDisabled || (!isStreaming && !value.trim() && attachedFiles.length === 0)}
+                size="icon"
+                variant={isStreaming ? "destructive" : "default"}
+                className="h-8 w-8 shrink-0 rounded-lg"
+                title={disabledReason || undefined}
+              >
+                {isStreaming ? (
+                  <Square className="h-3.5 w-3.5 fill-current" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Drag overlay hint */}
