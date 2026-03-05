@@ -480,11 +480,22 @@ class ExecutionService:
             query=execution.input_prompt,
             session=self.db,
             user_id=execution.user_id,
+            conversation_id=execution.session_id,
+            model_id=agent.model_id,
         )
 
         input_data = dict(execution.input_data or {})
         if context_messages:
             input_data["_context_layers"] = [msg.content for msg in context_messages]
+
+        # Emit conversation history trace event
+        history_count = context_builder.get_history_message_count()
+        if history_count:
+            yield {
+                "type": "trace:context",
+                "source": "conversation_history",
+                "message_count": history_count,
+            }
 
         # Emit knowledge trace event for the frontend right panel
         rag_results = context_builder.get_rag_results()
@@ -496,6 +507,14 @@ class ExecutionService:
                 "chunks": data["chunks"],
                 "total_results": data["total_results"],
             }
+
+        # Emit memory context trace event for the frontend right panel
+        context_details = context_builder.get_context_details()
+        yield {
+            "type": "trace:memory",
+            "history": context_details["history"],
+            "memory_entries": context_details["memory_entries"],
+        }
 
         # Create initial state
         state = create_initial_state(
