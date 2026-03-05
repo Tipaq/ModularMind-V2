@@ -514,41 +514,66 @@ const LAYER_COLORS: Record<string, { bg: string; text: string }> = {
 
 function ContextUsageBar({ overview }: { overview: BudgetOverview }) {
   const formatK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n);
-  const totalAllocated = overview.layers.history.allocated + overview.layers.memory.allocated + overview.layers.rag.allocated;
+  const cw = overview.contextWindow;
   const totalUsed = overview.layers.history.used + overview.layers.memory.used + overview.layers.rag.used;
+  const totalPct = cw > 0 ? Math.round((totalUsed / cw) * 100) : 0;
 
   return (
     <div className="px-4 py-3 space-y-2.5 border-b border-border/50">
+      {/* Header: context window size + total usage */}
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          Context Usage
+          Context Window
         </p>
-        <span className="text-[10px] font-mono text-muted-foreground">
-          {formatK(totalUsed)}/{formatK(overview.effectiveContext)} tok
-          {overview.maxPct < 100 && (
-            <span className="ml-1 text-muted-foreground/60">({overview.maxPct}% of {formatK(overview.contextWindow)})</span>
-          )}
+        <span className="text-[11px] font-mono font-medium tabular-nums">
+          {formatK(cw)} tok
         </span>
       </div>
-      {/* Stacked usage bar */}
-      <div className="flex h-2 rounded-full overflow-hidden bg-muted">
-        {(["history", "memory", "rag"] as const).map((key) => {
-          const layer = overview.layers[key];
-          const widthPct = overview.effectiveContext > 0 ? (layer.used / overview.effectiveContext) * 100 : 0;
-          return widthPct > 0 ? (
-            <div
-              key={key}
-              className={cn("h-full transition-all", LAYER_COLORS[key].bg)}
-              style={{ width: `${widthPct}%` }}
-            />
-          ) : null;
-        })}
+
+      {/* Stacked usage bar — relative to full context window */}
+      <div className="relative">
+        <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
+          {(["history", "memory", "rag"] as const).map((key) => {
+            const widthPct = cw > 0 ? (overview.layers[key].used / cw) * 100 : 0;
+            return widthPct > 0 ? (
+              <div
+                key={key}
+                className={cn("h-full transition-all", LAYER_COLORS[key].bg)}
+                style={{ width: `${widthPct}%` }}
+              />
+            ) : null;
+          })}
+        </div>
+        {/* Cap marker when maxPct < 100 */}
+        {overview.maxPct < 100 && (
+          <div
+            className="absolute top-0 bottom-0 w-px bg-foreground/40"
+            style={{ left: `${overview.maxPct}%` }}
+            title={`Cap: ${overview.maxPct}%`}
+          />
+        )}
       </div>
-      {/* Per-layer breakdown */}
+
+      {/* Total summary line */}
+      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+        <span>
+          <span className="font-mono font-medium text-foreground">{formatK(totalUsed)}</span>
+          <span> / {formatK(cw)} used</span>
+        </span>
+        <span className={cn(
+          "font-mono font-medium",
+          totalPct >= 90 ? "text-destructive" : totalPct >= 70 ? "text-warning" : "text-foreground",
+        )}>
+          {totalPct}%
+        </span>
+      </div>
+
+      {/* Per-layer breakdown — percentages relative to full context window */}
       <div className="grid grid-cols-3 gap-1">
         {(["history", "memory", "rag"] as const).map((key) => {
           const layer = overview.layers[key];
-          const fillPct = layer.allocated > 0 ? Math.min(100, Math.round((layer.used / layer.allocated) * 100)) : 0;
+          const usedPct = cw > 0 ? Math.round((layer.used / cw) * 100) : 0;
+          const allocPct = cw > 0 ? Math.round((layer.allocated / cw) * 100) : 0;
           return (
             <div key={key} className="text-center">
               <div className="flex items-center justify-center gap-1 mb-0.5">
@@ -556,13 +581,22 @@ function ContextUsageBar({ overview }: { overview: BudgetOverview }) {
                 <span className="text-[10px] text-muted-foreground capitalize">{key}</span>
               </div>
               <p className={cn("text-[11px] font-mono tabular-nums", LAYER_COLORS[key].text)}>
-                {formatK(layer.used)}/{formatK(layer.allocated)}
+                {formatK(layer.used)}
               </p>
-              <p className="text-[9px] text-muted-foreground">{fillPct}%</p>
+              <p className="text-[9px] font-mono text-muted-foreground tabular-nums">
+                {usedPct}% / {allocPct}%
+              </p>
             </div>
           );
         })}
       </div>
+
+      {/* Cap info */}
+      {overview.maxPct < 100 && (
+        <p className="text-[9px] text-muted-foreground/60 text-center">
+          Capped at {overview.maxPct}% &middot; {formatK(overview.effectiveContext)} effective
+        </p>
+      )}
     </div>
   );
 }
