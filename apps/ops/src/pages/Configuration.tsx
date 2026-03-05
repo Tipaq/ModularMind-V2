@@ -1,21 +1,14 @@
 import { useSearchParams } from "react-router-dom";
-import { Settings2, Key, Plug, Webhook, Layers, Cog } from "lucide-react";
-import { PageHeader, cn } from "@modularmind/ui";
+import { Settings2, Key, Plug, Webhook, Brain, BookOpen, Cog } from "lucide-react";
+import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
 import ProvidersTab from "../components/configuration/ProvidersTab";
 import McpServersTab from "../components/configuration/McpServersTab";
 import IntegrationsTab from "../components/configuration/IntegrationsTab";
-import EmbeddingsTab from "../components/configuration/EmbeddingsTab";
+import MemoryConfigTab from "../components/configuration/MemoryConfigTab";
+import KnowledgeConfigTab from "../components/configuration/KnowledgeConfigTab";
 import SystemTab from "../components/configuration/SystemTab";
 
-type TabId = "providers" | "mcp" | "integrations" | "embeddings" | "system";
-
-const tabs: { id: TabId; label: string; icon: typeof Key }[] = [
-  { id: "providers", label: "Providers", icon: Key },
-  { id: "mcp", label: "MCP Servers", icon: Plug },
-  { id: "integrations", label: "Integrations", icon: Webhook },
-  { id: "embeddings", label: "Embeddings", icon: Layers },
-  { id: "system", label: "System", icon: Cog },
-];
+type TabId = "providers" | "mcp" | "integrations" | "memory" | "knowledge" | "system";
 
 export default function Configuration() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -34,32 +27,53 @@ export default function Configuration() {
         description="Manage providers, integrations, and system settings"
       />
 
-      <div className="flex border-b border-border">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
-                activeTab === tab.id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
+        <TabsList>
+          <TabsTrigger value="providers">
+            <Key className="h-4 w-4" />
+            Providers
+          </TabsTrigger>
+          <TabsTrigger value="mcp">
+            <Plug className="h-4 w-4" />
+            MCP Servers
+          </TabsTrigger>
+          <TabsTrigger value="integrations">
+            <Webhook className="h-4 w-4" />
+            Integrations
+          </TabsTrigger>
+          <TabsTrigger value="memory">
+            <Brain className="h-4 w-4" />
+            Memory
+          </TabsTrigger>
+          <TabsTrigger value="knowledge">
+            <BookOpen className="h-4 w-4" />
+            Knowledge
+          </TabsTrigger>
+          <TabsTrigger value="system">
+            <Cog className="h-4 w-4" />
+            System
+          </TabsTrigger>
+        </TabsList>
 
-      {activeTab === "providers" && <ProvidersTab />}
-      {activeTab === "mcp" && <McpServersTab />}
-      {activeTab === "integrations" && <IntegrationsTab />}
-      {activeTab === "embeddings" && <EmbeddingsTab />}
-      {activeTab === "system" && <SystemTab />}
+        <TabsContent value="providers" className="mt-6">
+          <ProvidersTab />
+        </TabsContent>
+        <TabsContent value="mcp" className="mt-6">
+          <McpServersTab />
+        </TabsContent>
+        <TabsContent value="integrations" className="mt-6">
+          <IntegrationsTab />
+        </TabsContent>
+        <TabsContent value="memory" className="mt-6">
+          <MemoryConfigTab />
+        </TabsContent>
+        <TabsContent value="knowledge" className="mt-6">
+          <KnowledgeConfigTab />
+        </TabsContent>
+        <TabsContent value="system" className="mt-6">
+          <SystemTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

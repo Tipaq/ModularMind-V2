@@ -42,6 +42,15 @@ export interface ConsolidationLog {
   created_at: string;
 }
 
+export interface ConsolidationTriggerResult {
+  status: string;
+  decayed: number;
+  invalidated: number;
+  scopes_processed: number;
+  logs_cleaned: number;
+  duration_ms: number;
+}
+
 export interface GraphNode {
   id: string;
   content: string;
@@ -112,6 +121,9 @@ interface MemoryState {
   consolPage: number;
   consolLoading: boolean;
   consolError: string | null;
+  consolTriggering: boolean;
+  consolTriggerResult: ConsolidationTriggerResult | null;
+  consolTriggerError: string | null;
 
   // Users (for filter dropdown)
   memoryUsers: MemoryUser[];
@@ -125,6 +137,8 @@ interface MemoryState {
   fetchEntries: (page?: number) => Promise<void>;
   fetchGraphData: () => Promise<void>;
   fetchConsolidationLogs: (page?: number) => Promise<void>;
+  triggerConsolidation: () => Promise<void>;
+  clearTriggerResult: () => void;
   fetchMemoryUsers: () => Promise<void>;
   invalidateEntry: (entryId: string) => Promise<void>;
   setFilters: (filters: Partial<MemoryFilters>) => void;
@@ -158,6 +172,9 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   consolPage: 1,
   consolLoading: false,
   consolError: null,
+  consolTriggering: false,
+  consolTriggerResult: null,
+  consolTriggerError: null,
 
   memoryUsers: [],
 
@@ -239,6 +256,29 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     } finally {
       set({ consolLoading: false });
     }
+  },
+
+  triggerConsolidation: async () => {
+    set({ consolTriggering: true, consolTriggerError: null, consolTriggerResult: null });
+    try {
+      const data = await api.post<ConsolidationTriggerResult>(
+        "/memory/admin/consolidation/trigger",
+        {},
+      );
+      set({ consolTriggerResult: data });
+      // Refresh logs and stats after consolidation
+      await get().fetchConsolidationLogs(1);
+      await get().fetchGlobalStats();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to trigger consolidation";
+      set({ consolTriggerError: message });
+    } finally {
+      set({ consolTriggering: false });
+    }
+  },
+
+  clearTriggerResult: () => {
+    set({ consolTriggerResult: null, consolTriggerError: null });
   },
 
   fetchMemoryUsers: async () => {
