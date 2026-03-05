@@ -15,11 +15,20 @@ export interface Conversation {
   updated_at: string;
 }
 
+/** Structurally identical to `AttachmentChipData` in `@modularmind/ui`. */
+export interface MessageAttachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   metadata: Record<string, unknown>;
+  attachments?: MessageAttachment[];
   created_at: string;
 }
 
@@ -54,11 +63,13 @@ export interface ConversationUpdate {
 
 export interface SendMessageRequest {
   content: string;
+  attachment_ids?: string[];
 }
 
 // ─── Send Message Response ───────────────────────────────────────────────────
 
-export interface MemoryEntryResponse {
+/** Slim memory entry returned in supervisor routing context. */
+export interface MemoryEntrySummary {
   id: string;
   content: string;
   scope: string;
@@ -101,7 +112,7 @@ export interface SendMessageResponse {
   delegated_to: string | null;
   is_ephemeral: boolean | null;
   ephemeral_agent: { id: string; name: string } | null;
-  memory_entries: MemoryEntryResponse[];
+  memory_entries: MemoryEntrySummary[];
   knowledge_data: KnowledgeDataResponse | null;
 }
 

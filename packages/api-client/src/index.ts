@@ -18,6 +18,7 @@ export type * from "./types/memory";
 export type * from "./types/groups";
 export type * from "./types/supervisor";
 export type * from "./types/mcp";
+export type * from "./types/admin";
 
 // Utils
 export { snakeToCamel, mapKeysToCamel } from "./utils";

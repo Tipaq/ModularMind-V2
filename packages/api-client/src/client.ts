@@ -107,6 +107,30 @@ export class ApiClient {
   delete<T>(path: string) {
     return this.request<T>(path, { method: "DELETE" });
   }
+
+  /** Upload a FormData payload (multipart/form-data). Content-Type is set by the browser. */
+  async upload<T>(path: string, formData: FormData): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+
+    if (response.status === 401) {
+      const refreshed = await this.refresh();
+      if (!refreshed) throw new ApiError(401, "Session expired");
+      const retry = await fetch(`${this.baseUrl}${path}`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!retry.ok) throw new ApiError(retry.status, await retry.text());
+      return retry.json();
+    }
+
+    if (!response.ok) throw new ApiError(response.status, await response.text());
+    return response.json();
+  }
 }
 
 export class ApiError extends Error {
