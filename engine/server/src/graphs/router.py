@@ -4,63 +4,19 @@ Graphs router.
 API endpoints for listing graphs (read-only from config).
 """
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from src.auth import CurrentUser
 from src.domain_config import get_config_provider
-from src.infra.schemas import PaginatedResponse
+from src.graphs.schemas import (
+    EdgeDetail,
+    GraphDetail,
+    GraphListResponse,
+    GraphSummary,
+    NodeDetail,
+)
 
 router = APIRouter(prefix="/graphs", tags=["Graphs"])
-
-
-class NodeDetail(BaseModel):
-    """Full node representation (id, type, position, data)."""
-
-    id: str
-    type: str
-    position: dict[str, float] | None = None
-    data: dict[str, Any] = {}
-
-
-class EdgeDetail(BaseModel):
-    """Full edge representation."""
-
-    id: str
-    source: str
-    target: str
-    source_handle: str | None = None
-    target_handle: str | None = None
-    data: dict[str, Any] | None = None
-
-
-class GraphSummary(BaseModel):
-    """Graph summary for list view."""
-
-    id: str
-    name: str
-    description: str
-    version: int
-    timeout_seconds: int
-    node_count: int
-    edge_count: int
-    models: list[str] = []
-
-
-class GraphDetail(GraphSummary):
-    """Graph detail view."""
-
-    entry_node_id: str | None
-    nodes: list[NodeDetail]
-    edges: list[EdgeDetail]
-    config_version: int | None = None
-    config_hash: str | None = None
-
-
-class GraphListResponse(PaginatedResponse[GraphSummary]):
-    """Graph list response."""
 
 
 @router.get("", response_model=GraphListResponse)
