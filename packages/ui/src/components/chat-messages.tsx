@@ -5,8 +5,12 @@ import { ArrowRight, Bot, Loader2, User } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { ExecutionActivity } from "../types/chat";
 import { ExecutionActivityList } from "./execution-activity";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 const EMPTY_ACTIVITIES: ExecutionActivity[] = [];
+
+/** Minutes threshold — if two consecutive messages are closer than this, hide the timestamp. */
+const TIMESTAMP_GAP_MINUTES = 5;
 
 /** Minimal message shape — compatible with @modularmind/api-client Message. */
 export interface ChatMessage {
@@ -19,6 +23,15 @@ export interface ChatMessage {
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Full date+time for tooltip — just time if today, otherwise date + time. */
+function formatTooltipTime(iso: string): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (isSameDay(iso, new Date().toISOString())) return time;
+  const date = d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+  return `${date}, ${time}`;
 }
 
 function isSameDay(a: string, b: string): boolean {
@@ -38,6 +51,13 @@ function formatDateSeparator(iso: string): string {
   return d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 }
 
+/** Returns true if the gap between two ISO timestamps is >= TIMESTAMP_GAP_MINUTES. */
+function shouldShowTimestamp(prevIso: string | null, currentIso: string): boolean {
+  if (!prevIso) return true;
+  const diff = Math.abs(new Date(currentIso).getTime() - new Date(prevIso).getTime());
+  return diff >= TIMESTAMP_GAP_MINUTES * 60 * 1000;
+}
+
 // ─── MessageBubble ──────────────────────────────────────────────────────────
 
 interface MessageBubbleProps {
@@ -49,6 +69,8 @@ interface MessageBubbleProps {
   selected?: boolean;
   selectable?: boolean;
   onSelect?: () => void;
+  /** Whether to show the Messenger-style timestamp above the bubble. */
+  showTimestamp: boolean;
 }
 
 const MessageBubble = memo(function MessageBubble({
@@ -60,6 +82,7 @@ const MessageBubble = memo(function MessageBubble({
   selected,
   selectable,
   onSelect,
+  showTimestamp,
 }: MessageBubbleProps) {
   const isUser = msg.role === "user";
   const isAssistant = msg.role === "assistant";
@@ -73,8 +96,19 @@ const MessageBubble = memo(function MessageBubble({
   // While streaming with content building: show activity above the bubble
   const showActivityAbove = isLastAssistant && isStreaming && !!msg.content && activities.length > 0;
 
+  const timeStr = formatTime(msg.created_at);
+
   return (
     <div>
+      {/* Messenger-style timestamp centered above the message */}
+      {showTimestamp && (
+        <div className="flex items-center justify-center my-3">
+          <span className="text-[10px] text-muted-foreground">
+            {timeStr}
+          </span>
+        </div>
+      )}
+
       {/* Activity stream above bubble — only while streaming with content */}
       {showActivityAbove && (
         <div className="mb-3 ml-9">
@@ -109,45 +143,46 @@ const MessageBubble = memo(function MessageBubble({
             />
           </div>
         ) : (
-          <div
-            className={cn(
-              "max-w-[75%] px-4 py-2.5 transition-all",
-              isUser
-                ? "rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-secondary text-primary-foreground"
-                : "rounded-2xl rounded-bl-md bg-muted",
-              selectable && "cursor-pointer hover:ring-2 hover:ring-primary/20",
-              selected && "ring-2 ring-primary/50 shadow-sm",
-            )}
-            onClick={selectable ? onSelect : undefined}
-          >
-            {msg.content ? (
-              <div className="text-sm whitespace-pre-wrap break-words">
-                {msg.content}
-              </div>
-            ) : isStreaming && isLastAssistant ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Thinking...
-              </div>
-            ) : null}
-
-            {/* Routing metadata + timestamp */}
-            {msg.content && (
-              <div className={cn(
-                "flex items-center gap-2 mt-1.5 text-[10px]",
-                isUser ? "text-primary-foreground/60 justify-end" : "text-muted-foreground",
-              )}>
-                {showRoutingMetadata && !isUser && routingStrategy && (
-                  <span className="flex items-center gap-1">
-                    <ArrowRight className="h-2.5 w-2.5" />
-                    {routingStrategy}
-                    {delegatedTo && ` \u2192 ${delegatedTo}`}
-                  </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={cn(
+                  "max-w-[75%] px-4 py-2.5 transition-all",
+                  isUser
+                    ? "rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-secondary text-primary-foreground"
+                    : "rounded-2xl rounded-bl-md bg-muted",
+                  selectable && "cursor-pointer hover:ring-2 hover:ring-primary/20",
+                  selected && "ring-2 ring-primary/50 shadow-sm",
                 )}
-                <span>{formatTime(msg.created_at)}</span>
+                onClick={selectable ? onSelect : undefined}
+              >
+                {msg.content ? (
+                  <div className="text-sm whitespace-pre-wrap break-words">
+                    {msg.content}
+                  </div>
+                ) : isStreaming && isLastAssistant ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Thinking...
+                  </div>
+                ) : null}
+
+                {/* Routing metadata — stays inside the bubble */}
+                {msg.content && showRoutingMetadata && !isUser && routingStrategy && (
+                  <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <ArrowRight className="h-2.5 w-2.5" />
+                      {routingStrategy}
+                      {delegatedTo && ` \u2192 ${delegatedTo}`}
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </TooltipTrigger>
+            <TooltipContent side={isUser ? "left" : "right"} align="center" className="text-[10px]">
+              {formatTooltipTime(msg.created_at)}
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
     </div>
@@ -183,45 +218,55 @@ export const ChatMessages = memo(function ChatMessages({
   }, [messages]);
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto">
-      {messages.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-muted-foreground">
-          <p className="text-sm">Send a message to start the conversation</p>
-        </div>
-      ) : (
-        <div className="px-4 py-6 space-y-4">
-          {messages.map((msg, i) => {
-            const isLast = i === messages.length - 1;
-            const isUser = msg.role === "user";
-            const isAssistant = msg.role === "assistant";
-            const prevMsg = i > 0 ? messages[i - 1] : null;
-            const showDate = !prevMsg || !isSameDay(prevMsg.created_at, msg.created_at);
+    <TooltipProvider delayDuration={400}>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <p className="text-sm">Send a message to start the conversation</p>
+          </div>
+        ) : (
+          <div className="px-4 py-6">
+            {messages.map((msg, i) => {
+              const isLast = i === messages.length - 1;
+              const isUser = msg.role === "user";
+              const isAssistant = msg.role === "assistant";
+              const prevMsg = i > 0 ? messages[i - 1] : null;
+              const showDate = !prevMsg || !isSameDay(prevMsg.created_at, msg.created_at);
+              const showTimestamp = shouldShowTimestamp(
+                prevMsg?.created_at ?? null,
+                msg.created_at,
+              );
+              // Same sender → tight spacing, different sender → more breathing room
+              const sameSender = prevMsg && prevMsg.role === msg.role;
+              const gap = i === 0 ? "" : sameSender ? "mt-1" : "mt-4";
 
-            return (
-              <div key={msg.id}>
-                {showDate && (
-                  <div className="flex items-center justify-center my-4">
-                    <span className="text-[11px] text-muted-foreground bg-muted px-3 py-1 rounded-full">
-                      {formatDateSeparator(msg.created_at)}
-                    </span>
-                  </div>
-                )}
-                <MessageBubble
-                  msg={msg}
-                  isLast={isLast}
-                  isStreaming={isStreaming}
-                  activities={isLast && !isUser ? activities : EMPTY_ACTIVITIES}
-                  showRoutingMetadata={showRoutingMetadata}
-                  selectable={isAssistant && !!onSelectMessage}
-                  selected={isAssistant && msg.id === selectedMessageId}
-                  onSelect={isAssistant && onSelectMessage ? () => onSelectMessage(msg.id) : undefined}
-                />
-              </div>
-            );
-          })}
-          <div ref={bottomRef} />
-        </div>
-      )}
-    </div>
+              return (
+                <div key={msg.id} className={gap}>
+                  {showDate && (
+                    <div className="flex items-center justify-center my-4">
+                      <span className="text-[11px] text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                        {formatDateSeparator(msg.created_at)}
+                      </span>
+                    </div>
+                  )}
+                  <MessageBubble
+                    msg={msg}
+                    isLast={isLast}
+                    isStreaming={isStreaming}
+                    activities={isLast && !isUser ? activities : EMPTY_ACTIVITIES}
+                    showRoutingMetadata={showRoutingMetadata}
+                    selectable={isAssistant && !!onSelectMessage}
+                    selected={isAssistant && msg.id === selectedMessageId}
+                    onSelect={isAssistant && onSelectMessage ? () => onSelectMessage(msg.id) : undefined}
+                    showTimestamp={showTimestamp}
+                  />
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </div>
+        )}
+      </div>
+    </TooltipProvider>
   );
 });
