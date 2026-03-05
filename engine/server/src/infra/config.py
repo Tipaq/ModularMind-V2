@@ -180,11 +180,48 @@ class Settings(BaseSettings):
     MEMORY_DECAY_PROCEDURAL_HALF_LIFE: int = Field(default=730, ge=1)
     MEMORY_DECAY_PRUNE_THRESHOLD: float = Field(default=0.05, ge=0.0, le=1.0)
 
+    # ---- Memory Extraction Token Trigger -------------------------------------
+    MEMORY_BUFFER_TOKEN_THRESHOLD: int = Field(
+        default=3000, ge=500, le=20000,
+        description="Token threshold for extraction: trigger when unextracted content exceeds this",
+    )
+
     # ---- Memory Retrieval Scoring --------------------------------------------
-    MEMORY_SCORE_WEIGHT_RECENCY: float = Field(default=0.15, ge=0.0, le=1.0)
-    MEMORY_SCORE_WEIGHT_IMPORTANCE: float = Field(default=0.25, ge=0.0, le=1.0)
-    MEMORY_SCORE_WEIGHT_RELEVANCE: float = Field(default=0.45, ge=0.0, le=1.0)
-    MEMORY_SCORE_WEIGHT_FREQUENCY: float = Field(default=0.15, ge=0.0, le=1.0)
+    MEMORY_SCORE_WEIGHT_RECENCY: float = Field(default=0.10, ge=0.0, le=1.0)
+    MEMORY_SCORE_WEIGHT_IMPORTANCE: float = Field(default=0.15, ge=0.0, le=1.0)
+    MEMORY_SCORE_WEIGHT_RELEVANCE: float = Field(default=0.65, ge=0.0, le=1.0)
+    MEMORY_SCORE_WEIGHT_FREQUENCY: float = Field(default=0.10, ge=0.0, le=1.0)
+    MEMORY_MIN_RELEVANCE_GATE: float = Field(
+        default=0.4, ge=0.0, le=1.0,
+        description="Minimum Qdrant relevance score (RRF) to consider a memory entry. "
+        "Entries below this are dropped regardless of importance/recency.",
+    )
+
+    # ---- Context Budget (percentage of model context_window) -------------------
+    CONTEXT_BUDGET_HISTORY_PCT: float = Field(
+        default=30.0, ge=5.0, le=60.0,
+        description="Percentage of model context_window allocated to conversation history",
+    )
+    CONTEXT_BUDGET_MEMORY_PCT: float = Field(
+        default=10.0, ge=0.0, le=30.0,
+        description="Percentage of model context_window allocated to memory retrieval",
+    )
+    CONTEXT_BUDGET_RAG_PCT: float = Field(
+        default=15.0, ge=0.0, le=40.0,
+        description="Percentage of model context_window allocated to RAG chunks",
+    )
+    CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW: int = Field(
+        default=8192, ge=2048, le=200000,
+        description="Fallback context_window when model metadata is unavailable",
+    )
+    CONTEXT_BUDGET_MAX_PCT: float = Field(
+        default=100.0, ge=10.0, le=100.0,
+        description="Soft limit: max total % of context_window usable by all layers combined",
+    )
+    CONVERSATION_HISTORY_MAX_MESSAGES: int = Field(
+        default=20, ge=5, le=50,
+        description="Max recent messages to load for conversation history context",
+    )
 
     # ---- Conversation Indexing ----------------------------------------------
     CONVERSATION_INDEX_MODE: str = Field(
