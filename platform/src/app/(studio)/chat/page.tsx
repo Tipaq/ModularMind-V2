@@ -84,7 +84,7 @@ export default function ChatPage() {
   const contextPercent = useMemo(() => {
     const bo = selectedExecution?.contextData?.budgetOverview;
     if (!bo || bo.effectiveContext <= 0) return null;
-    const totalUsed = bo.layers.history.used + bo.layers.memory.used + bo.layers.rag.used;
+    const totalUsed = (bo.layers.system?.used ?? 0) + bo.layers.history.used + bo.layers.memory.used + bo.layers.rag.used;
     return Math.round((totalUsed / bo.effectiveContext) * 100);
   }, [selectedExecution]);
 
@@ -249,7 +249,7 @@ export default function ChatPage() {
               supervisor_prompt: newConfig.supervisorPrompt,
             },
           }),
-        }).catch(() => {});
+        }).catch((e) => console.warn("[Chat] config persist failed", e));
       }, CONFIG_DEBOUNCE_MS);
     },
     [activeConversationId, enabledAgentIds, enabledGraphIds],
@@ -288,7 +288,7 @@ export default function ChatPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
-      }).catch(() => {});
+      }).catch((e) => console.warn("[Chat] title update failed", e));
     }
 
     // Cancel any pending debounced PATCH to avoid concurrent writes
@@ -311,7 +311,7 @@ export default function ChatPage() {
           supervisor_prompt: chatConfig.supervisorPrompt,
         },
       }),
-    }).catch(() => {});
+    }).catch((e) => console.warn("[Chat] pre-send config persist failed", e));
 
     const files = attachedFiles.length > 0 ? attachedFiles.map((af) => af.file) : undefined;
     sendMessage(inputValue, convId ?? undefined, files);
@@ -420,6 +420,8 @@ export default function ChatPage() {
           supervisorLayers={supervisorLayers}
           onUpdateLayer={updateSupervisorLayer}
           selectedModelContextWindow={selectedModelContextWindow}
+          enabledAgents={agents.filter((a) => enabledAgentIds.includes(a.id))}
+          enabledGraphs={graphs.filter((g) => enabledGraphIds.includes(g.id))}
         />
       )}
     </div>

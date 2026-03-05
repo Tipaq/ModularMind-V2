@@ -34,6 +34,7 @@ interface SendMessageResponse {
         history: { pct: number; allocated: number; used: number };
         memory: { pct: number; allocated: number; used: number };
         rag: { pct: number; allocated: number; used: number };
+        system?: { pct: number; allocated: number; used: number };
       };
     };
   };
@@ -290,6 +291,7 @@ export function useChat(conversationId: string | null) {
               history: bo.layers.history,
               memory: bo.layers.memory,
               rag: bo.layers.rag,
+              ...(bo.layers.system ? { system: bo.layers.system } : {}),
             },
           } : null,
         };
@@ -430,6 +432,7 @@ export function useChat(conversationId: string | null) {
                   history: bo.layers.history,
                   memory: bo.layers.memory,
                   rag: bo.layers.rag,
+                  ...(bo.layers.system ? { system: bo.layers.system } : {}),
                 },
               } : null,
             };

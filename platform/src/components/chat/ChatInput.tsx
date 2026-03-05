@@ -24,6 +24,7 @@ import {
   cn,
 } from "@modularmind/ui";
 import type { EngineAgent, EngineGraph, EngineModel } from "@/hooks/useChatConfig";
+import type { AttachedFile } from "@modularmind/ui";
 
 const ALLOWED_FILE_TYPES = [
   "application/pdf",
@@ -40,10 +41,7 @@ const ALLOWED_FILE_TYPES = [
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
-export interface AttachedFile {
-  file: File;
-  id: string;
-}
+export type { AttachedFile } from "@modularmind/ui";
 
 interface ChatInputProps {
   value: string;

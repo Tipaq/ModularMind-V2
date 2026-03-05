@@ -5,6 +5,7 @@ import { cn } from "@modularmind/ui";
 import type { BudgetOverview } from "@/hooks/useChat";
 
 const LAYERS = [
+  { key: "system" as const, label: "System", color: "hsl(var(--primary))", bgClass: "bg-primary", textClass: "text-primary" },
   { key: "history" as const, label: "History", color: "hsl(var(--info))", bgClass: "bg-info", textClass: "text-info" },
   { key: "memory" as const, label: "Memory", color: "hsl(var(--warning))", bgClass: "bg-warning", textClass: "text-warning" },
   { key: "rag" as const, label: "RAG", color: "hsl(var(--success))", bgClass: "bg-success", textClass: "text-success" },
@@ -20,8 +21,9 @@ interface ContextBudgetDonutProps {
 export function ContextBudgetDonut({ overview, className }: ContextBudgetDonutProps) {
   const formatK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n);
 
-  const totalUsed = overview.layers.history.used + overview.layers.memory.used + overview.layers.rag.used;
-  const totalAllocated = overview.layers.history.allocated + overview.layers.memory.allocated + overview.layers.rag.allocated;
+  const systemLayer = overview.layers.system ?? { used: 0, allocated: 0, pct: 0 };
+  const totalUsed = systemLayer.used + overview.layers.history.used + overview.layers.memory.used + overview.layers.rag.used;
+  const totalAllocated = systemLayer.allocated + overview.layers.history.allocated + overview.layers.memory.allocated + overview.layers.rag.allocated;
   const fillPct = overview.effectiveContext > 0 ? Math.round((totalUsed / overview.effectiveContext) * 100) : 0;
 
   // SVG donut parameters
@@ -36,7 +38,9 @@ export function ContextBudgetDonut({ overview, className }: ContextBudgetDonutPr
     let cumPct = 0;
 
     for (const layer of LAYERS) {
-      const pct = overview.layers[layer.key].pct;
+      const info = layer.key === "system" ? overview.layers.system : overview.layers[layer.key];
+      if (!info) continue;
+      const pct = info.pct;
       if (pct > 0) {
         segments.push({
           offset: cumPct / 100,
@@ -67,7 +71,9 @@ export function ContextBudgetDonut({ overview, className }: ContextBudgetDonutPr
 
     let cumPct = 0;
     for (const layer of LAYERS) {
-      const usedPct = (overview.layers[layer.key].used / overview.effectiveContext) * 100;
+      const info = layer.key === "system" ? overview.layers.system : overview.layers[layer.key];
+      if (!info) continue;
+      const usedPct = (info.used / overview.effectiveContext) * 100;
       if (usedPct > 0) {
         segments.push({
           offset: cumPct / 100,
@@ -148,8 +154,8 @@ export function ContextBudgetDonut({ overview, className }: ContextBudgetDonutPr
       {/* Legend */}
       <div className="flex items-center gap-3 text-[10px] text-muted-foreground overflow-hidden">
         {LAYERS.map((layer) => {
-          const info = overview.layers[layer.key];
-          if (info.allocated === 0 && info.used === 0) return null;
+          const info = layer.key === "system" ? overview.layers.system : overview.layers[layer.key];
+          if (!info || (info.allocated === 0 && info.used === 0)) return null;
           return (
             <span key={layer.key} className="flex items-center gap-1 shrink-0">
               <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", layer.bgClass)} />
