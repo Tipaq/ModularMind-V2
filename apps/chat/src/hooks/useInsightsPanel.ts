@@ -1,52 +1,22 @@
 import { useCallback, useState } from "react";
 import { mapKeysToCamel } from "@modularmind/api-client";
+import type {
+  SupervisorData,
+  KnowledgeCollection,
+  KnowledgeChunk,
+  KnowledgeData as KnowledgeDataBase,
+  InsightsMemoryEntry,
+} from "@modularmind/ui";
 
-// ─── Supervisor ──────────────────────────────────────────────────────────────
+export type { SupervisorData, KnowledgeCollection, KnowledgeChunk, InsightsMemoryEntry };
 
-export interface SupervisorData {
-  routingStrategy: string | null;
-  delegatedTo: string | null;
-  isEphemeral: boolean;
-  ephemeralAgent: { id: string; name: string } | null;
-}
-
-// ─── Knowledge ───────────────────────────────────────────────────────────────
-
-export interface KnowledgeCollection {
-  collectionId: string;
-  collectionName: string;
-  chunkCount: number;
-}
-
-export interface KnowledgeChunk {
-  chunkId: string;
-  documentId: string;
-  collectionId: string;
-  collectionName: string;
-  documentFilename: string | null;
-  contentPreview: string;
-  score: number;
-  chunkIndex: number;
-}
-
-export interface KnowledgeData {
+/** Extended KnowledgeData with loading status for the panel. */
+export interface KnowledgeData extends KnowledgeDataBase {
   status: "idle" | "loading" | "completed";
-  collections: KnowledgeCollection[];
-  chunks: KnowledgeChunk[];
-  totalResults: number;
 }
 
-// ─── Memory ──────────────────────────────────────────────────────────────────
-
-export interface MemoryEntry {
-  id: string;
-  content: string;
-  scope: string;
-  tier: string;
-  importance: number;
-  memoryType: string;
-  category: string;
-}
+/** Alias kept for backward compatibility within the chat app. */
+export type MemoryEntry = InsightsMemoryEntry;
 
 // ─── Panel State ─────────────────────────────────────────────────────────────
 

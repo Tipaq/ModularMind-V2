@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Bot, Zap, PanelRight } from "lucide-react";
-import type { ConversationDetail, ConversationCreate } from "@modularmind/api-client";
-import { useChat, type Message } from "../hooks/useChat";
+import { useChat } from "../hooks/useChat";
 import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
-import { ChatSidebar, type Conversation } from "../components/ChatSidebar";
+import { useConversations } from "../hooks/useConversations";
+import { ChatSidebar } from "../components/ChatSidebar";
 import { ChatMessages } from "../components/ChatMessages";
-import { ChatInput } from "../components/ChatInput";
+import { ChatInput, type AttachedFile } from "../components/ChatInput";
 import { InsightsPanel } from "../components/InsightsPanel";
 import { useAuthStore } from "@modularmind/ui";
 import { api } from "../lib/api";
@@ -23,15 +23,25 @@ const DEFAULT_CONFIG: ChatConfig = {
 };
 
 export default function Chat() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [enabledAgentIds, setEnabledAgentIds] = useState<string[]>([]);
   const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
   const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CONFIG);
 
   const user = useAuthStore((s) => s.user);
   const { agents, graphs, models, load: loadConfig } = useChatConfig();
+
+  // ─── useChat (messages, streaming, SSE) ─────────────────────────────────
+  // We need activeConversationId before calling useChat, but useConversations
+  // depends on setInitialMessages from useChat.  Break the cycle by lifting
+  // activeConversationId into a local useState that both hooks can share via
+  // the returned setter from useConversations.
+  //
+  // useChat only reads the id for its sendMessage closure, so we can safely
+  // initialise it as null and let useConversations keep it updated.
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+
   const {
     messages,
     isStreaming,
@@ -44,10 +54,39 @@ export default function Chat() {
     cancelStream,
   } = useChat(activeConversationId);
 
+  // ─── useConversations (CRUD, list, selection) ───────────────────────────
+  const {
+    conversations,
+    setConversations,
+    crudError,
+    handleSelectConversation,
+    createConversation,
+    handleDeleteConversation,
+    handleRenameConversation,
+  } = useConversations({
+    user,
+    activeConversationId,
+    setActiveConversationId,
+    setInitialMessages,
+    setChatConfig,
+    setEnabledAgentIds,
+    setEnabledGraphIds,
+    enabledAgentIds,
+    enabledGraphIds,
+    supervisorMode: chatConfig.supervisorMode,
+  });
+
   const [panelOpen, setPanelOpen] = useState(false);
 
   // Debounce config persistence
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load config once user is authenticated
+  // (conversations are loaded by useConversations internally)
+  useEffect(() => {
+    if (!user) return;
+    loadConfig();
+  }, [user, loadConfig]);
 
   // Build the full model identifier the Engine expects: "provider:model_id"
   const toEngineModelId = useCallback((m: EngineModel) => `${m.provider}:${m.model_id}`, []);
@@ -70,111 +109,9 @@ export default function Chat() {
     return null;
   }, [effectiveModelId]);
 
-  // Load data once user is authenticated
-  useEffect(() => {
-    if (!user) return;
-    loadConfig();
-    let active = true;
-    async function fetchData() {
-      try {
-        const data = await api.get<{ items: Conversation[] }>("/conversations?page_size=50");
-        if (active) setConversations(data.items || []);
-      } catch (err) {
-        console.error("[Chat]", err);
-      }
-    }
-    fetchData();
-    return () => { active = false; };
-  }, [user, loadConfig]);
-
-  // Load messages when selecting a conversation
-  const handleSelectConversation = useCallback(
-    async (id: string) => {
-      setActiveConversationId(id);
-      try {
-        const data = await api.get<ConversationDetail>(`/conversations/${id}`);
-        const msgs: Message[] = (data.messages || []).map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          created_at: m.created_at,
-          metadata: m.metadata || {},
-        }));
-        setInitialMessages(msgs);
-
-        // Apply conversation config
-        const convConfig = data.config || {};
-        setEnabledAgentIds(convConfig.enabled_agent_ids || []);
-        setEnabledGraphIds(convConfig.enabled_graph_ids || []);
-        setChatConfig({
-          supervisorMode: data.supervisor_mode ?? true,
-          modelId: convConfig.model_id || null,
-          modelOverride: convConfig.model_override || false,
-        });
-      } catch (err) {
-        console.error("[Chat]", err);
-      }
-    },
-    [setInitialMessages],
-  );
-
-  const createConversation = useCallback(async (): Promise<string | null> => {
-    try {
-      const body: ConversationCreate = {
-        supervisor_mode: chatConfig.supervisorMode,
-      };
-      // If a single agent is selected, use direct mode
-      if (enabledAgentIds.length === 1 && enabledGraphIds.length === 0) {
-        body.agent_id = enabledAgentIds[0];
-        body.supervisor_mode = false;
-      }
-
-      const conv = await api.post<Conversation>("/conversations", body);
-      setConversations((prev) => [conv, ...prev]);
-      setActiveConversationId(conv.id);
-      setInitialMessages([]);
-      setChatConfig({ ...DEFAULT_CONFIG, supervisorMode: chatConfig.supervisorMode });
-      return conv.id;
-    } catch (err) {
-      console.error("[Chat]", err);
-      return null;
-    }
-  }, [enabledAgentIds, enabledGraphIds, chatConfig.supervisorMode, setInitialMessages]);
-
   const handleCreateConversation = useCallback(async () => {
     await createConversation();
   }, [createConversation]);
-
-  const handleDeleteConversation = useCallback(
-    async (id: string) => {
-      try {
-        await api.delete(`/conversations/${id}`);
-        setConversations((prev) => prev.filter((c) => c.id !== id));
-        if (activeConversationId === id) {
-          setActiveConversationId(null);
-          setInitialMessages([]);
-          setChatConfig(DEFAULT_CONFIG);
-        }
-      } catch (err) {
-        console.error("[Chat]", err);
-      }
-    },
-    [activeConversationId, setInitialMessages],
-  );
-
-  const handleRenameConversation = useCallback(
-    async (id: string, title: string) => {
-      try {
-        await api.patch(`/conversations/${id}`, { title });
-        setConversations((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, title } : c)),
-        );
-      } catch (err) {
-        console.error("[Chat]", err);
-      }
-    },
-    [],
-  );
 
   // Persist config changes to conversation (debounced)
   const persistConfig = useCallback(
@@ -197,7 +134,7 @@ export default function Chat() {
   );
 
   const handleSend = useCallback(async () => {
-    if (!inputValue.trim() || isStreaming || !effectiveModelId) return;
+    if ((!inputValue.trim() && attachedFiles.length === 0) || isStreaming || !effectiveModelId) return;
 
     let convId = activeConversationId;
 
@@ -233,9 +170,11 @@ export default function Chat() {
       },
     }).catch((err) => console.error("[Chat]", err));
 
-    sendMessage(inputValue, convId ?? undefined);
+    const files = attachedFiles.length > 0 ? attachedFiles.map((af) => af.file) : undefined;
+    sendMessage(inputValue, convId ?? undefined, files);
     setInputValue("");
-  }, [inputValue, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, effectiveModelId, sendMessage, conversations, messages.length]);
+    setAttachedFiles([]);
+  }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, effectiveModelId, sendMessage, conversations, messages.length, setConversations]);
 
   const handleToggleAgent = useCallback((agentId: string) => {
     setEnabledAgentIds((prev) =>
@@ -313,9 +252,9 @@ export default function Chat() {
           </div>
         </div>
 
-        {error && (
+        {(error || crudError) && (
           <div className="px-4 py-2 bg-destructive/10 text-destructive text-sm border-b border-destructive/20 shrink-0">
-            {error}
+            {error || crudError}
           </div>
         )}
 
@@ -338,6 +277,7 @@ export default function Chat() {
           enabledGraphIds={enabledGraphIds}
           onToggleAgent={handleToggleAgent}
           onToggleGraph={handleToggleGraph}
+          onFilesChange={setAttachedFiles}
           disabledReason={sendDisabledReason}
           models={models}
           selectedModelId={effectiveModelId}

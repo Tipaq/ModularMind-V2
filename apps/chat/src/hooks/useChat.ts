@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Message as ApiMessage, SendMessageResponse } from "@modularmind/api-client";
+import type { Message as ApiMessage, MessageAttachment, SendMessageResponse } from "@modularmind/api-client";
 import { api } from "../lib/api";
 import { useExecutionActivities } from "./useExecutionActivities";
 import { useInsightsPanel } from "./useInsightsPanel";
@@ -75,8 +75,20 @@ export function useChat(conversationId: string | null) {
     setMessages(msgs);
   }, []);
 
+  const uploadAttachment = useCallback(
+    async (conversationId: string, file: File): Promise<MessageAttachment> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return api.upload<MessageAttachment>(
+        `/conversations/${conversationId}/attachments`,
+        formData,
+      );
+    },
+    [],
+  );
+
   const sendMessage = useCallback(
-    async (content: string, overrideConversationId?: string) => {
+    async (content: string, overrideConversationId?: string, files?: File[]) => {
       const targetConvId = overrideConversationId || conversationId;
       if (!targetConvId || isStreaming) return;
 
@@ -86,6 +98,23 @@ export function useChat(conversationId: string | null) {
       resetActivities();
       resetPanel();
 
+      // Upload attachments first
+      let attachmentIds: string[] = [];
+      let uploadedAttachments: MessageAttachment[] = [];
+      if (files && files.length > 0) {
+        try {
+          const results = await Promise.all(
+            files.map((f) => uploadAttachment(targetConvId, f)),
+          );
+          attachmentIds = results.map((a) => a.id);
+          uploadedAttachments = results;
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to upload attachments");
+          setIsStreaming(false);
+          return;
+        }
+      }
+
       // Optimistically add user message
       const tempUserMsg: Message = {
         id: `temp-${Date.now()}`,
@@ -93,6 +122,7 @@ export function useChat(conversationId: string | null) {
         content,
         created_at: new Date().toISOString(),
         metadata: {},
+        attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
       };
       setMessages((prev) => [...prev, tempUserMsg]);
 
@@ -108,9 +138,12 @@ export function useChat(conversationId: string | null) {
       const sendStartMs = Date.now();
 
       // Send message to backend
+      const body: { content: string; attachment_ids?: string[] } = { content };
+      if (attachmentIds.length > 0) body.attachment_ids = attachmentIds;
+
       let res: SendMessageResponse;
       try {
-        res = await api.post<SendMessageResponse>(`/conversations/${targetConvId}/messages`, { content });
+        res = await api.post<SendMessageResponse>(`/conversations/${targetConvId}/messages`, body);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to send message");
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));

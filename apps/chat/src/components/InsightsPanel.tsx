@@ -86,15 +86,21 @@ function SupervisorTab({ data }: { data: SupervisorData | null }) {
 
 // ─── Knowledge Tab ───────────────────────────────────────────────────────────
 
+function scoreTextColor(pct: number): string {
+  if (pct >= 80) return "text-success";
+  if (pct >= 50) return "text-warning";
+  return "text-muted-foreground";
+}
+
+function scoreBgColor(pct: number): string {
+  if (pct >= 80) return "bg-success";
+  if (pct >= 50) return "bg-warning";
+  return "bg-muted-foreground/40";
+}
+
 function ChunkItem({ chunk }: { chunk: KnowledgeChunk }) {
   const [expanded, setExpanded] = useState(false);
   const scorePercent = Math.round(chunk.score * 100);
-  const scoreColor =
-    scorePercent >= 80
-      ? "text-success"
-      : scorePercent >= 50
-        ? "text-warning"
-        : "text-muted-foreground";
 
   return (
     <div
@@ -106,7 +112,7 @@ function ChunkItem({ chunk }: { chunk: KnowledgeChunk }) {
         <span className="text-xs font-medium truncate flex-1">
           {chunk.documentFilename || "Unknown document"}
         </span>
-        <span className={cn("text-[10px] font-mono shrink-0", scoreColor)}>
+        <span className={cn("text-[10px] font-mono shrink-0", scoreTextColor(scorePercent))}>
           {scorePercent}%
         </span>
         {expanded ? (
@@ -119,14 +125,7 @@ function ChunkItem({ chunk }: { chunk: KnowledgeChunk }) {
       {/* Score bar */}
       <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
         <div
-          className={cn(
-            "h-full rounded-full transition-all",
-            scorePercent >= 80
-              ? "bg-success"
-              : scorePercent >= 50
-                ? "bg-warning"
-                : "bg-muted-foreground/40",
-          )}
+          className={cn("h-full rounded-full transition-all", scoreBgColor(scorePercent))}
           style={{ width: `${scorePercent}%` }}
         />
       </div>
