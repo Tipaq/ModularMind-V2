@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { requireAuth, errorResponse } from "@/lib/api-utils";
 import { db } from "@/lib/db";
 import { parseBody, updateGraphSchema } from "@/lib/validations";
@@ -35,8 +36,8 @@ export async function PATCH(
     data: {
       ...(data.name !== undefined && { name: data.name }),
       ...(data.description !== undefined && { description: data.description }),
-      ...(data.nodes !== undefined && { nodes: data.nodes }),
-      ...(data.edges !== undefined && { edges: data.edges }),
+      ...(data.nodes !== undefined && { nodes: data.nodes as Prisma.InputJsonValue }),
+      ...(data.edges !== undefined && { edges: data.edges as Prisma.InputJsonValue }),
       version: { increment: 1 },
     },
   });

@@ -52,7 +52,7 @@ function GraphNodeComponent({ data, selected }: GraphNodeProps) {
           position={h.position}
           id={h.id}
           style={h.style}
-          className="!w-2.5 !h-2.5 !bg-gray-400 !border-2 !border-white"
+          className="!w-2.5 !h-2.5 !bg-muted-foreground !border-2 !border-background"
         />
       ))}
 
@@ -67,7 +67,7 @@ function GraphNodeComponent({ data, selected }: GraphNodeProps) {
           )}
         </div>
         {data.isEntryNode && (
-          <div className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" title="Entry point" />
+          <div className="h-2 w-2 rounded-full bg-success shrink-0" title="Entry point" />
         )}
       </div>
 
@@ -84,7 +84,7 @@ function GraphNodeComponent({ data, selected }: GraphNodeProps) {
           position={h.position}
           id={h.id}
           style={h.style}
-          className="!w-2.5 !h-2.5 !bg-gray-400 !border-2 !border-white"
+          className="!w-2.5 !h-2.5 !bg-muted-foreground !border-2 !border-background"
         />
       ))}
     </div>

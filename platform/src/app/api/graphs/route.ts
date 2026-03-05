@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { requireAuth } from "@/lib/api-utils";
 import { db } from "@/lib/db";
 import { paginatedQuery, paginatedResponse } from "@/lib/db-utils";
@@ -36,8 +37,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     data: {
       name: data.name,
       description: data.description,
-      nodes: data.nodes,
-      edges: data.edges,
+      nodes: data.nodes as Prisma.InputJsonValue,
+      edges: data.edges as Prisma.InputJsonValue,
     },
   });
 

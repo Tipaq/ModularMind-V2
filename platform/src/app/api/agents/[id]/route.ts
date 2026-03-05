@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { requireAuth, errorResponse } from "@/lib/api-utils";
 import { db } from "@/lib/db";
 import { parseBody, updateAgentSchema } from "@/lib/validations";
@@ -37,7 +38,7 @@ export async function PATCH(
       ...(data.description !== undefined && { description: data.description }),
       ...(data.model !== undefined && { model: data.model }),
       ...(data.provider !== undefined && { provider: data.provider }),
-      ...(data.config !== undefined && { config: data.config }),
+      ...(data.config !== undefined && { config: data.config as Prisma.InputJsonValue }),
       ...(data.tags !== undefined && { tags: data.tags }),
       version: { increment: 1 },
     },
