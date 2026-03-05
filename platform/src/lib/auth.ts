@@ -3,6 +3,9 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "./db";
 
+/** Sliding-window refresh threshold: re-validate user from DB every hour. */
+const JWT_REFRESH_SECONDS = 60 * 60; // 1 hour
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
@@ -35,9 +38,29 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user }) {
+      // Initial sign-in — stamp the token
       if (user) {
         token.role = (user as { role: string }).role;
+        token.issuedAt = Math.floor(Date.now() / 1000);
+        return token;
       }
+
+      // Sliding refresh — re-validate user from DB every hour
+      const now = Math.floor(Date.now() / 1000);
+      const issued = (token.issuedAt as number) ?? 0;
+      if (now - issued > JWT_REFRESH_SECONDS) {
+        const dbUser = await db.user.findUnique({
+          where: { id: token.sub! },
+          select: { id: true, role: true },
+        });
+        if (!dbUser) {
+          // User deleted — invalidate session
+          return {} as typeof token;
+        }
+        token.role = dbUser.role;
+        token.issuedAt = now;
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -48,7 +71,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
     authorized({ auth: session, request }) {
-      const isLoggedIn = !!session?.user;
       const { pathname } = request.nextUrl;
 
       // Public routes
@@ -65,9 +87,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return true;
       }
 
-      // Protected routes require auth
-      return isLoggedIn;
+      // Require valid session with user ID (catches empty tokens from deleted users)
+      return !!session?.user?.id;
     },
   },
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: 7 * 24 * 60 * 60, // 7 days hard expiry
+  },
 });

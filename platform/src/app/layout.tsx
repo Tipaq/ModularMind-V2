@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { SessionProvider } from "@/components/SessionProvider";
+import { SessionGuard } from "@/components/SessionGuard";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
@@ -28,7 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ThemeProvider defaultMode="system">
-          <SessionProvider>{children}</SessionProvider>
+          <SessionProvider>
+            <SessionGuard>{children}</SessionGuard>
+          </SessionProvider>
         </ThemeProvider>
       </body>
     </html>
