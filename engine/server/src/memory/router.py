@@ -20,10 +20,13 @@ from .models import ConsolidationLog, MemoryEdge, MemoryEntry, MemoryScope, Memo
 from .repository import MemoryRepository
 from .schemas import (
     ConsolidationLogResponse,
+    ConsolidationTriggerResponse,
     GlobalMemoryStatsResponse,
     GraphEdgeResponse,
     GraphNodeResponse,
     GraphResponse,
+    MemoryConfigResponse,
+    MemoryConfigUpdate,
     MemoryEntryResponse,
     MemoryListResponse,
     MemorySearchRequest,
@@ -182,6 +185,81 @@ async def get_consolidation_logs(
     }
 
 
+@router.post(
+    "/admin/consolidation/trigger",
+    response_model=ConsolidationTriggerResponse,
+    dependencies=[RequireAdmin],
+)
+async def trigger_consolidation(
+    db: DbSession = None,
+) -> ConsolidationTriggerResponse:
+    """Manually trigger a memory consolidation cycle (admin only)."""
+    import time
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import delete as sa_delete
+
+    from src.infra.redis import redis_client
+    from src.memory.consolidator import apply_exponential_decay
+
+    # Acquire Redis lock (short TTL for manual triggers)
+    lock_key = "memory:consolidation:lock"
+    lock_acquired = await redis_client.set(lock_key, "1", nx=True, ex=600)
+    if not lock_acquired:
+        raise HTTPException(
+            status_code=409,
+            detail="A consolidation is already running. Please wait for it to finish.",
+        )
+
+    start = time.monotonic()
+    try:
+        repo = MemoryRepository(db)
+
+        # Step 1: Exponential decay
+        decayed, invalidated = await apply_exponential_decay(db, settings)
+
+        # Step 2: Enumerate active scopes
+        all_scopes = await repo.get_distinct_scopes()
+        scopes_to_process = all_scopes[:20]
+
+        for scope_val, scope_id in scopes_to_process:
+            logger.debug("Manual consolidation: scope %s/%s", scope_val.value, scope_id)
+
+        # Step 3: Cleanup old logs (> 30 days)
+        cutoff = datetime.now().replace(tzinfo=None) - timedelta(days=30)
+        result = await db.execute(
+            sa_delete(ConsolidationLog).where(ConsolidationLog.created_at < cutoff)
+        )
+        logs_cleaned = result.rowcount or 0
+
+        await db.commit()
+
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        logger.info(
+            "Manual consolidation complete: %d decayed, %d invalidated, %d scopes, %dms",
+            decayed, invalidated, len(scopes_to_process), elapsed_ms,
+        )
+
+        return ConsolidationTriggerResponse(
+            status="completed",
+            decayed=decayed,
+            invalidated=invalidated,
+            scopes_processed=len(scopes_to_process),
+            logs_cleaned=logs_cleaned,
+            duration_ms=elapsed_ms,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Manual consolidation failed")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            await redis_client.delete(lock_key)
+        except Exception:
+            logger.error("Failed to release consolidation lock", exc_info=True)
+
+
 @router.post("/admin/{entry_id}/invalidate", dependencies=[RequireAdmin])
 async def invalidate_memory(
     entry_id: str,
@@ -320,6 +398,107 @@ async def get_memory_users(
     ]
 
 
+# ---- Config Endpoints ----
+
+
+# Mapping: schema field name -> Settings attribute name
+_CONFIG_FIELD_MAP: dict[str, str] = {
+    "decay_episodic_half_life": "MEMORY_DECAY_EPISODIC_HALF_LIFE",
+    "decay_semantic_half_life": "MEMORY_DECAY_SEMANTIC_HALF_LIFE",
+    "decay_procedural_half_life": "MEMORY_DECAY_PROCEDURAL_HALF_LIFE",
+    "decay_prune_threshold": "MEMORY_DECAY_PRUNE_THRESHOLD",
+    "score_weight_recency": "MEMORY_SCORE_WEIGHT_RECENCY",
+    "score_weight_importance": "MEMORY_SCORE_WEIGHT_IMPORTANCE",
+    "score_weight_relevance": "MEMORY_SCORE_WEIGHT_RELEVANCE",
+    "score_weight_frequency": "MEMORY_SCORE_WEIGHT_FREQUENCY",
+    "min_relevance_gate": "MEMORY_MIN_RELEVANCE_GATE",
+    "extraction_batch_size": "MEMORY_EXTRACTION_BATCH_SIZE",
+    "extraction_idle_seconds": "MEMORY_EXTRACTION_IDLE_SECONDS",
+    "extraction_scan_interval": "MEMORY_EXTRACTION_SCAN_INTERVAL",
+    "buffer_token_threshold": "MEMORY_BUFFER_TOKEN_THRESHOLD",
+    "max_entries": "MAX_MEMORY_ENTRIES",
+    "fact_extraction_enabled": "FACT_EXTRACTION_ENABLED",
+    "fact_extraction_min_messages": "FACT_EXTRACTION_MIN_MESSAGES",
+    "scorer_enabled": "MEMORY_SCORER_ENABLED",
+    "scorer_min_importance": "MEMORY_SCORER_MIN_IMPORTANCE",
+    "context_budget_history_pct": "CONTEXT_BUDGET_HISTORY_PCT",
+    "context_budget_memory_pct": "CONTEXT_BUDGET_MEMORY_PCT",
+    "context_budget_rag_pct": "CONTEXT_BUDGET_RAG_PCT",
+    "context_budget_default_context_window": "CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW",
+    "context_budget_max_pct": "CONTEXT_BUDGET_MAX_PCT",
+    "conversation_history_max_messages": "CONVERSATION_HISTORY_MAX_MESSAGES",
+}
+
+
+def _build_memory_config() -> MemoryConfigResponse:
+    """Build response from current settings values."""
+    return MemoryConfigResponse(
+        **{field: getattr(settings, attr) for field, attr in _CONFIG_FIELD_MAP.items()}
+    )
+
+
+def reload_memory_config() -> None:
+    """Reload memory settings from secrets_store into the in-memory singleton.
+
+    Called by the worker before memory tasks so that config changes made
+    through the admin API are picked up without restarting the worker process.
+    """
+    from src.infra.secrets import secrets_store
+
+    for attr in _CONFIG_FIELD_MAP.values():
+        stored = secrets_store.get(attr, "")
+        if stored:
+            field_type = type(getattr(settings, attr))
+            if field_type is bool:
+                setattr(settings, attr, stored.lower() in ("true", "1", "yes"))
+            elif field_type is int:
+                setattr(settings, attr, int(stored))
+            elif field_type is float:
+                setattr(settings, attr, float(stored))
+
+
+@router.get(
+    "/admin/config",
+    response_model=MemoryConfigResponse,
+    dependencies=[RequireAdmin],
+)
+async def get_memory_config() -> MemoryConfigResponse:
+    """Get current memory configuration (admin only)."""
+    from src.infra.secrets import secrets_store
+
+    # Load any persisted overrides
+    for attr in _CONFIG_FIELD_MAP.values():
+        stored = secrets_store.get(attr, "")
+        if stored:
+            field_type = type(getattr(settings, attr))
+            if field_type is bool:
+                setattr(settings, attr, stored.lower() in ("true", "1", "yes"))
+            elif field_type is int:
+                setattr(settings, attr, int(stored))
+            elif field_type is float:
+                setattr(settings, attr, float(stored))
+
+    return _build_memory_config()
+
+
+@router.patch(
+    "/admin/config",
+    response_model=MemoryConfigResponse,
+    dependencies=[RequireAdmin],
+)
+async def update_memory_config(update: MemoryConfigUpdate) -> MemoryConfigResponse:
+    """Update memory configuration (admin only). Persists across restarts."""
+    from src.infra.secrets import secrets_store
+
+    for field, attr in _CONFIG_FIELD_MAP.items():
+        value = getattr(update, field)
+        if value is not None:
+            setattr(settings, attr, value)
+            secrets_store.set(attr, str(value))
+
+    return _build_memory_config()
+
+
 # ---- User Endpoints ----
 # NOTE: The /{entry_id} catch-all routes MUST come after all /admin/* routes
 # to prevent FastAPI from matching "admin" as an entry_id.
@@ -404,6 +583,24 @@ async def search_memories(
         warning="Vector search unavailable, results may be incomplete"
         if degraded
         else None,
+    )
+
+
+@router.get("/me/stats", response_model=MemoryStatsResponse)
+async def get_my_memory_stats(
+    user: CurrentUser,
+    db: DbSession,
+) -> MemoryStatsResponse:
+    """Get aggregate memory stats for the current user across all scopes."""
+    repo = MemoryRepository(db)
+    stats = await repo.get_user_stats(user.id)
+
+    return MemoryStatsResponse(
+        total_entries=stats.total_entries,
+        entries_by_tier=stats.entries_by_tier,
+        entries_by_type=stats.entries_by_type,
+        oldest_entry=stats.oldest_entry,
+        newest_entry=stats.newest_entry,
     )
 
 

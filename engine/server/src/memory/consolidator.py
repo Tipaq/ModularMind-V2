@@ -8,14 +8,16 @@ Handles:
 """
 
 import logging
+from collections import defaultdict
+from uuid import uuid4
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infra.config import Settings
 from src.infra.utils import utcnow
 
-from .models import MemoryEntry, MemoryType
+from .models import ConsolidationLog, MemoryEntry, MemoryType
 from .vector_store import QdrantMemoryVectorStore
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,8 @@ async def apply_exponential_decay(
     Uses COALESCE(last_accessed, created_at) as reference date for entries
     that have never been accessed.
 
+    Creates ConsolidationLog entries per scope for audit trail.
+
     Returns:
         Tuple of (decayed_count, invalidated_count).
     """
@@ -46,6 +50,10 @@ async def apply_exponential_decay(
 
     decayed = 0
     invalidated = 0
+
+    # Track per-scope results for logging
+    scope_decayed: dict[tuple[str, str], list[str]] = defaultdict(list)
+    scope_invalidated: dict[tuple[str, str], list[dict]] = defaultdict(list)
 
     for memory_type, setting_name in _HALF_LIFE_SETTINGS.items():
         half_life = getattr(settings, setting_name)
@@ -69,7 +77,9 @@ async def apply_exponential_decay(
 
             # Exponential decay: importance *= 0.5 ^ (days / half_life)
             decay_factor = 0.5 ** (days_since / half_life)
-            new_importance = entry.importance * decay_factor
+            old_importance = entry.importance
+            new_importance = old_importance * decay_factor
+            scope_key = (entry.scope.value, entry.scope_id)
 
             if new_importance < prune_threshold:
                 # Invalidate (soft-delete)
@@ -88,6 +98,12 @@ async def apply_exponential_decay(
                     logger.error(
                         "Qdrant invalidation failed for %s: %s", entry.id, e
                     )
+                scope_invalidated[scope_key].append({
+                    "id": entry.id,
+                    "old": round(old_importance, 4),
+                    "new": round(new_importance, 4),
+                    "type": memory_type.value,
+                })
                 invalidated += 1
             else:
                 # Just update importance
@@ -96,7 +112,42 @@ async def apply_exponential_decay(
                     .where(MemoryEntry.id == entry.id)
                     .values(importance=new_importance)
                 )
+                scope_decayed[scope_key].append(entry.id)
                 decayed += 1
+
+    # Create ConsolidationLog entries per scope for invalidated entries
+    for (scope_val, scope_id), inv_entries in scope_invalidated.items():
+        log = ConsolidationLog(
+            id=str(uuid4()),
+            scope=scope_val,
+            scope_id=scope_id,
+            action="invalidated",
+            source_entry_ids=[e["id"] for e in inv_entries],
+            details={
+                "reason": (
+                    f"Pruned {len(inv_entries)} entries below "
+                    f"threshold ({prune_threshold})"
+                ),
+                "threshold": prune_threshold,
+                "entries": inv_entries[:10],
+            },
+        )
+        session.add(log)
+
+    # Create ConsolidationLog entries per scope for decayed entries
+    for (scope_val, scope_id), entry_ids in scope_decayed.items():
+        log = ConsolidationLog(
+            id=str(uuid4()),
+            scope=scope_val,
+            scope_id=scope_id,
+            action="decayed",
+            source_entry_ids=entry_ids,
+            details={
+                "reason": f"Exponential decay applied to {len(entry_ids)} entries",
+                "count": len(entry_ids),
+            },
+        )
+        session.add(log)
 
     await session.flush()
 

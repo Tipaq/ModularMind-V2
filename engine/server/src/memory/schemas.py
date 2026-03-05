@@ -85,6 +85,17 @@ class GlobalMemoryStatsResponse(BaseModel):
     entries_decayed_last_cycle: int
 
 
+class ConsolidationTriggerResponse(BaseModel):
+    """Response after triggering manual consolidation."""
+
+    status: str
+    decayed: int
+    invalidated: int
+    scopes_processed: int
+    logs_cleaned: int
+    duration_ms: int
+
+
 class ConsolidationLogResponse(BaseModel):
     """Consolidation log entry response."""
 
@@ -141,3 +152,82 @@ class MemoryUserResponse(BaseModel):
     user_id: str
     email: str | None
     memory_count: int
+
+
+# ── Memory Config ──────────────────────────────────────────────────
+
+
+class MemoryConfigResponse(BaseModel):
+    """Current memory configuration values."""
+
+    # Decay
+    decay_episodic_half_life: int
+    decay_semantic_half_life: int
+    decay_procedural_half_life: int
+    decay_prune_threshold: float
+
+    # Scoring weights
+    score_weight_recency: float
+    score_weight_importance: float
+    score_weight_relevance: float
+    score_weight_frequency: float
+    min_relevance_gate: float
+
+    # Extraction
+    extraction_batch_size: int
+    extraction_idle_seconds: int
+    extraction_scan_interval: int
+    buffer_token_threshold: int
+
+    # General
+    max_entries: int
+    fact_extraction_enabled: bool
+    fact_extraction_min_messages: int
+    scorer_enabled: bool
+    scorer_min_importance: float
+
+    # Context budget
+    context_budget_history_pct: float
+    context_budget_memory_pct: float
+    context_budget_rag_pct: float
+    context_budget_default_context_window: int
+    context_budget_max_pct: float
+    conversation_history_max_messages: int
+
+
+class MemoryConfigUpdate(BaseModel):
+    """Partial update for memory configuration."""
+
+    # Decay
+    decay_episodic_half_life: int | None = Field(default=None, ge=1)
+    decay_semantic_half_life: int | None = Field(default=None, ge=1)
+    decay_procedural_half_life: int | None = Field(default=None, ge=1)
+    decay_prune_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    # Scoring weights
+    score_weight_recency: float | None = Field(default=None, ge=0.0, le=1.0)
+    score_weight_importance: float | None = Field(default=None, ge=0.0, le=1.0)
+    score_weight_relevance: float | None = Field(default=None, ge=0.0, le=1.0)
+    score_weight_frequency: float | None = Field(default=None, ge=0.0, le=1.0)
+    min_relevance_gate: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    # Extraction
+    extraction_batch_size: int | None = Field(default=None, ge=5, le=100)
+    extraction_idle_seconds: int | None = Field(default=None, ge=60, le=3600)
+    extraction_scan_interval: int | None = Field(default=None, ge=30, le=600)
+    buffer_token_threshold: int | None = Field(default=None, ge=500, le=20000)
+
+    # General
+    max_entries: int | None = Field(default=None, ge=100, le=10000)
+    fact_extraction_enabled: bool | None = None
+    fact_extraction_min_messages: int | None = Field(default=None, ge=1, le=100)
+    scorer_enabled: bool | None = None
+    scorer_min_importance: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    # Context budget
+    context_budget_history_pct: float | None = Field(default=None, ge=5.0, le=60.0)
+    context_budget_memory_pct: float | None = Field(default=None, ge=0.0, le=30.0)
+    context_budget_rag_pct: float | None = Field(default=None, ge=0.0, le=40.0)
+    context_budget_default_context_window: int | None = Field(default=None, ge=2048, le=200000)
+    context_budget_max_pct: float | None = Field(default=None, ge=10.0, le=100.0)
+    conversation_history_max_messages: int | None = Field(default=None, ge=5, le=50)
