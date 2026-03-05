@@ -85,6 +85,7 @@ class ConversationMessage(Base):
     )
     content: Mapped[str] = mapped_column(Text)
     meta: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
+    attachments: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default="[]")
 
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
