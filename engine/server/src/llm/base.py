@@ -67,26 +67,16 @@ class LLMProvider(ABC):
         """
         ...
 
-    # Known provider prefixes — used to distinguish "provider:model" from
-    # Ollama-style "model:tag" (e.g. "llama3.2:latest").
-    _KNOWN_PROVIDERS: frozenset[str] = frozenset({
-        "ollama", "openai", "anthropic", "google", "mistral", "cohere",
-        "vllm", "tgi",
-    })
-
     def parse_model_id(self, full_model_id: str) -> tuple[str, str]:
         """Parse a full model ID into provider and model parts.
 
-        Args:
-            full_model_id: Full model ID (e.g., "ollama:llama3.2" or "openai:gpt-4")
-                Also handles Ollama tags like "llama3.2:latest" where the prefix
-                is NOT a known provider — returns the full string as model name.
-
-        Returns:
-            Tuple of (provider, model_name)
+        Uses the shared KNOWN_PROVIDERS set from infra.constants.
+        Falls back to this provider's name when no known prefix is found.
         """
+        from src.infra.constants import KNOWN_PROVIDERS
+
         if ":" in full_model_id:
             prefix, rest = full_model_id.split(":", 1)
-            if prefix.lower() in self._KNOWN_PROVIDERS:
+            if prefix.lower() in KNOWN_PROVIDERS:
                 return prefix, rest
         return self.provider_name, full_model_id

@@ -9,6 +9,7 @@ Import from here instead of hard-coding values in business logic.
 # Without this, Ollama tags like "llama3.2:latest" get incorrectly split.
 KNOWN_PROVIDERS: frozenset[str] = frozenset({
     "ollama", "openai", "anthropic", "google", "mistral", "cohere", "groq",
+    "vllm", "tgi",
 })
 
 
@@ -28,9 +29,6 @@ def parse_model_id(model_id: str) -> tuple[str, str]:
 # ── Embeddings ────────────────────────────────────────────────────────────────
 EMBEDDING_DIMENSION: int = 768
 """Default dense-vector dimension (nomic-embed-text)."""
-
-EMBEDDING_ZERO_VECTOR: list[float] = [0.0] * EMBEDDING_DIMENSION
-"""Pre-built zero vector for fallback / padding."""
 
 # ── Output & Display ──────────────────────────────────────────────────────────
 OUTPUT_TRUNCATION_LENGTH: int = 500
