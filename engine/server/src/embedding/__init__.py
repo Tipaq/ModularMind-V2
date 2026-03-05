@@ -38,24 +38,6 @@ def get_embedding_provider(provider_name: str, **kwargs: Any) -> EmbeddingProvid
     return provider_class(**kwargs)
 
 
-def register_provider(name: str, provider_class: type[EmbeddingProvider]) -> None:
-    """Register a custom embedding provider.
-
-    Args:
-        name: Provider name to register
-        provider_class: Provider class implementing EmbeddingProvider
-    """
-    _PROVIDERS[name] = provider_class
-
-
-def list_providers() -> list[str]:
-    """List all registered provider names.
-
-    Returns:
-        List of provider names
-    """
-    return list(_PROVIDERS.keys())
-
 
 __all__ = [
     "EmbeddingProvider",

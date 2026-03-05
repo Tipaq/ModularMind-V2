@@ -42,15 +42,6 @@ def get_llm_provider(provider_name: str, **kwargs: Any) -> LLMProvider:
     return provider_class(**kwargs)
 
 
-def register_provider(name: str, provider_class: type[LLMProvider]) -> None:
-    """Register a custom LLM provider."""
-    _PROVIDERS[name] = provider_class
-
-
-def list_providers() -> list[str]:
-    """List all registered provider names."""
-    return list(_PROVIDERS.keys())
-
 
 __all__ = [
     "LLMProvider",
