@@ -11,14 +11,13 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Badge, Button, cn } from "@modularmind/ui";
-import type { MemoryEntry, ContextData, BudgetOverview } from "@/hooks/useChat";
+import type { MemoryEntry, ContextData } from "@/hooks/useChat";
 
 // ── Types ────────────────────────────────────────────────────
 
 export interface MemoryTabProps {
   entries: MemoryEntry[];
   contextData: ContextData | null;
-  modelContextWindow?: number | null;
 }
 
 // ── Constants ────────────────────────────────────────────────
@@ -34,12 +33,6 @@ const TYPE_LABELS: Record<string, string> = {
   episodic: "Episodic",
   semantic: "Semantic",
   procedural: "Procedural",
-};
-
-const LAYER_COLORS: Record<string, { bg: string; text: string }> = {
-  history: { bg: "bg-info", text: "text-info" },
-  memory: { bg: "bg-warning", text: "text-warning" },
-  rag: { bg: "bg-success", text: "text-success" },
 };
 
 // ── Shared: Collapsible Section ──────────────────────────────
@@ -120,93 +113,52 @@ function MemoryEntryCard({ entry }: { entry: MemoryEntry }) {
   );
 }
 
-// ── Context Usage Bar ────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────
 
-function ContextUsageBar({ overview }: { overview: BudgetOverview }) {
-  const formatK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n);
-  const cw = overview.contextWindow;
-  const totalUsed = overview.layers.history.used + overview.layers.memory.used + overview.layers.rag.used;
-  const totalPct = cw > 0 ? Math.round((totalUsed / cw) * 100) : 0;
+function formatK(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 10_000) return `${Math.round(n / 1000)}K`;
+  if (n >= 1_000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
+}
+
+// ── Memory Usage Header ─────────────────────────────────────
+
+function MemoryUsageHeader({ contextData }: { contextData: ContextData }) {
+  const bo = contextData.budgetOverview;
+  if (!bo) return null;
+
+  const memLayer = bo.layers.memory;
+  const cw = bo.contextWindow;
+  const usedPct = cw > 0 ? Math.round((memLayer.used / cw) * 100) : 0;
+  const allocPct = cw > 0 ? Math.round((memLayer.allocated / cw) * 100) : 0;
 
   return (
-    <div className="px-4 py-3 space-y-2.5 border-b border-border/50">
-      {/* Header: context window size + total usage */}
+    <div className="px-4 py-3 space-y-2 border-b border-border/50">
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          Context Window
+          Memory Context
         </p>
-        <span className="text-[11px] font-mono font-medium tabular-nums">
-          {formatK(cw)} tok
+        <span className="text-[11px] font-mono font-medium tabular-nums text-warning">
+          {formatK(memLayer.used)} tok
         </span>
       </div>
 
-      {/* Stacked usage bar — relative to full context window */}
-      <div className="relative">
-        <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
-          {(["history", "memory", "rag"] as const).map((key) => {
-            const widthPct = cw > 0 ? (overview.layers[key].used / cw) * 100 : 0;
-            return widthPct > 0 ? (
-              <div
-                key={key}
-                className={cn("h-full transition-all", LAYER_COLORS[key].bg)}
-                style={{ width: `${widthPct}%` }}
-              />
-            ) : null;
-          })}
-        </div>
-        {/* Cap marker when maxPct < 100 */}
-        {overview.maxPct < 100 && (
-          <div
-            className="absolute top-0 bottom-0 w-px bg-foreground/40"
-            style={{ left: `${overview.maxPct}%` }}
-            title={`Cap: ${overview.maxPct}%`}
-          />
-        )}
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all bg-warning"
+          style={{ width: `${Math.max(usedPct, 1)}%` }}
+        />
       </div>
 
-      {/* Total summary line */}
       <div className="flex items-center justify-between text-[10px] text-muted-foreground">
         <span>
-          <span className="font-mono font-medium text-foreground">{formatK(totalUsed)}</span>
-          <span> / {formatK(cw)} used</span>
+          {usedPct}% of context used
         </span>
-        <span className={cn(
-          "font-mono font-medium",
-          totalPct >= 90 ? "text-destructive" : totalPct >= 70 ? "text-warning" : "text-foreground",
-        )}>
-          {totalPct}%
+        <span className="font-mono">
+          {formatK(memLayer.allocated)} allocated ({allocPct}%)
         </span>
       </div>
-
-      {/* Per-layer breakdown — percentages relative to full context window */}
-      <div className="grid grid-cols-3 gap-1">
-        {(["history", "memory", "rag"] as const).map((key) => {
-          const layer = overview.layers[key];
-          const usedPct = cw > 0 ? Math.round((layer.used / cw) * 100) : 0;
-          const allocPct = cw > 0 ? Math.round((layer.allocated / cw) * 100) : 0;
-          return (
-            <div key={key} className="text-center">
-              <div className="flex items-center justify-center gap-1 mb-0.5">
-                <span className={cn("h-1.5 w-1.5 rounded-full", LAYER_COLORS[key].bg)} />
-                <span className="text-[10px] text-muted-foreground capitalize">{key}</span>
-              </div>
-              <p className={cn("text-[11px] font-mono tabular-nums", LAYER_COLORS[key].text)}>
-                {formatK(layer.used)}
-              </p>
-              <p className="text-[9px] font-mono text-muted-foreground tabular-nums">
-                {usedPct}% / {allocPct}%
-              </p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Cap info */}
-      {overview.maxPct < 100 && (
-        <p className="text-[9px] text-muted-foreground/60 text-center">
-          Capped at {overview.maxPct}% &middot; {formatK(overview.effectiveContext)} effective
-        </p>
-      )}
     </div>
   );
 }
@@ -216,7 +168,6 @@ function ContextUsageBar({ overview }: { overview: BudgetOverview }) {
 export function MemoryTab({
   entries,
   contextData,
-  modelContextWindow,
 }: MemoryTabProps) {
   const [consolidating, setConsolidating] = useState(false);
   const [consolidateResult, setConsolidateResult] = useState<string | null>(null);
@@ -242,31 +193,11 @@ export function MemoryTab({
   const history = contextData?.history;
   const budget = history?.budget;
   const memEntries = contextData?.memoryEntries ?? entries;
-  const budgetOverview = contextData?.budgetOverview ?? null;
-
-  const formatK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n);
 
   return (
     <div className="space-y-1">
-      {/* Context Usage Bar — or fallback showing model context window */}
-      {budgetOverview ? (
-        <ContextUsageBar overview={budgetOverview} />
-      ) : modelContextWindow ? (
-        <div className="px-4 py-3 space-y-2 border-b border-border/50">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Context Window
-            </p>
-            <span className="text-[11px] font-mono font-medium tabular-nums">
-              {formatK(modelContextWindow)} tok
-            </span>
-          </div>
-          <div className="flex h-2.5 rounded-full overflow-hidden bg-muted" />
-          <p className="text-[10px] text-muted-foreground">
-            Send a message to see context usage breakdown.
-          </p>
-        </div>
-      ) : null}
+      {/* Memory-specific context usage */}
+      {contextData && <MemoryUsageHeader contextData={contextData} />}
 
       {/* Section 1: Context Window (Buffer) */}
       <CollapsibleSection
