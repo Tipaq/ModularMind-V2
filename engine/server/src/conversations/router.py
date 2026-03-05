@@ -69,19 +69,7 @@ async def _maybe_enqueue_marathon_extraction(conversation_id: str) -> None:
 
             cutoff = conv.last_memory_extracted_at or datetime.min
 
-            count_result = await session.execute(
-                select(func.count(ConversationMessage.id)).where(
-                    ConversationMessage.conversation_id == conversation_id,
-                    ConversationMessage.created_at > cutoff,
-                )
-            )
-            new_count = count_result.scalar() or 0
-
-            if new_count < s.MEMORY_EXTRACTION_BATCH_SIZE:
-                return
-            if new_count < s.FACT_EXTRACTION_MIN_MESSAGES:
-                return
-
+            # Fetch messages first so we can check both count and token budget
             result = await session.execute(
                 select(ConversationMessage)
                 .where(
@@ -92,6 +80,22 @@ async def _maybe_enqueue_marathon_extraction(conversation_id: str) -> None:
             )
             messages = list(result.scalars().all())
             if not messages:
+                return
+
+            new_count = len(messages)
+
+            # Must have at least the minimum message floor
+            if new_count < s.FACT_EXTRACTION_MIN_MESSAGES:
+                return
+
+            # Trigger if EITHER message batch threshold OR token threshold is met
+            from src.infra.token_counter import count_tokens
+
+            total_tokens = sum(count_tokens(m.content or "") for m in messages)
+            batch_ok = new_count >= s.MEMORY_EXTRACTION_BATCH_SIZE
+            token_ok = total_tokens >= s.MEMORY_BUFFER_TOKEN_THRESHOLD
+
+            if not batch_ok and not token_ok:
                 return
 
             messages_json = json.dumps([
@@ -418,7 +422,13 @@ async def _build_supervisor_response(
     user_msg_response: MessageResponse,
 ) -> SendMessageResponse:
     """Build the SendMessageResponse from supervisor result."""
-    from src.conversations.schemas import KnowledgeDataResponse
+    from src.conversations.schemas import (
+        ContextData,
+        ContextHistory,
+        ContextHistoryBudget,
+        ContextHistoryMessage,
+        KnowledgeDataResponse,
+    )
 
     routing_meta = result.get("routing_metadata", {})
     routing_strategy = routing_meta.get("strategy")
@@ -447,10 +457,29 @@ async def _build_supervisor_response(
             total_results=raw_knowledge.get("total_results", 0),
         )
 
+    # Build context data for frontend memory panel
+    context_data_response = None
+    raw_context = result.get("context_data")
+    if raw_context:
+        raw_history = raw_context.get("history", {})
+        raw_budget = raw_history.get("budget")
+        context_data_response = ContextData(
+            history=ContextHistory(
+                budget=ContextHistoryBudget(**raw_budget) if raw_budget else None,
+                messages=[
+                    ContextHistoryMessage(**m)
+                    for m in raw_history.get("messages", [])
+                ],
+                summary=raw_history.get("summary", ""),
+            ),
+            memory_entries=raw_context.get("memory_entries", []),
+        )
+
     base_kwargs = dict(
         user_message=user_msg_response,
         routing_strategy=routing_strategy,
         memory_entries=memory_entries,
+        context_data=context_data_response,
     )
 
     exec_id = result.get("execution_id")

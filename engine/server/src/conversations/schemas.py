@@ -138,6 +138,41 @@ class EphemeralAgent(BaseModel):
     name: str
 
 
+class ContextHistoryMessage(BaseModel):
+    """A single message from the conversation history buffer."""
+
+    role: str
+    content: str
+
+
+class ContextHistoryBudget(BaseModel):
+    """Budget info for the conversation history window."""
+
+    included_count: int = 0
+    max_messages: int = 0
+    total_chars: int = 0
+    max_chars: int = 0
+    budget_exceeded: bool = False
+    context_window: int | None = None
+    history_budget_pct: float | None = None
+    history_budget_tokens: int | None = None
+
+
+class ContextHistory(BaseModel):
+    """Conversation history context injected into LLM."""
+
+    budget: ContextHistoryBudget | None = None
+    messages: list[ContextHistoryMessage] = Field(default_factory=list)
+    summary: str = ""
+
+
+class ContextData(BaseModel):
+    """Full context injection data for frontend display."""
+
+    history: ContextHistory | None = None
+    memory_entries: list[MemoryEntryResponse] = Field(default_factory=list)
+
+
 class SendMessageResponse(BaseModel):
     """Send message response with execution info."""
 
@@ -152,6 +187,7 @@ class SendMessageResponse(BaseModel):
     ephemeral_agent: EphemeralAgent | None = None
     memory_entries: list[MemoryEntryResponse] = Field(default_factory=list)
     knowledge_data: KnowledgeDataResponse | None = None
+    context_data: ContextData | None = None
 
 
 # ─── Search Schemas ──────────────────────────────────────────────────────────
