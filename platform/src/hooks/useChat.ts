@@ -6,47 +6,17 @@ import type { ExecutionActivity } from "./useExecutionActivities";
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "./useExecutionActivities";
 
-import type { ChatMessage } from "@modularmind/ui";
+import type { ChatMessage, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry } from "@modularmind/ui";
+
+export type { KnowledgeCollection, KnowledgeChunk, KnowledgeData };
 
 export type Message = ChatMessage;
+export type MemoryEntry = InsightsMemoryEntry;
 
 export interface TokenUsage {
   prompt: number;
   completion: number;
   total: number;
-}
-
-export interface MemoryEntry {
-  id: string;
-  content: string;
-  scope: string;
-  tier: string;
-  importance: number;
-  memory_type: string;
-  category: string;
-}
-
-export interface KnowledgeCollection {
-  collectionId: string;
-  collectionName: string;
-  chunkCount: number;
-}
-
-export interface KnowledgeChunk {
-  chunkId: string;
-  documentId: string;
-  collectionId: string;
-  collectionName: string;
-  documentFilename: string | null;
-  contentPreview: string;
-  score: number;
-  chunkIndex: number;
-}
-
-export interface KnowledgeData {
-  collections: KnowledgeCollection[];
-  chunks: KnowledgeChunk[];
-  totalResults: number;
 }
 
 export interface ContextHistoryMessage {
@@ -56,7 +26,6 @@ export interface ContextHistoryMessage {
 
 export interface ContextHistoryBudget {
   includedCount: number;
-  maxMessages: number;
   totalChars: number;
   maxChars: number;
   budgetExceeded: boolean;
@@ -120,7 +89,7 @@ interface SendMessageResponse {
   };
   context_data?: {
     history?: {
-      budget?: { included_count: number; max_messages: number; total_chars: number; max_chars: number; budget_exceeded: boolean; context_window?: number; history_budget_pct?: number; history_budget_tokens?: number };
+      budget?: { included_count: number; total_chars: number; max_chars: number; budget_exceeded: boolean; context_window?: number; history_budget_pct?: number; history_budget_tokens?: number };
       messages?: { role: string; content: string }[];
       summary?: string;
     };
@@ -250,8 +219,25 @@ export function useChat(conversationId: string | null) {
     setExecutionDataMap({});
   }, []);
 
+  const uploadAttachment = useCallback(
+    async (conversationId: string, file: File): Promise<{ id: string; filename: string; content_type: string; size_bytes: number }> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/chat/conversations/${conversationId}/attachments`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(err.error || err.detail || "Failed to upload attachment");
+      }
+      return res.json();
+    },
+    [],
+  );
+
   const sendMessage = useCallback(
-    async (content: string, overrideConversationId?: string) => {
+    async (content: string, overrideConversationId?: string, files?: File[]) => {
       const targetConvId = overrideConversationId || conversationId;
       if (!targetConvId || isStreaming) return;
 
@@ -264,6 +250,21 @@ export function useChat(conversationId: string | null) {
       currentTokenUsageRef.current = null;
       currentContextDataRef.current = null;
 
+      // Upload attachments first
+      let attachmentIds: string[] = [];
+      let uploadedAttachments: { id: string; filename: string; content_type: string; size_bytes: number }[] = [];
+      if (files && files.length > 0) {
+        try {
+          const results = await Promise.all(files.map((f) => uploadAttachment(targetConvId, f)));
+          attachmentIds = results.map((a) => a.id);
+          uploadedAttachments = results;
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to upload attachments");
+          setIsStreaming(false);
+          return;
+        }
+      }
+
       // Optimistically add user message
       const tempUserMsg: Message = {
         id: `temp-${Date.now()}`,
@@ -271,6 +272,7 @@ export function useChat(conversationId: string | null) {
         content,
         created_at: new Date().toISOString(),
         metadata: {},
+        attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
       };
       setMessages((prev) => [...prev, tempUserMsg]);
 
@@ -288,12 +290,15 @@ export function useChat(conversationId: string | null) {
       const sendStartMs = Date.now();
 
       // Send message to backend via Platform proxy
+      const body: { content: string; attachment_ids?: string[] } = { content };
+      if (attachmentIds.length > 0) body.attachment_ids = attachmentIds;
+
       let res: SendMessageResponse;
       try {
         const response = await fetch(`/api/chat/conversations/${targetConvId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify(body),
         });
         if (!response.ok) {
           const errData = await response.json().catch(() => ({ error: "Failed to send message" }));
@@ -332,7 +337,6 @@ export function useChat(conversationId: string | null) {
           history: h ? {
             budget: h.budget ? {
               includedCount: h.budget.included_count,
-              maxMessages: h.budget.max_messages,
               totalChars: h.budget.total_chars,
               maxChars: h.budget.max_chars,
               budgetExceeded: h.budget.budget_exceeded,
@@ -473,7 +477,6 @@ export function useChat(conversationId: string | null) {
               history: h ? {
                 budget: h.budget ? {
                   includedCount: h.budget.included_count ?? 0,
-                  maxMessages: h.budget.max_messages ?? 0,
                   totalChars: h.budget.total_chars ?? 0,
                   maxChars: h.budget.max_chars ?? 0,
                   budgetExceeded: h.budget.budget_exceeded ?? false,

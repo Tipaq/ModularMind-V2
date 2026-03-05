@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/studio/shared/EmptyState";
 import { ResourceTable } from "@/components/studio/shared/ResourceTable";
 import { ResourceFilters } from "@/components/studio/shared/ResourceFilters";
 import { useEnginesStore, type PlatformEngineListItem } from "@/stores/engines";
-import type { ResourceColumn, ResourceFilterConfig, SortState } from "@/lib/types";
+import type { ResourceColumn, ResourceFilterConfig, SortState } from "@modularmind/ui";
 
 function StatusBadge({ status }: { status: string }) {
   return (

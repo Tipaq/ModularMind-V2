@@ -22,7 +22,7 @@ import { EmptyState } from "@/components/studio/shared/EmptyState";
 import { ResourceTable } from "@/components/studio/shared/ResourceTable";
 import { ResourceFilters } from "@/components/studio/shared/ResourceFilters";
 import { useClientsStore, type PlatformClient } from "@/stores/clients";
-import type { ResourceColumn, ResourceFilterConfig, SortState } from "@/lib/types";
+import type { ResourceColumn, ResourceFilterConfig, SortState } from "@modularmind/ui";
 
 const filterConfigs: ResourceFilterConfig[] = [
   { key: "search", label: "Search", type: "search", placeholder: "Search clients..." },

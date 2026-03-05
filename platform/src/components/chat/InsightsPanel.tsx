@@ -30,7 +30,7 @@ import {
 import type { ChatPanelTab } from "@modularmind/ui";
 import type { ExecutionActivity, MemoryEntry, KnowledgeData, KnowledgeChunk, MessageExecutionData, ContextData, BudgetOverview } from "@/hooks/useChat";
 import type { EngineModel, SupervisorLayer } from "@/hooks/useChatConfig";
-import { ExecutionActivityList } from "./ExecutionActivity";
+import { ExecutionActivityList } from "@modularmind/ui";
 import { ToolCallCard } from "./ToolCallCard";
 
 interface ChatConfig {
@@ -50,6 +50,7 @@ interface InsightsPanelProps {
   models: EngineModel[];
   supervisorLayers: SupervisorLayer[];
   onUpdateLayer: (key: string, content: string) => Promise<boolean>;
+  selectedModelContextWindow?: number | null;
 }
 
 // ── Execution Metrics ────────────────────────────────────────
@@ -423,7 +424,6 @@ function ActivityTabContent({
         <ExecutionActivityList
           activities={activities}
           isStreaming={isStreaming}
-          hasContent={true}
           flat
         />
       )}
@@ -488,9 +488,9 @@ function MemoryEntryCard({ entry }: { entry: MemoryEntry }) {
         <span className="text-[10px] font-mono text-info">{pct}%</span>
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
-        {entry.memory_type && (
+        {entry.memoryType && (
           <Badge variant="outline" className="text-[10px] h-4">
-            {TYPE_LABELS[entry.memory_type] || entry.memory_type}
+            {TYPE_LABELS[entry.memoryType] || entry.memoryType}
           </Badge>
         )}
         <Badge variant="secondary" className="text-[10px] h-4">
@@ -604,9 +604,11 @@ function ContextUsageBar({ overview }: { overview: BudgetOverview }) {
 function MemoryTabContent({
   entries,
   contextData,
+  modelContextWindow,
 }: {
   entries: MemoryEntry[];
   contextData: ContextData | null;
+  modelContextWindow?: number | null;
 }) {
   const [consolidating, setConsolidating] = useState(false);
   const [consolidateResult, setConsolidateResult] = useState<string | null>(null);
@@ -629,32 +631,47 @@ function MemoryTabContent({
     setTimeout(() => setConsolidateResult(null), 4000);
   };
 
-  if (!contextData && entries.length === 0) {
-    return <EmptyState icon={Brain} message="Send a message to see injected context." />;
-  }
-
   const history = contextData?.history;
   const budget = history?.budget;
   const memEntries = contextData?.memoryEntries ?? entries;
   const budgetOverview = contextData?.budgetOverview ?? null;
 
+  const formatK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n);
+
   return (
     <div className="space-y-1">
-      {/* Context Usage Bar */}
-      {budgetOverview && <ContextUsageBar overview={budgetOverview} />}
+      {/* Context Usage Bar — or fallback showing model context window */}
+      {budgetOverview ? (
+        <ContextUsageBar overview={budgetOverview} />
+      ) : modelContextWindow ? (
+        <div className="px-4 py-3 space-y-2 border-b border-border/50">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Context Window
+            </p>
+            <span className="text-[11px] font-mono font-medium tabular-nums">
+              {formatK(modelContextWindow)} tok
+            </span>
+          </div>
+          <div className="flex h-2.5 rounded-full overflow-hidden bg-muted" />
+          <p className="text-[10px] text-muted-foreground">
+            Send a message to see context usage breakdown.
+          </p>
+        </div>
+      ) : null}
 
       {/* Section 1: Context Window (Buffer) */}
       <CollapsibleSection
         title="Context Window"
         icon={Clock}
-        badge={budget ? `${budget.includedCount}/${budget.maxMessages}` : undefined}
+        badge={budget ? `${budget.includedCount} msgs` : undefined}
         defaultOpen
       >
         {budget ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs flex-wrap">
               <span className="font-mono">
-                {budget.includedCount}/{budget.maxMessages} messages
+                {budget.includedCount} messages
               </span>
               {budget.historyBudgetTokens != null && budget.historyBudgetTokens > 0 ? (
                 <>
@@ -943,6 +960,7 @@ export function InsightsPanel({
   models,
   supervisorLayers,
   onUpdateLayer,
+  selectedModelContextWindow,
 }: InsightsPanelProps) {
   const displayActivities = useMemo(() => {
     return isLiveSelected && isStreaming
@@ -1053,6 +1071,7 @@ export function InsightsPanel({
         <MemoryTabContent
           entries={memoryEntries}
           contextData={contextData}
+          modelContextWindow={selectedModelContextWindow}
         />
       </TabsContent>
 

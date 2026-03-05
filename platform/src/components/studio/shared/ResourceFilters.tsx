@@ -2,7 +2,7 @@
 
 import { ArrowUpDown, Search } from "lucide-react";
 import { Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@modularmind/ui";
-import type { ResourceFilterConfig } from "@/lib/types";
+import type { ResourceFilterConfig } from "@modularmind/ui";
 
 interface ResourceFiltersProps {
   filters: ResourceFilterConfig[];

@@ -6,7 +6,7 @@ import { useChat, type Message } from "@/hooks/useChat";
 import { useChatConfig } from "@/hooks/useChatConfig";
 import { ConversationSidebar, type Conversation } from "@/components/chat/ConversationSidebar";
 import { ChatMessages } from "@/components/chat/ChatMessages";
-import { ChatInput } from "@/components/chat/ChatInput";
+import { ChatInput, type AttachedFile } from "@/components/chat/ChatInput";
 import { InsightsPanel } from "@/components/chat/InsightsPanel";
 import { ContextBudgetDonut } from "@/components/chat/ContextBudgetDonut";
 import { PanelRight } from "lucide-react";
@@ -33,6 +33,7 @@ export default function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [enabledAgentIds, setEnabledAgentIds] = useState<string[]>([]);
   const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
   const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CONFIG);
@@ -87,6 +88,15 @@ export default function ChatPage() {
     return Math.round((totalUsed / bo.effectiveContext) * 100);
   }, [selectedExecution]);
 
+  // Selected model's context window for display when no execution data exists
+  const selectedModelContextWindow = useMemo(() => {
+    if (!chatConfig.modelId) return null;
+    const m = models.find(
+      (m) => m.id === chatConfig.modelId || `${m.provider}:${m.model_id}` === chatConfig.modelId,
+    );
+    return m?.context_window ?? null;
+  }, [chatConfig.modelId, models]);
+
   // Determine if sending is blocked
   const sendDisabledReason = useMemo(() => {
     if (!chatConfig.modelId) return "Select a model before sending";
@@ -123,12 +133,13 @@ export default function ChatPage() {
         if (!res.ok) return;
         const data = await res.json();
         const msgs: Message[] = (data.messages || []).map(
-          (m: { id: string; role: string; content: string; created_at: string; metadata?: Record<string, unknown> }) => ({
+          (m: { id: string; role: string; content: string; created_at: string; metadata?: Record<string, unknown>; attachments?: { id: string; filename: string; content_type: string; size_bytes: number }[] }) => ({
             id: m.id,
             role: m.role as "user" | "assistant" | "system",
             content: m.content,
             created_at: m.created_at,
             metadata: m.metadata || {},
+            attachments: m.attachments,
           }),
         );
         setInitialMessages(msgs);
@@ -256,7 +267,7 @@ export default function ChatPage() {
   );
 
   const handleSend = useCallback(async () => {
-    if (!inputValue.trim() || isStreaming || !chatConfig.modelId) return;
+    if ((!inputValue.trim() && attachedFiles.length === 0) || isStreaming || !chatConfig.modelId) return;
 
     let convId = activeConversationId;
 
@@ -302,9 +313,11 @@ export default function ChatPage() {
       }),
     }).catch(() => {});
 
-    sendMessage(inputValue, convId ?? undefined);
+    const files = attachedFiles.length > 0 ? attachedFiles.map((af) => af.file) : undefined;
+    sendMessage(inputValue, convId ?? undefined, files);
     setInputValue("");
-  }, [inputValue, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, sendMessage, conversations, messages.length]);
+    setAttachedFiles([]);
+  }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, sendMessage, conversations, messages.length]);
 
   const handleToggleAgent = useCallback((agentId: string) => {
     setEnabledAgentIds((prev) =>
@@ -362,6 +375,7 @@ export default function ChatPage() {
           activities={activities}
           selectedMessageId={selectedMessageId}
           onSelectMessage={setSelectedMessageId}
+          attachmentBaseUrl="/api/chat"
         />
 
         <ChatInput
@@ -376,6 +390,7 @@ export default function ChatPage() {
           enabledGraphIds={enabledGraphIds}
           onToggleAgent={handleToggleAgent}
           onToggleGraph={handleToggleGraph}
+          onFilesChange={setAttachedFiles}
           disabledReason={sendDisabledReason}
           models={models}
           selectedModelId={chatConfig.modelId}
@@ -404,6 +419,7 @@ export default function ChatPage() {
           models={models}
           supervisorLayers={supervisorLayers}
           onUpdateLayer={updateSupervisorLayer}
+          selectedModelContextWindow={selectedModelContextWindow}
         />
       )}
     </div>

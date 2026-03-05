@@ -32,9 +32,13 @@ const ALLOWED_FILE_TYPES = [
   "text/markdown",
   "application/json",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
 ];
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 export interface AttachedFile {
   file: File;
@@ -152,12 +156,12 @@ export function ChatInput({
 
       for (const file of Array.from(files)) {
         if (file.size > MAX_FILE_SIZE) {
-          setFileError(`${file.name} is too large (max 100MB)`);
+          setFileError(`${file.name} is too large (max 25MB)`);
           continue;
         }
         if (file.type && !ALLOWED_FILE_TYPES.includes(file.type)) {
           const ext = file.name.split(".").pop()?.toLowerCase();
-          const allowedExts = ["pdf", "txt", "csv", "md", "json", "docx"];
+          const allowedExts = ["pdf", "txt", "csv", "md", "json", "docx", "png", "jpg", "jpeg", "gif", "webp"];
           if (ext && !allowedExts.includes(ext)) {
             setFileError(`${file.name}: unsupported file type`);
             continue;
@@ -319,7 +323,7 @@ export function ChatInput({
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,.txt,.csv,.md,.json,.docx"
+            accept=".pdf,.txt,.csv,.md,.json,.docx,.png,.jpg,.jpeg,.gif,.webp"
             className="hidden"
             onChange={handleFileInputChange}
           />

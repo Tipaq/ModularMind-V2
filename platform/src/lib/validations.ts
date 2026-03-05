@@ -61,6 +61,7 @@ export const reportSchema = z.object({
 
 export const chatMessageSchema = z.object({
   content: z.string().min(1),
+  attachment_ids: z.array(z.string()).max(5).optional(),
 });
 
 export const conversationCreateSchema = z.object({

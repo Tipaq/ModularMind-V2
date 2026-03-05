@@ -44,7 +44,8 @@ export interface PlatformGraphListItem {
   updatedAt: string;
 }
 
-interface PaginatedResponse {
+/** Matches platform API pagination shape — platform doesn't depend on api-client. */
+interface PaginatedGraphResponse {
   items: PlatformGraphListItem[];
   total: number;
   page: number;
@@ -89,7 +90,7 @@ export const useGraphsStore = create<GraphsState>((set, get) => ({
       if (search) params.set("search", search);
       const res = await fetch(`/api/graphs?${params}`);
       if (!res.ok) throw new Error("Failed to load graphs");
-      const data: PaginatedResponse = await res.json();
+      const data: PaginatedGraphResponse = await res.json();
       set({
         graphs: data.items,
         total: data.total,

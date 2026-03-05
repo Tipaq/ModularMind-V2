@@ -33,6 +33,7 @@ export interface EngineModel {
   provider: string;
   model_id: string;
   display_name: string | null;
+  context_window: number | null;
   is_active: boolean;
   is_available: boolean;
   is_embedding: boolean;
