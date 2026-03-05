@@ -1,51 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "@modularmind/api-client";
 
-export interface EngineAgent {
-  id: string;
-  name: string;
-  description?: string;
-  model_id?: string;
-  system_prompt?: string;
-  version?: number;
-}
-
-export interface EngineGraph {
-  id: string;
-  name: string;
-  description?: string;
-  node_count?: number;
-  edge_count?: number;
-  version?: number;
-}
-
-export interface McpServer {
-  id: string;
-  name: string;
-  enabled: boolean;
-  status?: string;
-}
-
-export interface EngineModel {
-  id: string;
-  name: string;
-  provider: string;
-  model_id: string;
-  display_name: string | null;
-  context_window: number | null;
-  is_active: boolean;
-  is_available: boolean;
-  is_embedding: boolean;
-}
-
-export interface SupervisorLayer {
-  key: string;
-  label: string;
-  description: string;
-  content: string;
-  filename: string;
-}
+export type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "@modularmind/api-client";
 
 export function useChatConfig() {
   const [agents, setAgents] = useState<EngineAgent[]>([]);
