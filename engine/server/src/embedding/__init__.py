@@ -4,10 +4,12 @@ from typing import Any
 
 from .base import EmbeddingProvider
 from .ollama import OllamaEmbeddingProvider
+from .openai import OpenAIEmbeddingProvider
 
 # Registry of available providers
 _PROVIDERS: dict[str, type[EmbeddingProvider]] = {
     "ollama": OllamaEmbeddingProvider,
+    "openai": OpenAIEmbeddingProvider,
 }
 
 
@@ -58,5 +60,6 @@ def list_providers() -> list[str]:
 __all__ = [
     "EmbeddingProvider",
     "OllamaEmbeddingProvider",
+    "OpenAIEmbeddingProvider",
     "get_embedding_provider",
 ]
