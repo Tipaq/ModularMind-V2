@@ -294,6 +294,11 @@ export default function Chat() {
           supervisor={panelState.supervisor}
           knowledge={panelState.knowledge}
           memory={panelState.memory}
+          selectedModel={availableModels.find((m) => toEngineModelId(m) === effectiveModelId || m.id === effectiveModelId) ?? null}
+          supervisorMode={chatConfig.supervisorMode}
+          enabledAgents={agents.filter((a) => enabledAgentIds.includes(a.id))}
+          enabledGraphs={graphs.filter((g) => enabledGraphIds.includes(g.id))}
+          tokenUsage={tokenUsage}
         />
       )}
     </div>

@@ -39,10 +39,8 @@ const ALLOWED_FILE_TYPES = [
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 const MAX_TEXTAREA_HEIGHT = 200;
 
-export interface AttachedFile {
-  file: File;
-  id: string;
-}
+import type { AttachedFile } from "@modularmind/ui";
+export type { AttachedFile } from "@modularmind/ui";
 
 interface ChatInputProps {
   value: string;
