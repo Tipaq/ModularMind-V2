@@ -83,6 +83,15 @@ Shared color constant maps (import from `@modularmind/ui`): `CHANNEL_COLORS`, `S
 
 Shared components (import from `@modularmind/ui`): `ThemeProvider`, `ThemeToggle`, `ThemeCustomizer`, `AppearanceCard`, `PageHeader`, `StatusBadge`, `ChannelBadge`, `UserButton`, plus all shadcn/ui primitives (Button, Badge, Card, Dialog, etc.).
 
+### Generic UI Components
+
+Always use the generic components from `@modularmind/ui` — never re-implement tabs, selects, or other primitives with custom markup.
+
+- **Tabs**: Use `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` from `@modularmind/ui`. The base style is border-bottom (underline indicator, not pill/rounded). Never build custom tab bars with raw `<button>` elements. For URL-synced tabs, wire `value`/`onValueChange` to `useSearchParams`. Icons can be placed directly inside `<TabsTrigger>` (the base includes `gap-2`).
+- **Select**: Use `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem` from `@modularmind/ui`. For filter bars, use the `ResourceFilters` shared component which wraps Select internally.
+- **ChatPanel**: For side-panel tabs (chat insights), use the `ChatPanel` wrapper from `@modularmind/ui` which adds drag-to-scroll and compact sizing on top of the base Tabs.
+- Do **not** use raw Radix primitives (`@radix-ui/react-tabs`, `@radix-ui/react-select`) directly — always go through the `@modularmind/ui` wrappers which apply the design system styling.
+
 ### Platform (Next.js)
 
 - **Auth**: next-auth v5 with credentials provider, JWT sessions
@@ -125,3 +134,4 @@ make db-push        # Push Prisma schema
 - No hardcoded Tailwind colors (`bg-blue-500`, `text-green-600`) — use semantic tokens (`bg-primary`, `text-success`)
 - Reusable UI components go in `packages/ui`, not duplicated across apps
 - All React components using hooks in `packages/ui` must have `"use client"` directive
+- Always use generic UI components from `@modularmind/ui` (Tabs, Select, etc.) — never re-implement with raw HTML/buttons
