@@ -27,7 +27,8 @@ export interface PlatformClientDetail extends PlatformClient {
   engines: PlatformEngine[];
 }
 
-interface PaginatedResponse {
+/** Matches platform API pagination shape — platform doesn't depend on api-client. */
+interface PaginatedClientResponse {
   items: PlatformClient[];
   total: number;
   page: number;
@@ -73,7 +74,7 @@ export const useClientsStore = create<ClientsState>((set, get) => ({
       if (search) params.set("search", search);
       const res = await fetch(`/api/clients?${params}`);
       if (!res.ok) throw new Error("Failed to load clients");
-      const data: PaginatedResponse = await res.json();
+      const data: PaginatedClientResponse = await res.json();
       set({
         clients: data.items,
         total: data.total,

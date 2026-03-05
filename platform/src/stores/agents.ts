@@ -28,7 +28,8 @@ export interface PlatformAgent {
   updatedAt: string;
 }
 
-interface PaginatedResponse {
+/** Matches platform API pagination shape — platform doesn't depend on api-client. */
+interface PaginatedAgentResponse {
   items: PlatformAgent[];
   total: number;
   page: number;
@@ -73,7 +74,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
       if (search) params.set("search", search);
       const res = await fetch(`/api/agents?${params}`);
       if (!res.ok) throw new Error("Failed to load agents");
-      const data: PaginatedResponse = await res.json();
+      const data: PaginatedAgentResponse = await res.json();
       set({
         agents: data.items,
         total: data.total,

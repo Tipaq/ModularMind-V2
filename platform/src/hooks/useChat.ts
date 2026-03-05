@@ -2,135 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useExecutionActivities } from "./useExecutionActivities";
-import type { ExecutionActivity } from "./useExecutionActivities";
+import type { SendMessageResponse } from "@modularmind/api-client";
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "./useExecutionActivities";
 
-import type { ChatMessage, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry } from "@modularmind/ui";
+import type { ChatMessage, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, TokenUsage, ContextData, MessageExecutionData } from "@modularmind/ui";
+import { extractResponse } from "@modularmind/ui";
 
 export type { KnowledgeCollection, KnowledgeChunk, KnowledgeData };
+export type { TokenUsage, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData } from "@modularmind/ui";
 
 export type Message = ChatMessage;
 export type MemoryEntry = InsightsMemoryEntry;
-
-export interface TokenUsage {
-  prompt: number;
-  completion: number;
-  total: number;
-}
-
-export interface ContextHistoryMessage {
-  role: string;
-  content: string;
-}
-
-export interface ContextHistoryBudget {
-  includedCount: number;
-  totalChars: number;
-  maxChars: number;
-  budgetExceeded: boolean;
-  contextWindow?: number;
-  historyBudgetPct?: number;
-  historyBudgetTokens?: number;
-}
-
-export interface ContextHistory {
-  budget: ContextHistoryBudget | null;
-  messages: ContextHistoryMessage[];
-  summary: string;
-}
-
-export interface BudgetLayerInfo {
-  pct: number;
-  allocated: number;
-  used: number;
-}
-
-export interface BudgetOverview {
-  contextWindow: number;
-  effectiveContext: number;
-  maxPct: number;
-  layers: {
-    history: BudgetLayerInfo;
-    memory: BudgetLayerInfo;
-    rag: BudgetLayerInfo;
-  };
-}
-
-export interface ContextData {
-  history: ContextHistory | null;
-  memoryEntries: MemoryEntry[];
-  budgetOverview: BudgetOverview | null;
-}
-
-export interface MessageExecutionData {
-  activities: ExecutionActivity[];
-  memoryEntries: MemoryEntry[];
-  knowledgeData: KnowledgeData | null;
-  tokenUsage: TokenUsage | null;
-  contextData: ContextData | null;
-}
-
-interface SendMessageResponse {
-  execution_id?: string;
-  message_id?: string;
-  stream_url?: string;
-  user_message: Message;
-  direct_response?: string;
-  routing_strategy?: string;
-  delegated_to?: string;
-  is_ephemeral?: boolean;
-  ephemeral_agent?: { id: string; name: string };
-  memory_entries?: MemoryEntry[];
-  knowledge_data?: {
-    collections: { collection_id: string; collection_name: string; chunk_count: number }[];
-    chunks: { chunk_id: string; document_id: string; collection_id: string; collection_name: string; document_filename: string | null; content_preview: string; score: number; chunk_index: number }[];
-    total_results: number;
-  };
-  context_data?: {
-    history?: {
-      budget?: { included_count: number; total_chars: number; max_chars: number; budget_exceeded: boolean; context_window?: number; history_budget_pct?: number; history_budget_tokens?: number };
-      messages?: { role: string; content: string }[];
-      summary?: string;
-    };
-    memory_entries?: MemoryEntry[];
-    budget_overview?: {
-      context_window: number;
-      effective_context: number;
-      max_pct: number;
-      layers: {
-        history: { pct: number; allocated: number; used: number };
-        memory: { pct: number; allocated: number; used: number };
-        rag: { pct: number; allocated: number; used: number };
-      };
-    };
-  };
-}
-
-interface OutputData {
-  response?: string;
-  messages?: { type: string; content?: string }[];
-  node_outputs?: Record<string, { response?: string }>;
-}
-
-function extractResponse(output: OutputData | null | undefined): string {
-  if (!output) return "";
-  if (typeof output.response === "string") return output.response;
-  if (Array.isArray(output.messages)) {
-    for (let i = output.messages.length - 1; i >= 0; i--) {
-      const m = output.messages[i];
-      if (m.type === "ai" && m.content) return m.content;
-    }
-  }
-  if (output.node_outputs && typeof output.node_outputs === "object") {
-    const values = Object.values(output.node_outputs);
-    for (let i = values.length - 1; i >= 0; i--) {
-      const resp = values[i]?.response;
-      if (resp) return resp;
-    }
-  }
-  return "";
-}
 
 export function useChat(conversationId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -324,9 +207,17 @@ export function useChat(conversationId: string | null) {
         currentExecutionIdRef.current = message_id;
       }
 
-      // Capture memory entries for this message
+      // Capture memory entries for this message (map snake_case API → camelCase UI)
       if (resMemory && resMemory.length > 0) {
-        currentMemoryRef.current = resMemory;
+        currentMemoryRef.current = resMemory.map((e) => ({
+          id: e.id,
+          content: e.content,
+          scope: e.scope,
+          tier: e.tier,
+          importance: e.importance,
+          memoryType: e.memory_type,
+          category: e.category,
+        }));
       }
 
       // Capture context data from HTTP response (supervisor path)
@@ -347,7 +238,15 @@ export function useChat(conversationId: string | null) {
             messages: h.messages || [],
             summary: h.summary || "",
           } : null,
-          memoryEntries: resContext.memory_entries || [],
+          memoryEntries: (resContext.memory_entries || []).map((e) => ({
+            id: e.id,
+            content: e.content,
+            scope: e.scope,
+            tier: e.tier,
+            importance: e.importance,
+            memoryType: e.memory_type,
+            category: e.category,
+          })),
           budgetOverview: bo ? {
             contextWindow: bo.context_window,
             effectiveContext: bo.effective_context,

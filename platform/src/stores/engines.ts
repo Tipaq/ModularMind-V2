@@ -16,7 +16,8 @@ export interface PlatformEngineListItem {
   client: { id: string; name: string };
 }
 
-interface PaginatedResponse {
+/** Matches platform API pagination shape — platform doesn't depend on api-client. */
+interface PaginatedEngineResponse {
   items: PlatformEngineListItem[];
   total: number;
   page: number;
@@ -59,7 +60,7 @@ export const useEnginesStore = create<EnginesState>((set, get) => ({
       if (statusFilter) params.set("status", statusFilter);
       const res = await fetch(`/api/engines?${params}`);
       if (!res.ok) throw new Error("Failed to load engines");
-      const data: PaginatedResponse = await res.json();
+      const data: PaginatedEngineResponse = await res.json();
       set({
         engines: data.items,
         total: data.total,
