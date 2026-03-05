@@ -13,7 +13,7 @@ import {
 } from "@modularmind/ui";
 import type { ChatPanelTab } from "@modularmind/ui";
 import type { ExecutionActivity, MessageExecutionData } from "@/hooks/useChat";
-import type { EngineModel, SupervisorLayer } from "@/hooks/useChatConfig";
+import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "@/hooks/useChatConfig";
 import { ConfigTab } from "./insights/ConfigTab";
 import type { ExecutionMetrics } from "./insights/ConfigTab";
 import { ActivityTab } from "./insights/ActivityTab";
@@ -38,6 +38,8 @@ interface InsightsPanelProps {
   supervisorLayers: SupervisorLayer[];
   onUpdateLayer: (key: string, content: string) => Promise<boolean>;
   selectedModelContextWindow?: number | null;
+  enabledAgents: EngineAgent[];
+  enabledGraphs: EngineGraph[];
 }
 
 // ── Tab Definitions ──────────────────────────────────────────
@@ -62,6 +64,8 @@ export function InsightsPanel({
   supervisorLayers,
   onUpdateLayer,
   selectedModelContextWindow,
+  enabledAgents,
+  enabledGraphs,
 }: InsightsPanelProps) {
   const displayActivities = useMemo(() => {
     return isLiveSelected && isStreaming
@@ -154,6 +158,10 @@ export function InsightsPanel({
           layers={supervisorLayers}
           onUpdateLayer={onUpdateLayer}
           metrics={executionMetrics}
+          budgetOverview={contextData?.budgetOverview ?? null}
+          modelContextWindow={selectedModelContextWindow}
+          enabledAgents={enabledAgents}
+          enabledGraphs={enabledGraphs}
         />
       </TabsContent>
 
@@ -172,7 +180,6 @@ export function InsightsPanel({
         <MemoryTab
           entries={memoryEntries}
           contextData={contextData}
-          modelContextWindow={selectedModelContextWindow}
         />
       </TabsContent>
 
