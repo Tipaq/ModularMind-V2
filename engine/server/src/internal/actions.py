@@ -11,14 +11,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.auth import CurrentUser, RequireAdmin
+from src.infra.schemas import ActionResponse as _BaseActionResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Internal"])
 
 
-class ActionResponse(BaseModel):
-    status: str
+class ActionResponse(_BaseActionResponse):
     message: str
     details: dict | None = None
 

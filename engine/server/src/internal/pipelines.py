@@ -2,92 +2,28 @@
 
 import logging
 import os
-from datetime import datetime
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, update
 
 from src.auth import CurrentUser, RequireAdmin
 from src.infra.database import DbSession
+from src.internal.schemas import (
+    ActiveDocument,
+    DLQMessage,
+    DocumentStatusCounts,
+    KnowledgePipelineData,
+    MemoryPipelineData,
+    PipelineCounters,
+    PipelinesResponse,
+    StreamDetail,
+    StreamGroupInfo,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Internal"])
-
-
-# ---------------------------------------------------------------------------
-# Response Schemas
-# ---------------------------------------------------------------------------
-
-
-class StreamGroupInfo(BaseModel):
-    name: str
-    pending: int
-    consumers: int
-
-
-class StreamDetail(BaseModel):
-    length: int
-    groups: list[StreamGroupInfo] = Field(default_factory=list)
-
-
-class DLQMessage(BaseModel):
-    id: str
-    original_stream: str
-    original_id: str
-    error: str
-    data: str
-
-
-class MemoryPipelineData(BaseModel):
-    memory_raw: StreamDetail
-    memory_extracted: StreamDetail
-    memory_scored: StreamDetail | None = None
-    memory_dlq: StreamDetail
-    scorer_enabled: bool = True
-    total_entries: int = 0
-    entries_by_tier: dict[str, int] = Field(default_factory=dict)
-    entries_by_type: dict[str, int] = Field(default_factory=dict)
-    avg_importance: float = 0.0
-
-
-class DocumentStatusCounts(BaseModel):
-    pending: int = 0
-    processing: int = 0
-    ready: int = 0
-    failed: int = 0
-    total: int = 0
-
-
-class ActiveDocument(BaseModel):
-    id: str
-    filename: str
-    collection_id: str
-    collection_name: str
-    status: str
-    error_message: str | None = None
-    size_bytes: int | None = None
-    created_at: datetime
-
-
-class KnowledgePipelineData(BaseModel):
-    documents_stream: StreamDetail
-    status_counts: DocumentStatusCounts
-    active_documents: list[ActiveDocument] = Field(default_factory=list)
-
-
-class PipelineCounters(BaseModel):
-    facts_extracted_total: int = 0
-    embeddings_stored_total: int = 0
-
-
-class PipelinesResponse(BaseModel):
-    memory: MemoryPipelineData
-    knowledge: KnowledgePipelineData
-    dlq_messages: list[DLQMessage] = Field(default_factory=list)
-    counters: PipelineCounters
 
 
 # ---------------------------------------------------------------------------

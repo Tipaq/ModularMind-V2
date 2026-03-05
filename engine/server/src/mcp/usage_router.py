@@ -11,19 +11,16 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from src.auth import CurrentUser
+from src.mcp.schemas import MCPToolDefinition
 
 logger = logging.getLogger(__name__)
 
 usage_router = APIRouter(prefix="/mcp", tags=["MCP Usage"])
 
 
-# --- Schemas (shared with router.py) ---
+# --- Schemas ---
 
-
-class MCPToolResponse(BaseModel):
-    name: str
-    description: str | None
-    input_schema: dict
+MCPToolResponse = MCPToolDefinition
 
 
 class MCPToolCallRequestBody(BaseModel):

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.auth import UserRole
 from src.infra.schemas import PaginatedResponse
-from src.memory.schemas import MemoryEntryResponse
+from src.memory.schemas import MemoryEntryResponse, MemoryListResponse  # noqa: F401
 from src.rag.models import RAGScope
 
 
@@ -111,7 +111,7 @@ class TokenUsageResponse(BaseModel):
     by_model: list[ModelTokenUsage]
 
 
-MemoryListResponse = PaginatedResponse[MemoryEntryResponse]
+# MemoryListResponse imported from src.memory.schemas above
 
 
 class CollectionResponse(BaseModel):

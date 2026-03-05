@@ -13,11 +13,25 @@ from datetime import datetime
 import httpx
 import psutil
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.auth import CurrentUser, RequireAdmin
 from src.infra.config import get_settings
 from src.infra.utils import utcnow
+from src.internal.schemas import (
+    AlertItem,
+    AlertSummary,
+    GPUInfoResponse,
+    InfraMonitoring,
+    MetricPoint,
+    MetricSeries,
+    MetricsHistoryResponse,
+    MonitoringResponse,
+    OllamaRunningModel,
+    SchedulerMonitoring,
+    StreamingMonitoring,
+    SystemMonitoring,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -40,112 +54,8 @@ def get_start_time() -> float:
 
 
 # ---------------------------------------------------------------------------
-# Schemas
+# LLM / GPU Monitoring Schemas (kept here — only used by this module)
 # ---------------------------------------------------------------------------
-
-
-class GPUInfoResponse(BaseModel):
-    available: bool
-    type: str
-    device_count: int
-    memory_gb: float
-
-
-class SystemMonitoring(BaseModel):
-    cpu_percent: float
-    cpu_count: int
-    cpu_count_logical: int
-    memory_total_gb: float
-    memory_used_gb: float
-    memory_percent: float
-    disk_total_gb: float
-    disk_used_gb: float
-    disk_percent: float
-    gpu: GPUInfoResponse
-
-
-class StreamingMonitoring(BaseModel):
-    """SSE streaming status."""
-    active_streams: int = 0
-
-
-class SchedulerMonitoring(BaseModel):
-    global_current: int
-    global_max: int
-    active_slots: int
-    backpressure: bool
-
-
-class InfraMonitoring(BaseModel):
-    db_pool_size: int
-    db_pool_max_overflow: int
-    redis_max_connections: int
-    redis_healthy: bool
-    redis_latency_ms: float | None
-    ollama_status: str
-    ollama_models: list[str]
-    ollama_running_models: list[str] = Field(default_factory=list)
-    qdrant_status: str = "unknown"
-    qdrant_latency_ms: float | None = None
-    qdrant_collections: int = 0
-
-
-class AlertItem(BaseModel):
-    id: str
-    metric: str
-    threshold: float
-    actual: float
-    message: str
-    severity: str
-    triggered_at: str
-
-
-class AlertSummary(BaseModel):
-    active_count: int = 0
-    active_alerts: list[AlertItem] = Field(default_factory=list)
-
-
-class MonitoringResponse(BaseModel):
-    timestamp: str
-    uptime_seconds: int
-    system: SystemMonitoring
-    worker: dict = {}
-    streaming: StreamingMonitoring
-    scheduler: SchedulerMonitoring
-    infrastructure: InfraMonitoring
-    alerts: AlertSummary = Field(default_factory=AlertSummary)
-
-
-class MetricPoint(BaseModel):
-    ts: float
-    value: dict
-
-
-class MetricSeries(BaseModel):
-    name: str
-    points: list[MetricPoint]
-
-
-class MetricsHistoryResponse(BaseModel):
-    series: list[MetricSeries]
-    range_seconds: int
-    interval_seconds: int
-
-
-# ---------------------------------------------------------------------------
-# LLM / GPU Monitoring Schemas
-# ---------------------------------------------------------------------------
-
-
-class OllamaRunningModel(BaseModel):
-    name: str
-    size_vram_bytes: int
-    size_vram_gb: float
-    expires_at: str | None
-    context_length: int
-    parameter_size: str
-    quantization: str
-    family: str
 
 
 class GpuVramMonitoring(BaseModel):
