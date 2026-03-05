@@ -138,6 +138,76 @@ class SuperSupervisorService:
         result["routing_metadata"] = routing_metadata
         result["memory_entries"] = getattr(self, "_last_memory_entries", [])
         result["knowledge_data"] = getattr(self, "_last_knowledge_data", None)
+        from src.infra.config import get_settings as _get_settings
+        _settings = _get_settings()
+        _model_id = (conv_config or {}).get("model_id", "")
+        try:
+            from src.prompt_layers.context import AgentContextBuilder
+            _cw = AgentContextBuilder._resolve_context_window(_model_id) if _model_id else (
+                _settings.CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW
+            )
+        except Exception:
+            _cw = _settings.CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW
+        _max_pct = getattr(_settings, "CONTEXT_BUDGET_MAX_PCT", 100.0)
+        _effective_cw = int(_cw * _max_pct / 100)
+        _hist_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_HISTORY_PCT / 100)
+        _total_chars = sum(len(m.get("content") or "") for m in (messages or []))
+        _max_chars = _hist_budget * 4
+        _mem_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_MEMORY_PCT / 100)
+        _rag_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_RAG_PCT / 100)
+        _history_used = _total_chars // 4
+        _mem_entries = getattr(self, "_last_memory_entries", [])
+        _mem_used = sum(len(e.get("content", "")) for e in _mem_entries) // 4
+        _knowledge = getattr(self, "_last_knowledge_data", None)
+        _rag_used = 0
+        if _knowledge and isinstance(_knowledge, list) and len(_knowledge) > 0:
+            chunks = _knowledge[0].get("chunks", [])
+            _rag_used = sum(len(c.get("content_preview", "")) for c in chunks) // 4
+        result["context_data"] = {
+            "history": {
+                "budget": {
+                    "included_count": len(messages or []),
+                    "max_messages": _settings.CONVERSATION_HISTORY_MAX_MESSAGES,
+                    "total_chars": _total_chars,
+                    "max_chars": _max_chars,
+                    "budget_exceeded": _total_chars > _max_chars,
+                    "context_window": _cw,
+                    "history_budget_pct": _settings.CONTEXT_BUDGET_HISTORY_PCT,
+                    "history_budget_tokens": _hist_budget,
+                },
+                "messages": [
+                    {
+                        "role": m.get("role", "unknown"),
+                        "content": (m.get("content") or "")[:200],
+                    }
+                    for m in (messages or [])[-10:]
+                ],
+                "summary": "",
+            },
+            "memory_entries": _mem_entries,
+            "budget_overview": {
+                "context_window": _cw,
+                "effective_context": _effective_cw,
+                "max_pct": _max_pct,
+                "layers": {
+                    "history": {
+                        "pct": _settings.CONTEXT_BUDGET_HISTORY_PCT,
+                        "allocated": _hist_budget,
+                        "used": _history_used,
+                    },
+                    "memory": {
+                        "pct": _settings.CONTEXT_BUDGET_MEMORY_PCT,
+                        "allocated": _mem_budget,
+                        "used": _mem_used,
+                    },
+                    "rag": {
+                        "pct": _settings.CONTEXT_BUDGET_RAG_PCT,
+                        "allocated": _rag_budget,
+                        "used": _rag_used,
+                    },
+                },
+            },
+        }
         return result
 
     # =========================================================================
