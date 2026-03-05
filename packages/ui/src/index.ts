@@ -5,6 +5,12 @@ export type { User, Role } from "./stores/auth";
 // Auth hook
 export { useAuth } from "./hooks/useAuth";
 
+// Execution activities hook
+export { useExecutionActivities } from "./hooks/useExecutionActivities";
+
+// Chat utilities
+export { extractResponse } from "./hooks/useChatUtils";
+
 // Utilities
 export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTime, stripProvider, isLocalModel, formatDurationMs, formatCost } from "./lib/utils";
 
@@ -12,7 +18,7 @@ export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTi
 export { ACTIVITY_COLORS, CHANNEL_COLORS, STATUS_COLORS, ROLE_COLORS, HEALTH_COLORS } from "./lib/colors";
 
 // Chat types
-export type { ActivityType, ActivityStatus, ToolCallData, ExecutionActivity, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, SupervisorData } from "./types/chat";
+export type { ActivityType, ActivityStatus, ToolCallData, ExecutionActivity, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, SupervisorData, TokenUsage, ExecutionOutputData, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData } from "./types/chat";
 
 // Resource types (shared table/filter/pagination primitives)
 export type { ResourceColumn, ResourceFilterConfig, PaginationState, SortState } from "./types/resource";

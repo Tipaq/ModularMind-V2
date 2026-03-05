@@ -114,6 +114,24 @@ export interface SendMessageResponse {
   ephemeral_agent: { id: string; name: string } | null;
   memory_entries: MemoryEntrySummary[];
   knowledge_data: KnowledgeDataResponse | null;
+  context_data?: {
+    history?: {
+      budget?: { included_count: number; total_chars: number; max_chars: number; budget_exceeded: boolean; context_window?: number; history_budget_pct?: number; history_budget_tokens?: number };
+      messages?: { role: string; content: string }[];
+      summary?: string;
+    };
+    memory_entries?: MemoryEntrySummary[];
+    budget_overview?: {
+      context_window: number;
+      effective_context: number;
+      max_pct: number;
+      layers: {
+        history: { pct: number; allocated: number; used: number };
+        memory: { pct: number; allocated: number; used: number };
+        rag: { pct: number; allocated: number; used: number };
+      };
+    };
+  };
 }
 
 // ─── Search ──────────────────────────────────────────────────────────────────

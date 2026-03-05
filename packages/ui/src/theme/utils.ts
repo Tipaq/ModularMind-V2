@@ -56,6 +56,6 @@ export const ANTI_FOUC_SCRIPT = `
       document.documentElement.style.setProperty("--secondary", sh + " " + ss + "% " + sl + "%");
       document.documentElement.style.setProperty("--secondary-foreground", sh + " " + ss + "% " + sfl + "%");
     }
-  } catch(e) {}
+  } catch(e) { if(typeof console!=="undefined") console.warn("[mm-theme]",e); }
 })();
 `;

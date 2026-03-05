@@ -79,3 +79,79 @@ export interface SupervisorData {
   isEphemeral: boolean;
   ephemeralAgent: { id: string; name: string } | null;
 }
+
+// ─── Shared camelCase types for Token Usage / Execution Output / Context ─────
+// These mirror the snake_case API response but use camelCase for the UI layer.
+
+/** Token usage for a single LLM call (camelCase UI layer). */
+export interface TokenUsage {
+  prompt: number;
+  completion: number;
+  total: number;
+}
+
+/** Parsed execution output from SSE stream. */
+export interface ExecutionOutputData {
+  response?: string;
+  messages?: Array<{ type: string; content?: string }>;
+  node_outputs?: Record<string, { response?: string }>;
+}
+
+/** Context history message in budget tracking. */
+export interface ContextHistoryMessage {
+  role: string;
+  content: string;
+}
+
+/** Context history budget limits. */
+export interface ContextHistoryBudget {
+  includedCount: number;
+  totalChars: number;
+  maxChars: number;
+  budgetExceeded: boolean;
+  contextWindow?: number;
+  historyBudgetPct?: number;
+  historyBudgetTokens?: number;
+}
+
+/** Context history with messages and budget. */
+export interface ContextHistory {
+  budget: ContextHistoryBudget | null;
+  messages: ContextHistoryMessage[];
+  summary: string;
+}
+
+/** Budget allocation for a single context layer. */
+export interface BudgetLayerInfo {
+  pct: number;
+  allocated: number;
+  used: number;
+}
+
+/** Overview of context budget allocation across layers. */
+export interface BudgetOverview {
+  contextWindow: number;
+  effectiveContext: number;
+  maxPct: number;
+  layers: {
+    history: BudgetLayerInfo;
+    memory: BudgetLayerInfo;
+    rag: BudgetLayerInfo;
+  };
+}
+
+/** Full context data for a message execution. */
+export interface ContextData {
+  history: ContextHistory | null;
+  memoryEntries: InsightsMemoryEntry[];
+  budgetOverview: BudgetOverview | null;
+}
+
+/** Execution data associated with a specific message. */
+export interface MessageExecutionData {
+  activities: ExecutionActivity[];
+  memoryEntries: InsightsMemoryEntry[];
+  knowledgeData: KnowledgeData | null;
+  tokenUsage: TokenUsage | null;
+  contextData: ContextData | null;
+}
