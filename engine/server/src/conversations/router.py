@@ -7,7 +7,8 @@ API endpoints for conversation management and message sending.
 import asyncio
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 
 from src.auth import CurrentUser
 from src.domain_config import get_config_provider
@@ -19,6 +20,7 @@ from src.infra.query_utils import raise_not_found
 
 from .models import Conversation, MessageRole
 from .schemas import (
+    AttachmentResponse,
     ConversationCreate,
     ConversationDetailResponse,
     ConversationListResponse,
@@ -201,6 +203,56 @@ def check_conversation_access(conversation: Conversation, user_id: str) -> None:
         raise HTTPException(status_code=403, detail="Access denied")
 
 
+# Document MIME types that can have text extracted
+_DOCUMENT_CONTENT_TYPES = {
+    "application/pdf", "text/plain", "text/csv", "text/markdown",
+    "application/json",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+_MAX_ATTACHMENT_CONTEXT_CHARS = 10000
+
+
+async def _enrich_prompt_with_attachments(
+    content: str,
+    attachments: list[dict],
+) -> str:
+    """Extract text from document attachments and prepend to the user prompt."""
+    from src.infra.config import get_settings
+    from src.infra.object_store import get_object_store
+    from src.rag.processor import extract_text
+
+    settings = get_settings()
+    store = get_object_store()
+
+    parts: list[str] = []
+    for att in attachments:
+        ct = att.get("content_type") or ""
+        if ct not in _DOCUMENT_CONTENT_TYPES:
+            continue
+        try:
+            file_bytes = await store.download(
+                settings.S3_BUCKET_ATTACHMENTS, att["object_key"],
+            )
+            text = await extract_text(file_bytes, att["filename"])
+            if text:
+                truncated = text[:_MAX_ATTACHMENT_CONTEXT_CHARS]
+                parts.append(
+                    f"[Attached document: {att['filename']}]\n"
+                    f"<document_content>\n{truncated}\n</document_content>"
+                )
+        except Exception:
+            logger.warning(
+                "Failed to extract text from attachment %s", att.get("filename"),
+                exc_info=True,
+            )
+
+    if not parts:
+        return content
+
+    attachment_context = "\n\n".join(parts)
+    return f"{attachment_context}\n\n{content}"
+
+
 def build_conversation_response(
     conv: Conversation, msg_count: int, user_email: str | None = None,
 ) -> ConversationResponse:
@@ -291,6 +343,15 @@ async def get_conversation(
             role=msg.role.value if hasattr(msg.role, "value") else msg.role,
             content=msg.content,
             metadata=msg.meta or {},
+            attachments=[
+                AttachmentResponse(
+                    id=a["id"],
+                    filename=a["filename"],
+                    content_type=a.get("content_type"),
+                    size_bytes=a.get("size_bytes"),
+                )
+                for a in (msg.attachments or [])
+            ],
             created_at=msg.created_at,
         )
         for msg in conversation.messages
@@ -355,6 +416,171 @@ async def delete_conversation(
 
     await service.delete_conversation(conversation_id)
     await db.commit()
+
+
+# ─── Attachment Endpoints ────────────────────────────────────────────────────
+
+ATTACHMENT_ALLOWED_TYPES = {
+    # Documents
+    "application/pdf", "text/plain", "text/csv", "text/markdown",
+    "application/json",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    # Images
+    "image/png", "image/jpeg", "image/gif", "image/webp",
+}
+ATTACHMENT_ALLOWED_EXTENSIONS = {
+    ".pdf", ".txt", ".csv", ".md", ".json", ".docx",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp",
+}
+ATTACHMENT_MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
+ATTACHMENT_REDIS_TTL = 3600  # 1 hour
+
+
+@router.post("/{conversation_id}/attachments", response_model=AttachmentResponse, status_code=201)
+async def upload_attachment(
+    conversation_id: str,
+    user: CurrentUser,
+    db: DbSession,
+    file: UploadFile = File(...),
+) -> AttachmentResponse:
+    """Upload a file attachment for a future message in this conversation."""
+    import os
+    from uuid import uuid4
+
+    from src.infra.config import get_settings
+    from src.infra.object_store import get_object_store
+    from src.infra.redis import get_redis_client
+
+    settings = get_settings()
+
+    # Verify conversation exists and belongs to user
+    service = ConversationService(db)
+    conversation = await service.get_conversation_by_id(conversation_id)
+    if not conversation:
+        raise_not_found("Conversation")
+    check_conversation_access(conversation, user.id)
+
+    # Validate file
+    filename = file.filename or "unknown"
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ATTACHMENT_ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{ext}'",
+        )
+
+    # Read file (capped at max size)
+    chunks: list[bytes] = []
+    total_size = 0
+    while chunk := await file.read(64 * 1024):
+        total_size += len(chunk)
+        if total_size > ATTACHMENT_MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large (max {ATTACHMENT_MAX_FILE_SIZE // (1024 * 1024)}MB)",
+            )
+        chunks.append(chunk)
+
+    file_bytes = b"".join(chunks)
+    attachment_id = str(uuid4())
+    object_key = f"chat/{conversation_id}/{attachment_id}/{filename}"
+
+    # Upload to MinIO
+    store = get_object_store()
+    await store.upload(
+        bucket=settings.S3_BUCKET_ATTACHMENTS,
+        key=object_key,
+        data=file_bytes,
+        content_type=file.content_type or "application/octet-stream",
+    )
+
+    # Store pending metadata in Redis (TTL = 1 hour)
+    import json
+    redis = await get_redis_client()
+    meta = {
+        "id": attachment_id,
+        "conversation_id": conversation_id,
+        "user_id": user.id,
+        "filename": filename,
+        "content_type": file.content_type,
+        "size_bytes": total_size,
+        "object_key": object_key,
+    }
+    await redis.set(f"attachment:{attachment_id}", json.dumps(meta), ex=ATTACHMENT_REDIS_TTL)
+    await redis.aclose()
+
+    return AttachmentResponse(
+        id=attachment_id,
+        filename=filename,
+        content_type=file.content_type,
+        size_bytes=total_size,
+    )
+
+
+@router.get("/attachments/{attachment_id}")
+async def serve_attachment(
+    attachment_id: str,
+    user: CurrentUser,
+    db: DbSession,
+) -> StreamingResponse:
+    """Serve an attachment file from a sent message."""
+    from sqlalchemy import text
+
+    from src.infra.config import get_settings
+    from src.infra.object_store import get_object_store
+
+    settings = get_settings()
+
+    # Find the message containing this attachment
+    result = await db.execute(
+        text(
+            "SELECT id, conversation_id, attachments FROM conversation_messages "
+            "WHERE attachments @> :pattern::jsonb"
+        ),
+        {"pattern": f'[{{"id": "{attachment_id}"}}]'},
+    )
+    row = result.first()
+    if not row:
+        raise_not_found("Attachment")
+
+    conversation_id = row[1]
+    attachments_list = row[2] or []
+
+    # Verify user owns the conversation
+    service = ConversationService(db)
+    conversation = await service.get_conversation_by_id(conversation_id)
+    if not conversation:
+        raise_not_found("Attachment")
+    check_conversation_access(conversation, user.id)
+
+    # Find attachment metadata
+    att_meta = None
+    for att in attachments_list:
+        if att.get("id") == attachment_id:
+            att_meta = att
+            break
+    if not att_meta:
+        raise_not_found("Attachment")
+
+    object_key = att_meta.get("object_key")
+    if not object_key:
+        raise HTTPException(status_code=404, detail="Attachment file not found")
+
+    store = get_object_store()
+    content_type = att_meta.get("content_type") or "application/octet-stream"
+    safe_filename = att_meta.get("filename", "file").replace('"', '\\"')
+
+    async def stream():
+        async for chunk in store.download_stream(settings.S3_BUCKET_ATTACHMENTS, object_key):
+            yield chunk
+
+    return StreamingResponse(
+        stream(),
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+        },
+    )
 
 
 def _get_model_override(conv_config: dict) -> str | None:
@@ -685,11 +911,47 @@ async def send_message(
 
     check_conversation_access(conversation, user.id)
 
+    # Claim pending attachments from Redis
+    attachments_list: list[dict] = []
+    if data.attachment_ids:
+        import json as _json
+
+        from src.infra.redis import get_redis_client
+        redis = await get_redis_client()
+        try:
+            for att_id in data.attachment_ids:
+                raw = await redis.get(f"attachment:{att_id}")
+                if not raw:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Attachment {att_id} not found or expired",
+                    )
+                att_meta = _json.loads(raw)
+                if att_meta.get("conversation_id") != conversation_id:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Attachment {att_id} belongs to another conversation",
+                    )
+                if att_meta.get("user_id") != user.id:
+                    raise HTTPException(status_code=403, detail="Access denied")
+                attachments_list.append({
+                    "id": att_meta["id"],
+                    "filename": att_meta["filename"],
+                    "content_type": att_meta.get("content_type"),
+                    "size_bytes": att_meta.get("size_bytes"),
+                    "object_key": att_meta["object_key"],
+                })
+                # Delete from Redis (claimed)
+                await redis.delete(f"attachment:{att_id}")
+        finally:
+            await redis.aclose()
+
     # Save user message
     user_msg = await conv_service.add_message(
         conversation_id=conversation_id,
         role=MessageRole.USER,
         content=data.content,
+        attachments=attachments_list if attachments_list else None,
     )
 
     exec_service = ExecutionService(db)
@@ -699,8 +961,27 @@ async def send_message(
             role="user",
             content=user_msg.content,
             metadata=user_msg.meta or {},
+            attachments=[
+                AttachmentResponse(
+                    id=a["id"],
+                    filename=a["filename"],
+                    content_type=a.get("content_type"),
+                    size_bytes=a.get("size_bytes"),
+                )
+                for a in (user_msg.attachments or [])
+            ],
             created_at=user_msg.created_at,
         )
+
+        # Enrich prompt with text extracted from document attachments
+        if attachments_list:
+            enriched_content = await _enrich_prompt_with_attachments(
+                data.content, attachments_list,
+            )
+            data = SendMessageRequest(
+                content=enriched_content,
+                attachment_ids=[],
+            )
 
         if getattr(conversation, "supervisor_mode", False):
             return await _handle_supervisor_message(

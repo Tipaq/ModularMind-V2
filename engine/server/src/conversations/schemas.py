@@ -45,6 +45,15 @@ class ConversationUpdate(BaseModel):
     config: dict[str, Any] | None = None
 
 
+class AttachmentResponse(BaseModel):
+    """Attachment metadata returned to the client."""
+
+    id: str
+    filename: str
+    content_type: str | None = None
+    size_bytes: int | None = None
+
+
 class MessageResponse(BaseModel):
     """Message response."""
 
@@ -52,6 +61,7 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+    attachments: list[AttachmentResponse] = Field(default_factory=list)
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -88,10 +98,11 @@ class SendMessageRequest(BaseModel):
     """Send message request."""
 
     content: str = Field(min_length=1, max_length=50000)
+    attachment_ids: list[str] = Field(default_factory=list, max_length=5)
 
 
-class MemoryEntryResponse(BaseModel):
-    """Memory entry used during supervisor routing."""
+class MemoryEntrySummary(BaseModel):
+    """Slim memory entry used during supervisor routing context."""
 
     id: str
     content: str
@@ -149,7 +160,6 @@ class ContextHistoryBudget(BaseModel):
     """Budget info for the conversation history window."""
 
     included_count: int = 0
-    max_messages: int = 0
     total_chars: int = 0
     max_chars: int = 0
     budget_exceeded: bool = False
@@ -170,7 +180,7 @@ class ContextData(BaseModel):
     """Full context injection data for frontend display."""
 
     history: ContextHistory | None = None
-    memory_entries: list[MemoryEntryResponse] = Field(default_factory=list)
+    memory_entries: list[MemoryEntrySummary] = Field(default_factory=list)
 
 
 class SendMessageResponse(BaseModel):
@@ -185,7 +195,7 @@ class SendMessageResponse(BaseModel):
     delegated_to: str | None = None
     is_ephemeral: bool | None = None
     ephemeral_agent: EphemeralAgent | None = None
-    memory_entries: list[MemoryEntryResponse] = Field(default_factory=list)
+    memory_entries: list[MemoryEntrySummary] = Field(default_factory=list)
     knowledge_data: KnowledgeDataResponse | None = None
     context_data: ContextData | None = None
 

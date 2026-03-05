@@ -234,6 +234,7 @@ class ConversationService:
         content: str,
         metadata: dict | None = None,
         execution_id: str | None = None,
+        attachments: list[dict] | None = None,
     ) -> ConversationMessage:
         """Add a message to a conversation."""
         message = ConversationMessage(
@@ -243,6 +244,7 @@ class ConversationService:
             content=content,
             meta=metadata or {},
             execution_id=execution_id,
+            attachments=attachments or [],
         )
         self.db.add(message)
 
