@@ -27,8 +27,8 @@ export default function SystemTab() {
       try {
         const data = await api.get<LocalSettings>("/internal/settings");
         setSettings(data);
-      } catch {
-        /* settings may not be available */
+      } catch (err) {
+        console.warn("[SystemTab] settings not available:", err);
       }
       setLoading(false);
     })();

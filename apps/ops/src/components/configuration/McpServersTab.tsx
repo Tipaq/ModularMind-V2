@@ -142,8 +142,8 @@ export default function McpServersTab() {
         ]);
         setMcpServers(serversRes);
         setCatalog(catalogRes);
-      } catch {
-        /* endpoints may not be available */
+      } catch (err) {
+        console.warn("[McpServers] endpoints not available:", err);
       }
       setLoading(false);
     })();
@@ -176,8 +176,8 @@ export default function McpServersTab() {
       setMcpServers(mcpServers.filter((s) => s.id !== serverId));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[McpServers] remove:", err);
     }
   };
 
@@ -194,8 +194,8 @@ export default function McpServersTab() {
             : s,
         ),
       );
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[McpServers] test:", err);
     }
     setTestingId(null);
   };
@@ -236,8 +236,8 @@ export default function McpServersTab() {
           `/internal/mcp/servers/${server.id}/tools`,
         );
         setSettingsTools(tools);
-      } catch {
-        /* server may be unreachable */
+      } catch (err) {
+        console.warn("[McpServers] tools fetch:", err);
       }
       setSettingsToolsLoading(false);
     }
@@ -297,16 +297,16 @@ export default function McpServersTab() {
             : s,
         ),
       );
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[McpServers] refresh test:", err);
     }
     try {
       const tools = await api.get<MCPTool[]>(
         `/internal/mcp/servers/${settingsServer.id}/tools`,
       );
       setSettingsTools(tools);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[McpServers] refresh tools:", err);
     }
     setSettingsToolsLoading(false);
   };

@@ -61,7 +61,6 @@ interface MemoryConfig {
   context_budget_rag_pct: number;
   context_budget_default_context_window: number;
   context_budget_max_pct: number;
-  conversation_history_max_messages: number;
 }
 
 interface CatalogModel {
@@ -418,15 +417,6 @@ function ContextBudgetCard({
         {/* Separator + absolute fields */}
         <div className="border-t border-border pt-4 space-y-4">
           <NumberField
-            label="Max messages"
-            description="Absolute cap on recent messages loaded (regardless of token budget)"
-            value={val("conversation_history_max_messages")}
-            onChange={(v) => set("conversation_history_max_messages", v)}
-            min={5}
-            max={50}
-            unit="msgs"
-          />
-          <NumberField
             label="Default context window"
             description="Fallback when model metadata is unavailable"
             value={val("context_budget_default_context_window")}
@@ -554,7 +544,8 @@ export default function MemoryConfigTab() {
           catalogData.models.filter((m) => m.is_embedding || m.capabilities?.embedding),
         );
 
-        // Only show models that are actually available:
+        // Only show models that are actually available for chat:
+        // - Must have chat capability
         // - Ollama (local): must be pulled (pull_status === "ready")
         // - Cloud providers: must have API key configured
         const configuredProviders = new Set(
@@ -564,6 +555,7 @@ export default function MemoryConfigTab() {
           catalogData.models.filter((m) => {
             if (m.is_embedding) return false;
             if (!m.context_window) return false;
+            if (!m.capabilities?.chat) return false;
             // Local models: must be pulled
             if (m.model_type === "local" || m.provider === "ollama") {
               return m.pull_status === "ready";

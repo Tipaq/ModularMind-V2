@@ -255,8 +255,8 @@ export default function IntegrationsTab() {
         ]);
         setConnectors(connRes.items);
         setAgents(agentRes.items);
-      } catch {
-        /* endpoints may not be available */
+      } catch (err) {
+        console.warn("[IntegrationsTab] endpoints not available:", err);
       }
       setLoading(false);
     })();
@@ -327,8 +327,8 @@ export default function IntegrationsTab() {
       setConnectors((prev) =>
         prev.map((c) => (c.id === connector.id ? data : c)),
       );
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[Integrations] toggle:", err);
     }
   };
 
@@ -337,8 +337,8 @@ export default function IntegrationsTab() {
     try {
       await api.delete(`/connectors/${id}`);
       setConnectors((prev) => prev.filter((c) => c.id !== id));
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[Integrations] delete:", err);
     }
   };
 

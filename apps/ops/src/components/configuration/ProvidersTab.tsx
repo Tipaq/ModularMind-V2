@@ -211,8 +211,8 @@ export default function ProvidersTab() {
       try {
         const data = await api.get<LocalSettings>("/internal/settings");
         setSettings(data);
-      } catch {
-        /* settings may not be available yet */
+      } catch (err) {
+        console.warn("[ProvidersTab] settings not available:", err);
       }
       setLoading(false);
     })();
@@ -270,8 +270,8 @@ export default function ProvidersTab() {
       setSettings(data);
       setSaveSuccess(providerKey);
       setTimeout(() => setSaveSuccess(null), 3000);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[ProvidersTab] remove key:", err);
     }
     setSaving(null);
   };
