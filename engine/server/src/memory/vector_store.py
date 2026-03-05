@@ -52,6 +52,7 @@ class QdrantMemoryVectorStore(BaseHybridVectorStore):
         importance: float = 0.5,
         metadata: dict | None = None,
         memory_type: str = "episodic",
+        tier: str = "vector",
     ) -> None:
         """Upsert a single memory point to the memory collection."""
         client = await self._get_client()
@@ -84,6 +85,7 @@ class QdrantMemoryVectorStore(BaseHybridVectorStore):
                 "conversation_id": conv_id,
                 "importance": importance,
                 "memory_type": memory_type,
+                "tier": tier,
                 "is_expired": False,
                 "metadata": metadata or {},
             },

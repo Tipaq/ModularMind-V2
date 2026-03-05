@@ -31,7 +31,7 @@ class MemoryManager:
         repository: IMemoryRepository,
         embedding_provider: IEmbeddingProvider,
         max_context_entries: int = 10,
-        similarity_threshold: float = 0.3,
+        similarity_threshold: float = 0.5,
     ):
         """Initialize the memory manager.
 
@@ -122,8 +122,21 @@ class MemoryManager:
             delta = settings.MEMORY_SCORE_WEIGHT_FREQUENCY
             now = utcnow()
 
+            # Minimum relevance gate: entries below this Qdrant score are
+            # dropped regardless of importance/recency, preventing irrelevant
+            # but high-importance memories from polluting results.
+            min_relevance = settings.MEMORY_MIN_RELEVANCE_GATE
+
             scored_entries: list[tuple[MemoryEntry, float]] = []
             for entry, qdrant_score in results:
+                # Skip entries that don't meet the relevance floor
+                if qdrant_score < min_relevance:
+                    logger.debug(
+                        "Memory %s dropped: relevance %.3f < gate %.3f",
+                        entry.id, qdrant_score, min_relevance,
+                    )
+                    continue
+
                 # Recency: 0.995 ^ hours_since_access
                 ref_time = entry.last_accessed or entry.created_at
                 hours_since = (now - ref_time).total_seconds() / 3600
@@ -152,7 +165,7 @@ class MemoryManager:
             scored_entries.sort(key=lambda x: x[1], reverse=True)
             scored_entries = scored_entries[:limit]
 
-            # Update access for returned entries
+            # Update access only for returned entries (not dropped ones)
             entries = []
             for entry, score in scored_entries:
                 await self.repository.update_access(entry.id)

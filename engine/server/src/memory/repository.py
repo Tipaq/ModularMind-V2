@@ -70,6 +70,7 @@ class MemoryRepository:
                     importance=importance,
                     metadata=metadata or {},
                     memory_type=memory_type.value,
+                    tier=tier.value,
                 )
             except Exception as e:
                 logger.error("Qdrant upsert failed for memory %s: %s", entry_id, e)
@@ -267,6 +268,58 @@ class MemoryRepository:
                 newest = row.newest
 
         # Stats by type
+        type_query = (
+            select(
+                MemoryEntry.memory_type,
+                func.count(MemoryEntry.id).label("cnt"),
+            )
+            .where(*base_filter)
+            .group_by(MemoryEntry.memory_type)
+        )
+        type_result = await self.db.execute(type_query)
+        type_counts = {mt.value: 0 for mt in MemoryType}
+        for row in type_result.all():
+            type_counts[row.memory_type.value] = row.cnt
+
+        return MemoryStats(
+            total_entries=sum(tier_counts.values()),
+            entries_by_tier=tier_counts,
+            entries_by_type=type_counts,
+            oldest_entry=oldest,
+            newest_entry=newest,
+        )
+
+    async def get_user_stats(self, user_id: str) -> MemoryStats:
+        """Get aggregate memory statistics across all scopes for a user."""
+        base_filter = [
+            MemoryEntry.user_id == user_id,
+            MemoryEntry.expired_at.is_(None),
+        ]
+
+        tier_query = (
+            select(
+                MemoryEntry.tier,
+                func.count(MemoryEntry.id).label("cnt"),
+                func.min(MemoryEntry.created_at).label("oldest"),
+                func.max(MemoryEntry.created_at).label("newest"),
+            )
+            .where(*base_filter)
+            .group_by(MemoryEntry.tier)
+        )
+        tier_result = await self.db.execute(tier_query)
+        tier_rows = tier_result.all()
+
+        tier_counts = {tier.value: 0 for tier in MemoryTier}
+        oldest = None
+        newest = None
+
+        for row in tier_rows:
+            tier_counts[row.tier.value] = row.cnt
+            if oldest is None or (row.oldest and row.oldest < oldest):
+                oldest = row.oldest
+            if newest is None or (row.newest and row.newest > newest):
+                newest = row.newest
+
         type_query = (
             select(
                 MemoryEntry.memory_type,
