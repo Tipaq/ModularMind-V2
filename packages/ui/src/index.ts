@@ -23,6 +23,9 @@ export type { ActivityType, ActivityStatus, ToolCallData, ExecutionActivity, Kno
 // Resource types (shared table/filter/pagination primitives)
 export type { ResourceColumn, ResourceFilterConfig, PaginationState, SortState } from "./types/resource";
 
+// Engine config types (re-exported so platform can use them without depending on api-client)
+export type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "./types/engine";
+
 // Theme
 export { ThemeProvider } from "./theme/ThemeProvider";
 export type { ThemeMode, ThemeConfig, ThemeContextValue } from "./theme/ThemeProvider";

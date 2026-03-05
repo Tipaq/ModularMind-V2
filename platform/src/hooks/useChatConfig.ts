@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "@modularmind/api-client";
+import type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "@modularmind/ui";
 
-export type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "@modularmind/api-client";
+export type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "@modularmind/ui";
 
 export function useChatConfig() {
   const [agents, setAgents] = useState<EngineAgent[]>([]);

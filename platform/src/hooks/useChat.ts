@@ -2,7 +2,42 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useExecutionActivities } from "./useExecutionActivities";
-import type { SendMessageResponse } from "@modularmind/api-client";
+/** Local SendMessageResponse — platform doesn't depend on @modularmind/api-client. */
+interface SendMessageResponse {
+  execution_id?: string;
+  message_id?: string;
+  stream_url?: string;
+  user_message: Message;
+  direct_response?: string;
+  routing_strategy?: string;
+  delegated_to?: string;
+  is_ephemeral?: boolean;
+  ephemeral_agent?: { id: string; name: string };
+  memory_entries?: Array<{ id: string; content: string; scope: string; tier: string; importance: number; memory_type: string; category: string }>;
+  knowledge_data?: {
+    collections: Array<{ collection_id: string; collection_name: string; chunk_count: number }>;
+    chunks: Array<{ chunk_id: string; document_id: string; collection_id: string; collection_name: string; document_filename: string | null; content_preview: string; score: number; chunk_index: number }>;
+    total_results: number;
+  };
+  context_data?: {
+    history?: {
+      budget?: { included_count: number; total_chars: number; max_chars: number; budget_exceeded: boolean; context_window?: number; history_budget_pct?: number; history_budget_tokens?: number };
+      messages?: Array<{ role: string; content: string }>;
+      summary?: string;
+    };
+    memory_entries?: Array<{ id: string; content: string; scope: string; tier: string; importance: number; memory_type: string; category: string }>;
+    budget_overview?: {
+      context_window: number;
+      effective_context: number;
+      max_pct: number;
+      layers: {
+        history: { pct: number; allocated: number; used: number };
+        memory: { pct: number; allocated: number; used: number };
+        rag: { pct: number; allocated: number; used: number };
+      };
+    };
+  };
+}
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "./useExecutionActivities";
 
