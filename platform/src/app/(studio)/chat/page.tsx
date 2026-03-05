@@ -8,6 +8,7 @@ import { ConversationSidebar, type Conversation } from "@/components/chat/Conver
 import { ChatMessages } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { InsightsPanel } from "@/components/chat/InsightsPanel";
+import { ContextBudgetDonut } from "@/components/chat/ContextBudgetDonut";
 import { PanelRight } from "lucide-react";
 
 interface ChatConfig {
@@ -67,6 +68,24 @@ export default function ChatPage() {
     if (!selectedMessageId) return null;
     return executionDataMap[selectedMessageId] ?? null;
   }, [selectedMessageId, executionDataMap]);
+
+  // Auto-select the active model when none is set
+  useEffect(() => {
+    if (chatConfig.modelId) return;
+    const available = models.filter((m) => !m.is_embedding && m.is_available);
+    const active = available.find((m) => m.is_active) ?? available[0];
+    if (active) {
+      setChatConfig((prev) => ({ ...prev, modelId: `${active.provider}:${active.model_id}` }));
+    }
+  }, [models, chatConfig.modelId]);
+
+  // Context usage percentage from the latest execution
+  const contextPercent = useMemo(() => {
+    const bo = selectedExecution?.contextData?.budgetOverview;
+    if (!bo || bo.effectiveContext <= 0) return null;
+    const totalUsed = bo.layers.history.used + bo.layers.memory.used + bo.layers.rag.used;
+    return Math.round((totalUsed / bo.effectiveContext) * 100);
+  }, [selectedExecution]);
 
   // Determine if sending is blocked
   const sendDisabledReason = useMemo(() => {
@@ -358,7 +377,19 @@ export default function ChatPage() {
           onToggleAgent={handleToggleAgent}
           onToggleGraph={handleToggleGraph}
           disabledReason={sendDisabledReason}
+          models={models}
+          selectedModelId={chatConfig.modelId}
+          onModelChange={(modelId) => handleConfigChange({ modelId })}
+          onCompact={() => {/* TODO: implement conversation compaction */}}
+          compactDisabled={messages.length < 4}
+          contextPercent={contextPercent}
         />
+        {selectedExecution?.contextData?.budgetOverview && (
+          <ContextBudgetDonut
+            overview={selectedExecution.contextData.budgetOverview}
+            className="border-t border-border/30"
+          />
+        )}
       </div>
 
       {/* Right: Insights panel */}

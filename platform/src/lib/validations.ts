@@ -63,6 +63,13 @@ export const chatMessageSchema = z.object({
   content: z.string().min(1),
 });
 
+export const conversationCreateSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  supervisor_mode: z.boolean().optional(),
+  agent_id: z.string().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+});
+
 export const conversationPatchSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   supervisor_mode: z.boolean().optional(),

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-utils";
 import { engineFetch } from "@/lib/engine-proxy";
-import { parseBody, chatMessageSchema } from "@/lib/validations";
+import { parseBody, conversationCreateSchema } from "@/lib/validations";
 
 // GET /api/chat/conversations — List conversations
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const { session, error } = await requireAuth();
   if (error) return error;
 
-  const { data, error: bodyError } = await parseBody(req, chatMessageSchema);
+  const { data, error: bodyError } = await parseBody(req, conversationCreateSchema);
   if (bodyError) return bodyError;
 
   const res = await engineFetch(

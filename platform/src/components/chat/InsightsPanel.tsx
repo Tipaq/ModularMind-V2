@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo } from "react";
 import {
   Bot,
   BookOpen,
   Brain,
   Clock,
-  Cpu,
   Database,
   FileText,
   Wrench,
@@ -16,25 +15,20 @@ import {
   FileJson,
   Pencil,
   Loader2,
-  Route,
   Settings2,
   Zap,
+  RefreshCw,
 } from "lucide-react";
 import {
   Badge,
   Button,
   cn,
   Switch,
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
   TabsContent,
   ChatPanel,
 } from "@modularmind/ui";
 import type { ChatPanelTab } from "@modularmind/ui";
-import type { ExecutionActivity, MemoryEntry, KnowledgeData, KnowledgeChunk, MessageExecutionData } from "@/hooks/useChat";
+import type { ExecutionActivity, MemoryEntry, KnowledgeData, KnowledgeChunk, MessageExecutionData, ContextData, BudgetOverview } from "@/hooks/useChat";
 import type { EngineModel, SupervisorLayer } from "@/hooks/useChatConfig";
 import { ExecutionActivityList } from "./ExecutionActivity";
 import { ToolCallCard } from "./ToolCallCard";
@@ -133,206 +127,162 @@ function EmptyState({ icon: Icon, message }: { icon: React.ElementType; message:
   );
 }
 
-// ── Model Tab Content ────────────────────────────────────────
+// ── Config Tab Content (merged Model + Supervisor) ──────────
 
-function ModelTabContent({
+function ConfigTabContent({
   models,
   selectedModelId,
   modelOverride,
-  onSelectModel,
   onToggleOverride,
+  supervisorMode,
+  onToggleSupervisor,
+  layers,
+  onUpdateLayer,
   metrics,
 }: {
   models: EngineModel[];
   selectedModelId: string | null;
   modelOverride: boolean;
-  onSelectModel: (id: string | null) => void;
   onToggleOverride: (enabled: boolean) => void;
+  supervisorMode: boolean;
+  onToggleSupervisor: (enabled: boolean) => void;
+  layers: SupervisorLayer[];
+  onUpdateLayer: (key: string, content: string) => Promise<boolean>;
   metrics: ExecutionMetrics | null;
 }) {
-  const availableModels = useMemo(
-    () => models.filter((m) => m.is_active && m.is_available && !m.is_embedding),
-    [models],
-  );
-
-  const toEngineModelId = useCallback(
-    (m: EngineModel) => `${m.provider}:${m.model_id}`,
-    [],
-  );
-
-  // Find the selected model object for displaying details
-  const selectedModel = useMemo(
-    () => availableModels.find((m) => toEngineModelId(m) === selectedModelId) ?? null,
-    [availableModels, selectedModelId, toEngineModelId],
-  );
-
-  useEffect(() => {
-    if (!selectedModelId && availableModels.length > 0) {
-      onSelectModel(toEngineModelId(availableModels[0]));
-    }
-  }, [selectedModelId, availableModels, onSelectModel, toEngineModelId]);
+  const selectedModel = useMemo(() => {
+    if (!selectedModelId) return null;
+    const available = models.filter((m) => m.is_active && m.is_available && !m.is_embedding);
+    return available.find((m) => m.id === selectedModelId || `${m.provider}:${m.model_id}` === selectedModelId) ?? null;
+  }, [models, selectedModelId]);
 
   return (
-    <div className="p-4 space-y-3">
-      {availableModels.length === 0 ? (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            No models available. Pull a model in Ollama or configure provider credentials.
-          </p>
-          <a
-            href="/configuration"
-            className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-          >
-            <Settings2 className="h-3 w-3" />
-            Go to Configuration
-          </a>
-        </div>
-      ) : (
-        <>
-          <Select
-            value={selectedModelId ?? ""}
-            onValueChange={(v) => onSelectModel(v || null)}
-          >
-            <SelectTrigger className="w-full text-sm">
-              <SelectValue placeholder="Select a model..." />
-            </SelectTrigger>
-            <SelectContent>
-              {availableModels.map((m) => (
-                <SelectItem key={m.id} value={toEngineModelId(m)}>
-                  {m.display_name || m.name} ({m.provider})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Model info card — always visible when a model is selected */}
-          {selectedModel && (
-            <div className="border border-border/50 rounded-lg p-2.5">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                <span className="text-muted-foreground">Provider</span>
-                <span className="text-right font-medium">{selectedModel.provider}</span>
-                <span className="text-muted-foreground">Model ID</span>
-                <span className="text-right font-mono text-[11px] truncate">{selectedModel.model_id}</span>
-              </div>
+    <div className="space-y-1">
+      {/* Model info */}
+      <div className="px-4 pt-4 pb-2 space-y-3">
+        {selectedModel ? (
+          <div className="border border-border/50 rounded-lg p-2.5">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+              <span className="text-muted-foreground">Model</span>
+              <span className="text-right font-medium">{selectedModel.display_name || selectedModel.name}</span>
+              <span className="text-muted-foreground">Provider</span>
+              <span className="text-right font-medium">{selectedModel.provider}</span>
+              <span className="text-muted-foreground">Model ID</span>
+              <span className="text-right font-mono text-[11px] truncate">{selectedModel.model_id}</span>
             </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm">Override agent models</p>
-              {modelOverride && (
-                <p className="text-xs text-warning mt-0.5">
-                  All agents and graphs will use this model instead of their configured model.
-                </p>
-              )}
-            </div>
-            <Switch checked={modelOverride} onCheckedChange={onToggleOverride} />
           </div>
-        </>
-      )}
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            No model selected. Use the model picker in the input bar.
+          </p>
+        )}
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm">Override agent models</p>
+            {modelOverride && (
+              <p className="text-xs text-warning mt-0.5">
+                All agents and graphs will use this model instead of their configured model.
+              </p>
+            )}
+          </div>
+          <Switch checked={modelOverride} onCheckedChange={onToggleOverride} />
+        </div>
+      </div>
+
+      {/* Separator */}
+      <div className="border-t border-border/50" />
+
+      {/* Supervisor */}
+      <div className="px-4 pt-3 pb-2 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm">Supervisor Mode</span>
+          <Switch checked={supervisorMode} onCheckedChange={onToggleSupervisor} />
+        </div>
+        {supervisorMode && layers.length > 0 && (
+          <div className="space-y-2 pt-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Soul Layers
+            </p>
+            {layers.map((layer) => (
+              <LayerEditor
+                key={layer.key}
+                layer={layer}
+                onSave={onUpdateLayer}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Execution Metrics */}
       {metrics && (metrics.totalDurationMs != null || metrics.tokenUsage) && (
-        <div className="space-y-2 pt-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            Last Execution
-          </p>
+        <>
+          <div className="border-t border-border/50" />
+          <div className="px-4 pt-3 pb-4 space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Last Execution
+            </p>
 
-          {/* Stats grid */}
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-            {metrics.totalDurationMs != null && (
-              <>
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Clock className="h-3 w-3" />Total time
-                </span>
-                <span className="font-mono text-right">{formatDuration(metrics.totalDurationMs)}</span>
-              </>
-            )}
-            {metrics.llmDurationMs != null && (
-              <>
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Zap className="h-3 w-3" />LLM time
-                </span>
-                <span className="font-mono text-right">
-                  {formatDuration(metrics.llmDurationMs)}
-                  {metrics.llmCalls > 1 && (
-                    <span className="text-muted-foreground ml-1">({metrics.llmCalls} calls)</span>
-                  )}
-                </span>
-              </>
-            )}
-            {metrics.toolCalls > 0 && (
-              <>
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Wrench className="h-3 w-3" />Tools
-                </span>
-                <span className="font-mono text-right">{metrics.toolCalls} call{metrics.toolCalls > 1 ? "s" : ""}</span>
-              </>
-            )}
-          </div>
-
-          {/* Token usage card */}
-          {metrics.tokenUsage && (
-            <div className="border border-border/50 rounded-lg p-2.5 space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-mono">{formatNumber(metrics.tokenUsage.prompt)}</span>
-                <span className="text-muted-foreground">&rarr;</span>
-                <span className="font-mono">{formatNumber(metrics.tokenUsage.completion)}</span>
-                <span className="text-muted-foreground">=</span>
-                <span className="font-mono font-medium">{formatNumber(metrics.tokenUsage.total)}</span>
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                <span>prompt</span>
-                <span />
-                <span>completion</span>
-                <span />
-                <span>total</span>
-              </div>
-              {metrics.tokensPerSecond != null && (
-                <div className="text-center text-[10px] text-muted-foreground pt-0.5 border-t border-border/30">
-                  <span className="font-mono font-medium text-foreground">{Math.round(metrics.tokensPerSecond)}</span> tok/s
-                </div>
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+              {metrics.totalDurationMs != null && (
+                <>
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Clock className="h-3 w-3" />Total time
+                  </span>
+                  <span className="font-mono text-right">{formatDuration(metrics.totalDurationMs)}</span>
+                </>
+              )}
+              {metrics.llmDurationMs != null && (
+                <>
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Zap className="h-3 w-3" />LLM time
+                  </span>
+                  <span className="font-mono text-right">
+                    {formatDuration(metrics.llmDurationMs)}
+                    {metrics.llmCalls > 1 && (
+                      <span className="text-muted-foreground ml-1">({metrics.llmCalls} calls)</span>
+                    )}
+                  </span>
+                </>
+              )}
+              {metrics.toolCalls > 0 && (
+                <>
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Wrench className="h-3 w-3" />Tools
+                  </span>
+                  <span className="font-mono text-right">{metrics.toolCalls} call{metrics.toolCalls > 1 ? "s" : ""}</span>
+                </>
               )}
             </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
-// ── Supervisor Tab Content ───────────────────────────────────
-
-function SupervisorTabContent({
-  supervisorMode,
-  onToggle,
-  layers,
-  onUpdateLayer,
-}: {
-  supervisorMode: boolean;
-  onToggle: (enabled: boolean) => void;
-  layers: SupervisorLayer[];
-  onUpdateLayer: (key: string, content: string) => Promise<boolean>;
-}) {
-  return (
-    <div className="p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm">Supervisor Mode</span>
-        <Switch checked={supervisorMode} onCheckedChange={onToggle} />
-      </div>
-      {supervisorMode && layers.length > 0 && (
-        <div className="space-y-2 pt-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Soul Layers
-          </p>
-          {layers.map((layer) => (
-            <LayerEditor
-              key={layer.key}
-              layer={layer}
-              onSave={onUpdateLayer}
-            />
-          ))}
-        </div>
+            {/* Token usage card */}
+            {metrics.tokenUsage && (
+              <div className="border border-border/50 rounded-lg p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-mono">{formatNumber(metrics.tokenUsage.prompt)}</span>
+                  <span className="text-muted-foreground">&rarr;</span>
+                  <span className="font-mono">{formatNumber(metrics.tokenUsage.completion)}</span>
+                  <span className="text-muted-foreground">=</span>
+                  <span className="font-mono font-medium">{formatNumber(metrics.tokenUsage.total)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>prompt</span>
+                  <span />
+                  <span>completion</span>
+                  <span />
+                  <span>total</span>
+                </div>
+                {metrics.tokensPerSecond != null && (
+                  <div className="text-center text-[10px] text-muted-foreground pt-0.5 border-t border-border/30">
+                    <span className="font-mono font-medium text-foreground">{Math.round(metrics.tokensPerSecond)}</span> tok/s
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -517,49 +467,279 @@ const SCOPE_LABELS: Record<string, string> = {
   conversation: "Conversation",
 };
 
-const IMPORTANCE_COLORS: Record<string, string> = {
-  high: "text-warning",
-  medium: "text-muted-foreground",
-  low: "text-muted-foreground/60",
+const TYPE_LABELS: Record<string, string> = {
+  episodic: "Episodic",
+  semantic: "Semantic",
+  procedural: "Procedural",
 };
 
-function importanceLevel(score: number): string {
-  if (score >= 0.7) return "high";
-  if (score >= 0.4) return "medium";
-  return "low";
+function MemoryEntryCard({ entry }: { entry: MemoryEntry }) {
+  const pct = Math.round(entry.importance * 100);
+  return (
+    <div className="border border-border/50 rounded-lg p-2.5 space-y-1.5">
+      <p className="text-xs leading-relaxed">{entry.content}</p>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all bg-info"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className="text-[10px] font-mono text-info">{pct}%</span>
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {entry.memory_type && (
+          <Badge variant="outline" className="text-[10px] h-4">
+            {TYPE_LABELS[entry.memory_type] || entry.memory_type}
+          </Badge>
+        )}
+        <Badge variant="secondary" className="text-[10px] h-4">
+          {SCOPE_LABELS[entry.scope] || entry.scope}
+        </Badge>
+        {entry.category && (
+          <Badge variant="secondary" className="text-[10px] h-4">
+            {entry.category}
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
 }
 
-function MemoryTabContent({ entries }: { entries: MemoryEntry[] }) {
-  if (entries.length === 0) {
-    return <EmptyState icon={Brain} message="No memories retrieved for this message." />;
-  }
+const LAYER_COLORS: Record<string, { bg: string; text: string }> = {
+  history: { bg: "bg-info", text: "text-info" },
+  memory: { bg: "bg-warning", text: "text-warning" },
+  rag: { bg: "bg-success", text: "text-success" },
+};
+
+function ContextUsageBar({ overview }: { overview: BudgetOverview }) {
+  const formatK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n);
+  const totalAllocated = overview.layers.history.allocated + overview.layers.memory.allocated + overview.layers.rag.allocated;
+  const totalUsed = overview.layers.history.used + overview.layers.memory.used + overview.layers.rag.used;
 
   return (
-    <div className="p-4 space-y-2">
-      {entries.map((entry) => {
-        const level = importanceLevel(entry.importance);
-        return (
-          <div
-            key={entry.id}
-            className="border border-border/50 rounded-lg p-2.5 space-y-1.5"
-          >
-            <p className="text-xs leading-relaxed">{entry.content}</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              {entry.category && (
-                <Badge variant="outline" className="text-[10px] h-4">
-                  {entry.category}
+    <div className="px-4 py-3 space-y-2.5 border-b border-border/50">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          Context Usage
+        </p>
+        <span className="text-[10px] font-mono text-muted-foreground">
+          {formatK(totalUsed)}/{formatK(overview.effectiveContext)} tok
+          {overview.maxPct < 100 && (
+            <span className="ml-1 text-muted-foreground/60">({overview.maxPct}% of {formatK(overview.contextWindow)})</span>
+          )}
+        </span>
+      </div>
+      {/* Stacked usage bar */}
+      <div className="flex h-2 rounded-full overflow-hidden bg-muted">
+        {(["history", "memory", "rag"] as const).map((key) => {
+          const layer = overview.layers[key];
+          const widthPct = overview.effectiveContext > 0 ? (layer.used / overview.effectiveContext) * 100 : 0;
+          return widthPct > 0 ? (
+            <div
+              key={key}
+              className={cn("h-full transition-all", LAYER_COLORS[key].bg)}
+              style={{ width: `${widthPct}%` }}
+            />
+          ) : null;
+        })}
+      </div>
+      {/* Per-layer breakdown */}
+      <div className="grid grid-cols-3 gap-1">
+        {(["history", "memory", "rag"] as const).map((key) => {
+          const layer = overview.layers[key];
+          const fillPct = layer.allocated > 0 ? Math.min(100, Math.round((layer.used / layer.allocated) * 100)) : 0;
+          return (
+            <div key={key} className="text-center">
+              <div className="flex items-center justify-center gap-1 mb-0.5">
+                <span className={cn("h-1.5 w-1.5 rounded-full", LAYER_COLORS[key].bg)} />
+                <span className="text-[10px] text-muted-foreground capitalize">{key}</span>
+              </div>
+              <p className={cn("text-[11px] font-mono tabular-nums", LAYER_COLORS[key].text)}>
+                {formatK(layer.used)}/{formatK(layer.allocated)}
+              </p>
+              <p className="text-[9px] text-muted-foreground">{fillPct}%</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MemoryTabContent({
+  entries,
+  contextData,
+}: {
+  entries: MemoryEntry[];
+  contextData: ContextData | null;
+}) {
+  const [consolidating, setConsolidating] = useState(false);
+  const [consolidateResult, setConsolidateResult] = useState<string | null>(null);
+
+  const handleConsolidate = async () => {
+    setConsolidating(true);
+    setConsolidateResult(null);
+    try {
+      const res = await fetch("/api/chat/memory/consolidate", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setConsolidateResult(`Decayed: ${data.decayed}, Invalidated: ${data.invalidated} (${data.duration_ms}ms)`);
+      } else {
+        setConsolidateResult("Consolidation failed");
+      }
+    } catch {
+      setConsolidateResult("Consolidation failed");
+    }
+    setConsolidating(false);
+    setTimeout(() => setConsolidateResult(null), 4000);
+  };
+
+  if (!contextData && entries.length === 0) {
+    return <EmptyState icon={Brain} message="Send a message to see injected context." />;
+  }
+
+  const history = contextData?.history;
+  const budget = history?.budget;
+  const memEntries = contextData?.memoryEntries ?? entries;
+  const budgetOverview = contextData?.budgetOverview ?? null;
+
+  return (
+    <div className="space-y-1">
+      {/* Context Usage Bar */}
+      {budgetOverview && <ContextUsageBar overview={budgetOverview} />}
+
+      {/* Section 1: Context Window (Buffer) */}
+      <CollapsibleSection
+        title="Context Window"
+        icon={Clock}
+        badge={budget ? `${budget.includedCount}/${budget.maxMessages}` : undefined}
+        defaultOpen
+      >
+        {budget ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              <span className="font-mono">
+                {budget.includedCount}/{budget.maxMessages} messages
+              </span>
+              {budget.historyBudgetTokens != null && budget.historyBudgetTokens > 0 ? (
+                <>
+                  <span className="text-muted-foreground">&middot;</span>
+                  <span className="font-mono">
+                    {Math.round(budget.totalChars / 4).toLocaleString()}/{budget.historyBudgetTokens.toLocaleString()} tok
+                  </span>
+                  {budget.historyBudgetPct != null && budget.contextWindow != null && (
+                    <>
+                      <span className="text-muted-foreground">&middot;</span>
+                      <span className="text-muted-foreground">
+                        {budget.historyBudgetPct}% of {budget.contextWindow >= 1000 ? `${(budget.contextWindow / 1000).toFixed(budget.contextWindow >= 10000 ? 0 : 1)}K` : budget.contextWindow}
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : budget.maxChars > 0 ? (
+                <>
+                  <span className="text-muted-foreground">&middot;</span>
+                  <span className="font-mono">
+                    {budget.totalChars.toLocaleString()}/{budget.maxChars.toLocaleString()} chars
+                  </span>
+                </>
+              ) : null}
+              {budget.budgetExceeded && (
+                <Badge variant="outline" className="text-[10px] h-4 text-warning border-warning/30">
+                  budget exceeded
                 </Badge>
               )}
-              <Badge variant="secondary" className="text-[10px] h-4">
-                {SCOPE_LABELS[entry.scope] || entry.scope}
-              </Badge>
-              <span className={`text-[10px] ${IMPORTANCE_COLORS[level]}`}>
-                {(entry.importance * 100).toFixed(0)}%
-              </span>
             </div>
+            {(budget.historyBudgetTokens ?? budget.maxChars) > 0 && (
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    budget.budgetExceeded ? "bg-warning" : "bg-primary",
+                  )}
+                  style={{ width: `${Math.min(100, (budget.totalChars / Math.max(1, budget.maxChars)) * 100)}%` }}
+                />
+              </div>
+            )}
+            {history && history.messages.length > 0 && (
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {history.messages.map((msg, i) => (
+                  <div key={i} className="text-[11px] flex gap-2 items-start">
+                    <Badge variant="secondary" className="text-[10px] h-4 shrink-0 mt-0.5">
+                      {msg.role}
+                    </Badge>
+                    <span className="text-muted-foreground line-clamp-2">{msg.content}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        );
-      })}
+        ) : (
+          <p className="text-xs text-muted-foreground">No buffer data available.</p>
+        )}
+      </CollapsibleSection>
+
+      {/* Section 2: Summary (Compacting) */}
+      <CollapsibleSection
+        title="Summary"
+        icon={FileText}
+        badge={history?.summary ? "active" : undefined}
+        defaultOpen={!!history?.summary}
+      >
+        {history?.summary ? (
+          <div className="border border-border/50 rounded-lg p-2.5 bg-success/5">
+            <p className="text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+              {history.summary}
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {budget?.budgetExceeded
+              ? "Budget exceeded but no conversation summary exists yet."
+              : "No summary needed \u2014 all messages fit in context."}
+          </p>
+        )}
+      </CollapsibleSection>
+
+      {/* Section 3: Vector Memories */}
+      <CollapsibleSection
+        title="Vector Memories"
+        icon={Database}
+        badge={memEntries.length > 0 ? `${memEntries.length}` : undefined}
+        defaultOpen={memEntries.length > 0}
+      >
+        {memEntries.length > 0 ? (
+          <div className="space-y-2">
+            {memEntries.map((entry) => (
+              <MemoryEntryCard key={entry.id} entry={entry} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No vector memories retrieved for this message.</p>
+        )}
+      </CollapsibleSection>
+
+      {/* Consolidate / Compact button */}
+      <div className="px-4 py-3 border-t border-border/50">
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-xs gap-1.5"
+          onClick={handleConsolidate}
+          disabled={consolidating}
+        >
+          {consolidating ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3 w-3" />
+          )}
+          {consolidating ? "Consolidating..." : "Compact Memory"}
+        </Button>
+        {consolidateResult && (
+          <p className="text-[10px] text-muted-foreground text-center mt-1.5">{consolidateResult}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -711,8 +891,7 @@ function StepCard({ step }: { step: ExecutionActivity }) {
 // ── Tab Definitions ──────────────────────────────────────────
 
 const PANEL_TABS: ChatPanelTab[] = [
-  { value: "model", label: "Model", icon: Cpu },
-  { value: "supervisor", label: "Supervisor", icon: Route },
+  { value: "config", label: "Config", icon: Settings2 },
   { value: "activity", label: "Activity", icon: Activity },
   { value: "memory", label: "Memory", icon: Brain },
   { value: "knowledge", label: "RAG", icon: BookOpen },
@@ -738,6 +917,7 @@ export function InsightsPanel({
   }, [isLiveSelected, isStreaming, liveActivities, selectedExecution?.activities]);
 
   const memoryEntries = selectedExecution?.memoryEntries ?? [];
+  const contextData = selectedExecution?.contextData ?? null;
   const knowledgeData = selectedExecution?.knowledgeData ?? null;
   const tokenUsage = selectedExecution?.tokenUsage ?? null;
 
@@ -809,24 +989,18 @@ export function InsightsPanel({
   }, [displayActivities, tokenUsage, config.modelId]);
 
   return (
-    <ChatPanel tabs={PANEL_TABS} defaultTab="model">
-      <TabsContent value="model" className="mt-0">
-        <ModelTabContent
+    <ChatPanel tabs={PANEL_TABS} defaultTab="config">
+      <TabsContent value="config" className="mt-0">
+        <ConfigTabContent
           models={models}
           selectedModelId={config.modelId}
           modelOverride={config.modelOverride}
-          onSelectModel={(id) => onConfigChange({ modelId: id })}
           onToggleOverride={(enabled) => onConfigChange({ modelOverride: enabled })}
-          metrics={executionMetrics}
-        />
-      </TabsContent>
-
-      <TabsContent value="supervisor" className="mt-0">
-        <SupervisorTabContent
           supervisorMode={config.supervisorMode}
-          onToggle={(enabled) => onConfigChange({ supervisorMode: enabled })}
+          onToggleSupervisor={(enabled) => onConfigChange({ supervisorMode: enabled })}
           layers={supervisorLayers}
           onUpdateLayer={onUpdateLayer}
+          metrics={executionMetrics}
         />
       </TabsContent>
 
@@ -842,7 +1016,10 @@ export function InsightsPanel({
       </TabsContent>
 
       <TabsContent value="memory" className="mt-0">
-        <MemoryTabContent entries={memoryEntries} />
+        <MemoryTabContent
+          entries={memoryEntries}
+          contextData={contextData}
+        />
       </TabsContent>
 
       <TabsContent value="knowledge" className="mt-0">
