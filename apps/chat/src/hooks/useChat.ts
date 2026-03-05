@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Message as ApiMessage, MessageAttachment, SendMessageResponse } from "@modularmind/api-client";
+import type { ExecutionOutputData, TokenUsage } from "@modularmind/ui";
 import { api } from "../lib/api";
 import { useExecutionActivities } from "./useExecutionActivities";
 import { useInsightsPanel } from "./useInsightsPanel";
@@ -13,22 +14,11 @@ export type {
   MemoryEntry,
   InsightsPanelState,
 } from "./useInsightsPanel";
+export type { TokenUsage } from "@modularmind/ui";
 
 export type Message = ApiMessage;
 
-export interface TokenUsage {
-  prompt: number;
-  completion: number;
-  total: number;
-}
-
-interface ExecutionOutput {
-  response?: string;
-  messages?: Array<{ type: string; content?: string }>;
-  node_outputs?: Record<string, { response?: string }>;
-}
-
-function extractResponse(output: ExecutionOutput | null | undefined): string {
+function extractResponse(output: ExecutionOutputData | null | undefined): string {
   if (!output) return "";
   if (typeof output.response === "string") return output.response;
   if (Array.isArray(output.messages)) {
