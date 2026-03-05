@@ -69,6 +69,15 @@ def create_scheduler() -> AsyncIOScheduler:
             name="Scan conversations for memory extraction",
         )
 
+    # Orphaned attachment cleanup (every hour)
+    scheduler.add_job(
+        cleanup_orphaned_attachments,
+        "interval",
+        seconds=3600,
+        id="cleanup_orphaned_attachments",
+        name="Delete unclaimed chat attachments from MinIO",
+    )
+
     return scheduler
 
 
@@ -348,6 +357,70 @@ async def memory_extraction_scan() -> None:
             await redis_client.delete(lock_key)
         except Exception:
             logger.error("Failed to release extraction scan lock")
+
+
+async def cleanup_orphaned_attachments() -> None:
+    """Delete chat attachments uploaded to MinIO but never claimed by a message.
+
+    Strategy: list objects in the chat-attachments bucket, check Redis for a pending
+    key.  If the pending key is gone (TTL expired) and no DB message references the
+    attachment id, the object is orphaned and safe to delete.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from src.infra.config import get_settings
+    from src.infra.object_store import get_object_store
+    from src.infra.redis import get_redis_client
+
+    s = get_settings()
+    store = get_object_store()
+    # Only consider objects older than 2 hours (pending TTL is 1h)
+    age_threshold = datetime.now(timezone.utc) - timedelta(hours=2)
+
+    try:
+        objects = await store.list_objects(s.S3_BUCKET_ATTACHMENTS, prefix="chat/")
+    except Exception:
+        logger.exception("Failed to list attachment objects for cleanup")
+        return
+
+    if not objects:
+        return
+
+    r = get_redis_client()
+    deleted = 0
+
+    try:
+        for obj in objects:
+            # Skip recent objects
+            last_modified = obj.get("LastModified")
+            if last_modified and last_modified > age_threshold:
+                continue
+
+            key = obj.get("Key", "")
+            # Extract attachment_id from path: chat/{conv_id}/{att_id}/{filename}
+            parts = key.split("/")
+            if len(parts) < 4:
+                continue
+            att_id = parts[2]
+
+            # Check if pending Redis key still exists
+            pending_key = f"attachment:pending:{att_id}"
+            if await r.exists(pending_key):
+                continue
+
+            # Object is old and no longer pending — delete it
+            try:
+                await store.delete(s.S3_BUCKET_ATTACHMENTS, key)
+                deleted += 1
+            except Exception:
+                logger.warning("Failed to delete orphaned attachment %s", key)
+
+        if deleted:
+            logger.info("Cleaned up %d orphaned chat attachment(s)", deleted)
+    except Exception:
+        logger.exception("Orphaned attachment cleanup failed")
+    finally:
+        await r.aclose()
 
 
 async def cleanup_stale_executions() -> None:

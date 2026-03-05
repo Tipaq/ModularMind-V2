@@ -54,6 +54,16 @@ async def main() -> None:
 
     logger.info("Worker starting — Redis Streams + APScheduler")
 
+    # Ensure S3/MinIO buckets exist (worker needs them for document processing)
+    from src.infra.object_store import get_object_store
+
+    try:
+        store = get_object_store()
+        await store.ensure_buckets([settings.S3_BUCKET_RAG, settings.S3_BUCKET_ATTACHMENTS])
+        logger.info("S3 buckets initialized")
+    except Exception as exc:
+        logger.warning("S3 bucket initialization failed (non-fatal): %s", exc)
+
     # Start APScheduler
     scheduler = create_scheduler()
     scheduler.start()
