@@ -1,34 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { api } from "../lib/api";
+import type { EngineAgent, EngineGraph, EngineModel } from "@modularmind/api-client";
 
-export interface EngineAgent {
-  id: string;
-  name: string;
-  description?: string;
-  model_id?: string;
-  system_prompt?: string;
-  version?: number;
-}
-
-export interface EngineGraph {
-  id: string;
-  name: string;
-  description?: string;
-  node_count?: number;
-  edge_count?: number;
-  version?: number;
-}
-
-export interface EngineModel {
-  id: string;
-  name: string;
-  provider: string;
-  model_id: string;
-  display_name: string | null;
-  is_active: boolean;
-  is_available: boolean;
-  is_embedding: boolean;
-}
+export type { EngineAgent, EngineGraph, EngineModel } from "@modularmind/api-client";
 
 export function useChatConfig() {
   const [agents, setAgents] = useState<EngineAgent[]>([]);
