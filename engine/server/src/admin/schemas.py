@@ -8,7 +8,8 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from src.auth import UserRole
-from src.memory.models import MemoryScope, MemoryTier
+from src.infra.schemas import PaginatedResponse
+from src.memory.schemas import MemoryEntryResponse
 from src.rag.models import RAGScope
 
 
@@ -26,11 +27,8 @@ class UserStatsResponse(BaseModel):
     created_at: datetime
 
 
-class UserStatsListResponse(BaseModel):
-    items: list[UserStatsResponse]
-    total: int
-    page: int
-    page_size: int
+class UserStatsListResponse(PaginatedResponse[UserStatsResponse]):
+    pass
 
 
 class AdminUserUpdate(BaseModel):
@@ -64,11 +62,8 @@ class AdminConversationItem(BaseModel):
     updated_at: datetime
 
 
-class AdminConversationListResponse(BaseModel):
-    items: list[AdminConversationItem]
-    total: int
-    page: int
-    page_size: int
+class AdminConversationListResponse(PaginatedResponse[AdminConversationItem]):
+    pass
 
 
 class AdminMessageResponse(BaseModel):
@@ -116,25 +111,7 @@ class TokenUsageResponse(BaseModel):
     by_model: list[ModelTokenUsage]
 
 
-class MemoryEntryResponse(BaseModel):
-    id: str
-    scope: MemoryScope
-    scope_id: str
-    tier: MemoryTier
-    content: str
-    importance: float
-    access_count: int
-    last_accessed: datetime | None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class MemoryListResponse(BaseModel):
-    items: list[MemoryEntryResponse]
-    total: int
-    page: int
-    page_size: int
+MemoryListResponse = PaginatedResponse[MemoryEntryResponse]
 
 
 class CollectionResponse(BaseModel):

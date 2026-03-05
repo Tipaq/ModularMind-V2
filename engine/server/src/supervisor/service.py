@@ -167,7 +167,6 @@ class SuperSupervisorService:
             "history": {
                 "budget": {
                     "included_count": len(messages or []),
-                    "max_messages": _settings.CONVERSATION_HISTORY_MAX_MESSAGES,
                     "total_chars": _total_chars,
                     "max_chars": _max_chars,
                     "budget_exceeded": _total_chars > _max_chars,

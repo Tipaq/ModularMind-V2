@@ -10,6 +10,7 @@ import os
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile
+from fastapi.responses import StreamingResponse
 from src.infra.query_utils import raise_not_found
 from sqlalchemy import update
 
@@ -175,7 +176,7 @@ async def list_documents(
     documents = await repo.list_documents(collection_id)
 
     return DocumentListResponse(
-        items=[DocumentResponse.model_validate(d) for d in documents],
+        items=[DocumentResponse.from_document(d) for d in documents],
         total=len(documents),
     )
 
@@ -214,42 +215,40 @@ async def upload_document_endpoint(
     if ext not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '{ext}'. Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}",
+            detail=(
+                f"Unsupported file type '{ext}'. "
+                f"Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+            ),
         )
 
-    # Stream file to a temp file to avoid holding large uploads in RAM.
-    # The temp file is read by the worker and cleaned up after.
-    import tempfile
-
-    upload_dir = os.path.join(settings.CONFIG_DIR, "uploads")
-    os.makedirs(upload_dir, exist_ok=True)
-
+    # Stream file into memory buffer (capped at MAX_FILE_SIZE), then upload to MinIO
+    chunks: list[bytes] = []
     total_size = 0
-    tmp_fd, tmp_path = tempfile.mkstemp(dir=upload_dir, suffix=ext)
-    try:
-        while chunk := await file.read(64 * 1024):  # 64KB chunks
-            total_size += len(chunk)
-            if total_size > MAX_FILE_SIZE:
-                os.close(tmp_fd)
-                os.unlink(tmp_path)
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File too large (max {MAX_FILE_SIZE // (1024 * 1024)}MB)",
-                )
-            os.write(tmp_fd, chunk)
-        os.close(tmp_fd)
-    except HTTPException:
-        raise
-    except Exception:
-        try:
-            os.close(tmp_fd)
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    while chunk := await file.read(64 * 1024):
+        total_size += len(chunk)
+        if total_size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large (max {MAX_FILE_SIZE // (1024 * 1024)}MB)",
+            )
+        chunks.append(chunk)
+
+    file_bytes = b"".join(chunks)
+
+    # Upload original file to MinIO for persistent storage
+    doc_id = str(uuid4())
+    object_key = f"rag/{collection_id}/{doc_id}/{filename}"
+
+    from src.infra.object_store import get_object_store
+    store = get_object_store()
+    await store.upload(
+        bucket=settings.S3_BUCKET_RAG,
+        key=object_key,
+        data=file_bytes,
+        content_type=file.content_type or "application/octet-stream",
+    )
 
     # Create document record with PROCESSING status
-    doc_id = str(uuid4())
     document = RAGDocument(
         id=doc_id,
         collection_id=collection_id,
@@ -257,15 +256,13 @@ async def upload_document_endpoint(
         content_type=file.content_type,
         size_bytes=total_size,
         status=DocumentStatus.PROCESSING.value,
-        meta={"file_path": tmp_path},
+        meta={"object_key": object_key},
     )
     db.add(document)
     await db.commit()
     await db.refresh(document)
 
-    # Dispatch processing via Redis Streams.
-    # Pass file path instead of base64 to avoid doubling memory usage
-    # for large files. Worker reads file and cleans up when done.
+    # Dispatch processing via Redis Streams
     chunk_size = getattr(collection, "chunk_size", 500) or 500
     chunk_overlap = getattr(collection, "chunk_overlap", 50) or 50
 
@@ -274,7 +271,7 @@ async def upload_document_endpoint(
     await bus.publish("tasks:documents", {
         "collection_id": str(collection_id),
         "document_id": str(doc_id),
-        "file_path": tmp_path,
+        "object_key": object_key,
         "filename": filename,
         "chunk_size": chunk_size,
         "chunk_overlap": chunk_overlap,
@@ -282,7 +279,7 @@ async def upload_document_endpoint(
 
     logger.info("Document %s (%s) queued for processing", filename, doc_id)
 
-    return DocumentResponse.model_validate(document)
+    return DocumentResponse.from_document(document)
 
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
@@ -303,7 +300,130 @@ async def get_document(
     if not await repo.can_access_collection(document.collection_id, user.id, user_groups):
         raise_not_found("Document")
 
-    return DocumentResponse.model_validate(document)
+    return DocumentResponse.from_document(document)
+
+
+@router.get("/documents/{document_id}/download")
+async def download_document(
+    document_id: str,
+    user: CurrentUser,
+    user_groups: CurrentUserGroups,
+    db: DbSession,
+) -> StreamingResponse:
+    """Download the original document file from object storage."""
+    repo = RAGRepository(db)
+    document = await repo.get_document(document_id)
+
+    if not document:
+        raise_not_found("Document")
+
+    if not await repo.can_access_collection(document.collection_id, user.id, user_groups):
+        raise_not_found("Document")
+
+    object_key = (document.meta or {}).get("object_key")
+    if not object_key:
+        raise HTTPException(
+            status_code=404,
+            detail="Original file not available (uploaded before object storage)",
+        )
+
+    from src.infra.object_store import get_object_store
+    store = get_object_store()
+
+    content_type = document.content_type or "application/octet-stream"
+    safe_filename = document.filename.replace('"', '\\"')
+
+    async def stream():
+        async for chunk in store.download_stream(settings.S3_BUCKET_RAG, object_key):
+            yield chunk
+
+    return StreamingResponse(
+        stream(),
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+        },
+    )
+
+
+@router.post("/documents/{document_id}/reprocess", response_model=DocumentResponse, status_code=202)
+async def reprocess_document(
+    document_id: str,
+    user: CurrentUser,
+    user_groups: CurrentUserGroups,
+    db: DbSession,
+) -> DocumentResponse:
+    """Re-process a document (re-chunk + re-embed from persisted original file)."""
+    repo = RAGRepository(db)
+    document = await repo.get_document(document_id)
+
+    if not document:
+        raise_not_found("Document")
+
+    if not await repo.can_access_collection(document.collection_id, user.id, user_groups):
+        raise_not_found("Document")
+
+    object_key = (document.meta or {}).get("object_key")
+    if not object_key:
+        raise HTTPException(
+            status_code=409,
+            detail="Original file not available — cannot reprocess",
+        )
+
+    # Delete existing chunks (Qdrant + DB)
+    try:
+        from .vector_store import QdrantRAGVectorStore
+        vs = QdrantRAGVectorStore()
+        await vs.delete_by_document(document_id)
+    except Exception as e:
+        logger.warning("Qdrant chunk cleanup for reprocess of %s: %s", document_id, e)
+
+    # Update collection chunk_count before resetting document
+    collection = await repo.get_collection(document.collection_id)
+    old_chunk_count = document.chunk_count
+
+    from sqlalchemy import delete as sa_delete
+    from .models import RAGChunk
+    await db.execute(sa_delete(RAGChunk).where(RAGChunk.document_id == document_id))
+
+    # Reset document status
+    await db.execute(
+        update(RAGDocument)
+        .where(RAGDocument.id == document_id)
+        .values(
+            status=DocumentStatus.PROCESSING.value,
+            chunk_count=0,
+            error_message=None,
+        )
+    )
+
+    if collection and old_chunk_count > 0:
+        await db.execute(
+            update(RAGCollection)
+            .where(RAGCollection.id == document.collection_id)
+            .values(chunk_count=max(0, collection.chunk_count - old_chunk_count))
+        )
+
+    await db.commit()
+    await db.refresh(document)
+
+    # Re-dispatch to worker
+    chunk_size = collection.chunk_size if collection else 500
+    chunk_overlap = collection.chunk_overlap if collection else 50
+
+    from src.infra.publish import get_event_bus
+    bus = await get_event_bus()
+    await bus.publish("tasks:documents", {
+        "collection_id": document.collection_id,
+        "document_id": document_id,
+        "object_key": object_key,
+        "filename": document.filename,
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap,
+    })
+
+    logger.info("Document %s queued for reprocessing", document_id)
+    return DocumentResponse.from_document(document)
 
 
 @router.delete("/collections/{collection_id}/documents/{document_id}", status_code=204)
@@ -314,7 +434,7 @@ async def delete_document(
     user_groups: CurrentUserGroups,
     db: DbSession,
 ) -> None:
-    """Delete a document and its chunks."""
+    """Delete a document, its chunks, Qdrant vectors, and MinIO file."""
     repo = RAGRepository(db)
     document = await repo.get_document(document_id)
 
@@ -324,11 +444,21 @@ async def delete_document(
     if document.collection_id != collection_id:
         raise_not_found("Document")
 
-    # Verify collection access
     if not await repo.can_access_collection(collection_id, user.id, user_groups):
         raise_not_found("Collection")
 
     doc_chunk_count = document.chunk_count
+
+    # Best-effort MinIO cleanup
+    object_key = (document.meta or {}).get("object_key")
+    if object_key:
+        try:
+            from src.infra.object_store import get_object_store
+            store = get_object_store()
+            await store.delete(settings.S3_BUCKET_RAG, object_key)
+        except Exception as e:
+            logger.warning("MinIO cleanup failed for document %s: %s", document_id, e)
+
     await db.delete(document)
 
     # Update collection counts

@@ -176,13 +176,47 @@ class AgentContextBuilder:
             parts = model_id.split(":", 1)
             if len(parts) == 2:
                 provider, model_name = parts
-                # "ollama:llama3.2:latest" → "ollama-llama3-2-latest"
+
+                # Cloud models are seeded as "provider-model" with dots replaced.
+                # Ollama models are seeded as "model_name" with only colons replaced
+                # (dots kept).  Try both conventions.
+
+                # 1) Cloud format: "openai-gpt-4o" (dots → hyphens)
                 catalog_id = f"{provider}-{model_name}".replace(":", "-").replace(".", "-")
                 model = service.get_model(catalog_id)
+
+                # 2) Ollama format: "qwen2.5-latest" (dots kept)
                 if not model:
-                    # Ollama fallback: catalog ID without provider prefix
+                    catalog_id = model_name.replace(":", "-")
+                    model = service.get_model(catalog_id)
+
+                # 3) Try base-latest: "qwen2.5-latest" (dots kept)
+                if not model:
+                    base = model_name.rsplit(":", 1)[0] if ":" in model_name else model_name
+                    catalog_id = f"{base}-latest"
+                    model = service.get_model(catalog_id)
+
+                # 4) Same fallbacks but with dots replaced
+                if not model:
                     catalog_id = model_name.replace(":", "-").replace(".", "-")
                     model = service.get_model(catalog_id)
+                if not model:
+                    base = model_name.rsplit(":", 1)[0] if ":" in model_name else model_name
+                    catalog_id = f"{base}-latest".replace(".", "-")
+                    model = service.get_model(catalog_id)
+
+                # 5) Last resort: scan all catalog models for matching base name
+                if not model:
+                    base = model_name.rsplit(":", 1)[0] if ":" in model_name else model_name
+                    for entry in service.list_models():
+                        entry_name = entry.get("model_id", "") or entry.get("model_name", "")
+                        entry_base = (
+                            entry_name.rsplit(":", 1)[0] if ":" in entry_name else entry_name
+                        )
+                        if entry_base == base and entry.get("context_window"):
+                            model = entry
+                            break
+
                 if model and model.get("context_window"):
                     return model["context_window"]
         except Exception as e:
@@ -209,16 +243,16 @@ class AgentContextBuilder:
             from src.conversations.models import ConversationMessage
             from src.memory.models import MemoryEntry, MemoryScope, MemoryTier
 
-            settings = get_settings()
-            max_messages = settings.CONVERSATION_HISTORY_MAX_MESSAGES
             max_chars = max_tokens * 4  # ~4 chars/token
 
-            # Load recent messages (newest first, then reverse)
+            # Load recent messages (newest first, then reverse).
+            # No message-count cap — the token budget is the only cutoff.
+            # Safety limit of 200 rows to avoid loading entire conversation.
             result = await session.execute(
                 select(ConversationMessage)
                 .where(ConversationMessage.conversation_id == conversation_id)
                 .order_by(ConversationMessage.created_at.desc())
-                .limit(max_messages)
+                .limit(200)
             )
             rows = list(result.scalars().all())
             if not rows:
@@ -273,7 +307,6 @@ class AgentContextBuilder:
             self._last_history_count = len(lines)
             self._last_history_budget = {
                 "included_count": len(lines),
-                "max_messages": max_messages,
                 "total_chars": total_chars,
                 "max_chars": max_chars,
                 "budget_exceeded": budget_exceeded,

@@ -63,9 +63,27 @@ class DocumentResponse(BaseModel):
     chunk_count: int
     status: str = "ready"
     error_message: str | None = None
+    has_original: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_document(cls, doc) -> "DocumentResponse":
+        """Build response from RAGDocument model, computing has_original."""
+        meta = doc.meta or {}
+        return cls(
+            id=doc.id,
+            collection_id=doc.collection_id,
+            filename=doc.filename,
+            content_type=doc.content_type,
+            size_bytes=doc.size_bytes,
+            chunk_count=doc.chunk_count,
+            status=doc.status,
+            error_message=doc.error_message,
+            has_original=bool(meta.get("object_key")),
+            created_at=doc.created_at,
+        )
 
 
 class DocumentListResponse(PaginatedResponse[DocumentResponse]):

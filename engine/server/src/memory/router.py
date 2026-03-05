@@ -426,7 +426,6 @@ _CONFIG_FIELD_MAP: dict[str, str] = {
     "context_budget_rag_pct": "CONTEXT_BUDGET_RAG_PCT",
     "context_budget_default_context_window": "CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW",
     "context_budget_max_pct": "CONTEXT_BUDGET_MAX_PCT",
-    "conversation_history_max_messages": "CONVERSATION_HISTORY_MAX_MESSAGES",
 }
 
 

@@ -192,7 +192,6 @@ class MemoryConfigResponse(BaseModel):
     context_budget_rag_pct: float
     context_budget_default_context_window: int
     context_budget_max_pct: float
-    conversation_history_max_messages: int
 
 
 class MemoryConfigUpdate(BaseModel):
@@ -230,4 +229,3 @@ class MemoryConfigUpdate(BaseModel):
     context_budget_rag_pct: float | None = Field(default=None, ge=0.0, le=40.0)
     context_budget_default_context_window: int | None = Field(default=None, ge=2048, le=200000)
     context_budget_max_pct: float | None = Field(default=None, ge=10.0, le=100.0)
-    conversation_history_max_messages: int | None = Field(default=None, ge=5, le=50)
