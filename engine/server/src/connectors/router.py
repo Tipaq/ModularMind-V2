@@ -8,14 +8,19 @@ import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src.auth import CurrentUser, RequireAdmin
+from src.connectors.schemas import (
+    ConnectorCreate,
+    ConnectorCreateResponse,
+    ConnectorListResponse,
+    ConnectorResponse,
+    ConnectorUpdate,
+)
 from src.domain_config import get_config_provider
 from src.infra.database import DbSession
 from src.infra.query_utils import raise_not_found
-from src.infra.schemas import PaginatedResponse
 
 from .models import Connector
 
@@ -30,57 +35,6 @@ async def _verify_agent_exists(agent_id: str) -> None:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
 router = APIRouter(prefix="/connectors", tags=["Connectors"])
-
-
-# ─── Schemas ───────────────────────────────────────────────────────────────────
-
-
-class ConnectorCreate(BaseModel):
-    """Connector creation request."""
-
-    name: str = Field(min_length=1, max_length=200)
-    connector_type: str = Field(pattern="^(slack|teams|email|discord)$")
-    agent_id: str
-    config: dict = Field(default_factory=dict)
-
-
-class ConnectorUpdate(BaseModel):
-    """Connector update request."""
-
-    name: str | None = None
-    agent_id: str | None = None
-    is_enabled: bool | None = None
-    config: dict | None = None
-
-
-class ConnectorResponse(BaseModel):
-    """Connector response (without secret)."""
-
-    id: str
-    name: str
-    connector_type: str
-    agent_id: str
-    webhook_url: str
-    is_enabled: bool
-    config: dict
-    created_at: str
-    updated_at: str
-
-    model_config = {"from_attributes": True}
-
-
-class ConnectorCreateResponse(ConnectorResponse):
-    """Response after creating a connector — includes the webhook_secret once.
-
-    The secret is only shown at creation time. Subsequent GET/PUT/LIST
-    responses use ConnectorResponse which omits it.
-    """
-
-    webhook_secret: str
-
-
-class ConnectorListResponse(PaginatedResponse[ConnectorResponse]):
-    """Connector list response."""
 
 
 def to_response(connector: Connector) -> ConnectorResponse:

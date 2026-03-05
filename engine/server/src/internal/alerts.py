@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from src.auth import CurrentUser, RequireAdmin
-from src.internal.monitoring import AlertItem
+from src.internal.schemas import AlertItem
 
 logger = logging.getLogger(__name__)
 
