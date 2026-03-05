@@ -1,24 +1,22 @@
 import { create } from "zustand";
-import type { PaginatedResponse } from "@modularmind/api-client";
+import type {
+  PaginatedResponse,
+  MemoryEntry,
+  MemoryGraphNode,
+  MemoryGraphEdge,
+  MemoryGraphData,
+  MemoryUser,
+} from "@modularmind/api-client";
 import { api } from "../lib/api";
 
-// ---- Types ----
+export type { MemoryEntry, MemoryGraphNode, MemoryGraphEdge, MemoryGraphData, MemoryUser };
 
-export interface MemoryEntry {
-  id: string;
-  scope: string;
-  scope_id: string;
-  tier: string;
-  memory_type: string;
-  content: string;
-  importance: number;
-  access_count: number;
-  last_accessed: string | null;
-  expired_at: string | null;
-  metadata: Record<string, unknown>;
-  user_id: string | null;
-  created_at: string;
-}
+/** @deprecated Use MemoryGraphNode from @modularmind/api-client instead. */
+export type GraphNode = MemoryGraphNode;
+/** @deprecated Use MemoryGraphEdge from @modularmind/api-client instead. */
+export type GraphEdge = MemoryGraphEdge;
+/** @deprecated Use MemoryGraphData from @modularmind/api-client instead. */
+export type GraphData = MemoryGraphData;
 
 export interface GlobalMemoryStats {
   total_entries: number;
@@ -51,40 +49,6 @@ export interface ConsolidationTriggerResult {
   duration_ms: number;
 }
 
-export interface GraphNode {
-  id: string;
-  content: string;
-  memory_type: string;
-  scope: string;
-  scope_id: string;
-  tier: string;
-  importance: number;
-  access_count: number;
-  entities: string[];
-  tags: string[];
-  user_id: string | null;
-  last_accessed: string | null;
-  created_at: string;
-}
-
-export interface GraphEdge {
-  source: string;
-  target: string;
-  edge_type: string;
-  weight: number;
-  shared_entities: string[];
-}
-
-export interface GraphData {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}
-
-export interface MemoryUser {
-  user_id: string;
-  email: string | null;
-  memory_count: number;
-}
 
 interface MemoryFilters {
   scope: string;

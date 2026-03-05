@@ -96,8 +96,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
         `/rag/collections/${collectionId}/documents?page_size=200`,
       );
       set({ documents: data.items });
-    } catch {
-      // non-fatal
+    } catch (err) {
+      console.warn("[knowledge] Failed to fetch documents:", err);
     } finally {
       set({ documentsLoading: false });
     }
@@ -147,8 +147,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       set((state) => ({
         documents: state.documents.map((d) => (d.id === docId ? doc : d)),
       }));
-    } catch {
-      // non-fatal
+    } catch (err) {
+      console.warn("[knowledge] Failed to refresh document:", err);
     }
   },
 

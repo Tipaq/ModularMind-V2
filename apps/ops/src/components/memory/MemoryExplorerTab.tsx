@@ -16,7 +16,7 @@ import { EmptyState } from "../shared/EmptyState";
 import { ResourceTable } from "../shared/ResourceTable";
 import { MemoryTypeBadge } from "./MemoryTypeBadge";
 import { ImportanceBar } from "./ImportanceBar";
-import type { ResourceColumn } from "../../lib/types";
+import type { ResourceColumn } from "@modularmind/ui";
 
 const PAGE_SIZE = 20;
 

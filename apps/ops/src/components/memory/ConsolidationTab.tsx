@@ -28,7 +28,7 @@ import {
 import { useMemoryStore, type ConsolidationLog } from "../../stores/memory";
 import { ResourceTable } from "../shared/ResourceTable";
 import { EmptyState } from "../shared/EmptyState";
-import type { ResourceColumn } from "../../lib/types";
+import type { ResourceColumn } from "@modularmind/ui";
 
 const PAGE_SIZE = 20;
 

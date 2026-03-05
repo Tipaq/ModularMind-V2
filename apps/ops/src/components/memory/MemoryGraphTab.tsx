@@ -1,17 +1,40 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { Loader2, ZoomIn, ZoomOut, Maximize2, MousePointerClick, User, Clock, Star, Eye, Tag, Layers, Link2 } from "lucide-react";
-import { Button, Card, CardContent, Badge, Separator, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@modularmind/ui";
+import { Loader2, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@modularmind/ui";
 import { useMemoryStore, type GraphNode } from "../../stores/memory";
-import { MemoryTypeBadge } from "./MemoryTypeBadge";
+import { GraphNodeDetail } from "./GraphNodeDetail";
+import { GraphLegend } from "./GraphLegend";
 
 let Graph: typeof import("graphology").default | null = null;
 let Sigma: typeof import("sigma").Sigma | null = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let noverlapFn: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let FA2LayoutWorkerCls: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let fa2SyncFn: any = null;
+let noverlapFn: typeof import("graphology-layout-noverlap").default | null = null;
+let FA2LayoutWorkerCls: typeof import("graphology-layout-forceatlas2/worker").default | null = null;
+let fa2SyncFn: typeof import("graphology-layout-forceatlas2").default | null = null;
+
+// ── Canvas colors (hex required for Sigma/WebGL rendering) ───────────────────
+const USER_ANCHOR_PALETTE = ["#e879f9", "#fb923c", "#a78bfa", "#34d399", "#60a5fa", "#fbbf24"];
+const COLOR_NODE_DEFAULT = "#94a3b8";   // slate-400 — unassigned nodes
+const COLOR_EDGE_DEFAULT = "#475569";   // slate-600 — edge lines
+const COLOR_EDGE_ANCHOR = "#94a3b8";    // slate-400 — anchor gravity edges
+
+// ── Layout constants ─────────────────────────────────────────────────────────
+const ANCHOR_RADIUS = 80;
+const ANCHOR_NODE_SIZE = 18;
+const NODE_BASE_SIZE = 3;
+const NODE_IMPORTANCE_SCALE = 12;
+const FA2_SETTLE_MS = 250;
+const NOVERLAP_MAX_ITERATIONS = 100;
+const FA2_SCALING_RATIO = 12;
+const ZOOM_DURATION_MS = 200;
+const RESET_DURATION_MS = 300;
+const USER_ID_DISPLAY_LENGTH = 8;
+
+const FA2_WEIGHTS: Record<string, number> = {
+  same_tag: 3.0,
+  entity_overlap: 2.0,
+  same_category: 0.8,
+  semantic_similarity: 1.2,
+};
 
 async function loadGraphLibs() {
   if (Graph && Sigma && noverlapFn && FA2LayoutWorkerCls && fa2SyncFn) return;
@@ -39,14 +62,10 @@ export function MemoryGraphTab() {
   } = useMemoryStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<InstanceType<typeof import("sigma").Sigma> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fa2LayoutRef = useRef<any>(null);
+  const fa2LayoutRef = useRef<InstanceType<NonNullable<typeof FA2LayoutWorkerCls>> | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [libsLoaded, setLibsLoaded] = useState(false);
 
-  // One stable color per user — derived from graph data, used in both the
-  // renderer and the legend so they stay in sync.
-  const USER_ANCHOR_PALETTE = ["#e879f9", "#fb923c", "#a78bfa", "#34d399", "#60a5fa", "#fbbf24"];
   const userColorMap = useMemo(() => {
     if (!graphData) return {} as Record<string, string>;
     const uniqueIds = [...new Set(
@@ -90,16 +109,15 @@ export function MemoryGraphTab() {
     // One anchor per unique user_id, spread evenly on a circle.
     // These are frontend-only — not stored in the DB, no cross-user edges.
     const uniqueUserIds = Object.keys(userColorMap);
-    const anchorRadius = 80;
     uniqueUserIds.forEach((userId, idx) => {
       const angle = (2 * Math.PI * idx) / Math.max(uniqueUserIds.length, 1);
       const user = memoryUsers.find(u => u.user_id === userId);
       graph.addNode(`__anchor__${userId}`, {
-        x: anchorRadius * Math.cos(angle),
-        y: anchorRadius * Math.sin(angle),
-        size: 18,
+        x: ANCHOR_RADIUS * Math.cos(angle),
+        y: ANCHOR_RADIUS * Math.sin(angle),
+        size: ANCHOR_NODE_SIZE,
         color: userColorMap[userId],
-        label: user?.email ?? `${userId.slice(0, 8)}…`,  // shown on hover
+        label: user?.email ?? `${userId.slice(0, USER_ID_DISPLAY_LENGTH)}…`,
       });
     });
 
@@ -116,27 +134,20 @@ export function MemoryGraphTab() {
       graph.addNode(node.id, {
         x,
         y,
-        size: 3 + node.importance * 12,
-        color: (node.user_id && userColorMap[node.user_id]) ? userColorMap[node.user_id] : "#94a3b8",
+        size: NODE_BASE_SIZE + node.importance * NODE_IMPORTANCE_SCALE,
+        color: (node.user_id && userColorMap[node.user_id]) ? userColorMap[node.user_id] : COLOR_NODE_DEFAULT,
         label: "",      // empty → sigma shows nothing on hover
         memType: node.memory_type,  // read by afterRender to pick the shape
       });
     }
 
     // ── 3. Real edges (same_tag, entity_overlap, …) ───────────────────────────
-    const FA2_WEIGHTS: Record<string, number> = {
-      same_tag: 3.0,
-      entity_overlap: 2.0,
-      same_category: 0.8,
-      semantic_similarity: 1.2,
-    };
-
     for (const edge of graphData.edges) {
       if (graph.hasNode(edge.source) && graph.hasNode(edge.target)) {
         try {
           graph.addEdge(edge.source, edge.target, {
             size: 0.5 + edge.weight * 2,
-            color: "#475569",
+            color: COLOR_EDGE_DEFAULT,
             type: "line",
             weight: FA2_WEIGHTS[edge.edge_type] ?? 1.0,
           });
@@ -156,7 +167,7 @@ export function MemoryGraphTab() {
       try {
         graph.addEdge(node.id, anchorId, {
           size: 0.3,
-          color: "#94a3b8",
+          color: COLOR_EDGE_ANCHOR,
           type: "line",
           weight: 2.5,  // strong enough to cluster, weaker than same_tag
         });
@@ -167,7 +178,7 @@ export function MemoryGraphTab() {
     // Runs once synchronously so nodes don't pile up before the live sim starts.
     if (graph.order > 1) {
       noverlapFn.assign(graph, {
-        maxIterations: 100,
+        maxIterations: NOVERLAP_MAX_ITERATIONS,
         settings: { margin: 4, ratio: 1.2 },
       });
     }
@@ -176,15 +187,13 @@ export function MemoryGraphTab() {
     // Shared settings used by both the worker and synchronous FA2.
     const FA2_SETTINGS = {
       gravity: 1.0,
-      scalingRatio: 12,
+      scalingRatio: FA2_SCALING_RATIO,
       adjustSizes: true,
       outboundAttractionDistribution: true,
       barnesHutOptimize: graph.order > 200,
       weightAttribute: "weight",
     };
     const fa2Layout = new FA2LayoutWorkerCls!(graph, { settings: FA2_SETTINGS });
-    // Quick initial settle — stop automatically so the graph is static at rest.
-    const FA2_SETTLE_MS = 250;
     let fa2Timer: ReturnType<typeof setTimeout> | null = null;
     const restartAndSettle = () => {
       fa2Layout.start();
@@ -336,17 +345,17 @@ export function MemoryGraphTab() {
 
   const handleZoomIn = useCallback(() => {
     const camera = sigmaRef.current?.getCamera();
-    if (camera) camera.animatedZoom({ duration: 200 });
+    if (camera) camera.animatedZoom({ duration: ZOOM_DURATION_MS });
   }, []);
 
   const handleZoomOut = useCallback(() => {
     const camera = sigmaRef.current?.getCamera();
-    if (camera) camera.animatedUnzoom({ duration: 200 });
+    if (camera) camera.animatedUnzoom({ duration: ZOOM_DURATION_MS });
   }, []);
 
   const handleReset = useCallback(() => {
     const camera = sigmaRef.current?.getCamera();
-    if (camera) camera.animatedReset({ duration: 300 });
+    if (camera) camera.animatedReset({ duration: RESET_DURATION_MS });
   }, []);
 
   if (graphLoading) {
@@ -421,7 +430,7 @@ export function MemoryGraphTab() {
               <SelectItem value="all">All Users</SelectItem>
               {memoryUsers.map((u) => (
                 <SelectItem key={u.user_id} value={u.user_id}>
-                  {u.email ?? u.user_id.slice(0, 8) + "…"} ({u.memory_count})
+                  {u.email ?? u.user_id.slice(0, USER_ID_DISPLAY_LENGTH) + "…"} ({u.memory_count})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -441,41 +450,7 @@ export function MemoryGraphTab() {
             className="h-[500px] rounded-lg border bg-card relative"
           />
           {/* Legend */}
-          <div className="absolute bottom-3 left-3 flex flex-col gap-1.5 bg-card/80 backdrop-blur-sm rounded-md px-3 py-2 border text-xs text-muted-foreground">
-            {/* Types — shape only, color encodes user */}
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-muted-foreground/50" />
-              <span>Episodic</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 shrink-0 bg-muted-foreground/50" />
-              <span>Semantic</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <svg width="10" height="10" viewBox="0 0 10 10" className="shrink-0 text-muted-foreground/50">
-                <polygon points="5,0 10,10 0,10" fill="currentColor" />
-              </svg>
-              <span>Procedural</span>
-            </div>
-            {Object.keys(userColorMap).length > 0 && (
-              <>
-                <Separator className="my-0" />
-                {Object.entries(userColorMap).map(([userId, color]) => {
-                  const u = memoryUsers.find(m => m.user_id === userId);
-                  return (
-                    <div key={userId} className="flex items-center gap-1.5">
-                      <svg width="12" height="12" viewBox="0 0 12 12" className="shrink-0">
-                        <polygon points="6,1 10.2,3.5 10.2,8.5 6,11 1.8,8.5 1.8,3.5" fill={color} />
-                      </svg>
-                      <span className="truncate max-w-[110px]">
-                        {u?.email ?? `${userId.slice(0, 8)}…`}
-                      </span>
-                    </div>
-                  );
-                })}
-              </>
-            )}
-          </div>
+          <GraphLegend userColorMap={userColorMap} memoryUsers={memoryUsers} />
 
           {/* Zoom controls */}
           <div className="absolute top-3 right-3 flex flex-col gap-1">
@@ -492,192 +467,12 @@ export function MemoryGraphTab() {
         </div>
 
         {/* Detail Panel — always visible */}
-        <Card className="w-72 shrink-0 h-[500px] overflow-y-auto">
-          <CardContent className="pt-4 pb-4 space-y-0">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-              Node details
-            </p>
-            {selectedNode ? (
-              <div className="space-y-4">
-                {/* Type + Tier */}
-                <div className="flex items-center justify-between gap-2">
-                  <MemoryTypeBadge type={selectedNode.memory_type} />
-                  <Badge variant="outline" className="text-[10px] capitalize">
-                    {selectedNode.tier}
-                  </Badge>
-                </div>
-
-                {/* Content */}
-                <p className="text-sm leading-relaxed text-foreground">
-                  {selectedNode.content}
-                </p>
-
-                <Separator />
-
-                {/* User */}
-                <div className="flex items-start gap-2">
-                  <User className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-muted-foreground mb-0.5">User</p>
-                    {selectedNode.user_id ? (() => {
-                      const u = memoryUsers.find((u) => u.user_id === selectedNode.user_id);
-                      return u?.email ? (
-                        <p className="text-xs font-medium truncate" title={selectedNode.user_id}>{u.email}</p>
-                      ) : (
-                        <p className="text-xs font-medium font-mono truncate" title={selectedNode.user_id}>
-                          {selectedNode.user_id.slice(0, 8)}…
-                        </p>
-                      );
-                    })() : (
-                      <p className="text-xs text-muted-foreground italic">Global / no user</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Scope */}
-                <div className="flex items-start gap-2">
-                  <Layers className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-muted-foreground mb-0.5">Scope</p>
-                    <p className="text-xs font-medium capitalize">{selectedNode.scope.replace("_", " ")}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono truncate" title={selectedNode.scope_id}>
-                      {selectedNode.scope_id}
-                    </p>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex items-start gap-1.5">
-                    <Star className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                    <div>
-                      <p className="text-[10px] text-muted-foreground">Importance</p>
-                      <p className="text-sm font-semibold tabular-nums">
-                        {Math.round(selectedNode.importance * 100)}%
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-1.5">
-                    <Eye className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                    <div>
-                      <p className="text-[10px] text-muted-foreground">Accesses</p>
-                      <p className="text-sm font-semibold tabular-nums">{selectedNode.access_count}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tags */}
-                {selectedNode.tags.length > 0 && (
-                  <div className="flex items-start gap-2">
-                    <Tag className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <p className="text-[10px] text-muted-foreground mb-1">Tags</p>
-                      <div className="flex flex-wrap gap-1">
-                        {selectedNode.tags.map((t, i) => (
-                          <Badge key={i} variant="outline" className="text-[10px] border-orange-400/50 text-orange-600 dark:text-orange-400">
-                            #{t}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Entities */}
-                {selectedNode.entities.length > 0 && (
-                  <div className="flex items-start gap-2">
-                    <Tag className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <p className="text-[10px] text-muted-foreground mb-1">Entities</p>
-                      <div className="flex flex-wrap gap-1">
-                        {selectedNode.entities.map((e, i) => (
-                          <Badge key={i} variant="secondary" className="text-[10px]">
-                            {e}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Connections */}
-                {(() => {
-                  const conns = graphData!.edges
-                    .filter(e => e.source === selectedNode.id || e.target === selectedNode.id)
-                    .map(e => {
-                      const neighborId = e.source === selectedNode.id ? e.target : e.source;
-                      const neighbor = graphData!.nodes.find(n => n.id === neighborId);
-                      return neighbor ? { node: neighbor, edge_type: e.edge_type } : null;
-                    })
-                    .filter((c): c is { node: GraphNode; edge_type: string } => c !== null);
-                  if (!conns.length) return null;
-                  return (
-                    <>
-                      <Separator />
-                      <div className="space-y-1.5">
-                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                          <Link2 className="h-3 w-3" />
-                          Connected to ({conns.length})
-                        </p>
-                        {conns.map(({ node, edge_type }, i) => (
-                          <button key={i} className="w-full text-left" onClick={() => setSelectedNode(node)}>
-                            <div className="rounded-md border bg-muted/30 hover:bg-muted/50 transition-colors px-2.5 py-1.5 space-y-1">
-                              <div className="flex items-center gap-1.5">
-                                <MemoryTypeBadge type={node.memory_type} />
-                                <Badge variant="outline" className="text-[9px] ml-auto capitalize">
-                                  {edge_type.replace(/_/g, " ")}
-                                </Badge>
-                              </div>
-                              <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
-                                {node.content}
-                              </p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  );
-                })()}
-
-                <Separator />
-
-                {/* Dates */}
-                <div className="space-y-2">
-                  <div className="flex items-start gap-2">
-                    <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                    <div>
-                      <p className="text-[10px] text-muted-foreground">Created</p>
-                      <p className="text-xs">{new Date(selectedNode.created_at).toLocaleString()}</p>
-                    </div>
-                  </div>
-                  {selectedNode.last_accessed && (
-                    <div className="flex items-start gap-2">
-                      <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">Last accessed</p>
-                        <p className="text-xs">{new Date(selectedNode.last_accessed).toLocaleString()}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* ID */}
-                <div className="pt-1">
-                  <p className="text-[10px] text-muted-foreground/60 font-mono truncate" title={selectedNode.id}>
-                    {selectedNode.id}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-52 gap-2 text-muted-foreground">
-                <MousePointerClick className="h-5 w-5" />
-                <p className="text-xs text-center">Click a node to see its details</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <GraphNodeDetail
+          selectedNode={selectedNode}
+          graphData={graphData}
+          memoryUsers={memoryUsers}
+          setSelectedNode={setSelectedNode}
+        />
       </div>
     </div>
   );
