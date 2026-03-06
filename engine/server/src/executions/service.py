@@ -465,7 +465,10 @@ class ExecutionService:
             provider_name, model_name = (_prefix.lower(), _rest) if _prefix.lower() in _KNOWN_PROVIDERS else ("ollama", agent.model_id)
         else:
             provider_name, _ = "ollama", agent.model_id
-        llm_provider = get_llm_provider(provider_name)
+        provider_kwargs: dict[str, Any] = {}
+        if provider_name == "ollama":
+            provider_kwargs["base_url"] = settings.OLLAMA_BASE_URL
+        llm_provider = get_llm_provider(provider_name, **provider_kwargs)
 
         # Create compiler and compile agent graph
         compiler = GraphCompiler(self.config_provider, llm_provider, mcp_registry=get_mcp_registry())
@@ -590,7 +593,7 @@ class ExecutionService:
             raise ValueError(f"Graph not found: {execution.graph_id}")
 
         # Get LLM provider (use default)
-        llm_provider = get_llm_provider("ollama")
+        llm_provider = get_llm_provider("ollama", base_url=settings.OLLAMA_BASE_URL)
 
         # Create compiler and compile graph
         compiler = GraphCompiler(self.config_provider, llm_provider, mcp_registry=get_mcp_registry())

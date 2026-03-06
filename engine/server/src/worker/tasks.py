@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Any
 
+import src.conversations.models  # noqa: F401 — register Conversation for ExecutionRun FK
 import src.groups.models  # noqa: F401 — register UserGroupMember with SQLAlchemy mapper
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
 
     execution_id = data.get("execution_id", "")
     user_id = data.get("user_id", "")
+    ab_model_override = data.get("ab_model_override")
     if not execution_id:
         logger.error("graph_execution_handler: missing execution_id")
         return
@@ -42,6 +44,30 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
 
     async with async_session_maker() as session:
         service = ExecutionService(session)
+
+        # Inject model override into the execution's input_data so the
+        # compiler picks it up via state["input_data"]["_model_override"].
+        if ab_model_override:
+            from sqlalchemy import select, update
+
+            from src.executions.models import ExecutionRun
+
+            row = (await session.execute(
+                select(ExecutionRun.input_data).where(ExecutionRun.id == execution_id)
+            )).first()
+            if row:
+                idata = dict(row[0] or {}) if row[0] else {}
+                idata["_model_override"] = ab_model_override
+                await session.execute(
+                    update(ExecutionRun)
+                    .where(ExecutionRun.id == execution_id)
+                    .values(input_data=idata)
+                )
+                await session.commit()
+                logger.info(
+                    "Injected model override %s for execution %s",
+                    ab_model_override, execution_id,
+                )
 
         complete_event: dict[str, Any] | None = None
 
