@@ -2,10 +2,12 @@
 
 import { useState, useMemo } from "react";
 import {
+  AlertTriangle,
   Bot,
   Clock,
   Cpu,
   Gauge,
+
   Loader2,
   Pencil,
   Route,
@@ -13,7 +15,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { Badge, Button, cn, Switch } from "@modularmind/ui";
+import { Badge, Button, cn, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@modularmind/ui";
 import type { BudgetOverview } from "@/hooks/useChat";
 import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "@/hooks/useChatConfig";
 
@@ -43,6 +45,8 @@ export interface ConfigTabProps {
   modelContextWindow?: number | null;
   enabledAgents: EngineAgent[];
   enabledGraphs: EngineGraph[];
+  allAgents: EngineAgent[];
+  allGraphs: EngineGraph[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -112,6 +116,14 @@ function ContextUsage({ overview }: { overview: BudgetOverview }) {
 
   return (
     <div className="space-y-2">
+      {/* Title */}
+      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <Gauge className="h-3 w-3" />
+          Context window
+        </span>
+        <span className="font-mono font-medium text-foreground">{formatK(cw)} tok</span>
+      </div>
       {/* Stacked bar */}
       <div className="relative">
         <div className="flex h-2 rounded-full overflow-hidden bg-muted">
@@ -152,22 +164,34 @@ function ContextUsage({ overview }: { overview: BudgetOverview }) {
       </div>
 
       {/* Layer pills */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {LAYER_KEYS.map((key) => {
-          const layer = getLayer(overview, key);
-          if (!layer || layer.used <= 0) return null;
-          const pct = cw > 0 ? Math.round((layer.used / cw) * 100) : 0;
-          return (
-            <div key={key} className="flex items-center gap-1">
-              <span className={cn("h-1.5 w-1.5 rounded-full", LAYER_COLORS[key].bg)} />
-              <span className={cn("text-[10px] font-mono tabular-nums", LAYER_COLORS[key].text)}>
-                {formatK(layer.used)}
-              </span>
-              <span className="text-[9px] text-muted-foreground">{pct}%</span>
-            </div>
-          );
-        })}
-      </div>
+      <TooltipProvider delayDuration={200}>
+        <div className="flex items-center gap-2 flex-wrap">
+          {LAYER_KEYS.map((key) => {
+            const layer = getLayer(overview, key);
+            if (!layer || layer.used <= 0) return null;
+            const pct = cw > 0 ? Math.round((layer.used / cw) * 100) : 0;
+            return (
+              <Tooltip key={key}>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 cursor-default">
+                    <span className={cn("h-1.5 w-1.5 rounded-full", LAYER_COLORS[key].bg)} />
+                    <span className={cn("text-[10px] font-mono tabular-nums", LAYER_COLORS[key].text)}>
+                      {formatK(layer.used)}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground">{pct}%</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  <p className="font-medium">{LAYER_COLORS[key].label}</p>
+                  <p className="text-muted-foreground">
+                    {formatK(layer.used)} / {formatK(layer.allocated)} tokens ({layer.pct}% budget)
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+      </TooltipProvider>
 
       {overview.maxPct < 100 && (
         <p className="text-[9px] text-muted-foreground/60 text-center">
@@ -286,6 +310,8 @@ export function ConfigTab({
   modelContextWindow,
   enabledAgents,
   enabledGraphs,
+  allAgents,
+  allGraphs,
 }: ConfigTabProps) {
   const selectedModel = useMemo(() => {
     if (!selectedModelId) return null;
@@ -293,7 +319,58 @@ export function ConfigTab({
     return available.find((m) => m.id === selectedModelId || `${m.provider}:${m.model_id}` === selectedModelId) ?? null;
   }, [models, selectedModelId]);
 
+  // Compute a static budget overview when no execution data exists yet.
+  // We already know the model context_window and supervisor layer sizes.
+  const effectiveOverview = useMemo<BudgetOverview | null>(() => {
+    if (budgetOverview) return budgetOverview;
+    const cw = modelContextWindow;
+    if (!cw || cw <= 0) return null;
+
+    // Default budget percentages (must match engine config.py defaults)
+    const systemPct = 10;
+    const historyPct = 30;
+    const memoryPct = 10;
+    const ragPct = 15;
+    const maxPct = 100;
+    const effective = Math.round(cw * maxPct / 100);
+
+    // System tokens: sum of supervisor layer char counts / 4
+    const systemChars = layers.reduce((sum, l) => sum + (l.content?.length ?? 0), 0);
+    const systemUsed = Math.round(systemChars / 4);
+
+    return {
+      contextWindow: cw,
+      effectiveContext: effective,
+      maxPct,
+      layers: {
+        system: { pct: systemPct, allocated: Math.round(cw * systemPct / 100), used: systemUsed },
+        history: { pct: historyPct, allocated: Math.round(cw * historyPct / 100), used: 0 },
+        memory: { pct: memoryPct, allocated: Math.round(cw * memoryPct / 100), used: 0 },
+        rag: { pct: ragPct, allocated: Math.round(cw * ragPct / 100), used: 0 },
+      },
+    };
+  }, [budgetOverview, modelContextWindow, layers]);
+
   const activeCount = enabledAgents.length + enabledGraphs.length;
+
+  // Collect all model_ids used by agents (including those inside graphs)
+  // and check which ones are not available
+  const availableModelIds = useMemo(
+    () => new Set(models.filter((m) => m.is_available && !m.is_embedding).map((m) => `${m.provider}:${m.model_id}`)),
+    [models],
+  );
+
+  const missingAgentModels = useMemo(() => {
+    const missing: { agentName: string; modelId: string }[] = [];
+    for (const agent of allAgents) {
+      if (agent.model_id && !availableModelIds.has(agent.model_id)) {
+        missing.push({ agentName: agent.name, modelId: agent.model_id });
+      }
+    }
+    return missing;
+  }, [allAgents, availableModelIds]);
+
+  const overrideLocked = missingAgentModels.length > 0;
 
   return (
     <div>
@@ -310,30 +387,40 @@ export function ConfigTab({
         )}
 
         {/* Context usage */}
-        {budgetOverview ? (
-          <ContextUsage overview={budgetOverview} />
-        ) : modelContextWindow ? (
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Gauge className="h-3 w-3" />
-                Context window
-              </span>
-              <span className="font-mono font-medium text-foreground">{formatK(modelContextWindow)} tok</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-muted" />
-          </div>
+        {effectiveOverview ? (
+          <ContextUsage overview={effectiveOverview} />
         ) : null}
 
         {/* Override toggle */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-[11px]">Override agent models</span>
-            {modelOverride && (
+            {modelOverride && !overrideLocked && (
               <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
             )}
+            {overrideLocked && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AlertTriangle className="h-3 w-3 text-warning" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[220px] text-[10px]">
+                    <p>Cannot disable — some agent models are not pulled:</p>
+                    <ul className="mt-1 list-disc pl-3">
+                      {missingAgentModels.map((m) => (
+                        <li key={m.modelId}>{m.agentName}: {m.modelId}</li>
+                      ))}
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
-          <Switch checked={modelOverride} onCheckedChange={onToggleOverride} />
+          <Switch
+            checked={overrideLocked || modelOverride}
+            onCheckedChange={onToggleOverride}
+            disabled={overrideLocked}
+          />
         </div>
       </SectionCard>
 

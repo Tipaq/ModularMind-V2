@@ -2,9 +2,9 @@
 
 import { useMemo } from "react";
 import {
-  BookOpen,
   Brain,
   Activity,
+  Layers,
   Settings2,
 } from "lucide-react";
 import {
@@ -18,7 +18,6 @@ import { ConfigTab } from "./insights/ConfigTab";
 import type { ExecutionMetrics } from "./insights/ConfigTab";
 import { ActivityTab } from "./insights/ActivityTab";
 import { MemoryTab } from "./insights/MemoryTab";
-import { KnowledgeTab } from "./insights/KnowledgeTab";
 
 interface ChatConfig {
   supervisorMode: boolean;
@@ -40,6 +39,8 @@ interface InsightsPanelProps {
   selectedModelContextWindow?: number | null;
   enabledAgents: EngineAgent[];
   enabledGraphs: EngineGraph[];
+  allAgents: EngineAgent[];
+  allGraphs: EngineGraph[];
 }
 
 // ── Tab Definitions ──────────────────────────────────────────
@@ -47,8 +48,7 @@ interface InsightsPanelProps {
 const PANEL_TABS: ChatPanelTab[] = [
   { value: "config", label: "Config", icon: Settings2 },
   { value: "activity", label: "Activity", icon: Activity },
-  { value: "memory", label: "Memory", icon: Brain },
-  { value: "knowledge", label: "RAG", icon: BookOpen },
+  { value: "context", label: "Context", icon: Layers },
 ];
 
 // ── Main Panel ───────────────────────────────────────────────
@@ -66,12 +66,16 @@ export function InsightsPanel({
   selectedModelContextWindow,
   enabledAgents,
   enabledGraphs,
+  allAgents,
+  allGraphs,
 }: InsightsPanelProps) {
   const displayActivities = useMemo(() => {
     return isLiveSelected && isStreaming
       ? liveActivities
       : selectedExecution?.activities ?? [];
   }, [isLiveSelected, isStreaming, liveActivities, selectedExecution?.activities]);
+
+  const isLiveStreaming = isLiveSelected && isStreaming;
 
   const memoryEntries = selectedExecution?.memoryEntries ?? [];
   const contextData = selectedExecution?.contextData ?? null;
@@ -162,6 +166,8 @@ export function InsightsPanel({
           modelContextWindow={selectedModelContextWindow}
           enabledAgents={enabledAgents}
           enabledGraphs={enabledGraphs}
+          allAgents={allAgents}
+          allGraphs={allGraphs}
         />
       </TabsContent>
 
@@ -176,15 +182,14 @@ export function InsightsPanel({
         />
       </TabsContent>
 
-      <TabsContent value="memory" className="mt-0">
+      <TabsContent value="context" className="mt-0">
         <MemoryTab
           entries={memoryEntries}
           contextData={contextData}
+          knowledgeData={knowledgeData}
+          modelContextWindow={selectedModelContextWindow}
+          isStreaming={isLiveStreaming}
         />
-      </TabsContent>
-
-      <TabsContent value="knowledge" className="mt-0">
-        <KnowledgeTab data={knowledgeData} />
       </TabsContent>
     </ChatPanel>
   );

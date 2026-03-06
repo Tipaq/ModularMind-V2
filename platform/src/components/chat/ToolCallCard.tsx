@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Wrench, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@modularmind/ui";
-import type { ToolCallData } from "@/hooks/useExecutionActivities";
+import type { ToolCallData } from "@modularmind/ui";
 
 interface ToolCallCardProps {
   toolData: ToolCallData;
