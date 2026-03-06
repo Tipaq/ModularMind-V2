@@ -52,7 +52,7 @@ class ExecutionRun(Base):
     agent_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     graph_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     session_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("conversations.id"), nullable=True
+        String(36), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True
     )
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id"), index=True
@@ -121,7 +121,7 @@ class ExecutionStep(Base):
         String(36), primary_key=True, default=lambda: str(uuid4())
     )
     run_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("execution_runs.id"), index=True
+        String(36), ForeignKey("execution_runs.id", ondelete="CASCADE"), index=True
     )
     step_number: Mapped[int] = mapped_column()
 

@@ -180,6 +180,13 @@ class ConversationService:
         if not conversation:
             return False
 
+        # Delete messages first (they have FK to execution_runs)
+        await self.db.execute(
+            delete(ConversationMessage).where(
+                ConversationMessage.conversation_id == conversation_id
+            )
+        )
+
         # Delete execution steps for runs linked to this conversation
         step_subq = (
             select(ExecutionRun.id)

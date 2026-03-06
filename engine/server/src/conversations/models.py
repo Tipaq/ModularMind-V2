@@ -74,10 +74,10 @@ class ConversationMessage(Base):
         String(36), primary_key=True, default=lambda: str(uuid4())
     )
     conversation_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("conversations.id"), index=True
+        String(36), ForeignKey("conversations.id", ondelete="CASCADE"), index=True
     )
     execution_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("execution_runs.id"), nullable=True
+        String(36), ForeignKey("execution_runs.id", ondelete="SET NULL"), nullable=True
     )
 
     role: Mapped[MessageRole] = mapped_column(
