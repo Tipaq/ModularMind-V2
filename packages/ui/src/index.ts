@@ -80,6 +80,10 @@ export type { ChatInputProps } from "./components/chat-input";
 export { ChatEmptyState } from "./components/chat-empty-state";
 export type { ChatEmptyStateProps } from "./components/chat-empty-state";
 
+// Conversation sidebar
+export { ConversationSidebar } from "./components/conversation-sidebar";
+export type { ConversationSidebarProps, SidebarConversation } from "./components/conversation-sidebar";
+
 // Resource components (shared table, filters, empty state, detail header)
 export { EmptyState } from "./components/empty-state";
 export type { EmptyStateProps } from "./components/empty-state";

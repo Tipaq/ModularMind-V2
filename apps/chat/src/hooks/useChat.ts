@@ -26,6 +26,7 @@ export function useChat(conversationId: string | null) {
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef("");
+  const executionIdRef = useRef<string | null>(null);
 
   const {
     activities,
@@ -124,6 +125,9 @@ export function useChat(conversationId: string | null) {
       }
 
       const { execution_id, user_message, direct_response, routing_strategy, delegated_to, is_ephemeral, ephemeral_agent, memory_entries } = res;
+
+      // Track execution ID for cancel button
+      executionIdRef.current = execution_id || null;
 
       // Replace temp user message with real one
       setMessages((prev) => prev.map((m) => (m.id === tempUserMsg.id ? user_message : m)));
@@ -231,7 +235,18 @@ export function useChat(conversationId: string | null) {
           }
 
           if (data.type === "complete") {
+            executionIdRef.current = null;
             const output = data.output_data || data.output;
+
+            // Cancelled execution — remove placeholder assistant message
+            if (data.status === "stopped") {
+              setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+              finalizeActivities();
+              setIsStreaming(false);
+              cleanup();
+              return;
+            }
+
             const finalContent = extractResponse(output) || streamBufferRef.current;
             if (routing_strategy && delegated_to) {
               handleTraceEvent({ type: "trace:supervisor_delegate_end", duration_ms: data.duration_ms });
@@ -249,6 +264,7 @@ export function useChat(conversationId: string | null) {
           }
 
           if (data.type === "error") {
+            executionIdRef.current = null;
             setError(data.message || "Execution error");
             setIsStreaming(false);
             cleanup();
@@ -286,10 +302,28 @@ export function useChat(conversationId: string | null) {
   );
 
   const cancelStream = useCallback(() => {
+    // Close SSE connection
     if (sourceRef.current) {
       sourceRef.current.close();
       sourceRef.current = null;
     }
+
+    // Notify backend to cancel the execution
+    const execId = executionIdRef.current;
+    if (execId) {
+      api.post(`/executions/${execId}/stop`).catch(() => {});
+      executionIdRef.current = null;
+    }
+
+    // Remove the placeholder assistant message
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.role === "assistant" && !last.content) {
+        return prev.slice(0, -1);
+      }
+      return prev;
+    });
+
     setIsStreaming(false);
   }, []);
 

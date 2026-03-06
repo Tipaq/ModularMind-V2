@@ -89,7 +89,6 @@ export function useChat(conversationId: string | null) {
         tokenUsage: currentTokenUsageRef.current,
         contextData: currentContextDataRef.current,
       };
-      console.log("[Chat] snapshot contextData:", data.contextData?.budgetOverview);
       setExecutionDataMap((prev) => ({ ...prev, [id]: data }));
       // Persist to localStorage so execution data survives hard refresh.
       // Key: mm:exec:<execution_id> for delegated executions,
@@ -258,11 +257,9 @@ export function useChat(conversationId: string | null) {
       }
 
       // Capture context data from HTTP response (supervisor path)
-      console.log("[Chat] context_data from HTTP:", resContext);
       if (resContext) {
         const h = resContext.history;
         const bo = resContext.budget_overview;
-        console.log("[Chat] budget_overview from HTTP:", bo);
         currentContextDataRef.current = {
           history: h ? {
             budget: h.budget ? {
@@ -473,6 +470,18 @@ export function useChat(conversationId: string | null) {
 
           if (data.type === "complete") {
             const output = data.output_data || data.output;
+
+            // Cancelled execution — remove placeholder assistant message
+            if (data.status === "stopped") {
+              setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+              currentAssistantIdRef.current = "";
+              currentExecutionIdRef.current = "";
+              finalizeActivities();
+              setIsStreaming(false);
+              source.close();
+              return;
+            }
+
             const finalContent = extractResponse(output) || streamBufferRef.current;
             if (routing_strategy && delegated_to) {
               handleTraceEvent({ type: "trace:supervisor_delegate_end", duration_ms: data.duration_ms });
@@ -525,10 +534,29 @@ export function useChat(conversationId: string | null) {
   );
 
   const cancelStream = useCallback(() => {
+    // Close SSE connection
     if (sourceRef.current) {
       sourceRef.current.close();
       sourceRef.current = null;
     }
+
+    // Notify backend to cancel the execution via Platform proxy
+    const execId = currentExecutionIdRef.current;
+    if (execId) {
+      fetch(`/api/chat/executions/${execId}`, { method: "POST" }).catch(() => {});
+      currentExecutionIdRef.current = "";
+    }
+
+    // Remove the placeholder assistant message
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.role === "assistant" && !last.content) {
+        return prev.slice(0, -1);
+      }
+      return prev;
+    });
+
+    currentAssistantIdRef.current = "";
     setIsStreaming(false);
   }, []);
 

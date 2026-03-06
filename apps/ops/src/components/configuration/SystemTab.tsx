@@ -11,7 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  cn,
+  Switch,
 } from "@modularmind/ui";
 import type { LocalSettings } from "@modularmind/api-client";
 import { api } from "../../lib/api";
@@ -127,20 +127,10 @@ export default function SystemTab() {
                 Automatically sync configurations from the platform
               </p>
             </div>
-            <button
-              onClick={() => toggleSetting("auto_sync")}
-              className={cn(
-                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                settings?.auto_sync ? "bg-primary" : "bg-muted",
-              )}
-            >
-              <span
-                className={cn(
-                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                  settings?.auto_sync ? "translate-x-6" : "translate-x-1",
-                )}
-              />
-            </button>
+            <Switch
+              checked={settings?.auto_sync ?? false}
+              onCheckedChange={() => toggleSetting("auto_sync")}
+            />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">
@@ -266,20 +256,10 @@ export default function SystemTab() {
                 Share usage metrics to help improve the platform
               </p>
             </div>
-            <button
-              onClick={() => toggleSetting("telemetry_enabled")}
-              className={cn(
-                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                settings?.telemetry_enabled ? "bg-primary" : "bg-muted",
-              )}
-            >
-              <span
-                className={cn(
-                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                  settings?.telemetry_enabled ? "translate-x-6" : "translate-x-1",
-                )}
-              />
-            </button>
+            <Switch
+              checked={settings?.telemetry_enabled ?? false}
+              onCheckedChange={() => toggleSetting("telemetry_enabled")}
+            />
           </div>
           <div className="rounded-lg bg-muted p-4">
             <div className="flex items-start gap-3">

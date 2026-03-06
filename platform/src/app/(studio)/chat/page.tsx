@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useChat, type Message } from "@/hooks/useChat";
 import { useChatConfig } from "@/hooks/useChatConfig";
-import { ConversationSidebar, type Conversation } from "@/components/chat/ConversationSidebar";
+import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
+import type { Conversation } from "@modularmind/api-client";
 import { ChatMessages, ChatInput, InsightsPanel } from "@modularmind/ui";
 import type { AttachedFile } from "@modularmind/ui";
 import { PanelRight } from "lucide-react";
@@ -127,8 +128,8 @@ export default function ChatPage() {
         if (!res.ok || !active) return;
         const data = await res.json();
         if (active) setConversations(data.items || []);
-      } catch (err) {
-        if (active) console.error("[Chat]", err);
+      } catch {
+        // Silently ignore – component will show empty state
       }
     })();
     return () => { active = false; };
@@ -164,8 +165,8 @@ export default function ChatPage() {
           modelId: convConfig.model_id || null,
           modelOverride: convConfig.model_override || false,
         });
-      } catch (err) {
-        console.error("[Chat]", err);
+      } catch {
+        // Fetch failed – conversation panel stays in previous state
       }
     },
     [setInitialMessages],
@@ -215,8 +216,8 @@ export default function ChatPage() {
           setInitialMessages([]);
           setChatConfig(DEFAULT_CONFIG);
         }
-      } catch (err) {
-        console.error("[Chat]", err);
+      } catch {
+        // Delete failed – keep conversation in list
       }
     },
     [activeConversationId, setInitialMessages],
@@ -233,8 +234,8 @@ export default function ChatPage() {
         setConversations((prev) =>
           prev.map((c) => (c.id === id ? { ...c, title } : c)),
         );
-      } catch (err) {
-        console.error("[Chat]", err);
+      } catch {
+        // Rename failed – keep previous title
       }
     },
     [],
@@ -259,7 +260,7 @@ export default function ChatPage() {
               supervisor_prompt: newConfig.supervisorPrompt,
             },
           }),
-        }).catch((e) => console.warn("[Chat] config persist failed", e));
+        }).catch(() => { /* best-effort persist */ });
       }, CONFIG_DEBOUNCE_MS);
     },
     [activeConversationId, enabledAgentIds, enabledGraphIds],
