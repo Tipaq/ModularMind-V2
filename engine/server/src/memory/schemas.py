@@ -26,11 +26,11 @@ class MemoryEntryResponse(BaseModel):
     access_count: int
     last_accessed: datetime | None
     expired_at: datetime | None
-    metadata: dict = Field(validation_alias="meta")
+    meta: dict = Field(default_factory=dict, serialization_alias="metadata")
     user_id: str | None
     created_at: datetime
 
-    model_config = {"from_attributes": True, "populate_by_name": True}
+    model_config = {"from_attributes": True}
 
 
 class MemoryListResponse(PaginatedResponse[MemoryEntryResponse]):
