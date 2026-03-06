@@ -1,14 +1,26 @@
 import type { Session } from "next-auth";
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "./auth";
+import { checkRateLimit } from "./rate-limit";
 
 /**
- * Require an authenticated session. Returns the session or a 401 response.
+ * Require an authenticated session with rate limiting.
+ * Returns the session or a 401/429 response.
  */
-export async function requireAuth(): Promise<
+export async function requireAuth(opts?: {
+  maxRequests?: number;
+  windowMs?: number;
+}): Promise<
   | { session: Session; error?: never }
   | { session?: never; error: NextResponse }
 > {
+  // Rate limit by IP
+  const hdrs = await headers();
+  const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const rateLimited = checkRateLimit(ip, opts?.maxRequests, opts?.windowMs);
+  if (rateLimited) return { error: rateLimited };
+
   const session = await auth();
   if (!session) {
     return { error: errorResponse("Unauthorized", 401) };

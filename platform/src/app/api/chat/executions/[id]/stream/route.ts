@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
-import { errorResponse } from "@/lib/api-utils";
+import { requireAuth, errorResponse } from "@/lib/api-utils";
 import { INTERNAL_TOKEN } from "@/lib/engine-proxy";
 
 const ENGINE_URL = process.env.ENGINE_URL || "http://localhost:8000";
@@ -10,10 +9,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const session = await auth();
-  if (!session) {
-    return errorResponse("Unauthorized", 401);
-  }
+  const { session, error } = await requireAuth();
+  if (error) return error;
 
   const { id } = await params;
   const engineUrl = `${ENGINE_URL}/api/v1/executions/${id}/stream`;

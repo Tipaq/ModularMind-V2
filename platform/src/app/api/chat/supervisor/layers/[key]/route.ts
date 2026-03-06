@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-utils";
 import { engineFetch } from "@/lib/engine-proxy";
 import { parseBody, supervisorLayerPatchSchema } from "@/lib/validations";
 
@@ -8,8 +8,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<NextResponse> {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { session, error: authError } = await requireAuth();
+  if (authError) return authError;
 
   const { key } = await params;
   const { data, error } = await parseBody(req, supervisorLayerPatchSchema);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/api-utils";
 import { engineFetch } from "@/lib/engine-proxy";
 import { parseBody, conversationPatchSchema } from "@/lib/validations";
 
@@ -8,8 +8,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { session, error } = await requireAuth();
+  if (error) return error;
 
   const { id } = await params;
   const res = await engineFetch(`/api/v1/conversations/${id}`, {}, session.user?.email ?? undefined);
@@ -23,12 +23,12 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { session, error } = await requireAuth();
+  if (error) return error;
 
   const { id } = await params;
-  const { data, error } = await parseBody(req, conversationPatchSchema);
-  if (error) return error;
+  const { data, error: bodyError } = await parseBody(req, conversationPatchSchema);
+  if (bodyError) return bodyError;
 
   const res = await engineFetch(
     `/api/v1/conversations/${id}`,
@@ -45,8 +45,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse | Response> {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { session, error } = await requireAuth();
+  if (error) return error;
 
   const { id } = await params;
   const res = await engineFetch(
