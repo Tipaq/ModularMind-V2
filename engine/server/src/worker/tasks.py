@@ -8,6 +8,8 @@ import json
 import logging
 from typing import Any
 
+import src.groups.models  # noqa: F401 — register UserGroupMember with SQLAlchemy mapper
+
 logger = logging.getLogger(__name__)
 
 
@@ -186,13 +188,10 @@ async def document_process_handler(data: dict[str, Any]) -> None:
     - collection_id: str
     - document_id: str
     - object_key: str  (S3 key in MinIO)
-    - file_path: str   (legacy: temp file path, for backward compat)
     - filename: str
     - chunk_size: int
     - chunk_overlap: int
     """
-    import os
-
     from sqlalchemy import update
 
     from src.infra.database import async_session_maker
@@ -202,12 +201,11 @@ async def document_process_handler(data: dict[str, Any]) -> None:
     collection_id = data.get("collection_id", "")
     document_id = data.get("document_id", "")
     object_key = data.get("object_key", "")
-    file_path = data.get("file_path", "")  # legacy fallback
     filename = data.get("filename", "")
     chunk_size = int(data.get("chunk_size", 500))
     chunk_overlap = int(data.get("chunk_overlap", 50))
 
-    if not all([collection_id, document_id, filename]) or not (object_key or file_path):
+    if not all([collection_id, document_id, object_key, filename]):
         logger.error("document_process_handler: missing required fields in %s", data)
         return
 
@@ -215,24 +213,12 @@ async def document_process_handler(data: dict[str, Any]) -> None:
 
     async with async_session_maker() as session:
         try:
-            # Read file content from MinIO (preferred) or filesystem (legacy)
-            if object_key:
-                from src.infra.config import get_settings
-                from src.infra.object_store import get_object_store
+            from src.infra.config import get_settings
+            from src.infra.object_store import get_object_store
 
-                store = get_object_store()
-                s = get_settings()
-                file_content = await store.download(s.S3_BUCKET_RAG, object_key)
-            elif file_path:
-                with open(file_path, "rb") as f:
-                    file_content = f.read()
-                # Clean up legacy temp file
-                try:
-                    os.unlink(file_path)
-                except OSError:
-                    logger.warning("Failed to delete legacy temp file %s", file_path)
-            else:
-                raise ValueError("No object_key or file_path in task data")
+            store = get_object_store()
+            s = get_settings()
+            file_content = await store.download(s.S3_BUCKET_RAG, object_key)
 
             chunk_count = await process_document(
                 document_id=document_id,
