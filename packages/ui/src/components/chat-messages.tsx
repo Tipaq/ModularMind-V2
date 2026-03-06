@@ -6,6 +6,7 @@ import { cn } from "../lib/utils";
 import type { ExecutionActivity } from "../types/chat";
 import { ExecutionActivityList } from "./execution-activity";
 import { AttachmentChip, type AttachmentChipData } from "./attachment-chip";
+import { ChatEmptyState } from "./chat-empty-state";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 const EMPTY_ACTIVITIES: ExecutionActivity[] = [];
@@ -223,6 +224,10 @@ export interface ChatMessagesProps {
   attachmentBaseUrl?: string;
   /** Content rendered sticky at the bottom of the scroll container (e.g. ChatInput). */
   stickyFooter?: React.ReactNode;
+  /** Suggested prompts for the empty state. */
+  suggestedPrompts?: Array<{ label: string; prompt: string }>;
+  /** Callback when a suggestion chip is clicked. */
+  onSuggestionClick?: (prompt: string) => void;
 }
 
 export const ChatMessages = memo(function ChatMessages({
@@ -234,6 +239,8 @@ export const ChatMessages = memo(function ChatMessages({
   onSelectMessage,
   attachmentBaseUrl,
   stickyFooter,
+  suggestedPrompts,
+  onSuggestionClick,
 }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastMsg = messages[messages.length - 1];
@@ -246,11 +253,12 @@ export const ChatMessages = memo(function ChatMessages({
     <TooltipProvider delayDuration={400}>
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="min-h-full flex flex-col">
-          <div className="flex-1">
+          <div className={messages.length === 0 ? "flex-1 flex items-center justify-center" : "flex-1"}>
             {messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                <p className="text-sm">Send a message to start the conversation</p>
-              </div>
+              <ChatEmptyState
+                suggestions={suggestedPrompts}
+                onSuggestionClick={onSuggestionClick}
+              />
             ) : (
               <div className="px-4 py-6 pb-32">
                 {messages.map((msg, i) => {
