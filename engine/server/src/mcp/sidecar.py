@@ -82,7 +82,7 @@ class SidecarManager:
         try:
             self._docker = docker.from_env()
             self._docker.ping()
-        except Exception as e:
+        except Exception as e:  # Docker SDK raises heterogeneous errors (APIError, DockerException, etc.)
             self._docker = None
             raise SidecarError(f"Cannot connect to Docker daemon: {e}")
 
@@ -109,7 +109,7 @@ class SidecarManager:
                 if name not in ("bridge", "host", "none"):
                     logger.info("Auto-detected Docker network: %s", name)
                     return name
-        except Exception:
+        except Exception:  # Docker SDK raises heterogeneous errors during inspection
             logger.debug("Docker network detection failed", exc_info=True)
         logger.warning("Could not detect Docker network, sidecars may not be reachable")
         return None
@@ -242,7 +242,7 @@ class SidecarManager:
                 volumes=vols,
                 restart_policy={"Name": "unless-stopped"},
             )
-        except Exception as e:
+        except Exception as e:  # Docker SDK raises heterogeneous errors (APIError, ImageNotFound, etc.)
             raise SidecarError(f"Failed to create sidecar container: {e}")
 
         internal_url = f"http://{container_name}:{SIDECAR_INTERNAL_PORT}/mcp"
@@ -277,7 +277,7 @@ class SidecarManager:
             await asyncio.to_thread(container.stop, timeout=CONTAINER_STOP_TIMEOUT_SECS)
             await asyncio.to_thread(container.remove)
             logger.info("Removed MCP sidecar %s", info.container_name)
-        except Exception as e:
+        except Exception as e:  # Docker SDK raises heterogeneous errors during stop/remove
             logger.warning("Error removing sidecar %s: %s", info.container_name, e)
 
         self._update_sidecar_gauge()
@@ -303,7 +303,7 @@ class SidecarManager:
                 "status": container.status,
                 "running": container.status == "running",
             }
-        except Exception:
+        except Exception:  # Docker SDK raises heterogeneous errors; return fallback status
             return {
                 "server_id": server_id,
                 "container_name": info.container_name,
@@ -348,10 +348,10 @@ class SidecarManager:
                     try:
                         await asyncio.to_thread(container.start)
                         logger.info("Restarted sidecar %s", container.name)
-                    except Exception as e:
+                    except Exception as e:  # Docker SDK raises heterogeneous errors
                         logger.warning("Failed to restart %s: %s", container.name, e)
 
-        except Exception as e:
+        except Exception as e:  # Docker SDK raises heterogeneous errors during listing
             logger.warning("Failed to recover sidecars: %s", e)
 
         if recovered:
@@ -372,7 +372,7 @@ class SidecarManager:
                 )
                 await asyncio.to_thread(container.stop, timeout=CONTAINER_STOP_TIMEOUT_SECS)
                 logger.info("Stopped sidecar %s", info.container_name)
-            except Exception:
+            except Exception:  # Resilience: shutdown must attempt all sidecars
                 logger.warning("Failed to stop sidecar %s", info.container_name, exc_info=True)
 
     def _update_sidecar_gauge(self) -> None:
@@ -380,7 +380,7 @@ class SidecarManager:
         try:
             from src.infra.metrics import mcp_sidecars_active
             mcp_sidecars_active.set(len(self._sidecars))
-        except Exception:
+        except (ImportError, AttributeError):
             logger.debug("Failed to update sidecar gauge metric")
 
     @property

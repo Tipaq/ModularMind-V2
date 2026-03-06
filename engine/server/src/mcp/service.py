@@ -196,7 +196,7 @@ async def _auto_deploy_free_catalog_entries() -> None:
                     "MCP auto-deploy: deployed '%s' (%s)",
                     entry.name, config.transport.value,
                 )
-            except Exception as e:
+            except Exception as e:  # Resilience: individual deploy failures must not abort the loop
                 logger.warning("MCP auto-deploy: failed to deploy %s: %s", entry.name, e)
                 continue
 
@@ -232,7 +232,7 @@ async def startup_mcp(*, leader_only: bool = False) -> None:
         if settings.MCP_AUTO_DEPLOY_FREE:
             try:
                 await _auto_deploy_free_catalog_entries()
-            except Exception as e:
+            except Exception as e:  # Resilience: auto-deploy is non-fatal startup work
                 logger.warning("MCP free auto-deploy failed (non-fatal): %s", e)
         return
 
@@ -243,7 +243,7 @@ async def startup_mcp(*, leader_only: bool = False) -> None:
             recovered = await manager.recover_sidecars()
             if recovered:
                 logger.info("Recovered %d MCP sidecar(s) from previous run", len(recovered))
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.warning("MCP sidecar recovery failed (Docker may not be available): %s", e)
     else:
         logger.info("Docker SDK not available — MCP sidecar auto-provisioning disabled")
@@ -251,7 +251,7 @@ async def startup_mcp(*, leader_only: bool = False) -> None:
     # Auto-register MCP servers from environment
     try:
         _bootstrap_mcp_servers()
-    except Exception as e:
+    except Exception as e:  # Resilience: bootstrap is non-fatal startup work
         logger.warning("MCP bootstrap failed (non-fatal): %s", e)
 
     # Eagerly connect to all enabled MCP servers so the dashboard shows
@@ -321,7 +321,7 @@ async def _mcp_health_loop() -> None:
                 healthy = await client.health_check()
                 if not healthy:
                     logger.warning("MCP health: '%s' ping failed", server_id)
-            except Exception as e:
+            except Exception as e:  # MCP protocol errors are heterogeneous
                 logger.warning("MCP health: error checking '%s': %s", server_id, e)
 
 

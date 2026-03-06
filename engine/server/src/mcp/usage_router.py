@@ -44,7 +44,7 @@ async def list_server_tools(server_id: str, user: CurrentUser) -> list[MCPToolRe
     try:
         tools = await registry.discover_tools(server_id)
         return [MCPToolResponse(name=t.name, description=t.description, input_schema=t.input_schema) for t in tools]
-    except Exception as e:
+    except Exception as e:  # MCP servers raise heterogeneous transport errors
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to discover tools: {e}")
 
 
@@ -65,7 +65,7 @@ async def call_server_tool(
             server_id=server_id, tool_name=body.tool_name, arguments=body.arguments,
         ))
         return MCPToolCallResponseBody(content=result.content, is_error=result.is_error)
-    except Exception as e:
+    except Exception as e:  # MCP servers raise heterogeneous transport errors
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Tool call failed: {e}")
 
 

@@ -104,7 +104,7 @@ class MCPClient:
             self._consecutive_failures = 0
             logger.info("MCP SDK client connected to '%s' (HTTP)", self.config.name)
 
-        except Exception as e:
+        except (httpx.HTTPError, OSError, ConnectionError, TimeoutError) as e:
             await self._cleanup()
             raise MCPConnectionError(
                 f"Failed to connect to MCP server '{self.config.name}': {e}"
@@ -131,7 +131,7 @@ class MCPClient:
             self._consecutive_failures = 0
             logger.info("MCP SDK client connected to '%s' (stdio)", self.config.name)
 
-        except Exception as e:
+        except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:
             await self._cleanup()
             raise MCPConnectionError(
                 f"Failed to connect to MCP server '{self.config.name}': {e}"
@@ -190,7 +190,7 @@ class MCPClient:
                 await self.connect()
             await self._session.send_ping()
             return True
-        except Exception:
+        except (MCPClientError, OSError, ConnectionError, TimeoutError):
             return False
 
     def get_cached_tools(self) -> list[MCPToolDefinition]:
@@ -213,7 +213,7 @@ class MCPClient:
                 return result
             except MCPToolError:
                 raise
-            except Exception as e:
+            except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:
                 self._consecutive_failures += 1
                 if attempt < _MAX_RETRIES:
                     logger.warning(
@@ -235,7 +235,7 @@ class MCPClient:
         if self._exit_stack:
             try:
                 await self._exit_stack.aclose()
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.warning("Error closing MCP exit stack: %s", e)
             self._exit_stack = None
         self._session = None

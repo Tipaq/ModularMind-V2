@@ -136,7 +136,7 @@ async def deploy_from_catalog(body: MCPDeployFromCatalogRequest, user: CurrentUs
                 secrets=body.secrets,
                 server_id=server_id,
             )
-        except Exception as e:
+        except Exception as e:  # Docker API can raise various errors
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Failed to deploy sidecar: {e}",
@@ -253,7 +253,7 @@ async def get_server_logs(
                 )
                 if exit_code == 0:
                     app_logs += output.decode("utf-8", errors="replace") + "\n"
-            except Exception:
+            except Exception:  # noqa: BLE001 — container exec can fail in many ways
                 logger.debug("Failed to read %s from container", log_file)
 
         return {
@@ -261,7 +261,7 @@ async def get_server_logs(
             "logs": logs_text + "\n" + app_logs if app_logs else logs_text,
             "container_status": container.status,
         }
-    except Exception as e:
+    except Exception as e:  # Docker API can raise various errors
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to read container logs: {e}",
@@ -432,7 +432,7 @@ async def list_server_tools(server_id: str, user: CurrentUser) -> list[dict[str,
             {"name": t.name, "description": t.description, "input_schema": t.input_schema}
             for t in tools
         ]
-    except Exception as e:
+    except Exception as e:  # MCP servers raise heterogeneous transport errors
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to discover tools: {e}",
