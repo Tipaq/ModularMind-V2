@@ -4,7 +4,7 @@ import { useChat } from "../hooks/useChat";
 import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
 import { useConversations } from "../hooks/useConversations";
 import { ChatSidebar } from "../components/ChatSidebar";
-import { ChatMessages } from "../components/ChatMessages";
+import { ChatMessages } from "@modularmind/ui";
 import { ChatInput, type AttachedFile } from "../components/ChatInput";
 import { InsightsPanel } from "../components/InsightsPanel";
 import { useAuthStore } from "@modularmind/ui";
@@ -263,28 +263,29 @@ export default function Chat() {
           isStreaming={isStreaming}
           activities={activities}
           showRoutingMetadata
-        />
-
-        <ChatInput
-          value={inputValue}
-          onChange={setInputValue}
-          onSend={handleSend}
-          isStreaming={isStreaming}
-          onCancel={cancelStream}
-          agents={agents}
-          graphs={graphs}
-          enabledAgentIds={enabledAgentIds}
-          enabledGraphIds={enabledGraphIds}
-          onToggleAgent={handleToggleAgent}
-          onToggleGraph={handleToggleGraph}
-          onFilesChange={setAttachedFiles}
-          disabledReason={sendDisabledReason}
-          models={models}
-          selectedModelId={effectiveModelId}
-          onModelChange={(id) => handleModelChange(id)}
-          modelLabel={(m) => `${m.display_name || m.name} (${m.provider})`}
-          onCompact={() => {/* TODO: implement conversation compaction */}}
-          compactDisabled={messages.length < 4}
+          stickyFooter={
+            <ChatInput
+              value={inputValue}
+              onChange={setInputValue}
+              onSend={handleSend}
+              isStreaming={isStreaming}
+              onCancel={cancelStream}
+              agents={agents}
+              graphs={graphs}
+              enabledAgentIds={enabledAgentIds}
+              enabledGraphIds={enabledGraphIds}
+              onToggleAgent={handleToggleAgent}
+              onToggleGraph={handleToggleGraph}
+              onFilesChange={setAttachedFiles}
+              disabledReason={sendDisabledReason}
+              models={models}
+              selectedModelId={effectiveModelId}
+              onModelChange={(id) => handleModelChange(id)}
+              modelLabel={(m) => `${m.display_name || m.name} (${m.provider})`}
+              onCompact={() => {/* TODO: implement conversation compaction */}}
+              compactDisabled={messages.length < 4}
+            />
+          }
         />
       </div>
 

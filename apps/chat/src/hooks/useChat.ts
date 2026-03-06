@@ -3,18 +3,18 @@ import type { Message as ApiMessage, MessageAttachment, SendMessageResponse } fr
 import type { TokenUsage } from "@modularmind/ui";
 import { extractResponse } from "@modularmind/ui";
 import { api } from "../lib/api";
-import { useExecutionActivities } from "./useExecutionActivities";
+import { useExecutionActivities } from "@modularmind/ui";
 import { useInsightsPanel } from "./useInsightsPanel";
 
-export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "./useExecutionActivities";
+export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "@modularmind/ui";
 export type {
   SupervisorData,
   KnowledgeData,
   KnowledgeCollection,
   KnowledgeChunk,
-  MemoryEntry,
   InsightsPanelState,
 } from "./useInsightsPanel";
+export type { InsightsMemoryEntry } from "@modularmind/ui";
 export type { TokenUsage } from "@modularmind/ui";
 
 export type Message = ApiMessage;

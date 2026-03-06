@@ -15,15 +15,12 @@ export interface KnowledgeData extends KnowledgeDataBase {
   status: "idle" | "loading" | "completed";
 }
 
-/** Alias kept for backward compatibility within the chat app. */
-export type MemoryEntry = InsightsMemoryEntry;
-
 // ─── Panel State ─────────────────────────────────────────────────────────────
 
 export interface InsightsPanelState {
   supervisor: SupervisorData | null;
   knowledge: KnowledgeData;
-  memory: MemoryEntry[];
+  memory: InsightsMemoryEntry[];
 }
 
 const INITIAL_KNOWLEDGE: KnowledgeData = {
@@ -72,7 +69,7 @@ export function useInsightsPanel() {
     setState((prev) => ({ ...prev, supervisor: data }));
   }, []);
 
-  const setMemoryEntries = useCallback((entries: MemoryEntry[]) => {
+  const setMemoryEntries = useCallback((entries: InsightsMemoryEntry[]) => {
     setState((prev) => ({ ...prev, memory: entries }));
   }, []);
 

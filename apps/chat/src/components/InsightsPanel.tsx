@@ -4,6 +4,7 @@ import {
   TabsContent,
   cn,
   ChatPanel,
+  formatTokens,
 } from "@modularmind/ui";
 import type { ChatPanelTab, TokenUsage } from "@modularmind/ui";
 import type { EngineAgent, EngineGraph, EngineModel } from "@modularmind/api-client";
@@ -28,17 +29,10 @@ import type {
   SupervisorData,
   KnowledgeData,
   KnowledgeChunk,
-  MemoryEntry,
 } from "../hooks/useInsightsPanel";
+import type { InsightsMemoryEntry } from "@modularmind/ui";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatTokenCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
-  if (n >= 1_000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
 
 function contextColor(pct: number) {
   if (pct >= 90) return { text: "text-destructive", bg: "bg-destructive" };
@@ -89,7 +83,7 @@ function ConfigTab({
               </Badge>
               {contextWindow && (
                 <span className="text-[10px] text-muted-foreground">
-                  {formatTokenCount(contextWindow)} context
+                  {formatTokens(contextWindow)} context
                 </span>
               )}
             </div>
@@ -109,7 +103,7 @@ function ConfigTab({
           <div className="rounded-md border border-border/50 bg-muted/20 p-2.5 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-muted-foreground">
-                {formatTokenCount(promptTokens)} / {formatTokenCount(contextWindow)}
+                {formatTokens(promptTokens)} / {formatTokens(contextWindow)}
               </span>
               <span
                 className={cn(
@@ -383,7 +377,7 @@ function KnowledgeTab({ data }: { data: KnowledgeData }) {
 
 // ─── Memory Tab ──────────────────────────────────────────────────────────────
 
-function MemoryItem({ entry }: { entry: MemoryEntry }) {
+function MemoryItem({ entry }: { entry: InsightsMemoryEntry }) {
   const [expanded, setExpanded] = useState(false);
   const stars = Math.round(entry.importance * 5);
 
@@ -439,7 +433,7 @@ function MemoryTab({
   entries,
   contextWindow,
 }: {
-  entries: MemoryEntry[];
+  entries: InsightsMemoryEntry[];
   contextWindow?: number | null;
 }) {
   if (entries.length === 0) {
@@ -462,7 +456,7 @@ function MemoryTab({
       <div className="rounded-md border border-border/50 bg-muted/20 p-2.5 space-y-1.5">
         <div className="flex items-center justify-between">
           <span className="text-[11px] text-muted-foreground">
-            {entries.length} {entries.length === 1 ? "entry" : "entries"} · ~{formatTokenCount(memoryTokens)} tokens
+            {entries.length} {entries.length === 1 ? "entry" : "entries"} · ~{formatTokens(memoryTokens)} tokens
           </span>
           {memoryPercent !== null && (
             <span className="text-[10px] font-mono text-muted-foreground">
@@ -500,7 +494,7 @@ function MemoryTab({
 interface InsightsPanelProps {
   supervisor: SupervisorData | null;
   knowledge: KnowledgeData;
-  memory: MemoryEntry[];
+  memory: InsightsMemoryEntry[];
   // Config data
   selectedModel: EngineModel | null;
   supervisorMode: boolean;
