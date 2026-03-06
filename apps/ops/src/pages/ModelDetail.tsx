@@ -102,8 +102,7 @@ export default function ModelDetail() {
       if (!found) {
         try {
           found = await api.get<CatalogModel>(`/models/catalog/${modelId}`);
-        } catch (err) {
-          console.error("[ModelDetail] model not found:", err);
+        } catch {
           setError("Model not found");
         }
       }

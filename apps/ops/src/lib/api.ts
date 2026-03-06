@@ -1,1 +1,1 @@
-export { api, type ApiClient } from "@modularmind/api-client";
+export { api } from "@modularmind/api-client";

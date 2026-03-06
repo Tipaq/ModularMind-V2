@@ -10,6 +10,7 @@ import {
   Clock,
   type LucideIcon,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { cn, formatDuration, PageHeader } from "@modularmind/ui";
 import { useApi } from "../hooks/useApi";
 import { api } from "../lib/api";
@@ -157,16 +158,16 @@ export default function Dashboard() {
             { label: "Graphs", to: "/graphs", icon: GitFork, color: "from-warning to-warning/70" },
             { label: "Knowledge", to: "/knowledge", icon: BookOpen, color: "from-info to-info/70" },
           ].map((item) => (
-            <a
+            <Link
               key={item.to}
-              href={`/ops${item.to}`}
+              to={item.to}
               className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4 hover:bg-muted/50 transition-colors"
             >
               <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br", item.color)}>
                 <item.icon className="h-5 w-5 text-white" />
               </div>
               <span className="font-medium">{item.label}</span>
-            </a>
+            </Link>
           ))}
         </div>
       </div>
