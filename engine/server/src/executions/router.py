@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+import sqlalchemy.exc
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -109,7 +110,7 @@ async def _safe_create_execution(
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except (RuntimeError, OSError, KeyError, TypeError) as e:
         logger.exception("Failed to create execution: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create execution")
 
@@ -178,6 +179,7 @@ async def stream_execution(
 
         r = aioredis.Redis(connection_pool=get_redis_pool())
         last_id = "0"  # read from beginning — no events are lost
+        completed = False  # Track whether execution finished naturally
         try:
             while True:
                 if await request.is_disconnected():
@@ -195,10 +197,30 @@ async def stream_execution(
                             event = json.loads(fields[b"data"])
                             yield event
                             if event.get("type") in ("complete", "error"):
+                                completed = True
                                 return
                         except (json.JSONDecodeError, TypeError, KeyError):
                             continue
         finally:
+            # If the client disconnected before execution finished,
+            # signal the worker to cancel the execution.
+            if not completed:
+                try:
+                    await r.set(
+                        f"revoke_intent:{execution_id}",
+                        "cancel",
+                        ex=300,
+                        nx=True,  # Don't overwrite an explicit stop
+                    )
+                    logger.info(
+                        "Client disconnected, set revoke_intent for %s",
+                        execution_id,
+                    )
+                except Exception:
+                    logger.debug(
+                        "Failed to set revoke_intent on disconnect",
+                        exc_info=True,
+                    )
             await r.aclose()
 
     return await sse_response(event_generator(), request)
@@ -251,7 +273,7 @@ async def create_agent_execution(
                         "A/B routing execution %s: experiment=%s variant=%s model=%s",
                         execution.id, experiment_id, variant, model_id,
                     )
-            except Exception as ab_err:
+            except (ValueError, KeyError, RuntimeError, sqlalchemy.exc.SQLAlchemyError) as ab_err:
                 # DB errors poison the PostgreSQL transaction — rollback to
                 # restore the session so the execution INSERT can be committed.
                 await db.rollback()
@@ -269,7 +291,7 @@ async def create_agent_execution(
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except (RuntimeError, OSError, KeyError, TypeError) as e:
         logger.exception("Failed to create execution: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create execution")
 
@@ -454,7 +476,7 @@ async def approve_execution(
 
     from .approval import ApprovalService
 
-    redis_client = get_redis_client()
+    redis_client = await get_redis_client()
     try:
         approval_svc = ApprovalService(db, redis_client)
         success = await approval_svc.approve(
@@ -501,7 +523,7 @@ async def reject_execution(
 
     from .approval import ApprovalService
 
-    redis_client = get_redis_client()
+    redis_client = await get_redis_client()
     try:
         approval_svc = ApprovalService(db, redis_client)
         success = await approval_svc.reject(

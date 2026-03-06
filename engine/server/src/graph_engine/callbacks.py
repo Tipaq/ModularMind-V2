@@ -40,7 +40,7 @@ def _safe_str(value: Any, max_length: int = 500) -> str:
     """Convert value to string safely with truncation."""
     try:
         s = str(value)
-    except Exception:
+    except Exception:  # noqa: BLE001 — must not crash on any repr failure
         s = "<unserializable>"
     return _truncate(s, max_length)
 
@@ -162,7 +162,7 @@ def _extract_token_usage(
                 c_tok = count_tokens(resp_text)
         if p_tok or c_tok:
             return p_tok, c_tok, True
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         logger.debug("tiktoken fallback failed", exc_info=True)
 
     return 0, 0, False
@@ -242,7 +242,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
             event.setdefault("timestamp", datetime.now(UTC).isoformat())
             event.setdefault("execution_id", self.execution_id)
             self.publish_fn(event)
-        except Exception:
+        except Exception:  # noqa: BLE001 — callback must never crash LLM execution
             logger.debug("Failed to publish trace event", exc_info=True)
 
     def _start_run(self, run_id: UUID, provider: str = "unknown", model: str = "unknown") -> _RunContext:
@@ -291,7 +291,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
                     prompts[0], self.max_content_length
                 )
             self._publish(event)
-        except Exception:
+        except Exception:  # noqa: BLE001 — callback must never crash LLM execution
             logger.debug("on_llm_start trace error", exc_info=True)
 
     def on_chat_model_start(
@@ -343,7 +343,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
             event["message_types"] = type_counts
 
             self._publish(event)
-        except Exception:
+        except Exception:  # noqa: BLE001 — callback must never crash LLM execution
             logger.debug("on_chat_model_start trace error", exc_info=True)
 
     def on_llm_new_token(

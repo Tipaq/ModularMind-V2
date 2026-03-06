@@ -421,7 +421,7 @@ class ExecutionService:
                 ),
             }
 
-        except Exception as e:
+        except Exception as e:  # Resilience: catch-all for LLM, graph, and DB errors in execution
             logger.exception("Execution %s failed: %s", execution_id, e)
             execution.status = ExecutionStatus.FAILED
             execution.error_message = str(e)
@@ -526,7 +526,7 @@ class ExecutionService:
                         input_data["_context_layers"] = [
                             msg.content for msg in context_messages
                         ]
-            except Exception as e:
+            except Exception as e:  # Resilience: compaction failure must not block execution
                 logger.warning("Auto-compaction failed for %s: %s", execution.session_id, e)
                 yield {"type": "trace:compaction_end", "error": str(e)}
 

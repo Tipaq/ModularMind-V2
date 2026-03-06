@@ -4,9 +4,18 @@ Each function is an EventBus handler callback: it receives event data dict
 and returns when done (or raises to trigger retry/DLQ).
 """
 
+from __future__ import annotations
+
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+import redis.exceptions
+import sqlalchemy.exc
+
+if TYPE_CHECKING:
+    from redis.asyncio import Redis
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 import src.conversations.models  # noqa: F401 — register Conversation for ExecutionRun FK
 import src.groups.models  # noqa: F401 — register UserGroupMember with SQLAlchemy mapper
@@ -72,12 +81,21 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
         complete_event: dict[str, Any] | None = None
 
         try:
+            from src.executions.cancel import ExecutionCancelled, check_revoke_intent
             from src.infra.redis import get_redis_client
 
-            r = get_redis_client()
+            r = await get_redis_client()
+            cancelled = False
             try:
                 stream_key = f"exec_stream:{execution_id}"
                 async for event in service.execute(execution_id):
+                    # Check for cancellation before writing each event
+                    intent = await check_revoke_intent(execution_id)
+                    if intent == "cancel":
+                        logger.info("Execution %s cancelled by revoke_intent", execution_id)
+                        cancelled = True
+                        break
+
                     # Append events to a Redis Stream so late SSE subscribers
                     # can read from the beginning (no pub/sub race condition).
                     await r.xadd(
@@ -89,18 +107,34 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                         complete_event = event
                         break
 
+                if cancelled:
+                    await _handle_cancellation(session, r, execution_id, stream_key)
+                else:
+                    # Normal completion — persist assistant message
+                    await _persist_assistant_message(session, execution_id, complete_event)
+                    await session.commit()
+                    logger.info("Execution %s completed", execution_id)
+
                 # Stream auto-expires after 5 minutes (cleanup)
                 await r.expire(stream_key, 300)
             finally:
                 await r.aclose()
 
-            # Persist assistant message to conversation
-            await _persist_assistant_message(session, execution_id, complete_event)
+        except ExecutionCancelled:
+            # Cancellation propagated from inside graph/tool_loop
+            logger.info("Execution %s cancelled from graph execution", execution_id)
+            from src.infra.redis import get_redis_client
 
-            await session.commit()
-            logger.info("Execution %s completed", execution_id)
+            r2 = await get_redis_client()
+            try:
+                await _handle_cancellation(
+                    session, r2, execution_id, f"exec_stream:{execution_id}",
+                )
+                await r2.expire(f"exec_stream:{execution_id}", 300)
+            finally:
+                await r2.aclose()
 
-        except Exception:
+        except Exception:  # noqa: BLE001 — Worker resilience: catch all to avoid stream consumer crash
             logger.exception("Execution %s failed", execution_id)
             # Update status to FAILED
             from sqlalchemy import update
@@ -126,18 +160,61 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
             if user_id and execution_id:
                 try:
                     await fair_scheduler.release(user_id, execution_id)
-                except Exception as exc:
+                except (ConnectionError, OSError, redis.exceptions.RedisError) as exc:
                     logger.warning(
                         "Failed to release scheduler slot for execution %s: %s",
                         execution_id, exc,
                     )
 
 
+# --- Cancellation helper ---
+
+
+async def _handle_cancellation(
+    session: AsyncSession,
+    redis_client: Redis,
+    execution_id: str,
+    stream_key: str,
+) -> None:
+    """Mark execution as STOPPED, emit cancel event, clean up revoke intent."""
+    from sqlalchemy import update
+
+    from src.executions.models import ExecutionRun, ExecutionStatus
+    from src.infra.utils import utcnow
+
+    # Emit a cancel event to the SSE stream so the client gets a clean signal
+    cancel_event = {
+        "type": "complete",
+        "execution_id": execution_id,
+        "status": "stopped",
+        "output": None,
+        "error": "Execution cancelled",
+        "duration_ms": None,
+    }
+    await redis_client.xadd(stream_key, {"data": json.dumps(cancel_event, default=str)})
+
+    # Mark execution as STOPPED in DB
+    await session.execute(
+        update(ExecutionRun)
+        .where(ExecutionRun.id == execution_id)
+        .values(
+            status=ExecutionStatus.STOPPED,
+            error_message="Cancelled by user",
+            completed_at=utcnow(),
+        )
+    )
+    await session.commit()
+
+    # Clean up the revoke_intent key
+    await redis_client.delete(f"revoke_intent:{execution_id}")
+    logger.info("Execution %s marked as STOPPED (cancelled)", execution_id)
+
+
 # --- Persist assistant message after execution ---
 
 
 async def _persist_assistant_message(
-    session: "AsyncSession",
+    session: AsyncSession,
     execution_id: str,
     complete_event: dict[str, Any] | None,
 ) -> None:
@@ -273,7 +350,7 @@ async def document_process_handler(data: dict[str, Any]) -> None:
 
             # File stays in MinIO — no deletion (persistent storage)
 
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — Worker resilience: catch all to avoid stream consumer crash
             logger.exception("Failed to process document %s", document_id)
             try:
                 await session.execute(
@@ -285,7 +362,7 @@ async def document_process_handler(data: dict[str, Any]) -> None:
                     )
                 )
                 await session.commit()
-            except Exception:
+            except (OSError, sqlalchemy.exc.SQLAlchemyError):
                 logger.exception("Failed to update document %s status to FAILED", document_id)
             raise  # Re-raise to trigger retry/DLQ
 
@@ -312,7 +389,7 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
     logger.info("Pulling model: %s", model_name)
     progress_key = f"runtime:model_pull_progress:{model_name}"
 
-    r = get_redis_client()
+    r = await get_redis_client()
 
     try:
         await r.hset(progress_key, mapping={"status": "downloading", "progress": "0"})
@@ -356,7 +433,7 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
         await r.expire(progress_key, 3600)
         logger.info("Model %s pulled successfully", model_name)
 
-    except Exception:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
         logger.exception("Failed to pull model %s", model_name)
         await r.hset(progress_key, mapping={"status": "error", "progress": "0"})
         raise  # Trigger retry/DLQ

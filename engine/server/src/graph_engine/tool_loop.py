@@ -34,6 +34,7 @@ async def run_tool_loop(
     max_iterations: int = 10,
     tool_call_timeout: float = 60.0,
     publish_fn: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    cancel_check_fn: Callable[[], Awaitable[bool]] | None = None,
 ) -> tuple[str, list[BaseMessage]]:
     """Run an LLM tool-calling loop until completion or max iterations.
 
@@ -47,6 +48,9 @@ async def run_tool_loop(
         tool_call_timeout: Timeout in seconds for each individual tool call.
         publish_fn: Optional async callback to publish trace events
             (``trace:tool_start``, ``trace:tool_end``).
+        cancel_check_fn: Optional async callback that returns True if
+            the execution has been cancelled. Checked before each LLM
+            call and before each tool call.
 
     Returns:
         Tuple of ``(final_text_response, full_message_history)``.
@@ -55,6 +59,11 @@ async def run_tool_loop(
     msgs = list(messages)
 
     for iteration in range(max_iterations):
+        # Check for cancellation before each LLM call
+        if cancel_check_fn and await cancel_check_fn():
+            from src.executions.cancel import ExecutionCancelled
+            raise ExecutionCancelled()
+
         logger.info("Tool loop iteration %d/%d (messages=%d)", iteration + 1, max_iterations, len(msgs))
         response: AIMessage = await llm.ainvoke(msgs)
         msgs.append(response)
@@ -68,6 +77,11 @@ async def run_tool_loop(
 
         # Execute each tool call sequentially
         for call in tool_calls:
+            # Check for cancellation before each tool call
+            if cancel_check_fn and await cancel_check_fn():
+                from src.executions.cancel import ExecutionCancelled
+                raise ExecutionCancelled()
+
             tool_name: str = call.get("name", call.get("function", {}).get("name", "unknown"))
             tool_args: dict = call.get("args", {})
             call_id: str = call.get("id", f"call_{iteration}")
@@ -93,7 +107,7 @@ async def run_tool_loop(
             except TimeoutError:
                 logger.warning("Tool '%s' timed out after %.1fs", tool_name, tool_call_timeout)
                 result_text = f"Tool error: '{tool_name}' timed out after {tool_call_timeout:.0f}s"
-            except Exception as e:
+            except Exception as e:  # MCP tool calls raise heterogeneous errors
                 logger.warning("Tool '%s' failed: %s", tool_name, e)
                 result_text = f"Tool error: {e}"
 
@@ -157,5 +171,5 @@ async def _publish_safe(
     """Publish a trace event, swallowing errors."""
     try:
         await publish_fn(event)
-    except Exception:
+    except Exception:  # Fire-and-forget: swallow all publish errors
         logger.debug("Failed to publish tool trace event", exc_info=True)

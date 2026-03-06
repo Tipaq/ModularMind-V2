@@ -291,7 +291,7 @@ class GraphCompiler:
                         "Agent '%s': bound %d MCP tools from %d servers",
                         agent.name, len(lc_tools), len(mcp_server_ids),
                     )
-            except Exception as e:
+            except Exception as e:  # MCP discovery raises heterogeneous errors
                 logger.warning("Failed to discover MCP tools for agent '%s': %s", agent.name, e)
 
         # Capture for closure
@@ -306,6 +306,15 @@ class GraphCompiler:
             llm_messages = [SystemMessage(content=system_prompt)]
             _inject_context_layers(llm_messages, state)
             llm_messages.extend(messages)
+
+            # Build cancellation check from execution_id (thread_id)
+            _exec_id = (config or {}).get("configurable", {}).get("thread_id")
+
+            async def _is_cancelled() -> bool:
+                if not _exec_id:
+                    return False
+                from src.executions.cancel import check_revoke_intent
+                return await check_revoke_intent(_exec_id) == "cancel"
 
             try:
                 llm = await self.llm_provider.get_model(effective_model)
@@ -322,6 +331,7 @@ class GraphCompiler:
                             _tool_executor,
                             max_iterations=10,
                             tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
+                            cancel_check_fn=_is_cancelled,
                         )
                     else:
                         response = await llm.ainvoke(llm_messages, config=config)
@@ -331,7 +341,10 @@ class GraphCompiler:
                     response_text = response.content
 
                 logger.info("Agent response: %.100s...", response_text)
-            except Exception as e:
+            except Exception as e:  # LLM providers raise heterogeneous errors
+                from src.executions.cancel import ExecutionCancelled
+                if isinstance(e, ExecutionCancelled):
+                    raise  # Propagate cancellation to the worker
                 logger.error("Agent LLM error: %s", e)
                 response_text = f"[Error] Failed to get response from {effective_model}: {str(e)}"
 
@@ -431,7 +444,10 @@ class GraphCompiler:
                 response = await llm.ainvoke(llm_messages, config=config)
                 response_text = response.content
                 logger.info("Agent %s response: %.100s...", node_id, response_text)
-            except Exception as e:
+            except Exception as e:  # LLM providers raise heterogeneous errors
+                from src.executions.cancel import ExecutionCancelled
+                if isinstance(e, ExecutionCancelled):
+                    raise  # Propagate cancellation to the worker
                 logger.error("Agent %s LLM error: %s", node_id, e)
                 response_text = f"[Error] Failed to get response from {effective_model}: {str(e)}"
 
@@ -514,7 +530,7 @@ class GraphCompiler:
                         "data": output_data,
                     }
 
-                except Exception as e:
+                except Exception as e:  # MCP tool calls raise heterogeneous errors
                     logger.error("MCP tool %s failed: %s", mcp_tool_name, e)
                     output = {
                         "tool": mcp_tool_name,
@@ -617,7 +633,7 @@ class GraphCompiler:
                         "output": result.get("node_outputs", {}).get(bid, {}),
                         "messages": result.get("messages", []),
                     }
-                except Exception as e:
+                except Exception as e:  # Branch execution wraps LLM/tool calls
                     logger.error("Branch %s failed: %s", bid, e)
                     return {"branch_id": bid, "error": str(e)}
 
@@ -943,7 +959,7 @@ class GraphCompiler:
                         "response": result["response"],
                         "instruction": agent_sel.get("instruction", ""),
                     })
-                except Exception as e:
+                except Exception as e:  # LLM providers raise heterogeneous errors
                     logger.error("Supervisor %s: single delegation failed: %s", node_id, e)
                     delegation_results.append({
                         "agent_id": agent_sel["id"], "error": str(e),
@@ -962,7 +978,7 @@ class GraphCompiler:
                             "response": result["response"],
                             "instruction": sel.get("instruction", ""),
                         }
-                    except Exception as e:
+                    except Exception as e:  # LLM providers raise heterogeneous errors
                         return {"agent_id": sel["id"], "error": str(e)}
 
                 delegation_results = list(

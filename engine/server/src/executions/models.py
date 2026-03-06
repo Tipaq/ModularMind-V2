@@ -106,6 +106,7 @@ class ExecutionRun(Base):
         Index("ix_execution_runs_experiment", "experiment_id", "experiment_variant"),
         Index("ix_execution_runs_user_status", "user_id", "status"),
         Index("ix_execution_runs_session_created", "session_id", "created_at"),
+        Index("ix_execution_runs_status_created", "status", "created_at"),
     )
 
     def __repr__(self) -> str:
