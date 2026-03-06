@@ -76,14 +76,21 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
 
             r = get_redis_client()
             try:
-                channel = f"execution:{execution_id}"
+                stream_key = f"exec_stream:{execution_id}"
                 async for event in service.execute(execution_id):
-                    # Publish events to Redis pub/sub for SSE relay
-                    await r.publish(channel, json.dumps(event, default=str))
+                    # Append events to a Redis Stream so late SSE subscribers
+                    # can read from the beginning (no pub/sub race condition).
+                    await r.xadd(
+                        stream_key,
+                        {"data": json.dumps(event, default=str)},
+                    )
 
                     if event.get("type") == "complete":
                         complete_event = event
                         break
+
+                # Stream auto-expires after 5 minutes (cleanup)
+                await r.expire(stream_key, 300)
             finally:
                 await r.aclose()
 

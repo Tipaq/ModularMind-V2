@@ -154,8 +154,9 @@ async def stream_execution(
 ) -> StreamingResponse:
     """SSE stream for real-time execution events.
 
-    Subscribes to the Redis pub/sub channel ``execution:{execution_id}``
-    and relays every event to the client as a Server-Sent Event.
+    Reads from a Redis Stream ``exec_stream:{execution_id}`` so that
+    events published before the client connects are not lost (unlike
+    pub/sub which is fire-and-forget).
     """
     from src.infra.redis import get_redis_pool
     from src.infra.sse import sse_response
@@ -170,34 +171,34 @@ async def stream_execution(
     if execution.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    channel = f"execution:{execution_id}"
+    stream_key = f"exec_stream:{execution_id}"
 
     async def event_generator():
         import redis.asyncio as aioredis
 
         r = aioredis.Redis(connection_pool=get_redis_pool())
-        pubsub = r.pubsub()
+        last_id = "0"  # read from beginning — no events are lost
         try:
-            await pubsub.subscribe(channel)
             while True:
                 if await request.is_disconnected():
                     break
-                msg = await pubsub.get_message(
-                    ignore_subscribe_messages=True, timeout=1.0,
+                # Block up to 2s waiting for new entries
+                result = await r.xread(
+                    {stream_key: last_id}, block=2000, count=20,
                 )
-                if msg and msg["type"] == "message":
-                    try:
-                        event = json.loads(msg["data"])
-                        yield event
-                        if event.get("type") in ("complete", "error"):
-                            break
-                    except (json.JSONDecodeError, TypeError):
-                        continue
-                else:
-                    await asyncio.sleep(0.05)
+                if not result:
+                    continue
+                for _stream_name, entries in result:
+                    for entry_id, fields in entries:
+                        last_id = entry_id
+                        try:
+                            event = json.loads(fields[b"data"])
+                            yield event
+                            if event.get("type") in ("complete", "error"):
+                                return
+                        except (json.JSONDecodeError, TypeError, KeyError):
+                            continue
         finally:
-            await pubsub.unsubscribe(channel)
-            await pubsub.aclose()
             await r.aclose()
 
     return await sse_response(event_generator(), request)
@@ -382,7 +383,12 @@ async def _update_execution_status(
     if execution.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    method = getattr(service, f"{action}_execution")
+    _dispatch = {
+        "stop": service.stop_execution,
+        "pause": service.pause_execution,
+        "resume": service.resume_execution,
+    }
+    method = _dispatch[action]
     success = await method(execution_id)
     if not success:
         raise HTTPException(
