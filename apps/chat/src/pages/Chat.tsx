@@ -231,6 +231,20 @@ export default function Chat() {
     contextData: null,
   }), [activities, panelState.memory, panelState.knowledge, tokenUsage]);
 
+  const handleCompactFromInput = useCallback(async () => {
+    if (!activeConversationId) return;
+    await api.post(`/conversations/${activeConversationId}/compact`);
+  }, [activeConversationId]);
+
+  const handleCompactFromPanel = useCallback(async () => {
+    const result = await api.post<{
+      summary_preview: string;
+      compacted_count: number;
+      duration_ms: number;
+    }>(`/conversations/${activeConversationId}/compact`);
+    return result;
+  }, [activeConversationId]);
+
   const noOpUpdateLayer = useCallback(async () => false, []);
 
   const activeConv = conversations.find((c) => c.id === activeConversationId);
@@ -314,10 +328,10 @@ export default function Chat() {
               disabledReason={sendDisabledReason}
               models={models}
               selectedModelId={effectiveModelId}
-              onModelChange={(id) => handleModelChange(id)}
+              onModelChange={handleModelChange}
               modelLabel={(m) => `${m.display_name || m.name} (${m.provider})`}
-              onCompact={() => {/* TODO: implement conversation compaction */}}
-              compactDisabled={messages.length < 4}
+              onCompact={handleCompactFromInput}
+              compactDisabled={messages.length < 4 || isStreaming}
             />
           }
         />
@@ -340,6 +354,7 @@ export default function Chat() {
           enabledGraphs={graphs.filter((g) => enabledGraphIds.includes(g.id))}
           allAgents={agents}
           allGraphs={graphs}
+          onCompact={activeConversationId ? handleCompactFromPanel : undefined}
         />
       )}
     </div>
