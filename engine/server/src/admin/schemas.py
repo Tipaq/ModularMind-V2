@@ -3,9 +3,10 @@
 Pydantic models for admin user endpoints.
 """
 
+import math
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from src.auth import UserRole
 from src.infra.schemas import PaginatedResponse
@@ -79,7 +80,17 @@ class AdminConversationMessagesResponse(BaseModel):
     conversation_id: str
     user_id: str
     user_email: str
+    total: int
+    page: int
+    page_size: int
     messages: list[AdminMessageResponse]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def total_pages(self) -> int:
+        if not self.page_size:
+            return 1
+        return max(1, math.ceil(self.total / self.page_size))
 
 
 class TokenUsageSummary(BaseModel):

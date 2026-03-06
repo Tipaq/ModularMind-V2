@@ -50,7 +50,24 @@ async def list_graphs(
     end = start + page_size
     page_graphs = graphs[start:end]
 
-    # Resolve unique model_ids for each graph from agent nodes
+    # Resolve unique model_ids for each graph from agent nodes (batch-fetch)
+    all_agent_ids: set[str] = set()
+    for g in page_graphs:
+        for node in g.nodes:
+            agent_id = (node.data.get("config") or {}).get("agentId") or node.data.get("agent_id")
+            if agent_id:
+                all_agent_ids.add(str(agent_id))
+
+    import asyncio
+    agent_configs = dict(
+        zip(
+            all_agent_ids,
+            await asyncio.gather(
+                *(config_provider.get_agent_config(aid) for aid in all_agent_ids)
+            ),
+        )
+    )
+
     items: list[GraphSummary] = []
     for g in page_graphs:
         model_ids: list[str] = []
@@ -59,7 +76,7 @@ async def list_graphs(
             agent_id = (node.data.get("config") or {}).get("agentId") or node.data.get("agent_id")
             if not agent_id:
                 continue
-            agent_cfg = await config_provider.get_agent_config(str(agent_id))
+            agent_cfg = agent_configs.get(str(agent_id))
             if agent_cfg and agent_cfg.model_id not in seen:
                 seen.add(agent_cfg.model_id)
                 model_ids.append(agent_cfg.model_id)

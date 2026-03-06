@@ -122,6 +122,7 @@ async def list_users_with_stats(
     )
 
     # Apply filters
+    escaped = None
     if search:
         from src.infra.query_utils import escape_like
         escaped = escape_like(search)
@@ -134,8 +135,6 @@ async def list_users_with_stats(
     # Count total
     count_query = select(func.count()).select_from(User)
     if search:
-        from src.infra.query_utils import escape_like
-        escaped = escape_like(search)
         count_query = count_query.where(User.email.ilike(f"%{escaped}%", escape="\\"))
     if role is not None:
         count_query = count_query.where(User.role == role)
@@ -368,8 +367,10 @@ async def get_conversation_messages(
     user: CurrentUser,
     db: DbSession,
 
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
 ) -> AdminConversationMessagesResponse:
-    """Get all messages for a specific conversation (admin+)."""
+    """Get paginated messages for a specific conversation (admin+)."""
     target = await get_user_or_404(db, user_id)
 
     conv = (await db.execute(
@@ -381,16 +382,30 @@ async def get_conversation_messages(
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    # Count total messages
+    total = (await db.execute(
+        select(func.count()).where(
+            ConversationMessage.conversation_id == conversation_id
+        )
+    )).scalar() or 0
+
+    # Paginate
+    offset = (page - 1) * page_size
     messages = (await db.execute(
         select(ConversationMessage)
         .where(ConversationMessage.conversation_id == conversation_id)
         .order_by(ConversationMessage.created_at)
+        .offset(offset)
+        .limit(page_size)
     )).scalars().all()
 
     return AdminConversationMessagesResponse(
         conversation_id=conversation_id,
         user_id=user_id,
         user_email=target.email,
+        total=total,
+        page=page,
+        page_size=page_size,
         messages=[
             AdminMessageResponse(
                 id=m.id,
@@ -442,13 +457,15 @@ async def get_user_token_usage(
     )
     total_prompt, total_completion, total_count = summary_result.one()
 
-    # Cost for summary
+    # Cost for summary — aggregate per model to avoid fetching every row
     cost_rows = await db.execute(
         select(
             ExecutionRun.model,
-            ExecutionRun.tokens_prompt,
-            ExecutionRun.tokens_completion,
-        ).where(*base_filter, ExecutionRun.model.isnot(None))
+            func.sum(ExecutionRun.tokens_prompt),
+            func.sum(ExecutionRun.tokens_completion),
+        )
+        .where(*base_filter, ExecutionRun.model.isnot(None))
+        .group_by(ExecutionRun.model)
     )
     summary_cost = 0.0
     has_cloud = False
