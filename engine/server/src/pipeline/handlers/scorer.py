@@ -10,29 +10,22 @@ from typing import Any
 
 from src.infra.publish import get_event_bus
 from src.memory.scorer import MemoryScorer
+from src.pipeline.handlers._common import parse_pipeline_data
 
 logger = logging.getLogger(__name__)
 
 
 async def scorer_handler(data: dict[str, Any]) -> None:
     """Score extracted facts and publish to memory:scored."""
-    conversation_id = data.get("conversation_id", "")
-    agent_id = data.get("agent_id", "")
-    user_id = data.get("user_id", "")
-    facts_raw = data.get("facts", "[]")
-
-    if not conversation_id:
+    ctx = parse_pipeline_data(data)
+    if not ctx:
         logger.warning("scorer_handler: missing conversation_id, skipping")
         return
 
-    try:
-        facts = json.loads(facts_raw) if isinstance(facts_raw, str) else facts_raw
-    except json.JSONDecodeError:
-        logger.error(
-            "scorer_handler: invalid JSON in facts for conversation %s",
-            conversation_id,
-        )
-        return
+    conversation_id = ctx.conversation_id
+    agent_id = ctx.agent_id or ""
+    user_id = ctx.user_id or ""
+    facts = ctx.facts
 
     if not facts:
         logger.debug("No facts to score for conversation %s", conversation_id)

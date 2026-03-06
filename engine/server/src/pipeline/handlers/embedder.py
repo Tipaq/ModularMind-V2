@@ -8,7 +8,6 @@ Accepts input from either memory:scored (when scorer is enabled)
 or memory:extracted (when scorer is bypassed).
 """
 
-import json
 import logging
 from typing import Any
 
@@ -18,29 +17,22 @@ from src.embedding.resolver import get_memory_embedding_provider
 from src.infra.database import async_session_maker
 from src.memory.models import MemoryScope, MemoryTier, MemoryType
 from src.memory.repository import MemoryRepository
+from src.pipeline.handlers._common import parse_pipeline_data
 
 logger = logging.getLogger(__name__)
 
 
 async def embedder_handler(data: dict[str, Any]) -> None:
     """Generate embeddings for extracted facts and store in PG + Qdrant."""
-    conversation_id = data.get("conversation_id", "")
-    agent_id = data.get("agent_id", "")
-    user_id = data.get("user_id", "")
-    facts_raw = data.get("facts", "[]")
-
-    if not conversation_id:
+    ctx = parse_pipeline_data(data)
+    if not ctx:
         logger.warning("embedder_handler: missing conversation_id, skipping")
         return
 
-    try:
-        facts = json.loads(facts_raw) if isinstance(facts_raw, str) else facts_raw
-    except json.JSONDecodeError:
-        logger.error(
-            "embedder_handler: invalid JSON in facts for conversation %s",
-            conversation_id,
-        )
-        return
+    conversation_id = ctx.conversation_id
+    agent_id = ctx.agent_id or ""
+    user_id = ctx.user_id or ""
+    facts = ctx.facts
 
     if not facts:
         logger.debug("No facts to embed for conversation %s", conversation_id)

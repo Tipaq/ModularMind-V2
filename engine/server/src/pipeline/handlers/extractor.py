@@ -12,6 +12,7 @@ from typing import Any
 from src.infra.config import get_settings
 from src.infra.publish import get_event_bus
 from src.memory.fact_extractor import FactExtractor
+from src.pipeline.handlers._common import parse_pipeline_data
 
 logger = logging.getLogger(__name__)
 
@@ -20,24 +21,23 @@ _MIN_CONFIDENCE = 0.3
 
 async def extractor_handler(data: dict[str, Any]) -> None:
     """Extract facts from a conversation and publish to memory:extracted."""
-    conversation_id = data.get("conversation_id", "")
-    agent_id = data.get("agent_id", "")
-    user_id = data.get("user_id", "")
-    messages_raw = data.get("messages", "[]")
-
-    if not conversation_id:
+    ctx = parse_pipeline_data(data)
+    if not ctx:
         logger.warning("extractor_handler: missing conversation_id, skipping")
         return
+
+    conversation_id = ctx.conversation_id
+    agent_id = ctx.agent_id or ""
+    user_id = ctx.user_id or ""
+    messages = ctx.messages
 
     settings = get_settings()
     if not settings.FACT_EXTRACTION_ENABLED:
         logger.debug("Fact extraction disabled, skipping conversation %s", conversation_id)
         return
 
-    try:
-        messages = json.loads(messages_raw) if isinstance(messages_raw, str) else messages_raw
-    except json.JSONDecodeError:
-        logger.error("extractor_handler: invalid JSON in messages for conversation %s", conversation_id)
+    if not messages:
+        logger.debug("extractor_handler: no messages for conversation %s", conversation_id)
         return
 
     if len(messages) < settings.FACT_EXTRACTION_MIN_MESSAGES:
