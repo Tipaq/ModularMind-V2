@@ -5,23 +5,10 @@ import { useSession } from "next-auth/react";
 import { useChat, type Message } from "@/hooks/useChat";
 import { useChatConfig } from "@/hooks/useChatConfig";
 import type { Conversation } from "@modularmind/api-client";
-import { ConversationSidebar, ChatMessages, ChatInput, InsightsPanel } from "@modularmind/ui";
-import type { AttachedFile } from "@modularmind/ui";
+import { ConversationSidebar, ChatMessages, ChatInput, InsightsPanel, DEFAULT_CHAT_CONFIG, toggleArrayItem } from "@modularmind/ui";
+import type { AttachedFile, ChatConfig } from "@modularmind/ui";
 import { PanelRight } from "lucide-react";
 
-interface ChatConfig {
-  supervisorMode: boolean;
-  supervisorPrompt: string;
-  modelId: string | null;
-  modelOverride: boolean;
-}
-
-const DEFAULT_CONFIG: ChatConfig = {
-  supervisorMode: true,
-  supervisorPrompt: "",
-  modelId: null,
-  modelOverride: false,
-};
 
 const CONVERSATION_PAGE_SIZE = 50;
 const TITLE_MAX_LENGTH = 50;
@@ -34,7 +21,7 @@ export default function ChatPage() {
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [enabledAgentIds, setEnabledAgentIds] = useState<string[]>([]);
   const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
-  const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CONFIG);
+  const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CHAT_CONFIG);
   const [panelOpen, setPanelOpen] = useState(true);
 
   const { status: sessionStatus } = useSession();
@@ -68,27 +55,32 @@ export default function ChatPage() {
     return executionDataMap[selectedMessageId] ?? null;
   }, [selectedMessageId, executionDataMap]);
 
-  // Auto-select the active model when none is set
-  useEffect(() => {
-    if (chatConfig.modelId) return;
-    const available = models.filter((m) => !m.is_embedding && m.is_available);
-    const active = available.find((m) => m.is_active) ?? available[0];
-    if (active) {
-      setChatConfig((prev) => ({ ...prev, modelId: `${active.provider}:${active.model_id}` }));
-    }
-  }, [models, chatConfig.modelId]);
+  // Derive effective config: auto-select model + force override when needed.
+  // Computed during render instead of via setState-in-effect to avoid cascading renders.
+  const effectiveChatConfig = useMemo(() => {
+    let config = chatConfig;
 
-  // Force model override ON when some agent models are unavailable
-  useEffect(() => {
-    if (chatConfig.modelOverride) return;
-    const availableIds = new Set(
-      models.filter((m) => m.is_available && !m.is_embedding).map((m) => `${m.provider}:${m.model_id}`),
-    );
-    const hasMissing = agents.some((a) => a.model_id && !availableIds.has(a.model_id));
-    if (hasMissing) {
-      setChatConfig((prev) => ({ ...prev, modelOverride: true }));
+    // Auto-select the active model when none is set
+    if (!config.modelId && models.length > 0) {
+      const available = models.filter((m) => !m.is_embedding && m.is_available);
+      const active = available.find((m) => m.is_active) ?? available[0];
+      if (active) {
+        config = { ...config, modelId: `${active.provider}:${active.model_id}` };
+      }
     }
-  }, [models, agents, chatConfig.modelOverride]);
+
+    // Force model override ON when some agent models are unavailable
+    if (!config.modelOverride) {
+      const availableIds = new Set(
+        models.filter((m) => m.is_available && !m.is_embedding).map((m) => `${m.provider}:${m.model_id}`),
+      );
+      if (agents.some((a) => a.model_id && !availableIds.has(a.model_id))) {
+        config = { ...config, modelOverride: true };
+      }
+    }
+
+    return config;
+  }, [chatConfig, models, agents]);
 
   // Context usage percentage from the latest execution
   const contextPercent = useMemo(() => {
@@ -100,18 +92,18 @@ export default function ChatPage() {
 
   // Selected model's context window for display when no execution data exists
   const selectedModelContextWindow = useMemo(() => {
-    if (!chatConfig.modelId) return null;
+    if (!effectiveChatConfig.modelId) return null;
     const m = models.find(
-      (m) => m.id === chatConfig.modelId || `${m.provider}:${m.model_id}` === chatConfig.modelId,
+      (m) => m.id === effectiveChatConfig.modelId || `${m.provider}:${m.model_id}` === effectiveChatConfig.modelId,
     );
     return m?.context_window ?? null;
-  }, [chatConfig.modelId, models]);
+  }, [effectiveChatConfig.modelId, models]);
 
   // Determine if sending is blocked
   const sendDisabledReason = useMemo(() => {
-    if (!chatConfig.modelId) return "Select a model before sending";
+    if (!effectiveChatConfig.modelId) return "Select a model before sending";
     return null;
-  }, [chatConfig.modelId]);
+  }, [effectiveChatConfig.modelId]);
 
   // Debounce config persistence
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -175,7 +167,7 @@ export default function ChatPage() {
     try {
       const body: Record<string, unknown> = {
         title: "New Chat",
-        supervisor_mode: chatConfig.supervisorMode,
+        supervisor_mode: effectiveChatConfig.supervisorMode,
       };
       // If a single agent is selected, use direct mode
       if (enabledAgentIds.length === 1 && enabledGraphIds.length === 0) {
@@ -193,13 +185,13 @@ export default function ChatPage() {
       setConversations((prev) => [conv, ...prev]);
       setActiveConversationId(conv.id);
       setInitialMessages([]);
-      setChatConfig({ ...DEFAULT_CONFIG, supervisorMode: chatConfig.supervisorMode });
+      setChatConfig({ ...DEFAULT_CHAT_CONFIG, supervisorMode: effectiveChatConfig.supervisorMode });
       return conv.id as string;
     } catch (err) {
       console.error("[Chat]", err);
       return null;
     }
-  }, [enabledAgentIds, enabledGraphIds, chatConfig.supervisorMode, setInitialMessages]);
+  }, [enabledAgentIds, enabledGraphIds, effectiveChatConfig.supervisorMode, setInitialMessages]);
 
   const handleCreateConversation = useCallback(async () => {
     await createConversation();
@@ -213,7 +205,7 @@ export default function ChatPage() {
         if (activeConversationId === id) {
           setActiveConversationId(null);
           setInitialMessages([]);
-          setChatConfig(DEFAULT_CONFIG);
+          setChatConfig(DEFAULT_CHAT_CONFIG);
         }
       } catch {
         // Delete failed – keep conversation in list
@@ -277,7 +269,7 @@ export default function ChatPage() {
   );
 
   const handleSend = useCallback(async () => {
-    if ((!inputValue.trim() && attachedFiles.length === 0) || isStreaming || !chatConfig.modelId) return;
+    if ((!inputValue.trim() && attachedFiles.length === 0) || isStreaming || !effectiveChatConfig.modelId) return;
 
     let convId = activeConversationId;
 
@@ -316,9 +308,9 @@ export default function ChatPage() {
         config: {
           enabled_agent_ids: enabledAgentIds,
           enabled_graph_ids: enabledGraphIds,
-          model_id: chatConfig.modelId,
-          model_override: chatConfig.modelOverride,
-          supervisor_prompt: chatConfig.supervisorPrompt,
+          model_id: effectiveChatConfig.modelId,
+          model_override: effectiveChatConfig.modelOverride,
+          supervisor_prompt: effectiveChatConfig.supervisorPrompt,
         },
       }),
     }).catch((e) => console.warn("[Chat] pre-send config persist failed", e));
@@ -327,22 +319,14 @@ export default function ChatPage() {
     sendMessage(inputValue, convId ?? undefined, files);
     setInputValue("");
     setAttachedFiles([]);
-  }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, sendMessage, conversations, messages.length]);
+  }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, effectiveChatConfig, sendMessage, conversations, messages.length]);
 
   const handleToggleAgent = useCallback((agentId: string) => {
-    setEnabledAgentIds((prev) =>
-      prev.includes(agentId)
-        ? prev.filter((id) => id !== agentId)
-        : [...prev, agentId],
-    );
+    setEnabledAgentIds((prev) => toggleArrayItem(prev, agentId));
   }, []);
 
   const handleToggleGraph = useCallback((graphId: string) => {
-    setEnabledGraphIds((prev) =>
-      prev.includes(graphId)
-        ? prev.filter((id) => id !== graphId)
-        : [...prev, graphId],
-    );
+    setEnabledGraphIds((prev) => toggleArrayItem(prev, graphId));
   }, []);
 
   return (
@@ -402,7 +386,7 @@ export default function ChatPage() {
               onFilesChange={setAttachedFiles}
               disabledReason={sendDisabledReason}
               models={models}
-              selectedModelId={chatConfig.modelId}
+              selectedModelId={effectiveChatConfig.modelId}
               onModelChange={(modelId) => handleConfigChange({ modelId })}
               getModelId={(m) => `${m.provider}:${m.model_id}`}
               onCompact={async () => {

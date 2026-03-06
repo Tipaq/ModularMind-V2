@@ -18,8 +18,7 @@ export function useChatConfig() {
   const loadedRef = useRef(false);
   const loadingRef = useRef(false);
 
-  const load = useCallback(async () => {
-    if (loadedRef.current || loadingRef.current) return;
+  const _fetchConfig = useCallback(async () => {
     loadingRef.current = true;
     setLoading(true);
     try {
@@ -56,44 +55,16 @@ export function useChatConfig() {
     }
   }, []);
 
+  const load = useCallback(async () => {
+    if (loadedRef.current || loadingRef.current) return;
+    await _fetchConfig();
+  }, [_fetchConfig]);
+
   const reload = useCallback(async () => {
     loadedRef.current = false;
-    loadingRef.current = true;
     setLoaded(false);
-    setLoading(true);
-    try {
-      const [configRes, modelsRes, layersRes] = await Promise.all([
-        fetch("/api/chat/config"),
-        fetch("/api/chat/models"),
-        fetch("/api/chat/supervisor/layers"),
-      ]);
-
-      if (configRes.ok) {
-        const data = await configRes.json();
-        setAgents(data.agents || []);
-        setGraphs(data.graphs || []);
-        setMcpServers(data.mcpServers || []);
-      }
-
-      if (modelsRes.ok) {
-        const data = await modelsRes.json();
-        setModels(Array.isArray(data) ? data : []);
-      }
-
-      if (layersRes.ok) {
-        const data = await layersRes.json();
-        setSupervisorLayers(data.layers || []);
-      }
-
-      loadedRef.current = true;
-      setLoaded(true);
-    } catch {
-      // Silently fail
-    } finally {
-      loadingRef.current = false;
-      setLoading(false);
-    }
-  }, []);
+    await _fetchConfig();
+  }, [_fetchConfig]);
 
   const updateSupervisorLayer = useCallback(async (key: string, content: string) => {
     try {
