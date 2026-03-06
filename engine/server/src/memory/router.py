@@ -221,6 +221,8 @@ async def trigger_consolidation(
 
         # Step 2: Enumerate active scopes
         all_scopes = await repo.get_distinct_scopes()
+        # Cap at 20 scopes per manual trigger to prevent resource exhaustion.
+        # For full consolidation across all scopes, use the scheduled worker task.
         scopes_to_process = all_scopes[:20]
 
         for scope_val, scope_id in scopes_to_process:
@@ -612,6 +614,11 @@ async def get_memory_stats(
     db: DbSession,
 ) -> MemoryStatsResponse:
     """Get memory statistics for a scope."""
+    # Users can only view their own user-scoped memory stats.
+    # Agent/group scopes are shared resources and accessible to all authenticated users.
+    if scope == MemoryScope.USER_PROFILE and scope_id != str(user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     repo = MemoryRepository(db)
     stats = await repo.get_stats(scope, scope_id)
 
