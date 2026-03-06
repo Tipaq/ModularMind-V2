@@ -65,7 +65,7 @@ class Settings(BaseSettings):
         description="Redis password for requirepass. If set, injected into connection URL.",
     )
     REDIS_MAX_CONNECTIONS: int = Field(default=50, ge=10, le=200)
-    REDIS_SOCKET_TIMEOUT: int = Field(default=5, ge=1, le=30)
+    REDIS_SOCKET_TIMEOUT: int = Field(default=10, ge=1, le=60)
     REDIS_SOCKET_KEEPALIVE: bool = True
 
     # ---- LLM ----------------------------------------------------------------
@@ -159,7 +159,7 @@ class Settings(BaseSettings):
         default="inline",
         description="inline=blocking in-process execution (V2 default)",
     )
-    MAX_EXECUTION_TIMEOUT: int = Field(default=600, ge=60, le=1800)
+    MAX_EXECUTION_TIMEOUT: int = Field(default=900, ge=60, le=1800)
     MAX_PROMPT_LENGTH: int = Field(default=10000, ge=1000, le=50000)
     MAX_INPUT_PROMPT_SIZE: int = Field(default=32768, ge=1024, le=131072)
     MAX_INPUT_DATA_SIZE: int = Field(default=1048576, ge=1024, le=10485760)
@@ -375,6 +375,19 @@ class Settings(BaseSettings):
                 f"JWT_ALGORITHM must be one of {sorted(_ALLOWED_JWT_ALGORITHMS)}, got '{v}'"
             )
         return v
+
+    @model_validator(mode="after")
+    def reject_default_secret_in_production(self) -> "Settings":
+        """Prevent the engine from starting with the default SECRET_KEY in production."""
+        if (
+            self.SECRET_KEY == "change-me-in-production"
+            and self.ENVIRONMENT not in ("development", "test")
+        ):
+            raise ValueError(
+                "SECRET_KEY must be changed from its default value in non-development environments. "
+                "Generate one with: openssl rand -hex 32"
+            )
+        return self
 
     @model_validator(mode="after")
     def warn_on_dangerous_llm_urls(self) -> "Settings":

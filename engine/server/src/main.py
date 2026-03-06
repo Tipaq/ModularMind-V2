@@ -76,8 +76,14 @@ async def lifespan(app: FastAPI):
         from src.infra.redis import get_redis_client
         from src.supervisor.context_manager import init_context_manager
 
-        init_context_manager(get_redis_client())
+        redis_client = get_redis_client()
+        init_context_manager(redis_client)
         logger.info("HierarchicalContextManager initialized")
+
+        # Wire Redis into ConfigProvider for ephemeral agent storage
+        from src.domain_config.provider import get_config_provider
+
+        get_config_provider().set_redis(redis_client)
 
     # 3. Initialize Qdrant collections (knowledge + memory)
     from src.infra.qdrant import qdrant_factory
@@ -211,6 +217,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Security headers middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers (CSP, X-Content-Type-Options, etc.) to all responses."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'"
+        )
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 
 # ---------------------------------------------------------------------------
 # Exception handlers
