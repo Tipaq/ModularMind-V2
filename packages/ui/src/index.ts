@@ -80,6 +80,14 @@ export type { ChatInputProps } from "./components/chat-input";
 export { ChatEmptyState } from "./components/chat-empty-state";
 export type { ChatEmptyStateProps } from "./components/chat-empty-state";
 
+// Resource components (shared table, filters, empty state, detail header)
+export { EmptyState } from "./components/empty-state";
+export type { EmptyStateProps } from "./components/empty-state";
+export { DetailHeader } from "./components/detail-header";
+export type { DetailHeaderProps } from "./components/detail-header";
+export { ResourceTable } from "./components/resource-table";
+export { ResourceFilters } from "./components/resource-filters";
+
 // Activity timeline system
 export { ActivityTab } from "./components/activity";
 export type { ActivityTabProps } from "./components/activity";
