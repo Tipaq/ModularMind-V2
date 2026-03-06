@@ -41,7 +41,7 @@ export default function ProfilePage() {
                 <p className="text-sm text-muted-foreground">{user.email}</p>
               )}
               <p className="text-sm text-muted-foreground capitalize">
-                {(user as { role?: string }).role ?? "member"}
+                {user.role ?? "member"}
               </p>
             </div>
           </div>
@@ -75,7 +75,7 @@ export default function ProfilePage() {
               <div>
                 <p className="text-xs text-muted-foreground">Role</p>
                 <p className="text-sm capitalize">
-                  {(user as { role?: string }).role ?? "member"}
+                  {user.role ?? "member"}
                 </p>
               </div>
             </div>

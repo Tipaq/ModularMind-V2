@@ -2,48 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useExecutionActivities } from "@modularmind/ui";
-/** Local SendMessageResponse — platform doesn't depend on @modularmind/api-client. */
-interface SendMessageResponse {
-  execution_id?: string;
-  message_id?: string;
-  stream_url?: string;
-  user_message: Message;
-  direct_response?: string;
-  routing_strategy?: string;
-  delegated_to?: string;
-  is_ephemeral?: boolean;
-  ephemeral_agent?: { id: string; name: string };
-  memory_entries?: Array<{ id: string; content: string; scope: string; tier: string; importance: number; memory_type: string; category: string }>;
-  knowledge_data?: {
-    collections: Array<{ collection_id: string; collection_name: string; chunk_count: number }>;
-    chunks: Array<{ chunk_id: string; document_id: string; collection_id: string; collection_name: string; document_filename: string | null; content_preview: string; score: number; chunk_index: number }>;
-    total_results: number;
-  };
-  context_data?: {
-    history?: {
-      budget?: { included_count: number; total_chars: number; max_chars: number; budget_exceeded: boolean; context_window?: number; history_budget_pct?: number; history_budget_tokens?: number };
-      messages?: Array<{ role: string; content: string }>;
-      summary?: string;
-    };
-    memory_entries?: Array<{ id: string; content: string; scope: string; tier: string; importance: number; memory_type: string; category: string }>;
-    budget_overview?: {
-      context_window: number;
-      effective_context: number;
-      max_pct: number;
-      layers: {
-        history: { pct: number; allocated: number; used: number };
-        memory: { pct: number; allocated: number; used: number };
-        rag: { pct: number; allocated: number; used: number };
-        system?: { pct: number; allocated: number; used: number };
-      };
-    };
-  };
-}
+import type { SendMessageResponse } from "@modularmind/api-client";
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "@modularmind/ui";
 
 import type { ChatMessage, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, TokenUsage, ContextData, MessageExecutionData } from "@modularmind/ui";
-import { extractResponse } from "@modularmind/ui";
+import { extractResponse, mapKnowledgeData, mapMemoryEntries } from "@modularmind/ui";
 
 export type { KnowledgeCollection, KnowledgeChunk, KnowledgeData };
 export type { TokenUsage, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData } from "@modularmind/ui";
@@ -245,15 +209,7 @@ export function useChat(conversationId: string | null) {
 
       // Capture memory entries for this message (map snake_case API → camelCase UI)
       if (resMemory && resMemory.length > 0) {
-        currentMemoryRef.current = resMemory.map((e) => ({
-          id: e.id,
-          content: e.content,
-          scope: e.scope,
-          tier: e.tier,
-          importance: e.importance,
-          memoryType: e.memory_type,
-          category: e.category,
-        }));
+        currentMemoryRef.current = mapMemoryEntries(resMemory);
       }
 
       // Capture context data from HTTP response (supervisor path)
@@ -274,15 +230,7 @@ export function useChat(conversationId: string | null) {
             messages: h.messages || [],
             summary: h.summary || "",
           } : null,
-          memoryEntries: (resContext.memory_entries || []).map((e) => ({
-            id: e.id,
-            content: e.content,
-            scope: e.scope,
-            tier: e.tier,
-            importance: e.importance,
-            memoryType: e.memory_type,
-            category: e.category,
-          })),
+          memoryEntries: mapMemoryEntries(resContext.memory_entries || []),
           budgetOverview: bo ? {
             contextWindow: bo.context_window,
             effectiveContext: bo.effective_context,
@@ -299,24 +247,7 @@ export function useChat(conversationId: string | null) {
 
       // Capture knowledge data from HTTP response (DIRECT_RESPONSE path)
       if (resKnowledge && resKnowledge.total_results > 0) {
-        currentKnowledgeRef.current = {
-          collections: resKnowledge.collections.map((c) => ({
-            collectionId: c.collection_id,
-            collectionName: c.collection_name,
-            chunkCount: c.chunk_count,
-          })),
-          chunks: resKnowledge.chunks.map((ch) => ({
-            chunkId: ch.chunk_id,
-            documentId: ch.document_id,
-            collectionId: ch.collection_id,
-            collectionName: ch.collection_name,
-            documentFilename: ch.document_filename,
-            contentPreview: ch.content_preview,
-            score: ch.score,
-            chunkIndex: ch.chunk_index,
-          })),
-          totalResults: resKnowledge.total_results,
-        };
+        currentKnowledgeRef.current = mapKnowledgeData(resKnowledge);
       }
 
       // Replace temp user message with real one
@@ -379,30 +310,7 @@ export function useChat(conversationId: string | null) {
           }
 
           if (data.type === "trace:knowledge") {
-            interface RawCollection { collection_id: string; collection_name: string; chunk_count: number }
-            interface RawChunk { chunk_id: string; document_id: string; collection_id: string; collection_name: string; document_filename: string | null; content_preview: string; score: number; chunk_index: number }
-            currentKnowledgeRef.current = {
-              collections: ((data.collections || []) as RawCollection[]).map(
-                (c) => ({
-                  collectionId: c.collection_id,
-                  collectionName: c.collection_name,
-                  chunkCount: c.chunk_count,
-                }),
-              ),
-              chunks: ((data.chunks || []) as RawChunk[]).map(
-                (ch) => ({
-                  chunkId: ch.chunk_id,
-                  documentId: ch.document_id,
-                  collectionId: ch.collection_id,
-                  collectionName: ch.collection_name,
-                  documentFilename: ch.document_filename,
-                  contentPreview: ch.content_preview,
-                  score: ch.score,
-                  chunkIndex: ch.chunk_index,
-                }),
-              ),
-              totalResults: (data.total_results as number) || 0,
-            };
+            currentKnowledgeRef.current = mapKnowledgeData(data);
             // Flush live knowledge data to executionDataMap so UI updates during streaming
             if (assistantId) {
               setExecutionDataMap((prev) => ({
@@ -530,8 +438,18 @@ export function useChat(conversationId: string | null) {
         setIsStreaming(false);
       };
     },
-    [conversationId, isStreaming, handleTraceEvent, resetActivities, finalizeActivities],
+    [conversationId, isStreaming, handleTraceEvent, resetActivities, finalizeActivities, uploadAttachment],
   );
+
+  // Cleanup on unmount: close any active SSE connection
+  useEffect(() => {
+    return () => {
+      if (sourceRef.current) {
+        sourceRef.current.close();
+        sourceRef.current = null;
+      }
+    };
+  }, []);
 
   const cancelStream = useCallback(() => {
     // Close SSE connection
