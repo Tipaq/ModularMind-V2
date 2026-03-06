@@ -71,7 +71,17 @@ export function useConversations({
     async function fetchData() {
       try {
         const data = await api.get<{ items: Conversation[] }>("/conversations?page_size=50");
-        if (active) setConversations(data.items || []);
+        if (!active) return;
+        const items = data.items || [];
+
+        // Clean up orphaned conversations (created but cancelled before first response)
+        const orphans = items.filter((c) => c.message_count === 0);
+        const valid = items.filter((c) => c.message_count > 0);
+        if (orphans.length > 0) {
+          orphans.forEach((c) => api.delete(`/conversations/${c.id}`).catch(() => {}));
+        }
+
+        setConversations(valid);
       } catch {
         showError("Failed to load conversations");
       }
