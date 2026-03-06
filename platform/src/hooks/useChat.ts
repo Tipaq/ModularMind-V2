@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useExecutionActivities } from "./useExecutionActivities";
+import { useExecutionActivities } from "@modularmind/ui";
 /** Local SendMessageResponse — platform doesn't depend on @modularmind/api-client. */
 interface SendMessageResponse {
   execution_id?: string;
@@ -40,7 +40,7 @@ interface SendMessageResponse {
   };
 }
 
-export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "./useExecutionActivities";
+export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "@modularmind/ui";
 
 import type { ChatMessage, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, TokenUsage, ContextData, MessageExecutionData } from "@modularmind/ui";
 import { extractResponse } from "@modularmind/ui";
@@ -89,6 +89,7 @@ export function useChat(conversationId: string | null) {
         tokenUsage: currentTokenUsageRef.current,
         contextData: currentContextDataRef.current,
       };
+      console.log("[Chat] snapshot contextData:", data.contextData?.budgetOverview);
       setExecutionDataMap((prev) => ({ ...prev, [id]: data }));
       // Persist to localStorage so execution data survives hard refresh.
       // Key: mm:exec:<execution_id> for delegated executions,
@@ -257,9 +258,11 @@ export function useChat(conversationId: string | null) {
       }
 
       // Capture context data from HTTP response (supervisor path)
+      console.log("[Chat] context_data from HTTP:", resContext);
       if (resContext) {
         const h = resContext.history;
         const bo = resContext.budget_overview;
+        console.log("[Chat] budget_overview from HTTP:", bo);
         currentContextDataRef.current = {
           history: h ? {
             budget: h.budget ? {
@@ -403,6 +406,16 @@ export function useChat(conversationId: string | null) {
               ),
               totalResults: (data.total_results as number) || 0,
             };
+            // Flush live knowledge data to executionDataMap so UI updates during streaming
+            if (assistantId) {
+              setExecutionDataMap((prev) => ({
+                ...prev,
+                [assistantId]: {
+                  ...(prev[assistantId] || { activities: [], memoryEntries: [], knowledgeData: null, tokenUsage: null, contextData: null }),
+                  knowledgeData: currentKnowledgeRef.current,
+                },
+              }));
+            }
           }
 
           if (data.type === "trace:memory") {
@@ -439,6 +452,17 @@ export function useChat(conversationId: string | null) {
             // Also populate currentMemoryRef for backward compatibility
             if (memEntries.length > 0) {
               currentMemoryRef.current = memEntries;
+            }
+            // Flush live context data to executionDataMap so UI updates during streaming
+            if (assistantId) {
+              setExecutionDataMap((prev) => ({
+                ...prev,
+                [assistantId]: {
+                  ...(prev[assistantId] || { activities: [], memoryEntries: [], knowledgeData: null, tokenUsage: null, contextData: null }),
+                  contextData: currentContextDataRef.current,
+                  memoryEntries: [...currentMemoryRef.current],
+                },
+              }));
             }
           }
 

@@ -5,10 +5,9 @@ import { useSession } from "next-auth/react";
 import { useChat, type Message } from "@/hooks/useChat";
 import { useChatConfig } from "@/hooks/useChatConfig";
 import { ConversationSidebar, type Conversation } from "@/components/chat/ConversationSidebar";
-import { ChatMessages } from "@/components/chat/ChatMessages";
+import { ChatMessages } from "@modularmind/ui";
 import { ChatInput, type AttachedFile } from "@/components/chat/ChatInput";
 import { InsightsPanel } from "@/components/chat/InsightsPanel";
-import { ContextBudgetDonut } from "@/components/chat/ContextBudgetDonut";
 import { PanelRight } from "lucide-react";
 
 interface ChatConfig {
@@ -376,35 +375,31 @@ export default function ChatPage() {
           selectedMessageId={selectedMessageId}
           onSelectMessage={setSelectedMessageId}
           attachmentBaseUrl="/api/chat"
+          stickyFooter={
+            <ChatInput
+              value={inputValue}
+              onChange={setInputValue}
+              onSend={handleSend}
+              isStreaming={isStreaming}
+              onCancel={cancelStream}
+              agents={agents}
+              graphs={graphs}
+              enabledAgentIds={enabledAgentIds}
+              enabledGraphIds={enabledGraphIds}
+              onToggleAgent={handleToggleAgent}
+              onToggleGraph={handleToggleGraph}
+              onFilesChange={setAttachedFiles}
+              disabledReason={sendDisabledReason}
+              models={models}
+              selectedModelId={chatConfig.modelId}
+              onModelChange={(modelId) => handleConfigChange({ modelId })}
+              getModelId={(m) => `${m.provider}:${m.model_id}`}
+              onCompact={() => {/* TODO: implement conversation compaction */}}
+              compactDisabled={messages.length < 4}
+              contextPercent={contextPercent}
+            />
+          }
         />
-
-        <ChatInput
-          value={inputValue}
-          onChange={setInputValue}
-          onSend={handleSend}
-          isStreaming={isStreaming}
-          onCancel={cancelStream}
-          agents={agents}
-          graphs={graphs}
-          enabledAgentIds={enabledAgentIds}
-          enabledGraphIds={enabledGraphIds}
-          onToggleAgent={handleToggleAgent}
-          onToggleGraph={handleToggleGraph}
-          onFilesChange={setAttachedFiles}
-          disabledReason={sendDisabledReason}
-          models={models}
-          selectedModelId={chatConfig.modelId}
-          onModelChange={(modelId) => handleConfigChange({ modelId })}
-          onCompact={() => {/* TODO: implement conversation compaction */}}
-          compactDisabled={messages.length < 4}
-          contextPercent={contextPercent}
-        />
-        {selectedExecution?.contextData?.budgetOverview && (
-          <ContextBudgetDonut
-            overview={selectedExecution.contextData.budgetOverview}
-            className="border-t border-border/30"
-          />
-        )}
       </div>
 
       {/* Right: Insights panel */}
@@ -422,6 +417,8 @@ export default function ChatPage() {
           selectedModelContextWindow={selectedModelContextWindow}
           enabledAgents={agents.filter((a) => enabledAgentIds.includes(a.id))}
           enabledGraphs={graphs.filter((g) => enabledGraphIds.includes(g.id))}
+          allAgents={agents}
+          allGraphs={graphs}
         />
       )}
     </div>
