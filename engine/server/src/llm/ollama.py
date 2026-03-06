@@ -101,7 +101,7 @@ class OllamaProvider(LLMProvider):
 
                 return models
 
-        except Exception as e:
+        except (httpx.HTTPError, ConnectionError, OSError, TimeoutError) as e:
             logger.error(f"Failed to list Ollama models: {e}")
             return []
 
@@ -115,7 +115,7 @@ class OllamaProvider(LLMProvider):
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(f"{self.base_url}/api/tags")
                 return response.status_code == 200
-        except Exception:
+        except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
             return False
 
     async def list_running_models(self) -> list[dict]:
@@ -145,7 +145,7 @@ class OllamaProvider(LLMProvider):
                         },
                     })
                 return models
-        except Exception as e:
+        except (httpx.HTTPError, ConnectionError, OSError, TimeoutError) as e:
             logger.debug(f"Failed to list running models: {e}")
             return []
 
@@ -165,6 +165,6 @@ class OllamaProvider(LLMProvider):
                     json={"name": model_name},
                 )
                 return response.status_code == 200
-        except Exception as e:
+        except (httpx.HTTPError, ConnectionError, OSError, TimeoutError) as e:
             logger.error(f"Failed to pull model {model_name}: {e}")
             return False

@@ -68,7 +68,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         except httpx.HTTPStatusError as e:
             logger.error("OpenAI embedding HTTP error: %s", e)
             raise RuntimeError(f"OpenAI embedding failed: {e}") from e
-        except Exception as e:
+        except (httpx.RequestError, ConnectionError, TimeoutError, KeyError) as e:
             logger.error("OpenAI embedding error: %s", e)
             raise RuntimeError(f"OpenAI embedding failed: {e}") from e
 
@@ -86,5 +86,5 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                     json={"model": self.model, "input": "test"},
                 )
                 return response.status_code == 200
-        except Exception:
+        except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
             return False

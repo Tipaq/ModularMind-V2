@@ -354,7 +354,7 @@ async def list_providers(user: CurrentUser) -> list[ProviderConfigResponse]:
         ) as client:
             resp = await client.get("/api/tags")
             ollama_connected = resp.status_code == 200
-    except Exception:
+    except (httpx.HTTPError, OSError):
         logger.debug("Ollama connectivity check failed")
 
     results: list[ProviderConfigResponse] = []

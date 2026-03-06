@@ -44,7 +44,7 @@ async def fetch_openai_models(api_key: str) -> list[dict]:
                 "source": "dynamic",
             })
         return results
-    except Exception as e:
+    except httpx.HTTPError as e:
         logger.warning("Failed to fetch OpenAI models: %s", e)
         return []
 
@@ -77,7 +77,7 @@ async def fetch_anthropic_models(api_key: str) -> list[dict]:
                 "source": "dynamic",
             })
         return results
-    except Exception as e:
+    except httpx.HTTPError as e:
         logger.warning("Failed to fetch Anthropic models: %s", e)
         return []
 
@@ -110,7 +110,7 @@ async def fetch_google_models(api_key: str) -> list[dict]:
                 "source": "dynamic",
             })
         return results
-    except Exception as e:
+    except httpx.HTTPError as e:
         logger.warning("Failed to fetch Google models: %s", e)
         return []
 
@@ -138,7 +138,7 @@ async def fetch_mistral_models(api_key: str) -> list[dict]:
                 "source": "dynamic",
             })
         return results
-    except Exception as e:
+    except httpx.HTTPError as e:
         logger.warning("Failed to fetch Mistral models: %s", e)
         return []
 
@@ -169,7 +169,7 @@ async def fetch_cohere_models(api_key: str) -> list[dict]:
                 "source": "dynamic",
             })
         return results
-    except Exception as e:
+    except httpx.HTTPError as e:
         logger.warning("Failed to fetch Cohere models: %s", e)
         return []
 
@@ -198,7 +198,7 @@ async def fetch_groq_models(api_key: str) -> list[dict]:
                 "source": "dynamic",
             })
         return results
-    except Exception as e:
+    except httpx.HTTPError as e:
         logger.warning("Failed to fetch Groq models: %s", e)
         return []
 

@@ -121,7 +121,7 @@ class RuntimeModelService:
         for f in self._models_dir.glob("*.json"):
             try:
                 models.append(json.loads(f.read_text()))
-            except Exception as e:
+            except (json.JSONDecodeError, OSError) as e:
                 logger.error(f"Failed to read model file {f}: {e}")
         return models
 
@@ -167,7 +167,7 @@ class RuntimeModelService:
                         logger.warning(
                             "Ollama delete returned %d for %s", resp.status_code, model_name,
                         )
-            except Exception as e:
+            except httpx.HTTPError as e:
                 logger.warning("Failed to delete model from Ollama: %s", e)
 
             # Clean up Redis progress keys
@@ -225,7 +225,7 @@ class RuntimeModelService:
                     if name.endswith(":latest"):
                         result[name.removesuffix(":latest")] = info
                 return result
-        except Exception as e:
+        except httpx.HTTPError as e:
             logger.warning(f"Failed to query Ollama tags: {e}")
             return {}
 
@@ -271,7 +271,7 @@ class RuntimeModelService:
 
         # Set initial progress so the frontend sees "downloading" immediately
         from src.infra.redis import get_redis_client
-        r = get_redis_client()
+        r = await get_redis_client()
         try:
             await r.hset(
                 f"runtime:model_pull_progress:{model_name}",

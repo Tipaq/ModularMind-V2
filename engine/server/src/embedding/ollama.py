@@ -92,7 +92,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
         except httpx.HTTPStatusError as e:
             logger.error(f"Ollama embedding HTTP error: {e}")
             raise RuntimeError(f"Failed to generate embedding: {e}") from e
-        except Exception as e:
+        except (httpx.RequestError, ConnectionError, TimeoutError, KeyError) as e:
             logger.error(f"Ollama embedding error: {e}")
             raise RuntimeError(f"Failed to generate embedding: {e}") from e
 
@@ -135,7 +135,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
                 # Check for exact match or with :latest suffix
                 return self.model in models or f"{self.model}:latest" in models
 
-        except Exception:
+        except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
             return False
 
     async def ensure_model(self) -> bool:
@@ -155,6 +155,6 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
                     json={"name": self.model},
                 )
                 return response.status_code == 200
-        except Exception as e:
+        except (httpx.HTTPError, ConnectionError, OSError, TimeoutError) as e:
             logger.error(f"Failed to pull embedding model: {e}")
             return False
