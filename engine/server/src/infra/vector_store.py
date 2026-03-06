@@ -62,7 +62,7 @@ class BaseHybridVectorStore:
         self.last_search_degraded = False
         try:
             client = await self._get_client()
-        except Exception:
+        except (ConnectionError, OSError, TimeoutError):
             logger.error("Qdrant unavailable for %s search", self._collection, exc_info=True)
             self.last_search_degraded = True
             return []
@@ -87,7 +87,7 @@ class BaseHybridVectorStore:
                 with_payload=True,
                 score_threshold=threshold if threshold > 0 else None,
             )
-        except Exception:
+        except (ConnectionError, OSError, TimeoutError, ValueError):
             logger.error("Qdrant %s search failed", self._collection, exc_info=True)
             self.last_search_degraded = True
             return []

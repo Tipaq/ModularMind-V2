@@ -60,7 +60,7 @@ class RedisStreamBus(EventBus):
                         try:
                             await handler(data)
                             await self.redis.xack(stream, group, msg_id)
-                        except Exception:
+                        except Exception:  # noqa: BLE001 — Worker resilience: catch all to avoid stream consumer crash
                             logger.exception(
                                 "Handler failed for %s msg_id=%s retry=%d",
                                 stream,
@@ -87,7 +87,7 @@ class RedisStreamBus(EventBus):
                 logger.warning("Redis connection lost, backoff=%.1fs", backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, MAX_BACKOFF)
-            except Exception:
+            except Exception:  # noqa: BLE001 — Worker resilience: catch all to avoid stream consumer crash
                 logger.exception("Unexpected error in consumer %s/%s", stream, consumer)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, MAX_BACKOFF)

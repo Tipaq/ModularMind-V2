@@ -20,7 +20,7 @@ def count_tokens(text: str) -> int:
         return 0
     try:
         return len(_encoding.encode(text))
-    except Exception:
+    except (ValueError, UnicodeDecodeError):
         logger.debug("tiktoken encoding failed, falling back to word estimate")
         return len(text.split()) * 4 // 3
 

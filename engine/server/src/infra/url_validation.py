@@ -118,7 +118,7 @@ def validate_url_ssrf(
                 # DNS resolution failed — allow (the actual HTTP call will
                 # fail with a clear error)
                 pass
-            except Exception as e:
+            except OSError as e:
                 logger.warning("DNS resolution check failed for %s: %s", bare_host, e)
 
     return None

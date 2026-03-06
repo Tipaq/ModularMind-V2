@@ -58,7 +58,7 @@ class ObjectStore:
                         logger.info("Created S3 bucket: %s", bucket)
                     except client.exceptions.BucketAlreadyOwnedByYou:
                         pass
-                    except Exception as exc:
+                    except (OSError, ConnectionError) as exc:
                         logger.error("Failed to create bucket %s: %s", bucket, exc)
                         raise
 
@@ -154,7 +154,7 @@ class ObjectStore:
         try:
             await self.head(bucket, key)
             return True
-        except Exception:
+        except (OSError, ConnectionError):
             return False
 
 

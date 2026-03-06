@@ -181,7 +181,7 @@ class QdrantClientFactory:
             try:
                 info = await self._client.get_collection(name)
                 qdrant_points_total.labels(collection=name).set(info.points_count or 0)
-            except Exception as e:
+            except (ConnectionError, OSError, TimeoutError) as e:
                 logger.debug("Failed to refresh Qdrant metrics for %s: %s", name, e)
 
     async def create_snapshot(self, collection_name: str) -> str:

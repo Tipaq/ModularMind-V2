@@ -12,6 +12,7 @@ import time
 from threading import Lock
 from typing import Any
 
+import redis.exceptions
 from fastapi import HTTPException, Request
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import JSONResponse
@@ -191,7 +192,7 @@ class RateLimitMiddleware:
             try:
                 result = await self.check_redis(redis, client_id)
                 return result
-            except Exception as e:
+            except (ConnectionError, OSError, redis.exceptions.RedisError) as e:
                 logger.error("Rate limit Redis check failed: %s", e)
             finally:
                 await redis.aclose()
@@ -299,7 +300,7 @@ class RateLimitDependency:
                 )
         except HTTPException:
             raise
-        except Exception as e:
+        except (ConnectionError, OSError, redis.exceptions.RedisError) as e:
             logger.error("Rate limit dependency check failed: %s", e)
         finally:
             if redis:

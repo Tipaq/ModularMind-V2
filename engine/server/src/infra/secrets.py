@@ -105,7 +105,7 @@ class SecretsStore:
                 "Failed to decrypt secrets file - SECRET_KEY may have changed. "
                 "API keys will need to be re-entered in the dashboard."
             )
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
             logger.error("Error loading secrets from disk: %s", e)
 
     def load_from_env(self) -> None:
@@ -167,7 +167,7 @@ class SecretsStore:
                 raise
 
             logger.debug("Secrets persisted to encrypted storage")
-        except Exception as e:
+        except OSError as e:
             logger.error("Failed to persist secrets: %s", e)
 
     @staticmethod
@@ -202,7 +202,7 @@ class SecretsStore:
                 )
         except subprocess.TimeoutExpired:
             logger.warning("icacls timed out for %s", path)
-        except Exception as e:
+        except OSError as e:
             logger.warning("Failed to restrict Windows file permissions on %s: %s", path, e)
 
     def set(self, key: str, value: str) -> None:

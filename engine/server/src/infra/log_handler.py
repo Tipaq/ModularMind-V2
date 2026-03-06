@@ -43,7 +43,7 @@ class RedisLogHandler(logging.Handler):
         try:
             self._client = get_sync_redis_client()
             return self._client
-        except Exception:
+        except (ConnectionError, OSError, sync_redis.RedisError):
             return None
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -66,8 +66,7 @@ class RedisLogHandler(logging.Handler):
 
             if should_flush:
                 self.flush()
-        except Exception:
-            # Never let logging errors propagate
+        except Exception:  # noqa: BLE001 — log handler must never propagate errors
             pass
 
     def flush(self) -> None:
@@ -100,7 +99,7 @@ class RedisLogHandler(logging.Handler):
             # Success — remove flushed entries from buffer
             with self._lock:
                 self._buffer = self._buffer[len(entries):]
-        except Exception as exc:
+        except (ConnectionError, OSError, sync_redis.RedisError) as exc:
             # Keep entries for retry; cap buffer size
             with self._lock:
                 if len(self._buffer) > self.MAX_BUFFER:

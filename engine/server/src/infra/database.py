@@ -56,7 +56,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         try:
             yield session
             await session.commit()
-        except Exception:
+        except Exception:  # noqa: BLE001 — must rollback on any error before re-raising
             await session.rollback()
             raise
 
@@ -70,7 +70,7 @@ async def get_db_readonly() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         try:
             yield session
-        except Exception:
+        except Exception:  # noqa: BLE001 — must rollback on any error before re-raising
             await session.rollback()
             raise
 
