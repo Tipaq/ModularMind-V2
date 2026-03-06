@@ -12,6 +12,7 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@modularmind/api-client": "workspace:*",
     "@modularmind/ui": "workspace:*",
     "@prisma/client": "^6.0.0",
     "@xyflow/react": "^12.4.0",

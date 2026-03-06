@@ -245,6 +245,9 @@ importers:
 
   platform:
     dependencies:
+      '@modularmind/api-client':
+        specifier: workspace:*
+        version: link:../packages/api-client
       '@modularmind/ui':
         specifier: workspace:*
         version: link:../packages/ui
