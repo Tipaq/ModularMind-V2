@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { DEFAULT_PAGE_SIZE } from "@/lib/db-utils";
+import { paginatedFetch, mutatingFetch } from "./helpers";
 
 export interface PlatformEngineListItem {
   id: string;
@@ -14,14 +14,6 @@ export interface PlatformEngineListItem {
   createdAt: string;
   updatedAt: string;
   client: { id: string; name: string };
-}
-
-/** Matches platform API pagination shape — platform doesn't depend on api-client. */
-interface PaginatedEngineResponse {
-  items: PlatformEngineListItem[];
-  total: number;
-  page: number;
-  total_pages: number;
 }
 
 interface EnginesState {
@@ -52,40 +44,17 @@ export const useEnginesStore = create<EnginesState>((set, get) => ({
   statusFilter: "",
 
   fetchEngines: async (page = 1) => {
-    set({ loading: true, error: null });
-    try {
-      const { search, statusFilter } = get();
-      const params = new URLSearchParams({ page: String(page), page_size: String(DEFAULT_PAGE_SIZE) });
-      if (search) params.set("search", search);
-      if (statusFilter) params.set("status", statusFilter);
-      const res = await fetch(`/api/engines?${params}`);
-      if (!res.ok) throw new Error("Failed to load engines");
-      const data: PaginatedEngineResponse = await res.json();
-      set({
-        engines: data.items,
-        total: data.total,
-        page: data.page,
-        totalPages: data.total_pages,
-        loading: false,
-      });
-    } catch (err) {
-      set({
-        error: err instanceof Error ? err.message : "Failed to load engines",
-        loading: false,
-      });
-    }
+    const { search, statusFilter } = get();
+    const engines = await paginatedFetch<PlatformEngineListItem>(
+      "/api/engines", page, search, "engines", set,
+      statusFilter ? { status: statusFilter } : undefined,
+    );
+    set({ engines });
   },
 
   deleteEngine: async (id) => {
-    set({ error: null });
-    try {
-      const res = await fetch(`/api/engines/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete engine");
-      get().fetchEngines(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to delete engine" });
-      throw err;
-    }
+    await mutatingFetch(`/api/engines/${id}`, "DELETE", "delete engine", set);
+    get().fetchEngines(get().page);
   },
 
   setSearch: (search: string) => set({ search }),

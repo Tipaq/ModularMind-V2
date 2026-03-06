@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useTableSort } from "@/hooks/useTableSort";
 import { useRouter } from "next/navigation";
-import { Server, Trash2, Key, Wifi, WifiOff } from "lucide-react";
+import { Server, Trash2, Key } from "lucide-react";
+import { EngineStatusBadge as StatusBadge } from "@/components/EngineStatusBadge";
 import {
   Button,
   DropdownMenu,
@@ -10,25 +12,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   PageHeader,
-  STATUS_COLORS,
   relativeTime,
   EmptyState,
   ResourceTable,
   ResourceFilters,
 } from "@modularmind/ui";
 import { useEnginesStore, type PlatformEngineListItem } from "@/stores/engines";
-import type { ResourceColumn, ResourceFilterConfig, SortState } from "@modularmind/ui";
-
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? STATUS_COLORS.offline}`}
-    >
-      {status === "synced" ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-      {status}
-    </span>
-  );
-}
+import type { ResourceColumn, ResourceFilterConfig } from "@modularmind/ui";
 
 const filterConfigs: ResourceFilterConfig[] = [
   { key: "search", label: "Search", type: "search", placeholder: "Search engines..." },
@@ -58,7 +48,16 @@ export default function EnginesPage() {
     setStatusFilter,
   } = useEnginesStore();
 
-  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const onFilterChange = useCallback(
+    (key: string, value: string) => {
+      if (key === "status") {
+        setStatusFilter(value);
+        fetchEngines(1);
+      }
+    },
+    [setStatusFilter, fetchEngines],
+  );
+  const { filterValues, sortState, handleColumnSort, handleFilterChange } = useTableSort(onFilterChange);
 
   useEffect(() => {
     fetchEngines(1);
@@ -95,38 +94,6 @@ export default function EnginesPage() {
 
     return result;
   }, [engines, filterValues]);
-
-  const handleFilterChange = useCallback(
-    (key: string, value: string) => {
-      setFilterValues((prev) => ({ ...prev, [key]: value }));
-      if (key === "status") {
-        setStatusFilter(value);
-        fetchEngines(1);
-      }
-    },
-    [setStatusFilter, fetchEngines],
-  );
-
-  const sortState = useMemo((): SortState | null => {
-    const s = filterValues.sort;
-    if (!s) return null;
-    if (s.endsWith("_asc")) return { key: s.replace(/_asc$/, ""), direction: "asc" };
-    if (s.endsWith("_desc")) return { key: s.replace(/_desc$/, ""), direction: "desc" };
-    return { key: s, direction: "asc" };
-  }, [filterValues.sort]);
-
-  const handleColumnSort = useCallback((sortKey: string) => {
-    setFilterValues((prev) => {
-      const current = prev.sort || "";
-      if (current === `${sortKey}_asc` || current === sortKey) {
-        return { ...prev, sort: `${sortKey}_desc` };
-      }
-      if (current === `${sortKey}_desc`) {
-        return { ...prev, sort: "" };
-      }
-      return { ...prev, sort: `${sortKey}_asc` };
-    });
-  }, []);
 
   const handleDelete = useCallback(
     async (engine: PlatformEngineListItem) => {

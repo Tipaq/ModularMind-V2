@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { DEFAULT_PAGE_SIZE } from "@/lib/db-utils";
+import { paginatedFetch, mutatingFetch, fetchOne } from "./helpers";
 
 export interface AgentConfig {
   systemPrompt?: string;
@@ -26,14 +26,6 @@ export interface PlatformAgent {
   tags: string[];
   createdAt: string;
   updatedAt: string;
-}
-
-/** Matches platform API pagination shape — platform doesn't depend on api-client. */
-interface PaginatedAgentResponse {
-  items: PlatformAgent[];
-  total: number;
-  page: number;
-  total_pages: number;
 }
 
 interface AgentsState {
@@ -67,105 +59,36 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   search: "",
 
   fetchAgents: async (page = 1) => {
-    set({ loading: true, error: null });
-    try {
-      const { search } = get();
-      const params = new URLSearchParams({ page: String(page), page_size: String(DEFAULT_PAGE_SIZE) });
-      if (search) params.set("search", search);
-      const res = await fetch(`/api/agents?${params}`);
-      if (!res.ok) throw new Error("Failed to load agents");
-      const data: PaginatedAgentResponse = await res.json();
-      set({
-        agents: data.items,
-        total: data.total,
-        page: data.page,
-        totalPages: data.total_pages,
-        loading: false,
-      });
-    } catch (err) {
-      set({
-        error: err instanceof Error ? err.message : "Failed to load agents",
-        loading: false,
-      });
-    }
+    const agents = await paginatedFetch<PlatformAgent>("/api/agents", page, get().search, "agents", set);
+    set({ agents });
   },
 
-  fetchAgent: async (id: string) => {
-    set({ loading: true, error: null });
-    try {
-      const res = await fetch(`/api/agents/${id}`);
-      if (!res.ok) throw new Error("Failed to load agent");
-      const agent: PlatformAgent = await res.json();
-      set({ selectedAgent: agent, loading: false });
-    } catch (err) {
-      set({
-        error: err instanceof Error ? err.message : "Failed to load agent",
-        loading: false,
-      });
-    }
+  fetchAgent: async (id) => {
+    const agent = await fetchOne<PlatformAgent>(`/api/agents/${id}`, "agent", set);
+    set({ selectedAgent: agent });
   },
 
   createAgent: async (data) => {
-    set({ error: null });
-    try {
-      const res = await fetch("/api/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to create agent");
-      const agent: PlatformAgent = await res.json();
-      get().fetchAgents(get().page);
-      return agent;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to create agent";
-      set({ error: message });
-      throw err;
-    }
+    const agent = await mutatingFetch<PlatformAgent>("/api/agents", "POST", "create agent", set, data);
+    get().fetchAgents(get().page);
+    return agent;
   },
 
   updateAgent: async (id, data) => {
-    set({ error: null });
-    try {
-      const res = await fetch(`/api/agents/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to update agent");
-      const agent: PlatformAgent = await res.json();
-      set({ selectedAgent: agent });
-      get().fetchAgents(get().page);
-      return agent;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update agent";
-      set({ error: message });
-      throw err;
-    }
+    const agent = await mutatingFetch<PlatformAgent>(`/api/agents/${id}`, "PATCH", "update agent", set, data);
+    set({ selectedAgent: agent });
+    get().fetchAgents(get().page);
+    return agent;
   },
 
   deleteAgent: async (id) => {
-    set({ error: null });
-    try {
-      const res = await fetch(`/api/agents/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete agent");
-      get().fetchAgents(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to delete agent" });
-      throw err;
-    }
+    await mutatingFetch(`/api/agents/${id}`, "DELETE", "delete agent", set);
+    get().fetchAgents(get().page);
   },
 
   duplicateAgent: async (id) => {
-    set({ error: null });
-    try {
-      const res = await fetch(`/api/agents/${id}/duplicate`, { method: "POST" });
-      if (!res.ok) throw new Error("Failed to duplicate agent");
-      get().fetchAgents(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to duplicate agent" });
-      throw err;
-    }
+    await mutatingFetch(`/api/agents/${id}/duplicate`, "POST", "duplicate agent", set);
+    get().fetchAgents(get().page);
   },
 
   setSearch: (search: string) => set({ search }),

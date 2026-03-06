@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { DEFAULT_PAGE_SIZE } from "@/lib/db-utils";
+import { paginatedFetch, mutatingFetch, fetchOne } from "./helpers";
 
 export interface PlatformEngine {
   id: string;
@@ -25,14 +25,6 @@ export interface PlatformClient {
 
 export interface PlatformClientDetail extends PlatformClient {
   engines: PlatformEngine[];
-}
-
-/** Matches platform API pagination shape — platform doesn't depend on api-client. */
-interface PaginatedClientResponse {
-  items: PlatformClient[];
-  total: number;
-  page: number;
-  total_pages: number;
 }
 
 interface ClientsState {
@@ -67,130 +59,47 @@ export const useClientsStore = create<ClientsState>((set, get) => ({
   search: "",
 
   fetchClients: async (page = 1) => {
-    set({ loading: true, error: null });
-    try {
-      const { search } = get();
-      const params = new URLSearchParams({ page: String(page), page_size: String(DEFAULT_PAGE_SIZE) });
-      if (search) params.set("search", search);
-      const res = await fetch(`/api/clients?${params}`);
-      if (!res.ok) throw new Error("Failed to load clients");
-      const data: PaginatedClientResponse = await res.json();
-      set({
-        clients: data.items,
-        total: data.total,
-        page: data.page,
-        totalPages: data.total_pages,
-        loading: false,
-      });
-    } catch (err) {
-      set({
-        error: err instanceof Error ? err.message : "Failed to load clients",
-        loading: false,
-      });
-    }
+    const clients = await paginatedFetch<PlatformClient>("/api/clients", page, get().search, "clients", set);
+    set({ clients });
   },
 
-  fetchClient: async (id: string) => {
-    set({ loading: true, error: null });
-    try {
-      const res = await fetch(`/api/clients/${id}`);
-      if (!res.ok) throw new Error("Failed to load client");
-      const client: PlatformClientDetail = await res.json();
-      set({ selectedClient: client, loading: false });
-    } catch (err) {
-      set({
-        error: err instanceof Error ? err.message : "Failed to load client",
-        loading: false,
-      });
-    }
+  fetchClient: async (id) => {
+    const client = await fetchOne<PlatformClientDetail>(`/api/clients/${id}`, "client", set);
+    set({ selectedClient: client });
   },
 
   createClient: async (data) => {
-    set({ error: null });
-    try {
-      const res = await fetch("/api/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to create client");
-      const client: PlatformClient = await res.json();
-      get().fetchClients(get().page);
-      return client;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to create client";
-      set({ error: message });
-      throw err;
-    }
+    const client = await mutatingFetch<PlatformClient>("/api/clients", "POST", "create client", set, data);
+    get().fetchClients(get().page);
+    return client;
   },
 
   updateClient: async (id, data) => {
-    set({ error: null });
-    try {
-      const res = await fetch(`/api/clients/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to update client");
-      const client: PlatformClient = await res.json();
-      // Refresh detail if we're on the detail page
-      const selected = get().selectedClient;
-      if (selected && selected.id === id) {
-        set({ selectedClient: { ...selected, ...client } });
-      }
-      get().fetchClients(get().page);
-      return client;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update client";
-      set({ error: message });
-      throw err;
+    const client = await mutatingFetch<PlatformClient>(`/api/clients/${id}`, "PATCH", "update client", set, data);
+    const selected = get().selectedClient;
+    if (selected && selected.id === id) {
+      set({ selectedClient: { ...selected, ...client } });
     }
+    get().fetchClients(get().page);
+    return client;
   },
 
   deleteClient: async (id) => {
-    set({ error: null });
-    try {
-      const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete client");
-      get().fetchClients(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to delete client" });
-      throw err;
-    }
+    await mutatingFetch(`/api/clients/${id}`, "DELETE", "delete client", set);
+    get().fetchClients(get().page);
   },
 
   addEngine: async (clientId, data) => {
-    set({ error: null });
-    try {
-      const res = await fetch(`/api/clients/${clientId}/engines`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to add engine");
-      const engine: PlatformEngine = await res.json();
-      get().fetchClient(clientId);
-      return engine;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to add engine";
-      set({ error: message });
-      throw err;
-    }
+    const engine = await mutatingFetch<PlatformEngine>(`/api/clients/${clientId}/engines`, "POST", "add engine", set, data);
+    get().fetchClient(clientId);
+    return engine;
   },
 
   deleteEngine: async (engineId) => {
-    set({ error: null });
-    try {
-      const res = await fetch(`/api/engines/${engineId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete engine");
-      const selected = get().selectedClient;
-      if (selected) {
-        get().fetchClient(selected.id);
-      }
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to delete engine" });
-      throw err;
+    await mutatingFetch(`/api/engines/${engineId}`, "DELETE", "delete engine", set);
+    const selected = get().selectedClient;
+    if (selected) {
+      get().fetchClient(selected.id);
     }
   },
 

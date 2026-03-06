@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useTableSort } from "@/hooks/useTableSort";
 import { useRouter } from "next/navigation";
 import { Building2, Plus, Trash2 } from "lucide-react";
 import {
@@ -22,7 +23,7 @@ import {
   ResourceFilters,
 } from "@modularmind/ui";
 import { useClientsStore, type PlatformClient } from "@/stores/clients";
-import type { ResourceColumn, ResourceFilterConfig, SortState } from "@modularmind/ui";
+import type { ResourceColumn, ResourceFilterConfig } from "@modularmind/ui";
 
 const filterConfigs: ResourceFilterConfig[] = [
   { key: "search", label: "Search", type: "search", placeholder: "Search clients..." },
@@ -41,7 +42,7 @@ export default function ClientsPage() {
     deleteClient,
   } = useClientsStore();
 
-  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const { filterValues, sortState, handleColumnSort, handleFilterChange } = useTableSort();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", engineUrl: "http://localhost:8000" });
@@ -74,30 +75,6 @@ export default function ClientsPage() {
     return result;
   }, [clients, filterValues]);
 
-  const handleFilterChange = useCallback((key: string, value: string) => {
-    setFilterValues((prev) => ({ ...prev, [key]: value }));
-  }, []);
-
-  const sortState = useMemo((): SortState | null => {
-    const s = filterValues.sort;
-    if (!s) return null;
-    if (s.endsWith("_asc")) return { key: s.replace(/_asc$/, ""), direction: "asc" };
-    if (s.endsWith("_desc")) return { key: s.replace(/_desc$/, ""), direction: "desc" };
-    return { key: s, direction: "asc" };
-  }, [filterValues.sort]);
-
-  const handleColumnSort = useCallback((sortKey: string) => {
-    setFilterValues((prev) => {
-      const current = prev.sort || "";
-      if (current === `${sortKey}_asc` || current === sortKey) {
-        return { ...prev, sort: `${sortKey}_desc` };
-      }
-      if (current === `${sortKey}_desc`) {
-        return { ...prev, sort: "" };
-      }
-      return { ...prev, sort: `${sortKey}_asc` };
-    });
-  }, []);
 
   const handleRowClick = useCallback(
     (client: PlatformClient) => {
