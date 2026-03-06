@@ -18,7 +18,7 @@ export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTi
 export { ACTIVITY_COLORS, CHANNEL_COLORS, STATUS_COLORS, ROLE_COLORS, HEALTH_COLORS } from "./lib/colors";
 
 // Chat types
-export type { ActivityType, ActivityStatus, ToolCallData, ExecutionActivity, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, SupervisorData, TokenUsage, ExecutionOutputData, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData, AttachedFile } from "./types/chat";
+export type { ActivityType, ActivityStatus, ToolCallData, LlmCallData, RoutingData, ErrorData, ExecutionActivity, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, SupervisorData, TokenUsage, ExecutionOutputData, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData, AttachedFile } from "./types/chat";
 
 // Resource types (shared table/filter/pagination primitives)
 export type { ResourceColumn, ResourceFilterConfig, PaginationState, SortState } from "./types/resource";
@@ -77,3 +77,22 @@ export { ChatPanel } from "./components/chat-panel";
 export type { ChatPanelProps, ChatPanelTab } from "./components/chat-panel";
 export { ChatInput } from "./components/chat-input";
 export type { ChatInputProps } from "./components/chat-input";
+export { ChatEmptyState } from "./components/chat-empty-state";
+export type { ChatEmptyStateProps } from "./components/chat-empty-state";
+
+// Activity timeline system
+export { ActivityTab } from "./components/activity";
+export type { ActivityTabProps } from "./components/activity";
+export { ExecutionTimeline } from "./components/activity";
+export { ExecutionSummaryHeader, computeSummary } from "./components/activity";
+export type { ExecutionSummary } from "./components/activity";
+export { AgentDetailModal } from "./components/activity";
+export type { AgentDetailModalProps } from "./components/activity";
+
+// Insights panel system (shared InsightsPanel with Config, Activity, Context tabs)
+export { InsightsPanel } from "./components/insights";
+export type { InsightsPanelProps } from "./components/insights";
+export { ConfigTab } from "./components/insights";
+export type { ConfigTabProps, ExecutionMetrics } from "./components/insights";
+export { MemoryTab } from "./components/insights";
+export type { MemoryTabProps } from "./components/insights";
