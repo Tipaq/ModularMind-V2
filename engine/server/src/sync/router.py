@@ -2,22 +2,28 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src.infra.config import settings
+from src.infra.rate_limit import RateLimitDependency
+from src.internal.auth import verify_internal_token
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sync", tags=["Sync"])
 
+_sync_rate_limit = RateLimitDependency(requests_per_minute=10)
 
-@router.post("/trigger")
-async def trigger_sync() -> dict[str, bool]:
+
+@router.post("/trigger", dependencies=[Depends(_sync_rate_limit)])
+async def trigger_sync(request: Request) -> dict[str, bool]:
     """Webhook endpoint — Platform notifies Engine of new config.
 
     This triggers an immediate poll instead of waiting for the next
-    scheduled interval.
+    scheduled interval. Protected by HMAC-derived internal token.
     """
+    verify_internal_token(request)
+
     if not settings.PLATFORM_URL:
         raise HTTPException(status_code=400, detail="Platform sync not configured")
 
