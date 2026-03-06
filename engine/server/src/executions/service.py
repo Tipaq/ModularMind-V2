@@ -493,6 +493,43 @@ class ExecutionService:
         if context_messages:
             input_data["_context_layers"] = [msg.content for msg in context_messages]
 
+        # Auto-compact if history budget exceeded (Claude-style inline compaction)
+        history_budget = context_builder._last_history_budget
+        if history_budget.get("budget_exceeded") and execution.session_id:
+            yield {
+                "type": "trace:compaction_start",
+                "message_count": history_budget.get("included_count", 0),
+            }
+            try:
+                from src.conversations.compaction import CompactionService
+
+                compaction_svc = CompactionService(self.db)
+                compact_result = await compaction_svc.compact(
+                    conversation_id=execution.session_id,
+                    model_id=agent.model_id,
+                    user_id=execution.user_id,
+                )
+                yield {"type": "trace:compaction_end", **compact_result}
+
+                # Re-build context with the compacted history
+                if compact_result.get("compacted_count", 0) > 0:
+                    context_messages = await context_builder.build_context_messages(
+                        agent=agent,
+                        query=execution.input_prompt,
+                        session=self.db,
+                        user_id=execution.user_id,
+                        conversation_id=execution.session_id,
+                        model_id=agent.model_id,
+                        system_prompt_chars=system_prompt_chars,
+                    )
+                    if context_messages:
+                        input_data["_context_layers"] = [
+                            msg.content for msg in context_messages
+                        ]
+            except Exception as e:
+                logger.warning("Auto-compaction failed for %s: %s", execution.session_id, e)
+                yield {"type": "trace:compaction_end", "error": str(e)}
+
         # Emit conversation history trace event
         history_count = context_builder.get_history_message_count()
         if history_count:

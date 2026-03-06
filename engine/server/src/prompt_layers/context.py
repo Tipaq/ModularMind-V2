@@ -244,21 +244,54 @@ class AgentContextBuilder:
 
         Builds a rolling window: if messages exceed the token budget,
         older messages are replaced by a SUMMARY entry if one exists.
+
+        Respects context compaction: if ``config["compacted_before_message_id"]``
+        is set on the conversation, only messages after that point are loaded
+        and the compaction summary is always prepended.
         """
         try:
             from sqlalchemy import select
 
-            from src.conversations.models import ConversationMessage
+            from src.conversations.models import Conversation, ConversationMessage
             from src.memory.models import MemoryEntry, MemoryScope, MemoryTier
 
             max_chars = max_tokens * 4  # ~4 chars/token
 
-            # Load recent messages (newest first, then reverse).
-            # No message-count cap — the token budget is the only cutoff.
-            # Safety limit of 200 rows to avoid loading entire conversation.
-            result = await session.execute(
+            # Check for compaction boundary in conversation config
+            compacted_before_id: str | None = None
+            try:
+                conv_result = await session.execute(
+                    select(Conversation.config)
+                    .where(Conversation.id == conversation_id)
+                )
+                conv_config = conv_result.scalar_one_or_none() or {}
+                compacted_before_id = conv_config.get("compacted_before_message_id")
+            except Exception:
+                pass  # Best-effort
+
+            # Build message query — skip compacted messages if boundary exists
+            msg_query = (
                 select(ConversationMessage)
                 .where(ConversationMessage.conversation_id == conversation_id)
+            )
+            if compacted_before_id:
+                try:
+                    cutoff_result = await session.execute(
+                        select(ConversationMessage.created_at)
+                        .where(ConversationMessage.id == compacted_before_id)
+                    )
+                    cutoff_time = cutoff_result.scalar_one_or_none()
+                    if cutoff_time:
+                        msg_query = msg_query.where(
+                            ConversationMessage.created_at > cutoff_time,
+                        )
+                except Exception:
+                    pass  # Fall back to loading all messages
+
+            # Load recent messages (newest first, then reverse).
+            # Safety limit of 200 rows to avoid loading entire conversation.
+            result = await session.execute(
+                msg_query
                 .order_by(ConversationMessage.created_at.desc())
                 .limit(200)
             )
@@ -288,9 +321,9 @@ class AgentContextBuilder:
 
             lines.reverse()  # back to chronological
 
-            # If budget exceeded, try to prepend a summary of older context
+            # Prepend summary if compacted OR if budget exceeded
             summary_prefix = ""
-            if budget_exceeded:
+            if compacted_before_id or budget_exceeded:
                 try:
                     summary_result = await session.execute(
                         select(MemoryEntry)
