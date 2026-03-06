@@ -201,3 +201,224 @@ class UserSyncRequest(BaseModel):
     """Request body for user sync from platform."""
 
     users: list[UserSyncItem]
+
+
+# ---------------------------------------------------------------------------
+# Alerts Schemas
+# ---------------------------------------------------------------------------
+
+
+class ThresholdConfig(BaseModel):
+    cpu_percent: float = 90.0
+    memory_percent: float = 85.0
+    workers_min: int = 1
+    dlq_max: int = 10
+    queue_depth_max: int = 50
+    enabled: bool = True
+
+
+class ThresholdUpdate(BaseModel):
+    cpu_percent: float | None = None
+    memory_percent: float | None = None
+    workers_min: int | None = None
+    dlq_max: int | None = None
+    queue_depth_max: int | None = None
+    enabled: bool | None = None
+
+
+class AlertHistoryResponse(BaseModel):
+    items: list[AlertItem]
+    total: int
+
+
+class ActiveAlertsResponse(BaseModel):
+    active_count: int
+    alerts: list[AlertItem]
+
+
+# ---------------------------------------------------------------------------
+# Monitoring Schemas (LLM / GPU)
+# ---------------------------------------------------------------------------
+
+
+class GpuVramMonitoring(BaseModel):
+    total_vram_gb: float
+    used_vram_gb: float
+    used_vram_percent: float
+    loaded_models: list[OllamaRunningModel]
+    model_count: int
+
+
+class LlmPerformanceSnapshot(BaseModel):
+    avg_latency_ms: float
+    avg_tokens_per_second: float
+    avg_ttft_ms: float
+    total_requests_last_hour: int
+
+
+class ModelEvent(BaseModel):
+    type: str
+    model: str
+    ts: str
+
+
+class LlmGpuMonitoring(BaseModel):
+    gpu_vram: GpuVramMonitoring
+    llm_performance: LlmPerformanceSnapshot
+    model_events: list[ModelEvent]
+
+
+class AgentMetricsItem(BaseModel):
+    agent_id: str
+    agent_name: str
+    total_executions: int
+    total_tokens: int
+    avg_duration_ms: float
+    error_count: int
+    error_rate: float
+
+
+class ExecutionSummary(BaseModel):
+    id: str
+    execution_type: str
+    status: str
+    user_id: str
+    user_email: str
+    agent_id: str | None
+    graph_id: str | None
+    model: str | None
+    tokens_prompt: int
+    tokens_completion: int
+    input_preview: str
+    started_at: str | None
+    created_at: str
+    completed_at: str | None
+    duration_seconds: float | None
+
+
+class LiveExecutionsResponse(BaseModel):
+    active: list[ExecutionSummary]
+    recent: list[ExecutionSummary]
+    total_active: int
+
+
+# ---------------------------------------------------------------------------
+# Playground Schemas
+# ---------------------------------------------------------------------------
+
+
+class PlaygroundMessage(BaseModel):
+    role: str
+    content: str
+
+
+class PlaygroundCompletionRequest(BaseModel):
+    provider: str
+    model: str
+    messages: list[PlaygroundMessage]
+    max_tokens: int = 1024
+    temperature: float = 0.7
+
+
+class PlaygroundCompletionResponseBody(BaseModel):
+    content: str
+    model: str
+    usage: dict[str, int]
+    latency_ms: int
+
+
+# ---------------------------------------------------------------------------
+# Providers Schemas
+# ---------------------------------------------------------------------------
+
+
+class ProviderTestRequest(BaseModel):
+    provider: str
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class ProviderTestResponse(BaseModel):
+    provider: str
+    available: bool
+    error: str | None = None
+
+
+class InternalPullRequest(BaseModel):
+    model_name: str
+
+
+# ---------------------------------------------------------------------------
+# Settings Schemas
+# ---------------------------------------------------------------------------
+
+
+class SettingsResponse(BaseModel):
+    llm_api_keys: dict[str, str]
+    default_model: str | None
+    telemetry_enabled: bool
+    auto_sync: bool
+    sync_interval_minutes: int
+    ollama_keep_alive: str
+    memory_embedding_provider: str
+    memory_embedding_model: str
+    knowledge_embedding_provider: str
+    knowledge_embedding_model: str
+
+
+class SettingsUpdate(BaseModel):
+    llm_api_keys: dict[str, str] | None = Field(None, max_length=20)
+    default_model: str | None = None
+    telemetry_enabled: bool | None = None
+    auto_sync: bool | None = None
+    sync_interval_minutes: int | None = None
+    ollama_keep_alive: str | None = None
+    memory_embedding_provider: str | None = None
+    memory_embedding_model: str | None = None
+    knowledge_embedding_provider: str | None = None
+    knowledge_embedding_model: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Supervisor Layers Schemas
+# ---------------------------------------------------------------------------
+
+
+class LayerInfo(BaseModel):
+    key: str
+    label: str
+    description: str
+    content: str
+    filename: str
+
+
+class LayersResponse(BaseModel):
+    layers: list[LayerInfo]
+
+
+class LayerUpdateRequest(BaseModel):
+    content: str = Field(..., min_length=0, max_length=10000)
+
+
+class LayerUpdateResponse(BaseModel):
+    key: str
+    content: str
+    status: str = "updated"
+
+
+# ---------------------------------------------------------------------------
+# Logs Schemas
+# ---------------------------------------------------------------------------
+
+
+class LogEntry(BaseModel):
+    ts: str
+    level: str
+    logger: str
+    message: str
+    source: str
+
+
+class LogsResponse(BaseModel):
+    items: list[LogEntry]
+    total: int

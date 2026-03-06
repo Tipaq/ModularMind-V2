@@ -13,19 +13,25 @@ from datetime import datetime
 import httpx
 import psutil
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
 
 from src.auth import CurrentUser, RequireAdmin
 from src.infra.config import get_settings
 from src.infra.utils import utcnow
 from src.internal.schemas import (
+    AgentMetricsItem,
     AlertItem,
     AlertSummary,
+    ExecutionSummary,
     GPUInfoResponse,
+    GpuVramMonitoring,
     InfraMonitoring,
+    LiveExecutionsResponse,
+    LlmGpuMonitoring,
+    LlmPerformanceSnapshot,
     MetricPoint,
     MetricSeries,
     MetricsHistoryResponse,
+    ModelEvent,
     MonitoringResponse,
     OllamaRunningModel,
     SchedulerMonitoring,
@@ -51,72 +57,6 @@ def set_start_time(t: float) -> None:
 def get_start_time() -> float:
     """Get the shared startup timestamp."""
     return _start_time or time.time()
-
-
-# ---------------------------------------------------------------------------
-# LLM / GPU Monitoring Schemas (kept here — only used by this module)
-# ---------------------------------------------------------------------------
-
-
-class GpuVramMonitoring(BaseModel):
-    total_vram_gb: float
-    used_vram_gb: float
-    used_vram_percent: float
-    loaded_models: list[OllamaRunningModel]
-    model_count: int
-
-
-class LlmPerformanceSnapshot(BaseModel):
-    avg_latency_ms: float
-    avg_tokens_per_second: float
-    avg_ttft_ms: float
-    total_requests_last_hour: int
-
-
-class ModelEvent(BaseModel):
-    type: str
-    model: str
-    ts: str
-
-
-class LlmGpuMonitoring(BaseModel):
-    gpu_vram: GpuVramMonitoring
-    llm_performance: LlmPerformanceSnapshot
-    model_events: list[ModelEvent]
-
-
-class AgentMetricsItem(BaseModel):
-    agent_id: str
-    agent_name: str
-    total_executions: int
-    total_tokens: int
-    avg_duration_ms: float
-    error_count: int
-    error_rate: float
-
-
-class ExecutionSummary(BaseModel):
-    id: str
-    execution_type: str
-    status: str
-    user_id: str
-    user_email: str
-    agent_id: str | None
-    graph_id: str | None
-    model: str | None
-    tokens_prompt: int
-    tokens_completion: int
-    input_preview: str
-    started_at: str | None
-    created_at: str
-    completed_at: str | None
-    duration_seconds: float | None
-
-
-class LiveExecutionsResponse(BaseModel):
-    active: list[ExecutionSummary]
-    recent: list[ExecutionSummary]
-    total_active: int
 
 
 RANGE_MAP = {

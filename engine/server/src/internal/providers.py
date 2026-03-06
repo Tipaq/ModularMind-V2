@@ -7,37 +7,18 @@ Provider testing and model pull endpoints.
 import logging
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
 
 from src.auth import CurrentUser, RequireOwner
 from src.infra.config import get_settings
 from src.infra.constants import KNOWN_PROVIDERS
 from src.infra.secrets import secrets_store
 from src.internal.auth import verify_internal_token
+from src.internal.schemas import InternalPullRequest, ProviderTestRequest, ProviderTestResponse
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter(tags=["Internal - Providers"])
-
-
-# ── Schemas ────────────────────────────────────────────────────────
-
-
-class ProviderTestRequest(BaseModel):
-    provider: str
-    api_key: str | None = None
-    base_url: str | None = None
-
-
-class ProviderTestResponse(BaseModel):
-    provider: str
-    available: bool
-    error: str | None = None
-
-
-class InternalPullRequest(BaseModel):
-    model_name: str
 
 
 # ── Endpoints ──────────────────────────────────────────────────────

@@ -12,9 +12,9 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
 
 from src.auth import CurrentUser, RequireOwner
+from src.internal.schemas import LayerInfo, LayersResponse, LayerUpdateRequest, LayerUpdateResponse
 
 logger = logging.getLogger(__name__)
 
@@ -40,31 +40,6 @@ _LAYER_DESCRIPTIONS: dict[str, str] = {
     "supervisor_personality": "Defines how the supervisor communicates — tone, style, behavior patterns. Can be overridden per conversation.",
     "tool_task": "Instructions for the supervisor when using external tools (web search, APIs). Defines the tool-use workflow.",
 }
-
-
-# ── Schemas ────────────────────────────────────────────────────────
-
-
-class LayerInfo(BaseModel):
-    key: str
-    label: str
-    description: str
-    content: str
-    filename: str
-
-
-class LayersResponse(BaseModel):
-    layers: list[LayerInfo]
-
-
-class LayerUpdateRequest(BaseModel):
-    content: str = Field(..., min_length=0, max_length=10000)
-
-
-class LayerUpdateResponse(BaseModel):
-    key: str
-    content: str
-    status: str = "updated"
 
 
 # ── Helpers ────────────────────────────────────────────────────────

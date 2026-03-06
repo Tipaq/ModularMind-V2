@@ -10,26 +10,13 @@ import logging
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from src.auth import CurrentUser, RequireAdmin
+from src.internal.schemas import LogEntry, LogsResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Internal"])
-
-
-class LogEntry(BaseModel):
-    ts: str
-    level: str
-    logger: str
-    message: str
-    source: str
-
-
-class LogsResponse(BaseModel):
-    items: list[LogEntry]
-    total: int
 
 
 @router.get("/logs", dependencies=[RequireAdmin])

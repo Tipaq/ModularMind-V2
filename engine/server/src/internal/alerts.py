@@ -8,42 +8,19 @@ import json
 import logging
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
 
 from src.auth import CurrentUser, RequireAdmin
-from src.internal.schemas import AlertItem
+from src.internal.schemas import (
+    ActiveAlertsResponse,
+    AlertHistoryResponse,
+    AlertItem,
+    ThresholdConfig,
+    ThresholdUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Internal"])
-
-
-class ThresholdConfig(BaseModel):
-    cpu_percent: float = 90.0
-    memory_percent: float = 85.0
-    workers_min: int = 1
-    dlq_max: int = 10
-    queue_depth_max: int = 50
-    enabled: bool = True
-
-
-class ThresholdUpdate(BaseModel):
-    cpu_percent: float | None = None
-    memory_percent: float | None = None
-    workers_min: int | None = None
-    dlq_max: int | None = None
-    queue_depth_max: int | None = None
-    enabled: bool | None = None
-
-
-class AlertHistoryResponse(BaseModel):
-    items: list[AlertItem]
-    total: int
-
-
-class ActiveAlertsResponse(BaseModel):
-    active_count: int
-    alerts: list[AlertItem]
 
 
 @router.get("/alerts/thresholds", dependencies=[RequireAdmin])

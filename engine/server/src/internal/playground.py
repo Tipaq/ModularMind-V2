@@ -8,41 +8,22 @@ import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 
 from src.auth import CurrentUser, RequireOwner
 from src.infra.config import get_settings
 from src.infra.constants import KNOWN_PROVIDERS
 from src.infra.rate_limit import RateLimitDependency
 from src.infra.secrets import secrets_store
+from src.internal.schemas import (
+    PlaygroundCompletionRequest,
+    PlaygroundCompletionResponseBody,
+    PlaygroundMessage,
+)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter(tags=["Internal - Playground"])
-
-
-# ── Schemas ────────────────────────────────────────────────────────
-
-
-class PlaygroundMessage(BaseModel):
-    role: str
-    content: str
-
-
-class PlaygroundCompletionRequest(BaseModel):
-    provider: str
-    model: str
-    messages: list[PlaygroundMessage]
-    max_tokens: int = 1024
-    temperature: float = 0.7
-
-
-class PlaygroundCompletionResponseBody(BaseModel):
-    content: str
-    model: str
-    usage: dict[str, int]
-    latency_ms: int
 
 
 # ── Endpoints ──────────────────────────────────────────────────────
