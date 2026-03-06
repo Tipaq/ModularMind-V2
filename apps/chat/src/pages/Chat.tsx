@@ -4,28 +4,17 @@ import { useChat } from "../hooks/useChat";
 import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
 import { useConversations } from "../hooks/useConversations";
 import { ChatSidebar } from "../components/ChatSidebar";
-import { ChatMessages, ChatInput, InsightsPanel, useAuthStore } from "@modularmind/ui";
-import type { AttachedFile, MessageExecutionData } from "@modularmind/ui";
+import { ChatMessages, ChatInput, InsightsPanel, useAuthStore, DEFAULT_CHAT_CONFIG } from "@modularmind/ui";
+import type { AttachedFile, MessageExecutionData, ChatConfig } from "@modularmind/ui";
 import { api } from "../lib/api";
 
-interface ChatConfig {
-  supervisorMode: boolean;
-  modelId: string | null;
-  modelOverride: boolean;
-}
-
-const DEFAULT_CONFIG: ChatConfig = {
-  supervisorMode: true,
-  modelId: null,
-  modelOverride: false,
-};
 
 export default function Chat() {
   const [inputValue, setInputValue] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [enabledAgentIds, setEnabledAgentIds] = useState<string[]>([]);
   const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
-  const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CONFIG);
+  const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CHAT_CONFIG);
 
   const user = useAuthStore((s) => s.user);
   const { agents, graphs, models, load: loadConfig } = useChatConfig();

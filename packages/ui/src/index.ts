@@ -17,6 +17,10 @@ export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTi
 // Color constants
 export { ACTIVITY_COLORS, CHANNEL_COLORS, STATUS_COLORS, ROLE_COLORS, HEALTH_COLORS } from "./lib/colors";
 
+// Chat config
+export type { ChatConfig } from "./lib/chat-config";
+export { DEFAULT_CHAT_CONFIG } from "./lib/chat-config";
+
 // Chat types
 export type { ActivityType, ActivityStatus, ToolCallData, LlmCallData, RoutingData, ErrorData, ExecutionActivity, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, SupervisorData, TokenUsage, ExecutionOutputData, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData, AttachedFile } from "./types/chat";
 
