@@ -4,9 +4,8 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useChat, type Message } from "@/hooks/useChat";
 import { useChatConfig } from "@/hooks/useChatConfig";
-import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import type { Conversation } from "@modularmind/api-client";
-import { ChatMessages, ChatInput, InsightsPanel } from "@modularmind/ui";
+import { ConversationSidebar, ChatMessages, ChatInput, InsightsPanel } from "@modularmind/ui";
 import type { AttachedFile } from "@modularmind/ui";
 import { PanelRight } from "lucide-react";
 
