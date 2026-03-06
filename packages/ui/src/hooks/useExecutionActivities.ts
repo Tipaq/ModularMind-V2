@@ -62,6 +62,7 @@ export function useExecutionActivities() {
     // --- LLM ---
     if (eventType === "trace:llm_start") {
       const id = `llm-${++seqRef.current}`;
+      const model = (data.model as string) || "LLM";
       let detail: string | undefined;
       if (data.message_count) detail = `${data.message_count} messages`;
       setActivities((prev) => [
@@ -70,31 +71,52 @@ export function useExecutionActivities() {
           id,
           type: "llm",
           status: "running",
-          label: `Calling ${data.model || "LLM"}`,
+          label: `Calling ${model}`,
           detail,
+          model,
           preview: data.prompt_preview ? truncate(data.prompt_preview as string, 120) : undefined,
           startedAt: Date.now(),
+          llmData: {
+            model,
+            messageCount: data.message_count as number | undefined,
+            messageTypes: data.message_types as Record<string, number> | undefined,
+          },
         },
       ]);
       return;
     }
     if (eventType === "trace:llm_end") {
-      let detail: string | undefined;
-      if (data.tokens) {
-        const tokens = data.tokens as Record<string, number>;
-        const parts: string[] = [];
-        if (tokens.total) parts.push(`${tokens.total} tokens`);
-        if (tokens.prompt && tokens.completion)
-          parts.push(`${tokens.prompt}\u2192${tokens.completion}`);
-        detail = parts.join(" \u00b7 ");
-      }
-      setActivities((prev) =>
-        completeLastRunning(prev, "llm", {
-          durationMs: data.duration_ms as number | undefined,
+      setActivities((prev) => {
+        const idx = [...prev].reverse().findIndex((a) => a.type === "llm" && a.status === "running");
+        if (idx === -1) return prev;
+        const realIdx = prev.length - 1 - idx;
+        const updated = [...prev];
+        const existing = updated[realIdx];
+
+        const tokens = data.tokens as { prompt: number; completion: number; total: number } | undefined;
+        let detail: string | undefined;
+        if (tokens) {
+          const parts: string[] = [];
+          if (tokens.total) parts.push(`${tokens.total} tokens`);
+          if (tokens.prompt && tokens.completion)
+            parts.push(`${tokens.prompt}\u2192${tokens.completion}`);
+          detail = parts.join(" \u00b7 ");
+        }
+
+        updated[realIdx] = {
+          ...existing,
+          status: "completed",
+          durationMs: (data.duration_ms as number | undefined) ?? Date.now() - existing.startedAt,
           detail,
-          preview: data.response_preview ? truncate(data.response_preview as string, 150) : undefined,
-        }),
-      );
+          preview: data.response_preview ? truncate(data.response_preview as string, 150) : existing.preview,
+          llmData: {
+            ...existing.llmData!,
+            tokens: tokens ? { ...tokens, estimated: data.tokens_estimated as boolean | undefined } : undefined,
+            responsePreview: data.response_preview ? truncate(data.response_preview as string, 300) : undefined,
+          },
+        };
+        return updated;
+      });
       return;
     }
 
@@ -154,6 +176,7 @@ export function useExecutionActivities() {
             label: "Searching documents",
             detail: data.query ? `"${truncate(data.query as string, 60)}"` : undefined,
             startedAt: Date.now(),
+            query: data.query ? truncate(data.query as string, 120) : undefined,
           },
         ]);
       } else if (data.status === "completed") {
@@ -161,6 +184,7 @@ export function useExecutionActivities() {
           completeLastRunning(prev, "retrieval", {
             durationMs: data.duration_ms as number | undefined,
             detail: data.num_results != null ? `${data.num_results} results` : undefined,
+            numResults: data.num_results as number | undefined,
           }),
         );
       }
@@ -193,6 +217,7 @@ export function useExecutionActivities() {
           label: "Parallel execution",
           detail: data.branch_count ? `${data.branch_count} branches` : undefined,
           startedAt: Date.now(),
+          branchCount: data.branch_count as number | undefined,
         },
       ]);
       return;
@@ -214,6 +239,8 @@ export function useExecutionActivities() {
           label: `Loop${data.mode === "batch" ? " (batch)" : ""}`,
           detail: data.total_items != null ? `${data.total_items} items` : undefined,
           startedAt: Date.now(),
+          loopMode: data.mode as string | undefined,
+          loopItems: data.total_items as number | undefined,
         },
       ]);
       return;
@@ -234,7 +261,17 @@ export function useExecutionActivities() {
     }
     if (eventType === "trace:supervisor_routed") {
       setActivities((prev) =>
-        completeLastRunning(prev, "routing", { durationMs: data.duration_ms as number | undefined, detail: (data.strategy as string) || undefined }),
+        completeLastRunning(prev, "routing", {
+          durationMs: data.duration_ms as number | undefined,
+          detail: (data.strategy as string) || undefined,
+          routingData: {
+            strategy: (data.strategy as string) || "unknown",
+            reasoning: data.reasoning as string | undefined,
+            confidence: data.confidence as number | undefined,
+            targetAgent: data.agent_name as string | undefined,
+            targetGraph: data.graph_name as string | undefined,
+          },
+        }),
       );
       return;
     }
@@ -284,6 +321,7 @@ export function useExecutionActivities() {
           type: "agent_created",
           status: "completed",
           label: `Created agent: ${data.agent_name || "ephemeral"}`,
+          agentName: data.agent_name as string | undefined,
           startedAt: Date.now(),
           durationMs: (data.duration_ms as number) || 0,
         },
@@ -321,6 +359,10 @@ export function useExecutionActivities() {
           label: `${data.error || "An error occurred"}`,
           startedAt: Date.now(),
           durationMs: (data.duration_ms as number) || undefined,
+          errorData: {
+            errorType: data.error_type as string | undefined,
+            step: data.step as string | undefined,
+          },
         },
       ]);
       return;

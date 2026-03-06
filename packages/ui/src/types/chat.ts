@@ -20,6 +20,35 @@ export interface ToolCallData {
   result?: string;
 }
 
+/** Structured LLM call data captured from trace events. */
+export interface LlmCallData {
+  model: string;
+  messageCount?: number;
+  messageTypes?: Record<string, number>;
+  tokens?: {
+    prompt: number;
+    completion: number;
+    total: number;
+    estimated?: boolean;
+  };
+  responsePreview?: string;
+}
+
+/** Routing decision data from supervisor. */
+export interface RoutingData {
+  strategy: string;
+  reasoning?: string;
+  confidence?: number;
+  targetAgent?: string;
+  targetGraph?: string;
+}
+
+/** Error details from trace events. */
+export interface ErrorData {
+  errorType?: string;
+  step?: string;
+}
+
 export interface ExecutionActivity {
   id: string;
   type: ActivityType;
@@ -34,6 +63,14 @@ export interface ExecutionActivity {
   isEphemeral?: boolean;
   model?: string;
   tools?: string[];
+  llmData?: LlmCallData;
+  routingData?: RoutingData;
+  errorData?: ErrorData;
+  branchCount?: number;
+  loopMode?: string;
+  loopItems?: number;
+  query?: string;
+  numResults?: number;
 }
 
 // ─── Shared camelCase types for Insights / Knowledge / Memory panels ─────────
