@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Save, Trash2 } from "lucide-react";
-import { Button, Badge } from "@modularmind/ui";
+import { Button, Badge, DetailHeader } from "@modularmind/ui";
 import type { Node, Edge } from "@xyflow/react";
-import { DetailHeader } from "@/components/studio/shared/DetailHeader";
+import Link from "next/link";
 import type { PlatformGraph } from "@/stores/graphs";
 
 // Dynamic import to avoid SSR issues with ReactFlow
@@ -119,6 +119,7 @@ export default function GraphDetailPage() {
       <DetailHeader
         backHref="/graphs"
         backLabel="Graphs"
+        renderLink={({ href, className, children }) => <Link href={href} className={className}>{children}</Link>}
         title={graph.name}
         badges={
           <>

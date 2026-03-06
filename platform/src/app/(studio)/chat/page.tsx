@@ -405,8 +405,16 @@ export default function ChatPage() {
               selectedModelId={chatConfig.modelId}
               onModelChange={(modelId) => handleConfigChange({ modelId })}
               getModelId={(m) => `${m.provider}:${m.model_id}`}
-              onCompact={() => {/* TODO: implement conversation compaction */}}
-              compactDisabled={messages.length < 4}
+              onCompact={async () => {
+                if (!activeConversationId) return;
+                const res = await fetch("/api/chat/compact", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ conversation_id: activeConversationId }),
+                });
+                if (!res.ok) throw new Error("Compaction failed");
+              }}
+              compactDisabled={messages.length < 4 || isStreaming}
               contextPercent={contextPercent}
             />
           }
@@ -430,11 +438,15 @@ export default function ChatPage() {
           enabledGraphs={graphs.filter((g) => enabledGraphIds.includes(g.id))}
           allAgents={agents}
           allGraphs={graphs}
-          onConsolidate={async () => {
-            const res = await fetch("/api/chat/memory/consolidate", { method: "POST" });
-            if (!res.ok) throw new Error("Consolidation failed");
+          onCompact={activeConversationId ? async () => {
+            const res = await fetch("/api/chat/compact", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ conversation_id: activeConversationId }),
+            });
+            if (!res.ok) throw new Error("Compaction failed");
             return res.json();
-          }}
+          } : undefined}
         />
       )}
     </div>

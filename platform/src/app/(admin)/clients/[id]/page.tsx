@@ -26,8 +26,9 @@ import {
   Input,
   STATUS_COLORS,
   relativeTime,
+  DetailHeader,
 } from "@modularmind/ui";
-import { DetailHeader } from "@/components/studio/shared/DetailHeader";
+import Link from "next/link";
 import { useClientsStore } from "@/stores/clients";
 
 function StatusBadge({ status }: { status: string }) {
@@ -148,6 +149,7 @@ export default function ClientDetailPage() {
       <DetailHeader
         backHref="/clients"
         backLabel="Clients"
+        renderLink={({ href, className, children }) => <Link href={href} className={className}>{children}</Link>}
         title={isEditing ? editName : client.name}
         isEditing={isEditing}
         onEditTitle={(v) => setEditName(v)}

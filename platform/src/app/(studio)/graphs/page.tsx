@@ -16,10 +16,10 @@ import {
   DropdownMenuItem,
   Input,
   PageHeader,
+  EmptyState,
+  ResourceTable,
+  ResourceFilters,
 } from "@modularmind/ui";
-import { EmptyState } from "@/components/studio/shared/EmptyState";
-import { ResourceTable } from "@/components/studio/shared/ResourceTable";
-import { ResourceFilters } from "@/components/studio/shared/ResourceFilters";
 import { useGraphsStore, type PlatformGraphListItem } from "@/stores/graphs";
 import type { ResourceColumn, ResourceFilterConfig, SortState } from "@modularmind/ui";
 

@@ -27,8 +27,9 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
+  DetailHeader,
 } from "@modularmind/ui";
-import { DetailHeader } from "@/components/studio/shared/DetailHeader";
+import Link from "next/link";
 import { useAgentsStore } from "@/stores/agents";
 
 function Section({
@@ -188,6 +189,7 @@ export default function AgentDetailPage() {
       <DetailHeader
         backHref="/agents"
         backLabel="Agents"
+        renderLink={({ href, className, children }) => <Link href={href} className={className}>{children}</Link>}
         title={isEditing ? editValues.name : agent.name}
         isEditing={isEditing}
         onEditTitle={(v) => setEditValues((prev) => ({ ...prev, name: v }))}
