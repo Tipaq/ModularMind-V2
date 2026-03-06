@@ -94,7 +94,7 @@ async def apply_exponential_decay(
                 # Best-effort Qdrant update
                 try:
                     await vector_store.set_expired(entry.id)
-                except Exception as e:
+                except Exception as e:  # Qdrant client raises heterogeneous errors
                     logger.error(
                         "Qdrant invalidation failed for %s: %s", entry.id, e
                     )

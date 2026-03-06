@@ -6,6 +6,7 @@ API endpoints for memory operations.
 
 import logging
 
+import redis
 from fastapi import APIRouter, HTTPException, Query, Response
 from src.infra.query_utils import raise_not_found
 from sqlalchemy import case, func, select
@@ -250,13 +251,13 @@ async def trigger_consolidation(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception as e:  # Consolidation involves DB + Redis + LLM; logs and returns 500
         logger.exception("Manual consolidation failed")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         try:
             await redis_client.delete(lock_key)
-        except Exception:
+        except redis.RedisError:
             logger.error("Failed to release consolidation lock", exc_info=True)
 
 
@@ -551,7 +552,7 @@ async def search_memories(
 
     try:
         query_embedding = await embedding_provider.embed_text(request.query)
-    except Exception as e:
+    except Exception as e:  # LLM providers raise heterogeneous errors
         raise HTTPException(
             status_code=503,
             detail=f"Embedding service unavailable: {e}",
@@ -636,6 +637,9 @@ async def get_memory(
     if not entry:
         raise_not_found("Memory entry")
 
+    if entry.user_id and entry.user_id != str(user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     return MemoryEntryResponse.model_validate(entry)
 
 
@@ -647,10 +651,15 @@ async def delete_memory(
 ) -> dict[str, str]:
     """Delete a memory entry."""
     repo = MemoryRepository(db)
-    deleted = await repo.delete_entry(entry_id)
+    entry = await repo.get_entry(entry_id)
 
-    if not deleted:
+    if not entry:
         raise_not_found("Memory entry")
+
+    if entry.user_id and entry.user_id != str(user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    await repo.delete_entry(entry_id)
 
     await db.commit()
 
@@ -659,7 +668,7 @@ async def delete_memory(
 
         vs = QdrantMemoryVectorStore()
         await vs.delete_entry(entry_id)
-    except Exception as e:
+    except Exception as e:  # Qdrant client can raise various errors
         logger.error("Qdrant cleanup failed for memory entry %s: %s", entry_id, e)
 
     return {"status": "deleted"}

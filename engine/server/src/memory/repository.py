@@ -72,7 +72,7 @@ class MemoryRepository:
                     memory_type=memory_type.value,
                     tier=tier.value,
                 )
-            except Exception as e:
+            except Exception as e:  # Qdrant client raises heterogeneous errors
                 logger.error("Qdrant upsert failed for memory %s: %s", entry_id, e)
 
         return entry
@@ -190,7 +190,7 @@ class MemoryRepository:
         # Best-effort Qdrant update
         try:
             await self._vector_store.set_expired(entry_id)
-        except Exception as e:
+        except Exception as e:  # Qdrant client raises heterogeneous errors
             logger.error("Qdrant invalidation failed for %s: %s", entry_id, e)
 
     async def delete_entry(self, entry_id: str) -> bool:

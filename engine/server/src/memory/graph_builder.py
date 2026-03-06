@@ -173,7 +173,7 @@ class MemoryGraphBuilder:
                             "weight": neighbor.score,
                             "shared_entities": [],
                         }
-            except Exception:
+            except Exception:  # Qdrant client raises heterogeneous errors
                 logger.debug(
                     "Semantic fallback failed for entry %s", entry_id[:8]
                 )

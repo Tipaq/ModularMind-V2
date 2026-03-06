@@ -86,7 +86,7 @@ class MemoryScorer:
 
         try:
             scores = await self._call_llm(prompt)
-        except Exception:
+        except (RuntimeError, ValueError, ConnectionError, OSError):
             logger.exception("Scorer LLM call failed, passing facts through unscored")
             # Fallback: return facts with original importance and default type
             return [

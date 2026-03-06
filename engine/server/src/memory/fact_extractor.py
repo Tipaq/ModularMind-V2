@@ -169,7 +169,7 @@ class FactExtractor:
 
             return facts
 
-        except Exception as e:
+        except Exception as e:  # LLM providers raise heterogeneous errors
             logger.error("Fact extraction failed: %s", e)
             return []
 
@@ -296,7 +296,7 @@ class FactExtractor:
                         )
                         count += 1
 
-                except Exception as e:
+                except Exception as e:  # Resilience: per-fact errors must not abort the batch
                     logger.error("Failed to process fact: %s", e)
 
             await batch_db.commit()

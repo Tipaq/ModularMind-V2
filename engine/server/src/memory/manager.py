@@ -63,7 +63,7 @@ class MemoryManager:
         try:
             stats = await self.repository.get_stats(scope, scope_id)
             return stats.total_entries > 0
-        except Exception as e:
+        except Exception as e:  # Resilience: mixed DB + vector store query
             logger.warning(f"Error checking memory stats: {e}")
             return False
 
@@ -174,7 +174,7 @@ class MemoryManager:
 
             return entries
 
-        except Exception as e:
+        except Exception as e:  # Resilience: mixed embedding + vector search + DB ops
             logger.error(f"Error getting memory context: {e}")
             return []
 
@@ -217,7 +217,7 @@ class MemoryManager:
             logger.info(f"Stored memory: {entry.id} (scope: {scope}, tier: {tier})")
             return entry
 
-        except Exception as e:
+        except Exception as e:  # Resilience: mixed embedding + DB write ops
             logger.error(f"Error storing memory: {e}")
             return None
 
