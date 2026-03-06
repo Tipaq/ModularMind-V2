@@ -63,7 +63,7 @@ class EphemeralAgentFactory:
 
         await self._check_rate_limit(conversation_id)
 
-        agent_id = uuid4()
+        agent_id = str(uuid4())
         rag_config = RAGConfig(
             enabled=bool(rag_collections),
             collection_ids=[UUID(c) for c in (rag_collections or [])],

@@ -1040,12 +1040,41 @@ class SuperSupervisorService:
         """Handle EXECUTE_GRAPH — create execution record for a graph."""
         graph_id = decision.graph_id
         if not graph_id:
+            # LLM may have put the id in agent_id instead — fall back to delegation
+            if decision.agent_id:
+                logger.info(
+                    "EXECUTE_GRAPH has no graph_id but agent_id=%s — falling back to DELEGATE_AGENT",
+                    decision.agent_id,
+                )
+                decision.strategy = RoutingStrategy.DELEGATE_AGENT
+                return await self._handle_agent_delegation(
+                    decision, conv_id, content, user_id, {},
+                )
             return {
                 "direct_response": "No graph specified for execution",
                 "execution_id": None,
             }
 
         graph_config = await self.config_provider.get_graph_config(graph_id)
+        # If the graph doesn't exist, the LLM may have confused an agent for a graph.
+        # Try graph_id as an agent_id, or fall back to decision.agent_id.
+        if not graph_config:
+            fallback_agent_id = decision.agent_id
+            # Check if graph_id is actually an agent
+            if not fallback_agent_id:
+                agent_check = await self.config_provider.get_agent_config(graph_id)
+                if agent_check:
+                    fallback_agent_id = graph_id
+            if fallback_agent_id:
+                logger.info(
+                    "Graph %s not found, falling back to DELEGATE_AGENT with agent_id=%s",
+                    graph_id, fallback_agent_id,
+                )
+                decision.agent_id = fallback_agent_id
+                decision.strategy = RoutingStrategy.DELEGATE_AGENT
+                return await self._handle_agent_delegation(
+                    decision, conv_id, content, user_id, {},
+                )
         graph_name = graph_config.name if graph_config else graph_id
 
         execution_data = ExecutionCreate(
