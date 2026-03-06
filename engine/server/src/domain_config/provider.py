@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import redis.asyncio as aioredis
+import sqlalchemy.exc
 import yaml
 from modularmind_shared.utils import compute_config_hash
 
@@ -139,7 +140,7 @@ class ConfigProvider:
                         versions[f"agent:{config_id}"] = ConfigVersion(
                             config_hash=row.config_hash, loaded_at=now,
                         )
-                    except Exception as e:
+                    except (ValueError, KeyError, TypeError) as e:
                         logger.error(
                             "Failed to validate agent config %s v%d: %s",
                             row.id, row.version, e,
@@ -154,12 +155,12 @@ class ConfigProvider:
                         versions[f"graph:{config_id}"] = ConfigVersion(
                             config_hash=row.config_hash, loaded_at=now,
                         )
-                    except Exception as e:
+                    except (ValueError, KeyError, TypeError) as e:
                         logger.error(
                             "Failed to validate graph config %s v%d: %s",
                             row.id, row.version, e,
                         )
-        except Exception as e:
+        except (sqlalchemy.exc.SQLAlchemyError, OSError) as e:
             logger.error("Failed to load configs from DB, retaining cache: %s", e)
             new_agents = dict(self._agents)
             new_graphs = dict(self._graphs)
@@ -183,7 +184,7 @@ class ConfigProvider:
                 versions[f"model:{model_id}"] = ConfigVersion(
                     config_hash=compute_config_hash(data), loaded_at=now,
                 )
-            except Exception as e:
+            except (OSError, ValueError, KeyError) as e:
                 logger.error("Failed to load model config %s: %s", file, e)
         return new_models
 

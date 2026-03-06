@@ -169,7 +169,7 @@ class ConversationIndexer:
                 try:
                     await self.index_message(message, conversation)
                     count += 1
-                except Exception as e:
+                except Exception as e:  # Graceful degradation: skip failed messages during reindex
                     logger.error("Failed to index message %s: %s", message.id, e)
 
         return count
@@ -209,6 +209,6 @@ class ConversationIndexer:
             response = await llm.ainvoke([HumanMessage(content=prompt)])
             return response.content.strip()
 
-        except Exception as e:
+        except Exception as e:  # LLM providers raise heterogeneous errors
             logger.error("Summary generation failed: %s", e)
             return None

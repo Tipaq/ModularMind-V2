@@ -254,7 +254,7 @@ class CompactionService:
             ep = get_memory_embedding_provider()
             if ep:
                 embedding = await ep.embed_query(summary_text)
-        except Exception as e:
+        except Exception as e:  # LLM providers raise heterogeneous errors
             logger.warning("Embedding failed for compaction summary: %s", e)
 
         repo = MemoryRepository(self.session)

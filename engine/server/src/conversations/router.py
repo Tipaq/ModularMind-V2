@@ -52,6 +52,8 @@ async def _maybe_enqueue_marathon_extraction(conversation_id: str) -> None:
     import json
     from datetime import datetime
 
+    import redis.exceptions
+    import sqlalchemy.exc
     from sqlalchemy import select, update
 
     from src.infra.database import async_session_maker
@@ -126,7 +128,7 @@ async def _maybe_enqueue_marathon_extraction(conversation_id: str) -> None:
                 "Marathon extraction: enqueued %d messages from conversation %s",
                 len(messages), conv.id,
             )
-    except Exception:
+    except (OSError, redis.exceptions.RedisError, sqlalchemy.exc.SQLAlchemyError):
         logger.debug(
             "Marathon extraction check failed for conversation %s",
             conversation_id,
@@ -241,7 +243,7 @@ async def _enrich_prompt_with_attachments(
                     f"[Attached document: {att['filename']}]\n"
                     f"<document_content>\n{truncated}\n</document_content>"
                 )
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             logger.warning(
                 "Failed to extract text from attachment %s", att.get("filename"),
                 exc_info=True,
@@ -525,6 +527,8 @@ async def serve_attachment(
     db: DbSession,
 ) -> StreamingResponse:
     """Serve an attachment file from a sent message."""
+    import json
+
     from sqlalchemy import text
 
     from src.infra.config import get_settings
@@ -538,7 +542,7 @@ async def serve_attachment(
             "SELECT id, conversation_id, attachments FROM conversation_messages "
             "WHERE attachments @> :pattern::jsonb"
         ),
-        {"pattern": f'[{{"id": "{attachment_id}"}}]'},
+        {"pattern": json.dumps([{"id": attachment_id}])},
     )
     row = result.first()
     if not row:
@@ -865,7 +869,7 @@ async def _handle_direct_execution(
                     for s in get_mcp_registry().list_servers()
                     if s.enabled
                 ]
-        except Exception:
+        except (RuntimeError, ValueError, KeyError):
             logger.debug(
                 "MCP auto-enable failed, continuing without MCP",
                 exc_info=True,
@@ -1015,7 +1019,7 @@ async def send_message(
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except (RuntimeError, OSError, KeyError, TypeError) as e:
         logger.exception("Failed to create execution: %s", e)
         raise HTTPException(status_code=500, detail="Failed to start execution")
 
