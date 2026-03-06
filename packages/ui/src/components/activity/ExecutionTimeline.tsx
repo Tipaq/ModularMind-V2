@@ -26,6 +26,7 @@ const DOT_BG: Record<string, string> = {
   error: "bg-destructive",
   direct_response: "bg-success",
   agent_created: "bg-primary",
+  compaction: "bg-info",
 };
 
 function TimelineItem({

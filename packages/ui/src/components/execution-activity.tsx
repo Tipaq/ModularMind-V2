@@ -12,6 +12,7 @@ import {
   Route,
   MessageSquare,
   Sparkles,
+  RefreshCw,
   Loader2,
   CheckCircle2,
   ChevronDown,
@@ -36,6 +37,7 @@ const ACTIVITY_ICON: Record<ActivityType, React.ElementType> = {
   delegation: Bot,
   direct_response: MessageSquare,
   agent_created: Sparkles,
+  compaction: RefreshCw,
 };
 
 const ActivityItem = memo(function ActivityItem({ activity }: { activity: ExecutionActivity }) {

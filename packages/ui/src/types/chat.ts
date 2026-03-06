@@ -9,7 +9,8 @@ export type ActivityType =
   | "routing"
   | "delegation"
   | "direct_response"
-  | "agent_created";
+  | "agent_created"
+  | "compaction";
 
 export type ActivityStatus = "running" | "completed" | "failed";
 

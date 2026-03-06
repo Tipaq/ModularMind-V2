@@ -42,6 +42,7 @@ export const ACTIVITY_COLORS: Record<string, string> = {
   delegation: "text-warning",
   direct_response: "text-success",
   agent_created: "text-primary",
+  compaction: "text-info",
 };
 
 /** Health status dot colors */

@@ -13,11 +13,8 @@ function completeLastRunning(
   type: ActivityType,
   patch: Partial<ExecutionActivity>,
 ): ExecutionActivity[] {
-  const idx = [...prev]
-    .reverse()
-    .findIndex((a) => a.type === type && a.status === "running");
-  if (idx === -1) return prev;
-  const realIdx = prev.length - 1 - idx;
+  const realIdx = prev.findLastIndex((a) => a.type === type && a.status === "running");
+  if (realIdx === -1) return prev;
   const updated = [...prev];
   updated[realIdx] = {
     ...updated[realIdx],
@@ -87,9 +84,8 @@ export function useExecutionActivities() {
     }
     if (eventType === "trace:llm_end") {
       setActivities((prev) => {
-        const idx = [...prev].reverse().findIndex((a) => a.type === "llm" && a.status === "running");
-        if (idx === -1) return prev;
-        const realIdx = prev.length - 1 - idx;
+        const realIdx = prev.findLastIndex((a) => a.type === "llm" && a.status === "running");
+        if (realIdx === -1) return prev;
         const updated = [...prev];
         const existing = updated[realIdx];
 
@@ -146,9 +142,8 @@ export function useExecutionActivities() {
     }
     if (eventType === "trace:tool_end") {
       setActivities((prev) => {
-        const idx = [...prev].reverse().findIndex((a) => a.type === "tool" && a.status === "running");
-        if (idx === -1) return prev;
-        const realIdx = prev.length - 1 - idx;
+        const realIdx = prev.findLastIndex((a) => a.type === "tool" && a.status === "running");
+        if (realIdx === -1) return prev;
         const updated = [...prev];
         const existing = updated[realIdx];
         updated[realIdx] = {
@@ -326,6 +321,34 @@ export function useExecutionActivities() {
           durationMs: (data.duration_ms as number) || 0,
         },
       ]);
+      return;
+    }
+
+    // --- Context compaction ---
+    if (eventType === "trace:compaction_start") {
+      const id = `compact-${++seqRef.current}`;
+      setActivities((prev) => [
+        ...prev,
+        {
+          id,
+          type: "compaction",
+          status: "running",
+          label: "Compacting history",
+          detail: data.message_count ? `${data.message_count} messages` : undefined,
+          startedAt: Date.now(),
+        },
+      ]);
+      return;
+    }
+    if (eventType === "trace:compaction_end") {
+      setActivities((prev) =>
+        completeLastRunning(prev, "compaction", {
+          durationMs: data.duration_ms as number | undefined,
+          detail: data.compacted_count
+            ? `${data.compacted_count} messages compacted`
+            : (data.error as string) || undefined,
+        }),
+      );
       return;
     }
 
