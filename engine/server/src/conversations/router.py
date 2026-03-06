@@ -649,6 +649,8 @@ async def _build_supervisor_response(
 ) -> SendMessageResponse:
     """Build the SendMessageResponse from supervisor result."""
     from src.conversations.schemas import (
+        BudgetLayerInfo,
+        BudgetOverview,
         ContextData,
         ContextHistory,
         ContextHistoryBudget,
@@ -689,6 +691,7 @@ async def _build_supervisor_response(
     if raw_context:
         raw_history = raw_context.get("history", {})
         raw_budget = raw_history.get("budget")
+        raw_bo = raw_context.get("budget_overview")
         context_data_response = ContextData(
             history=ContextHistory(
                 budget=ContextHistoryBudget(**raw_budget) if raw_budget else None,
@@ -699,6 +702,14 @@ async def _build_supervisor_response(
                 summary=raw_history.get("summary", ""),
             ),
             memory_entries=raw_context.get("memory_entries", []),
+            budget_overview=BudgetOverview(
+                context_window=raw_bo["context_window"],
+                effective_context=raw_bo["effective_context"],
+                max_pct=raw_bo["max_pct"],
+                layers={
+                    k: BudgetLayerInfo(**v) for k, v in raw_bo["layers"].items()
+                },
+            ) if raw_bo else None,
         )
 
     base_kwargs = dict(
@@ -764,6 +775,11 @@ async def _handle_supervisor_message(
     from .models import ConversationMessage
 
     conv_config: dict = getattr(conversation, "config", None) or {}
+    # Normalise frontend key names → supervisor key names
+    if "enabled_agent_ids" in conv_config and "enabled_agents" not in conv_config:
+        conv_config["enabled_agents"] = conv_config["enabled_agent_ids"]
+    if "enabled_graph_ids" in conv_config and "enabled_graphs" not in conv_config:
+        conv_config["enabled_graphs"] = conv_config["enabled_graph_ids"]
     model_id = conv_config.get("model_id")
     if not model_id:
         raise HTTPException(

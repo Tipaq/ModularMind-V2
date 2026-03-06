@@ -176,11 +176,29 @@ class ContextHistory(BaseModel):
     summary: str = ""
 
 
+class BudgetLayerInfo(BaseModel):
+    """Token budget info for a single context layer."""
+
+    pct: float = 0
+    allocated: int = 0
+    used: int = 0
+
+
+class BudgetOverview(BaseModel):
+    """Overall context budget breakdown across all layers."""
+
+    context_window: int = 0
+    effective_context: int = 0
+    max_pct: float = 100
+    layers: dict[str, BudgetLayerInfo] = Field(default_factory=dict)
+
+
 class ContextData(BaseModel):
     """Full context injection data for frontend display."""
 
     history: ContextHistory | None = None
     memory_entries: list[MemoryEntrySummary] = Field(default_factory=list)
+    budget_overview: BudgetOverview | None = None
 
 
 class SendMessageResponse(BaseModel):
