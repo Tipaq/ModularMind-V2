@@ -10,6 +10,7 @@ import logging
 from typing import Any
 
 import httpx
+import sqlalchemy.exc
 
 from src.infra.config import settings
 
@@ -151,7 +152,7 @@ class SyncService:
                         change_note=f"Synced from platform (v{raw_agent.get('version', 1)})",
                     )
                     logger.info("Applied agent config: %s (%s)", agent_id, raw_agent.get("name"))
-                except Exception:
+                except (ValueError, KeyError, sqlalchemy.exc.SQLAlchemyError):
                     logger.exception("Failed to apply agent %s", agent_id)
             await session.commit()
 
@@ -175,7 +176,7 @@ class SyncService:
                         change_note=f"Synced from platform (v{raw_graph.get('version', 1)})",
                     )
                     logger.info("Applied graph config: %s (%s)", graph_id, raw_graph.get("name"))
-                except Exception:
+                except (ValueError, KeyError, sqlalchemy.exc.SQLAlchemyError):
                     logger.exception("Failed to apply graph %s", graph_id)
             await session.commit()
 

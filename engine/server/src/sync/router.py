@@ -2,6 +2,7 @@
 
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src.infra.config import settings
@@ -34,7 +35,7 @@ async def trigger_sync(request: Request) -> dict[str, bool]:
     try:
         updated = await svc.poll()
         return {"updated": updated}
-    except Exception as exc:
+    except (httpx.HTTPError, ConnectionError, OSError, ValueError) as exc:
         logger.exception("Sync trigger failed")
         raise HTTPException(status_code=500, detail="Sync failed") from exc
     finally:

@@ -10,6 +10,9 @@ Configures interval and cron jobs for:
 
 import logging
 
+import httpx
+import redis.exceptions
+import sqlalchemy.exc
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.infra.config import settings
@@ -91,7 +94,7 @@ async def sync_platform() -> None:
         updated = await svc.poll()
         if updated:
             logger.info("Config updated from platform")
-    except Exception:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError):
         logger.exception("Platform sync failed")
     finally:
         await svc.close()
@@ -116,7 +119,7 @@ async def report_to_platform() -> None:
                 json=payload,
                 headers={"X-Engine-Key": settings.ENGINE_API_KEY},
             )
-    except Exception:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
         logger.exception("Failed to report to platform")
 
 
@@ -186,13 +189,13 @@ async def memory_consolidation() -> None:
             await session.commit()
 
         logger.info("Memory consolidation complete")
-    except Exception:
+    except (sqlalchemy.exc.SQLAlchemyError, OSError, RuntimeError):
         logger.exception("Memory consolidation failed")
     finally:
         # Release Redis lock
         try:
             await redis_client.delete(lock_key)
-        except Exception:
+        except (ConnectionError, OSError, redis.exceptions.RedisError):
             logger.error("Failed to release consolidation lock", exc_info=True)
 
 
@@ -343,19 +346,19 @@ async def memory_extraction_scan() -> None:
             for conv, _new_count in rows:
                 try:
                     await _extract_new_messages(session, conv, now)
-                except Exception:
+                except (sqlalchemy.exc.SQLAlchemyError, redis.exceptions.RedisError, OSError):
                     logger.exception(
                         "Failed to enqueue extraction for conversation %s", conv.id,
                     )
 
             await session.commit()
 
-    except Exception:
+    except (sqlalchemy.exc.SQLAlchemyError, redis.exceptions.RedisError, OSError):
         logger.exception("Memory extraction scan failed")
     finally:
         try:
             await redis_client.delete(lock_key)
-        except Exception:
+        except (ConnectionError, OSError, redis.exceptions.RedisError):
             logger.error("Failed to release extraction scan lock")
 
 
@@ -379,14 +382,14 @@ async def cleanup_orphaned_attachments() -> None:
 
     try:
         objects = await store.list_objects(s.S3_BUCKET_ATTACHMENTS, prefix="chat/")
-    except Exception:
+    except (OSError, ConnectionError):
         logger.exception("Failed to list attachment objects for cleanup")
         return
 
     if not objects:
         return
 
-    r = get_redis_client()
+    r = await get_redis_client()
     deleted = 0
 
     try:
@@ -412,12 +415,12 @@ async def cleanup_orphaned_attachments() -> None:
             try:
                 await store.delete(s.S3_BUCKET_ATTACHMENTS, key)
                 deleted += 1
-            except Exception:
+            except (OSError, ConnectionError):
                 logger.warning("Failed to delete orphaned attachment %s", key)
 
         if deleted:
             logger.info("Cleaned up %d orphaned chat attachment(s)", deleted)
-    except Exception:
+    except (OSError, ConnectionError, redis.exceptions.RedisError):
         logger.exception("Orphaned attachment cleanup failed")
     finally:
         await r.aclose()
@@ -452,5 +455,5 @@ async def cleanup_stale_executions() -> None:
             if result.rowcount:
                 logger.info("Cleaned up %d stale executions", result.rowcount)
             await session.commit()
-    except Exception:
+    except sqlalchemy.exc.SQLAlchemyError:
         logger.exception("Stale execution cleanup failed")

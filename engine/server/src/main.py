@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
         from src.infra.redis import get_redis_client
         from src.supervisor.context_manager import init_context_manager
 
-        redis_client = get_redis_client()
+        redis_client = await get_redis_client()
         init_context_manager(redis_client)
         logger.info("HierarchicalContextManager initialized")
 
@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
     try:
         await qdrant_factory.ensure_collections()
         logger.info("Qdrant collections initialized")
-    except Exception as exc:
+    except (ConnectionError, OSError, TimeoutError) as exc:
         logger.warning("Qdrant initialization failed (non-fatal): %s", exc)
 
     # 3b. Initialize S3/MinIO buckets
@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
         store = get_object_store()
         await store.ensure_buckets([settings.S3_BUCKET_RAG, settings.S3_BUCKET_ATTACHMENTS])
         logger.info("S3 buckets initialized")
-    except Exception as exc:
+    except (OSError, ConnectionError) as exc:
         logger.warning("S3 bucket initialization failed (non-fatal): %s", exc)
 
     # 4. Load seed model catalog
@@ -112,7 +112,7 @@ async def lifespan(app: FastAPI):
         seeded = model_svc.load_seed_catalog()
         if seeded:
             logger.info("Seeded %d model(s) from catalog", seeded)
-    except Exception as exc:
+    except (OSError, ValueError, KeyError) as exc:
         logger.warning("Model catalog seeding failed (non-fatal): %s", exc)
 
     # 5. Initialize MCP registry + recover sidecars
@@ -121,7 +121,7 @@ async def lifespan(app: FastAPI):
     try:
         await startup_mcp()
         logger.info("MCP registry initialized, sidecars recovered")
-    except Exception as exc:
+    except (OSError, ConnectionError, RuntimeError) as exc:
         logger.warning("MCP startup failed (non-fatal): %s", exc)
 
     # 6. Initialize sync service
@@ -130,13 +130,13 @@ async def lifespan(app: FastAPI):
     sync_service = SyncService()
     try:
         await sync_service.initialize()
-    except Exception as exc:
+    except (OSError, ConnectionError, ValueError) as exc:
         logger.warning("Sync service initialization failed (non-fatal): %s", exc)
 
     # 7. MCP leader-only phase (auto-deploy free catalog entries)
     try:
         await startup_mcp(leader_only=True)
-    except Exception as exc:
+    except (OSError, ConnectionError, RuntimeError) as exc:
         logger.warning("MCP leader-only startup failed (non-fatal): %s", exc)
 
     logger.info(
@@ -154,7 +154,7 @@ async def lifespan(app: FastAPI):
     try:
         await close_redis()
         logger.info("Redis connections closed")
-    except Exception as exc:
+    except (ConnectionError, OSError) as exc:
         logger.warning("Error closing Redis: %s", exc)
 
     # Shutdown MCP registry + sidecars
@@ -163,21 +163,21 @@ async def lifespan(app: FastAPI):
     try:
         await shutdown_mcp()
         logger.info("MCP registry shut down")
-    except Exception as exc:
+    except (OSError, RuntimeError) as exc:
         logger.warning("Error shutting down MCP: %s", exc)
 
     # Close sync service
     try:
         await sync_service.close()
         logger.info("Sync service closed")
-    except Exception as exc:
+    except (OSError, ConnectionError) as exc:
         logger.warning("Error closing sync service: %s", exc)
 
     # Close Qdrant client
     try:
         await qdrant_factory.close()
         logger.info("Qdrant client closed")
-    except Exception as exc:
+    except (OSError, ConnectionError) as exc:
         logger.warning("Error closing Qdrant client: %s", exc)
 
     logger.info("ModularMind Engine shut down")

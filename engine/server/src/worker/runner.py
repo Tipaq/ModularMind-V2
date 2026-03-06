@@ -13,6 +13,8 @@ import os
 import signal
 import sys
 
+import redis.exceptions
+
 from src.infra.config import settings
 from src.infra.redis_streams import RedisStreamBus
 from src.worker.scheduler import create_scheduler
@@ -30,7 +32,7 @@ async def health_server(bus: RedisStreamBus, port: int) -> None:
         try:
             await bus.redis.ping()
             writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
-        except Exception:
+        except (ConnectionError, OSError, redis.exceptions.RedisError):
             writer.write(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 4\r\n\r\nfail")
         await writer.drain()
         writer.close()
@@ -66,7 +68,7 @@ async def main() -> None:
         store = get_object_store()
         await store.ensure_buckets([settings.S3_BUCKET_RAG, settings.S3_BUCKET_ATTACHMENTS])
         logger.info("S3 buckets initialized")
-    except Exception as exc:
+    except (OSError, ConnectionError) as exc:
         logger.warning("S3 bucket initialization failed (non-fatal): %s", exc)
 
     # Start APScheduler

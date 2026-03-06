@@ -83,7 +83,7 @@ class SuperSupervisorService:
         """Async Redis PUBLISH for event streaming."""
         try:
             await self.redis.publish(channel, json.dumps(event))
-        except Exception as e:
+        except (aioredis.RedisError, ConnectionError) as e:
             logger.warning("Failed to publish event to %s: %s", channel, e)
 
     # =========================================================================
@@ -146,7 +146,7 @@ class SuperSupervisorService:
             _cw = AgentContextBuilder._resolve_context_window(_model_id) if _model_id else (
                 _settings.CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW
             )
-        except Exception:
+        except (KeyError, ValueError, AttributeError):
             _cw = _settings.CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW
         _max_pct = getattr(_settings, "CONTEXT_BUDGET_MAX_PCT", 100.0)
         _effective_cw = int(_cw * _max_pct / 100)
@@ -240,7 +240,7 @@ class SuperSupervisorService:
                 if auto_ids:
                     conv_config = {**conv_config, "enabled_mcp_servers": auto_ids}
                     logger.debug("MCP auto-enable: %d server(s) for conversation", len(auto_ids))
-        except Exception as e:
+        except Exception as e:  # MCP registry may raise heterogeneous errors
             logger.debug("MCP auto-enable check failed: %s", e)
         return conv_config
 
@@ -392,7 +392,7 @@ class SuperSupervisorService:
 
             return self._parse_routing_response(response)
 
-        except Exception as e:
+        except Exception as e:  # LLM providers raise heterogeneous errors
             logger.error("LLM routing failed: %s", e, exc_info=True)
             return RoutingDecision(
                 strategy=RoutingStrategy.DIRECT_RESPONSE,
@@ -457,14 +457,14 @@ class SuperSupervisorService:
                     tools = await registry.discover_tools(sid)
                     if tools:
                         tools_map[server_name] = tools
-                except Exception:
+                except Exception:  # MCP protocol errors are heterogeneous
                     logger.debug(
                         "MCP tool discovery failed for server %s",
                         sid,
                         exc_info=True,
                     )
             return tools_map or None
-        except Exception as e:
+        except Exception as e:  # MCP registry/protocol errors are heterogeneous
             logger.debug("MCP tool discovery for routing failed: %s", e)
             return None
 
@@ -628,7 +628,7 @@ class SuperSupervisorService:
                 "tool_response_inline": True,
             }
 
-        except Exception as e:
+        except Exception as e:  # LLM providers raise heterogeneous errors
             logger.error("TOOL_RESPONSE execution failed: %s", e, exc_info=True)
             await publish_fn({
                 "type": "error", "event": "run_failed",
@@ -768,7 +768,7 @@ class SuperSupervisorService:
                     )
                 return result, raw_entries
 
-        except Exception as e:
+        except Exception as e:  # Resilience: mixed DB + vector + embedding ops
             logger.warning("Memory retrieval for supervisor failed: %s", e, exc_info=True)
             return "", []
 
@@ -877,7 +877,7 @@ class SuperSupervisorService:
                 )
                 return formatted, knowledge_data
 
-        except Exception as e:
+        except Exception as e:  # Resilience: mixed DB + RAG + embedding ops
             logger.warning("Knowledge retrieval for supervisor failed: %s", e, exc_info=True)
             return "", None
 
@@ -1160,7 +1160,7 @@ class SuperSupervisorService:
                 results.append(result)
                 if result.get("execution_id"):
                     execution_ids.append(result["execution_id"])
-            except Exception as e:
+            except Exception as e:  # Resilience: sub-decisions must not abort the batch
                 logger.error(
                     "MULTI_ACTION sub-decision %d/%d failed: %s",
                     i + 1, len(sub_decisions), e,
