@@ -75,3 +75,5 @@ export { ExecutionActivityList } from "./components/execution-activity";
 export type { ExecutionActivityListProps } from "./components/execution-activity";
 export { ChatPanel } from "./components/chat-panel";
 export type { ChatPanelProps, ChatPanelTab } from "./components/chat-panel";
+export { ChatInput } from "./components/chat-input";
+export type { ChatInputProps } from "./components/chat-input";

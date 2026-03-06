@@ -221,6 +221,8 @@ export interface ChatMessagesProps {
   onSelectMessage?: (id: string) => void;
   /** Base URL for attachment download links. Default: "/api/v1/conversations". */
   attachmentBaseUrl?: string;
+  /** Content rendered sticky at the bottom of the scroll container (e.g. ChatInput). */
+  stickyFooter?: React.ReactNode;
 }
 
 export const ChatMessages = memo(function ChatMessages({
@@ -231,63 +233,74 @@ export const ChatMessages = memo(function ChatMessages({
   selectedMessageId,
   onSelectMessage,
   attachmentBaseUrl,
+  stickyFooter,
 }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastMsg = messages[messages.length - 1];
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages.length, lastMsg?.content]);
 
   return (
     <TooltipProvider delayDuration={400}>
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            <p className="text-sm">Send a message to start the conversation</p>
-          </div>
-        ) : (
-          <div className="px-4 py-6">
-            {messages.map((msg, i) => {
-              const isLast = i === messages.length - 1;
-              const isUser = msg.role === "user";
-              const isAssistant = msg.role === "assistant";
-              const prevMsg = i > 0 ? messages[i - 1] : null;
-              const showDate = !prevMsg || !isSameDay(prevMsg.created_at, msg.created_at);
-              const showTimestamp = shouldShowTimestamp(
-                prevMsg?.created_at ?? null,
-                msg.created_at,
-              );
-              // Same sender → tight spacing, different sender → more breathing room
-              const sameSender = prevMsg && prevMsg.role === msg.role;
-              const gap = i === 0 ? "" : sameSender ? "mt-1" : "mt-4";
+        <div className="min-h-full flex flex-col">
+          <div className="flex-1">
+            {messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <p className="text-sm">Send a message to start the conversation</p>
+              </div>
+            ) : (
+              <div className="px-4 py-6 pb-32">
+                {messages.map((msg, i) => {
+                  const isLast = i === messages.length - 1;
+                  const isUser = msg.role === "user";
+                  const isAssistant = msg.role === "assistant";
+                  const prevMsg = i > 0 ? messages[i - 1] : null;
+                  const showDate = !prevMsg || !isSameDay(prevMsg.created_at, msg.created_at);
+                  const showTimestamp = shouldShowTimestamp(
+                    prevMsg?.created_at ?? null,
+                    msg.created_at,
+                  );
+                  // Same sender → tight spacing, different sender → more breathing room
+                  const sameSender = prevMsg && prevMsg.role === msg.role;
+                  const gap = i === 0 ? "" : sameSender ? "mt-1" : "mt-4";
 
-              return (
-                <div key={msg.id} className={gap}>
-                  {showDate && (
-                    <div className="flex items-center justify-center my-4">
-                      <span className="text-[11px] text-muted-foreground bg-muted px-3 py-1 rounded-full">
-                        {formatDateSeparator(msg.created_at)}
-                      </span>
+                  return (
+                    <div key={msg.id} className={gap}>
+                      {showDate && (
+                        <div className="flex items-center justify-center my-4">
+                          <span className="text-[11px] text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                            {formatDateSeparator(msg.created_at)}
+                          </span>
+                        </div>
+                      )}
+                      <MessageBubble
+                        msg={msg}
+                        isLast={isLast}
+                        isStreaming={isStreaming}
+                        activities={isLast && !isUser ? activities : EMPTY_ACTIVITIES}
+                        showRoutingMetadata={showRoutingMetadata}
+                        selectable={isAssistant && !!onSelectMessage}
+                        selected={isAssistant && msg.id === selectedMessageId}
+                        onSelect={isAssistant && onSelectMessage ? () => onSelectMessage(msg.id) : undefined}
+                        showTimestamp={showTimestamp}
+                        attachmentBaseUrl={attachmentBaseUrl}
+                      />
                     </div>
-                  )}
-                  <MessageBubble
-                    msg={msg}
-                    isLast={isLast}
-                    isStreaming={isStreaming}
-                    activities={isLast && !isUser ? activities : EMPTY_ACTIVITIES}
-                    showRoutingMetadata={showRoutingMetadata}
-                    selectable={isAssistant && !!onSelectMessage}
-                    selected={isAssistant && msg.id === selectedMessageId}
-                    onSelect={isAssistant && onSelectMessage ? () => onSelectMessage(msg.id) : undefined}
-                    showTimestamp={showTimestamp}
-                    attachmentBaseUrl={attachmentBaseUrl}
-                  />
-                </div>
-              );
-            })}
-            <div ref={bottomRef} />
+                  );
+                })}
+                <div ref={bottomRef} />
+              </div>
+            )}
           </div>
-        )}
+          {stickyFooter && (
+            <div className="sticky bottom-0 z-10 bg-gradient-to-t from-background from-80% to-transparent">
+              {stickyFooter}
+            </div>
+          )}
+        </div>
       </div>
     </TooltipProvider>
   );
