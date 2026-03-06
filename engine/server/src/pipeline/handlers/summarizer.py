@@ -7,13 +7,13 @@ summaries for the same conversation are expired before the new one is
 created (only one active summary per conversation).
 """
 
-import json
 import logging
 from typing import Any
 
 import sqlalchemy.exc
 
 from src.infra.config import get_settings
+from src.pipeline.handlers._common import parse_pipeline_data
 
 logger = logging.getLogger(__name__)
 
@@ -29,24 +29,23 @@ Summary:"""
 
 async def summarizer_handler(data: dict[str, Any]) -> None:
     """Generate a conversation summary and store as a SUMMARY-tier memory entry."""
-    conversation_id = data.get("conversation_id", "")
-    agent_id = data.get("agent_id", "")
-    user_id = data.get("user_id", "")
-    messages_raw = data.get("messages", "[]")
-
-    if not conversation_id:
+    ctx = parse_pipeline_data(data)
+    if not ctx:
         logger.warning("summarizer_handler: missing conversation_id, skipping")
         return
+
+    conversation_id = ctx.conversation_id
+    agent_id = ctx.agent_id or ""
+    user_id = ctx.user_id or ""
+    messages = ctx.messages
 
     settings = get_settings()
     if not settings.FACT_EXTRACTION_ENABLED:
         logger.debug("Fact extraction disabled, skipping summarizer for %s", conversation_id)
         return
 
-    try:
-        messages = json.loads(messages_raw) if isinstance(messages_raw, str) else messages_raw
-    except json.JSONDecodeError:
-        logger.error("summarizer_handler: invalid JSON for conversation %s", conversation_id)
+    if not messages:
+        logger.debug("summarizer_handler: no messages for conversation %s", conversation_id)
         return
 
     if len(messages) < settings.FACT_EXTRACTION_MIN_MESSAGES:
@@ -124,7 +123,7 @@ async def summarizer_handler(data: dict[str, Any]) -> None:
         embedding = None
         if embedding_provider:
             try:
-                embedding = await embedding_provider.embed_query(summary_text)
+                embedding = await embedding_provider.embed_text(summary_text)
             except Exception as e:  # LLM providers raise heterogeneous errors
                 logger.warning("Embedding failed for summary: %s", e)
 
