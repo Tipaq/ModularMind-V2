@@ -5,9 +5,8 @@ import { useSession } from "next-auth/react";
 import { useChat, type Message } from "@/hooks/useChat";
 import { useChatConfig } from "@/hooks/useChatConfig";
 import { ConversationSidebar, type Conversation } from "@/components/chat/ConversationSidebar";
-import { ChatMessages } from "@modularmind/ui";
-import { ChatInput, type AttachedFile } from "@/components/chat/ChatInput";
-import { InsightsPanel } from "@/components/chat/InsightsPanel";
+import { ChatMessages, ChatInput, InsightsPanel } from "@modularmind/ui";
+import type { AttachedFile } from "@modularmind/ui";
 import { PanelRight } from "lucide-react";
 
 interface ChatConfig {
@@ -78,6 +77,18 @@ export default function ChatPage() {
       setChatConfig((prev) => ({ ...prev, modelId: `${active.provider}:${active.model_id}` }));
     }
   }, [models, chatConfig.modelId]);
+
+  // Force model override ON when some agent models are unavailable
+  useEffect(() => {
+    if (chatConfig.modelOverride) return;
+    const availableIds = new Set(
+      models.filter((m) => m.is_available && !m.is_embedding).map((m) => `${m.provider}:${m.model_id}`),
+    );
+    const hasMissing = agents.some((a) => a.model_id && !availableIds.has(a.model_id));
+    if (hasMissing) {
+      setChatConfig((prev) => ({ ...prev, modelOverride: true }));
+    }
+  }, [models, agents, chatConfig.modelOverride]);
 
   // Context usage percentage from the latest execution
   const contextPercent = useMemo(() => {
@@ -419,6 +430,11 @@ export default function ChatPage() {
           enabledGraphs={graphs.filter((g) => enabledGraphIds.includes(g.id))}
           allAgents={agents}
           allGraphs={graphs}
+          onConsolidate={async () => {
+            const res = await fetch("/api/chat/memory/consolidate", { method: "POST" });
+            if (!res.ok) throw new Error("Consolidation failed");
+            return res.json();
+          }}
         />
       )}
     </div>
