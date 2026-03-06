@@ -25,10 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@modularmind/ui";
-import { useMemoryStore, type ConsolidationLog } from "../../stores/memory";
-import { ResourceTable } from "../shared/ResourceTable";
-import { EmptyState } from "../shared/EmptyState";
+import { EmptyState, ResourceTable } from "@modularmind/ui";
 import type { ResourceColumn } from "@modularmind/ui";
+import { useMemoryStore, type ConsolidationLog } from "../../stores/memory";
 
 const PAGE_SIZE = 20;
 
@@ -39,6 +38,7 @@ const ACTION_STYLES: Record<string, { bg: string; icon: typeof CheckCircle2 }> =
   manual_invalidate: { bg: "bg-warning/15 text-warning border-warning/30", icon: AlertCircle },
   promoted: { bg: "bg-success/15 text-success border-success/30", icon: CheckCircle2 },
   kept: { bg: "bg-muted text-muted-foreground", icon: CheckCircle2 },
+  compacted: { bg: "bg-info/15 text-info border-info/30", icon: RefreshCw },
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -48,6 +48,7 @@ const ACTION_LABELS: Record<string, string> = {
   manual_invalidate: "Manual Invalidate",
   promoted: "Promoted",
   kept: "Kept",
+  compacted: "Compacted",
 };
 
 function timeAgo(dateStr: string): string {

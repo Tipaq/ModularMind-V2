@@ -28,23 +28,10 @@ export default function Users() {
   const [activeFilter, setActiveFilter] = useState("");
   const [editUser, setEditUser] = useState<UserStats | null>(null);
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ page: String(page), page_size: "20" });
-      if (search) params.set("search", search);
-      if (roleFilter) params.set("role", roleFilter);
-      if (activeFilter) params.set("is_active", activeFilter);
+  // Bump to force refetch (e.g. after edit)
+  const [fetchKey, setFetchKey] = useState(0);
 
-      const res = await api.get<UserStatsListResponse>(`/admin/users?${params}`);
-      setUsers(res.items);
-      setTotal(res.total);
-    } catch (err) {
-      console.error("[Users] fetch:", err);
-      setUsers([]);
-    }
-    setLoading(false);
-  }, [search, roleFilter, activeFilter, page]);
+  const fetchUsers = useCallback(() => setFetchKey((k) => k + 1), []);
 
   useEffect(() => {
     let active = true;
@@ -69,7 +56,7 @@ export default function Users() {
     }
     fetchData();
     return () => { active = false; };
-  }, [search, roleFilter, activeFilter, page]);
+  }, [search, roleFilter, activeFilter, page, fetchKey]);
 
   // Debounced search
   useEffect(() => {

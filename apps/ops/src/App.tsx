@@ -1,27 +1,38 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ThemeProvider, ErrorBoundary } from "@modularmind/ui";
 
 import DashboardLayout from "./layouts/DashboardLayout";
-import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
-import Setup from "./pages/Setup";
-import Monitoring from "./pages/Monitoring";
-import Configuration from "./pages/Configuration";
-import Models from "./pages/Models";
-import ModelDetail from "./pages/ModelDetail";
-import Knowledge from "./pages/Knowledge";
-import Users from "./pages/Users";
-import UserDetail from "./pages/UserDetail";
 
-import Settings from "./pages/Settings";
-import Profile from "./pages/Profile";
-import Memory from "./pages/Memory";
+// Lazy-loaded routes
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Setup = lazy(() => import("./pages/Setup"));
+const Monitoring = lazy(() => import("./pages/Monitoring"));
+const Configuration = lazy(() => import("./pages/Configuration"));
+const Models = lazy(() => import("./pages/Models"));
+const ModelDetail = lazy(() => import("./pages/ModelDetail"));
+const Knowledge = lazy(() => import("./pages/Knowledge"));
+const Users = lazy(() => import("./pages/Users"));
+const UserDetail = lazy(() => import("./pages/UserDetail"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Memory = lazy(() => import("./pages/Memory"));
+
+function RouteLoader() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <ErrorBoundary>
     <ThemeProvider defaultMode="system">
     <BrowserRouter basename="/ops">
+      <Suspense fallback={<RouteLoader />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/setup" element={<Setup />} />
@@ -40,6 +51,7 @@ export default function App() {
           <Route path="/profile" element={<Profile />} />
         </Route>
       </Routes>
+      </Suspense>
     </BrowserRouter>
     </ThemeProvider>
     </ErrorBoundary>

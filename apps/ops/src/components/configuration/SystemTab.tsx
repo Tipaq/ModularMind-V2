@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, RefreshCcw, Bell, Shield, Cpu } from "lucide-react";
+import { RefreshCw, RefreshCcw, Bell, Shield, Cpu, Timer } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -70,6 +70,21 @@ export default function SystemTab() {
     try {
       await api.patch<LocalSettings>("/internal/settings", {
         ollama_keep_alive: value,
+      });
+    } catch {
+      setSettings(settings);
+      setSaveError("Failed to save setting");
+    }
+  };
+
+  const updateExecutionTimeout = async (value: string) => {
+    if (!settings) return;
+    const newValue = parseInt(value);
+    const updated = { ...settings, max_execution_timeout: newValue };
+    setSettings(updated);
+    try {
+      await api.patch<LocalSettings>("/internal/settings", {
+        max_execution_timeout: newValue,
       });
     } catch {
       setSettings(settings);
@@ -187,6 +202,46 @@ export default function SystemTab() {
             <p className="text-xs text-muted-foreground">
               How long Ollama keeps a model loaded in VRAM after the last request.
               Longer values reduce cold-start latency but use more GPU memory.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Execution */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Timer className="h-5 w-5" />
+            <CardTitle>Execution</CardTitle>
+          </div>
+          <CardDescription>
+            Configure execution limits for agent and graph runs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Max Execution Timeout
+            </label>
+            <Select
+              value={String(settings?.max_execution_timeout || 900)}
+              onValueChange={updateExecutionTimeout}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="120">2 minutes</SelectItem>
+                <SelectItem value="300">5 minutes</SelectItem>
+                <SelectItem value="600">10 minutes</SelectItem>
+                <SelectItem value="900">15 minutes</SelectItem>
+                <SelectItem value="1200">20 minutes</SelectItem>
+                <SelectItem value="1800">30 minutes</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Maximum time an agent or graph execution can run before being cancelled.
+              Increase this if you use local models that generate slowly.
             </p>
           </div>
         </CardContent>

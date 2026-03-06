@@ -11,12 +11,11 @@ import {
   Switch,
   Label,
 } from "@modularmind/ui";
+import { EmptyState, ResourceTable } from "@modularmind/ui";
+import type { ResourceColumn } from "@modularmind/ui";
 import { useMemoryStore, type MemoryEntry } from "../../stores/memory";
-import { EmptyState } from "../shared/EmptyState";
-import { ResourceTable } from "../shared/ResourceTable";
 import { MemoryTypeBadge } from "./MemoryTypeBadge";
 import { ImportanceBar } from "./ImportanceBar";
-import type { ResourceColumn } from "@modularmind/ui";
 
 const PAGE_SIZE = 20;
 

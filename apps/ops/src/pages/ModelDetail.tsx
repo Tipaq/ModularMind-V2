@@ -13,10 +13,9 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { Badge, Button, Separator, Slider, cn } from "@modularmind/ui";
+import { Badge, Button, Separator, Slider, cn, DetailHeader } from "@modularmind/ui";
 import { PROVIDER_INFO } from "@modularmind/api-client";
 import type { CatalogModel } from "@modularmind/api-client";
-import { DetailHeader } from "../components/shared/DetailHeader";
 import { ModelStatusBadge } from "../components/shared/ModelStatusBadge";
 import { useModelsStore } from "../stores/models";
 import { api } from "../lib/api";
@@ -221,6 +220,7 @@ export default function ModelDetail() {
       <DetailHeader
         backHref="/models"
         backLabel="Models"
+        renderLink={({ href, className, children }) => <Link to={href} className={className}>{children}</Link>}
         title={model.display_name || model.model_name}
         badges={
           <>
