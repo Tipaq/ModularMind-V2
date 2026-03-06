@@ -1,15 +1,15 @@
 import { MousePointerClick, User, Clock, Star, Eye, Tag, Layers, Link2 } from "lucide-react";
 import { Card, CardContent, Badge, Separator } from "@modularmind/ui";
-import { type GraphNode, type GraphData, type MemoryUser } from "../../stores/memory";
+import { type MemoryGraphNode, type MemoryGraphData, type MemoryUser } from "../../stores/memory";
 import { MemoryTypeBadge } from "./MemoryTypeBadge";
 
 const USER_ID_DISPLAY_LENGTH = 8;
 
 interface GraphNodeDetailProps {
-  selectedNode: GraphNode | null;
-  graphData: GraphData;
+  selectedNode: MemoryGraphNode | null;
+  graphData: MemoryGraphData;
   memoryUsers: MemoryUser[];
-  setSelectedNode: (node: GraphNode | null) => void;
+  setSelectedNode: (node: MemoryGraphNode | null) => void;
 }
 
 export function GraphNodeDetail({
@@ -138,7 +138,7 @@ export function GraphNodeDetail({
                   const neighbor = graphData.nodes.find(n => n.id === neighborId);
                   return neighbor ? { node: neighbor, edge_type: e.edge_type } : null;
                 })
-                .filter((c): c is { node: GraphNode; edge_type: string } => c !== null);
+                .filter((c): c is { node: MemoryGraphNode; edge_type: string } => c !== null);
               if (!conns.length) return null;
               return (
                 <>

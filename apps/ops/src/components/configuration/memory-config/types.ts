@@ -24,17 +24,7 @@ export interface MemoryConfig {
   context_budget_max_pct: number;
 }
 
-export interface CatalogModel {
-  id: string;
-  provider: string;
-  model_name: string;
-  display_name: string;
-  model_type?: string;
-  is_embedding?: boolean;
-  capabilities?: Record<string, boolean>;
-  pull_status?: string | null;
-  context_window?: number | null;
-}
+export type { CatalogModel } from "@modularmind/api-client";
 
 /** Getter for a config value (returns draft value if present, else config value) */
 export type ConfigGetter = <K extends keyof MemoryConfig>(key: K) => MemoryConfig[K];

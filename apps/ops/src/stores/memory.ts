@@ -12,13 +12,6 @@ import { api } from "../lib/api";
 
 export type { MemoryEntry, MemoryGraphNode, MemoryGraphEdge, MemoryGraphData, MemoryUser, ConsolidationLog };
 
-/** @deprecated Use MemoryGraphNode from @modularmind/api-client instead. */
-export type GraphNode = MemoryGraphNode;
-/** @deprecated Use MemoryGraphEdge from @modularmind/api-client instead. */
-export type GraphEdge = MemoryGraphEdge;
-/** @deprecated Use MemoryGraphData from @modularmind/api-client instead. */
-export type GraphData = MemoryGraphData;
-
 export interface GlobalMemoryStats {
   total_entries: number;
   entries_by_type: Record<string, number>;
@@ -65,7 +58,7 @@ interface MemoryState {
   filters: MemoryFilters;
 
   // Graph
-  graphData: GraphData | null;
+  graphData: MemoryGraphData | null;
   graphLoading: boolean;
   graphError: string | null;
 
@@ -89,7 +82,7 @@ interface MemoryState {
 
   fetchGlobalStats: () => Promise<void>;
   fetchEntries: (page?: number) => Promise<void>;
-  fetchGraphData: () => Promise<void>;
+  fetchMemoryGraphData: () => Promise<void>;
   fetchConsolidationLogs: (page?: number) => Promise<void>;
   triggerConsolidation: () => Promise<void>;
   clearTriggerResult: () => void;
@@ -173,7 +166,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     }
   },
 
-  fetchGraphData: async () => {
+  fetchMemoryGraphData: async () => {
     set({ graphLoading: true, graphError: null });
     try {
       const { graphFilters } = get();
@@ -181,7 +174,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       if (graphFilters.scope) params.set("scope", graphFilters.scope);
       if (graphFilters.memory_type) params.set("memory_type", graphFilters.memory_type);
       if (graphFilters.user_id) params.set("user_id", graphFilters.user_id);
-      const data = await api.get<GraphData>(`/memory/admin/graph?${params}`);
+      const data = await api.get<MemoryGraphData>(`/memory/admin/graph?${params}`);
       set({ graphData: data });
     } catch (err) {
       set({ graphError: err instanceof Error ? err.message : "Failed to fetch graph" });

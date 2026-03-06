@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Loader2, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import { Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@modularmind/ui";
-import { useMemoryStore, type GraphNode } from "../../stores/memory";
+import { useMemoryStore, type MemoryGraphNode } from "../../stores/memory";
 import { GraphNodeDetail } from "./GraphNodeDetail";
 import { GraphLegend } from "./GraphLegend";
 
@@ -56,14 +56,14 @@ async function loadGraphLibs() {
 
 export function MemoryGraphTab() {
   const {
-    graphData, graphLoading, graphError, fetchGraphData,
+    graphData, graphLoading, graphError, fetchMemoryGraphData,
     graphFilters, setGraphFilters,
     memoryUsers, fetchMemoryUsers,
   } = useMemoryStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<InstanceType<typeof import("sigma").Sigma> | null>(null);
   const fa2LayoutRef = useRef<InstanceType<NonNullable<typeof FA2LayoutWorkerCls>> | null>(null);
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [selectedNode, setSelectedNode] = useState<MemoryGraphNode | null>(null);
   const [libsLoaded, setLibsLoaded] = useState(false);
 
   const userColorMap = useMemo(() => {
@@ -78,13 +78,13 @@ export function MemoryGraphTab() {
 
   useEffect(() => {
     fetchMemoryUsers();
-    fetchGraphData();
+    fetchMemoryGraphData();
     loadGraphLibs().then(() => setLibsLoaded(true));
-  }, [fetchGraphData, fetchMemoryUsers]);
+  }, [fetchMemoryGraphData, fetchMemoryUsers]);
 
   const handleFilterChange = useCallback((key: string, value: string) => {
     setGraphFilters({ [key]: value === "all" ? "" : value });
-    setTimeout(() => useMemoryStore.getState().fetchGraphData(), 0);
+    setTimeout(() => useMemoryStore.getState().fetchMemoryGraphData(), 0);
   }, [setGraphFilters]);
 
   // Render graph when both data and libs are ready

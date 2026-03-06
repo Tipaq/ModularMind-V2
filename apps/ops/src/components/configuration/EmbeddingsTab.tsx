@@ -13,7 +13,7 @@ import {
   SelectValue,
   Badge,
 } from "@modularmind/ui";
-import type { LocalSettings } from "@modularmind/api-client";
+import type { LocalSettings, CatalogModel } from "@modularmind/api-client";
 import { api } from "../../lib/api";
 
 // Known embedding dimensions per model (matches ENGINE MODEL_DIMENSIONS)
@@ -23,18 +23,6 @@ const MODEL_DIMENSIONS: Record<string, number> = {
   "all-minilm": 384,
   "snowflake-arctic-embed": 1024,
 };
-
-interface CatalogModel {
-  id: string;
-  provider: string;
-  model_name: string;
-  display_name: string;
-  is_embedding?: boolean;
-  capabilities?: Record<string, boolean>;
-  pull_status?: string | null;
-  size?: string | null;
-  disk_size?: string | null;
-}
 
 interface PipelineCardProps {
   title: string;
@@ -216,9 +204,7 @@ export default function EmbeddingsTab() {
 
         // Filter to embedding-capable models only
         const embedding = catalogData.models.filter(
-          (m) =>
-            m.is_embedding ||
-            m.capabilities?.embedding
+          (m) => m.capabilities?.embedding,
         );
         setEmbeddingModels(embedding);
       } catch {

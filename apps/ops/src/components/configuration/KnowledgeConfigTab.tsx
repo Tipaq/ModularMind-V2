@@ -22,20 +22,8 @@ import {
   SelectValue,
   Badge,
 } from "@modularmind/ui";
-import type { LocalSettings } from "@modularmind/api-client";
+import type { LocalSettings, CatalogModel } from "@modularmind/api-client";
 import { api } from "../../lib/api";
-
-// ── Types ────────────────────────────────────────────────────────
-
-interface CatalogModel {
-  id: string;
-  provider: string;
-  model_name: string;
-  display_name: string;
-  is_embedding?: boolean;
-  capabilities?: Record<string, boolean>;
-  pull_status?: string | null;
-}
 
 interface RerankConfig {
   rerank_provider: string;
@@ -94,7 +82,7 @@ export default function KnowledgeConfigTab() {
         ]);
         setSettings(settingsData);
         setEmbeddingModels(
-          catalogData.models.filter((m) => m.is_embedding || m.capabilities?.embedding),
+          catalogData.models.filter((m) => m.capabilities?.embedding),
         );
 
         try {

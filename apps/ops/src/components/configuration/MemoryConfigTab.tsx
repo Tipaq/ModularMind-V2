@@ -93,7 +93,7 @@ export default function MemoryConfigTab() {
         setConfig(memConfig);
         setEmbeddingSettings(settingsData);
         setEmbeddingModels(
-          catalogData.models.filter((m) => m.is_embedding || m.capabilities?.embedding),
+          catalogData.models.filter((m) => m.capabilities?.embedding),
         );
 
         // Only show models that are actually available for chat:
@@ -105,7 +105,7 @@ export default function MemoryConfigTab() {
         );
         setLlmModels(
           catalogData.models.filter((m) => {
-            if (m.is_embedding) return false;
+            if (m.capabilities?.embedding) return false;
             if (!m.context_window) return false;
             if (!m.capabilities?.chat) return false;
             // Local models: must be pulled
