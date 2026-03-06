@@ -8,7 +8,7 @@ from .catalog import (
     get_catalog_entry,
     get_free_catalog_entries,
 )
-from .sdk_client import MCPSDKClient as MCPClient, MCPClientError, MCPConnectionError, MCPToolError
+from .sdk_client import MCPClient, MCPClientError, MCPConnectionError, MCPToolError
 from .registry import MCPRegistry
 from .schemas import (
     MCPServerConfig,

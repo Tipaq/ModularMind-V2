@@ -32,9 +32,8 @@ logger = logging.getLogger(__name__)
 
 def _truncate(text: str, max_length: int) -> str:
     """Truncate text with ellipsis if too long."""
-    if len(text) <= max_length:
-        return text
-    return text[:max_length - 1] + "\u2026"
+    from src.infra.text_utils import truncate
+    return truncate(text, max_length)
 
 
 def _safe_str(value: Any, max_length: int = 500) -> str:

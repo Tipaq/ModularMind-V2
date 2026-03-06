@@ -146,9 +146,8 @@ def try_bind_tools(
 
 def _truncate(text: str, max_length: int) -> str:
     """Truncate text with ellipsis."""
-    if len(text) <= max_length:
-        return text
-    return text[: max_length - 1] + "…"
+    from src.infra.text_utils import truncate
+    return truncate(text, max_length)
 
 
 async def _publish_safe(

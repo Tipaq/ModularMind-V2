@@ -1,7 +1,6 @@
 """MCP client using the official mcp SDK.
 
-Wraps the mcp Python SDK (v1.26.0+) to provide the same public interface
-as the previous custom MCPClient. Supports both Streamable HTTP and stdio
+Wraps the mcp Python SDK (v1.26.0+). Supports both Streamable HTTP and stdio
 transports via AsyncExitStack for long-lived context managers.
 """
 
@@ -39,7 +38,7 @@ class MCPToolError(MCPClientError):
     """Error executing an MCP tool."""
 
 
-class MCPSDKClient:
+class MCPClient:
     """Async MCP client using the official mcp SDK.
 
     Supports both Streamable HTTP and stdio transports.

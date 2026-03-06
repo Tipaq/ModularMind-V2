@@ -1069,9 +1069,6 @@ class GraphCompiler:
         def route_condition(state: GraphState) -> str:
             ctx = build_condition_context(state)
             for expr, target in condition_map:
-                # Backward compat: literal true/yes/1 always match
-                if expr.lower() in ("true", "yes", "1"):
-                    return target
                 if safe_eval_condition(expr, ctx):
                     return target
             return default_target
