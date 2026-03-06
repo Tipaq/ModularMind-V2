@@ -21,6 +21,7 @@ from src.infra.query_utils import raise_not_found
 from .models import Conversation, MessageRole
 from .schemas import (
     AttachmentResponse,
+    CompactResponse,
     ConversationCreate,
     ConversationDetailResponse,
     ConversationListResponse,
@@ -51,7 +52,7 @@ async def _maybe_enqueue_marathon_extraction(conversation_id: str) -> None:
     import json
     from datetime import datetime
 
-    from sqlalchemy import func, select, update
+    from sqlalchemy import select, update
 
     from src.infra.database import async_session_maker
     from src.infra.metrics import memory_extraction_enqueued
@@ -1017,6 +1018,51 @@ async def send_message(
     except Exception as e:
         logger.exception("Failed to create execution: %s", e)
         raise HTTPException(status_code=500, detail="Failed to start execution")
+
+
+@router.post("/{conversation_id}/compact", response_model=CompactResponse)
+async def compact_conversation(
+    conversation_id: str,
+    user: CurrentUser,
+    db: DbSession,
+) -> CompactResponse:
+    """Compact older conversation messages into an LLM-generated summary.
+
+    The summary replaces old messages in the LLM context window.
+    Original messages are preserved in the database.
+    """
+    from .compaction import CompactionService
+
+    service = ConversationService(db)
+    conversation = await service.get_conversation_by_id(conversation_id)
+    if not conversation:
+        raise_not_found("Conversation")
+    check_conversation_access(conversation, user.id)
+
+    # Resolve model_id from agent config or conversation config
+    model_id = (conversation.config or {}).get("model_id")
+    if not model_id and conversation.agent_id:
+        agent = await get_config_provider().get_agent_config(conversation.agent_id)
+        if agent:
+            model_id = agent.model_id
+    if not model_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No model configured — cannot compact without an LLM",
+        )
+
+    compaction = CompactionService(db)
+    try:
+        result = await compaction.compact(
+            conversation_id, model_id=model_id, user_id=user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    await db.commit()
+    return CompactResponse(**result)
 
 
 # ─── Admin Router (prefix: /api/v1/admin) ───────────────────────────────────

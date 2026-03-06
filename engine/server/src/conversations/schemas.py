@@ -247,3 +247,11 @@ class ConversationSearchResponse(BaseModel):
 
     results: list[ConversationSearchResultItem]
     total: int
+
+
+class CompactResponse(BaseModel):
+    """Context compaction response."""
+
+    summary_preview: str
+    compacted_count: int
+    duration_ms: int
