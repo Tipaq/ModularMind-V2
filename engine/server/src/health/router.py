@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 import psutil
 import redis
+import sqlalchemy.exc
 from fastapi import APIRouter
 
 from src.infra.config import get_settings
@@ -47,7 +48,7 @@ async def health_check() -> dict[str, Any]:
             await session.execute(text("SELECT 1"))
         latency = (time.monotonic() - start) * 1000
         components["database"] = {"status": "ok", "latency_ms": round(latency, 2)}
-    except Exception as e:
+    except (ConnectionError, OSError, sqlalchemy.exc.SQLAlchemyError) as e:
         logger.error("Database health check failed: %s", e)
         components["database"] = {"status": "error", "error": str(e)}
         status = "unhealthy"
@@ -72,7 +73,7 @@ async def health_check() -> dict[str, Any]:
         await qdrant_client.get_collections()
         latency = (time.monotonic() - start) * 1000
         components["qdrant"] = {"status": "ok", "latency_ms": round(latency, 2)}
-    except Exception as e:
+    except (ConnectionError, OSError, TimeoutError) as e:
         logger.warning("Qdrant health check failed: %s", e)
         components["qdrant"] = {"status": "unavailable", "error": str(e)}
         if status == "healthy":
@@ -88,7 +89,7 @@ async def health_check() -> dict[str, Any]:
                 components["ollama"] = {"status": "ok", "models_loaded": models}
             else:
                 components["ollama"] = {"status": "unavailable"}
-    except Exception:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
         logger.debug("Ollama health check unavailable")
         components["ollama"] = {"status": "unavailable"}
 
@@ -102,7 +103,7 @@ async def health_check() -> dict[str, Any]:
             "status": "ok" if worker_groups else "no_consumers",
             "consumer_groups": len(worker_groups),
         }
-    except Exception:
+    except (ConnectionError, OSError, redis.RedisError):
         logger.debug("Worker health check unavailable")
         components["worker"] = {"status": "unknown"}
 
@@ -152,5 +153,5 @@ async def readiness_probe() -> dict[str, Any]:
         async with async_session_maker() as session:
             await session.execute(text("SELECT 1"))
         return {"status": "ready"}
-    except Exception as e:
+    except (ConnectionError, OSError, sqlalchemy.exc.SQLAlchemyError) as e:
         return {"status": "not_ready", "reason": str(e)}

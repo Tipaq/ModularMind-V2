@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import redis as redis_mod
+
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
@@ -116,16 +118,16 @@ async def get_dataset_progress(
 
     # Get Redis progress (async — avoids blocking the event loop)
     try:
-        redis = get_redis_client()
-        data = await redis.hgetall(f"runtime:dataset_progress:{dataset_id}")
-        await redis.aclose()
+        r = await get_redis_client()
+        data = await r.hgetall(f"runtime:dataset_progress:{dataset_id}")
+        await r.aclose()
         if data:
             return DatasetProgress(
                 status=data.get("status", "unknown"),
                 progress_pct=int(data.get("progress", 0)),
                 examples_found=int(data.get("examples_found", 0)),
             )
-    except Exception:
+    except (ConnectionError, OSError, redis_mod.RedisError):
         logger.warning("Redis unavailable for dataset progress %s", dataset_id)
 
     return DatasetProgress(status=dataset.status.value)

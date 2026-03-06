@@ -9,6 +9,7 @@ import logging
 import time
 
 import psutil
+import sqlalchemy.exc
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 
@@ -134,7 +135,7 @@ async def import_configs(request: Request, db: DbSession) -> dict:
                 config_copy = {k: v for k, v in data.items() if k != "version"}
                 await repo.create_agent_version(agent_id, config_copy)
                 agents_imported += 1
-            except Exception as e:
+            except (OSError, yaml.YAMLError, sqlalchemy.exc.SQLAlchemyError) as e:
                 logger.error("Failed to import agent from %s: %s", f, e)
 
     # Import graphs
@@ -156,7 +157,7 @@ async def import_configs(request: Request, db: DbSession) -> dict:
                 config_copy = {k: v for k, v in data.items() if k != "version"}
                 await repo.create_graph_version(graph_id, config_copy)
                 graphs_imported += 1
-            except Exception as e:
+            except (OSError, yaml.YAMLError, sqlalchemy.exc.SQLAlchemyError) as e:
                 logger.error("Failed to import graph from %s: %s", f, e)
 
     logger.info(

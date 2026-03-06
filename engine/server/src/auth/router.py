@@ -131,7 +131,7 @@ async def logout(request: Request, response: Response) -> dict[str, str]:
                             )
                     finally:
                         await redis_client.aclose()
-        except Exception:
+        except (pyjwt.InvalidTokenError, KeyError, ConnectionError, OSError):
             logger.warning("Best-effort token blacklist failed", exc_info=True)
 
     # Delete cookies at all possible paths
