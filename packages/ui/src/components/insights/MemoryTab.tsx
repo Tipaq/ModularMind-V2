@@ -32,7 +32,7 @@ export interface MemoryTabProps {
   modelContextWindow?: number | null;
   isStreaming?: boolean;
   /** Optional callback for "Compact History" action. If not provided, the button is hidden. */
-  onConsolidate?: () => Promise<{ decayed: number; invalidated: number; duration_ms: number }>;
+  onCompact?: () => Promise<{ summary_preview: string; compacted_count: number; duration_ms: number }>;
 }
 
 // ── Constants ────────────────────────────────────────────────
@@ -179,15 +179,26 @@ function HistorySection({ contextData }: { contextData: ContextData }) {
 
   return (
     <div className="px-4 pb-3 space-y-2">
+      {history?.summary && (
+        <div className="rounded-md border border-info/20 bg-info/5 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-info mb-1">
+            Compacted Context
+          </p>
+          <p className="text-[11px] leading-relaxed text-foreground/80 line-clamp-4">
+            {history.summary}
+          </p>
+        </div>
+      )}
+
       {messages.length > 0 ? (
         <div ref={scrollRef} className="rounded-md border border-border/40 overflow-hidden divide-y divide-border/20 max-h-[200px] overflow-y-auto">
           {messages.map((msg, i) => (
             <MessageRow key={i} msg={msg} compact />
           ))}
         </div>
-      ) : (
+      ) : !history?.summary ? (
         <p className="text-[11px] text-muted-foreground">No history yet.</p>
-      )}
+      ) : null}
 
       {history?.budget?.budgetExceeded && (
         <p className="text-[10px] text-warning">
@@ -420,20 +431,20 @@ export function MemoryTab({
   knowledgeData,
   modelContextWindow,
   isStreaming,
-  onConsolidate,
+  onCompact,
 }: MemoryTabProps) {
   const [consolidating, setConsolidating] = useState(false);
   const [consolidateResult, setConsolidateResult] = useState<string | null>(null);
 
-  const handleConsolidate = async () => {
-    if (!onConsolidate) return;
+  const handleCompact = async () => {
+    if (!onCompact) return;
     setConsolidating(true);
     setConsolidateResult(null);
     try {
-      const data = await onConsolidate();
-      setConsolidateResult(`Decayed: ${data.decayed}, Invalidated: ${data.invalidated} (${data.duration_ms}ms)`);
+      const data = await onCompact();
+      setConsolidateResult(`Compacted ${data.compacted_count} messages (${data.duration_ms}ms)`);
     } catch {
-      setConsolidateResult("Consolidation failed");
+      setConsolidateResult("Compaction failed");
     }
     setConsolidating(false);
     setTimeout(() => setConsolidateResult(null), 4000);
@@ -495,13 +506,13 @@ export function MemoryTab({
           {messages.length > 0 && (
             <HistoryModal messages={messages} budget={budget ?? null} />
           )}
-          {onConsolidate && (
+          {onCompact && (
             <Button
               variant="default"
               size="sm"
               className="flex-1 h-7 text-[10px] gap-1.5"
-              onClick={handleConsolidate}
-              disabled={consolidating || !contextData}
+              onClick={handleCompact}
+              disabled={consolidating || !contextData || isStreaming}
             >
               {consolidating ? (
                 <Loader2 className="h-3 w-3 animate-spin" />

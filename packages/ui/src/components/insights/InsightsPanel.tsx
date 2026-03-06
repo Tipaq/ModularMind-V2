@@ -42,7 +42,7 @@ export interface InsightsPanelProps {
   allAgents: EngineAgent[];
   allGraphs: EngineGraph[];
   /** Optional callback for "Compact History" action. */
-  onConsolidate?: () => Promise<{ decayed: number; invalidated: number; duration_ms: number }>;
+  onCompact?: () => Promise<{ summary_preview: string; compacted_count: number; duration_ms: number }>;
 }
 
 // ── Tab Definitions ──────────────────────────────────────────
@@ -70,7 +70,7 @@ export function InsightsPanel({
   enabledGraphs,
   allAgents,
   allGraphs,
-  onConsolidate,
+  onCompact,
 }: InsightsPanelProps) {
   const displayActivities = useMemo(() => {
     return isLiveSelected && isStreaming
@@ -166,7 +166,7 @@ export function InsightsPanel({
           knowledgeData={knowledgeData}
           modelContextWindow={selectedModelContextWindow}
           isStreaming={isLiveStreaming}
-          onConsolidate={onConsolidate}
+          onCompact={onCompact}
         />
       </TabsContent>
     </ChatPanel>
