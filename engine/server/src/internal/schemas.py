@@ -360,6 +360,7 @@ class SettingsResponse(BaseModel):
     auto_sync: bool
     sync_interval_minutes: int
     ollama_keep_alive: str
+    max_execution_timeout: int
     memory_embedding_provider: str
     memory_embedding_model: str
     knowledge_embedding_provider: str
@@ -373,6 +374,7 @@ class SettingsUpdate(BaseModel):
     auto_sync: bool | None = None
     sync_interval_minutes: int | None = None
     ollama_keep_alive: str | None = None
+    max_execution_timeout: int | None = Field(None, ge=60, le=1800)
     memory_embedding_provider: str | None = None
     memory_embedding_model: str | None = None
     knowledge_embedding_provider: str | None = None

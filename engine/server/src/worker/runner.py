@@ -54,6 +54,11 @@ async def main() -> None:
 
     logger.info("Worker starting — Redis Streams + APScheduler")
 
+    # Wire Redis into ConfigProvider so the worker can resolve ephemeral agents
+    from src.domain_config.provider import get_config_provider
+
+    get_config_provider().set_redis(redis_client)
+
     # Ensure S3/MinIO buckets exist (worker needs them for document processing)
     from src.infra.object_store import get_object_store
 

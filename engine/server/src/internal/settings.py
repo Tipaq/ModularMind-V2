@@ -29,8 +29,8 @@ def mask_key(value: str) -> str:
     return "\u2022" * 16
 
 
-def _load_embedding_overrides() -> None:
-    """Load persisted embedding overrides from secrets store into settings."""
+def _load_persisted_overrides() -> None:
+    """Load persisted overrides from secrets store into settings."""
     for attr in (
         "MEMORY_EMBEDDING_PROVIDER",
         "MEMORY_EMBEDDING_MODEL",
@@ -41,11 +41,20 @@ def _load_embedding_overrides() -> None:
         if stored:
             setattr(settings, attr, stored)
 
+    stored_timeout = secrets_store.get("MAX_EXECUTION_TIMEOUT", "")
+    if stored_timeout:
+        try:
+            val = int(stored_timeout)
+            if 60 <= val <= 1800:
+                settings.MAX_EXECUTION_TIMEOUT = val
+        except ValueError:
+            pass
+
 
 def build_settings_response() -> SettingsResponse:
     """Build the current settings response with masked keys."""
-    # Ensure persisted embedding overrides are loaded
-    _load_embedding_overrides()
+    # Ensure persisted overrides are loaded
+    _load_persisted_overrides()
 
     providers = secrets_store.get_configured_providers()
     masked_keys = {}
@@ -64,6 +73,7 @@ def build_settings_response() -> SettingsResponse:
         auto_sync=True,
         sync_interval_minutes=5,
         ollama_keep_alive=settings.OLLAMA_KEEP_ALIVE,
+        max_execution_timeout=settings.MAX_EXECUTION_TIMEOUT,
         memory_embedding_provider=(
             settings.MEMORY_EMBEDDING_PROVIDER or settings.EMBEDDING_PROVIDER
         ),
@@ -113,6 +123,10 @@ async def update_settings_endpoint(update: SettingsUpdate, user: CurrentUser) ->
 
     if update.ollama_keep_alive is not None:
         settings.OLLAMA_KEEP_ALIVE = update.ollama_keep_alive
+
+    if update.max_execution_timeout is not None:
+        settings.MAX_EXECUTION_TIMEOUT = update.max_execution_timeout
+        secrets_store.set("MAX_EXECUTION_TIMEOUT", str(update.max_execution_timeout))
 
     # Embedding pipeline overrides — persist via secrets store for restart survival
     for attr in (
