@@ -4,10 +4,8 @@ import { useChat } from "../hooks/useChat";
 import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
 import { useConversations } from "../hooks/useConversations";
 import { ChatSidebar } from "../components/ChatSidebar";
-import { ChatMessages } from "@modularmind/ui";
-import { ChatInput, type AttachedFile } from "../components/ChatInput";
-import { InsightsPanel } from "../components/InsightsPanel";
-import { useAuthStore } from "@modularmind/ui";
+import { ChatMessages, ChatInput, InsightsPanel, useAuthStore } from "@modularmind/ui";
+import type { AttachedFile, MessageExecutionData } from "@modularmind/ui";
 import { api } from "../lib/api";
 
 interface ChatConfig {
@@ -199,6 +197,42 @@ export default function Chat() {
     [persistConfig],
   );
 
+  // ─── Shared InsightsPanel adapter ─────────────────────────────────────────
+  const selectedModel = useMemo(
+    () => availableModels.find((m) => toEngineModelId(m) === effectiveModelId || m.id === effectiveModelId) ?? null,
+    [availableModels, effectiveModelId, toEngineModelId],
+  );
+
+  const insightsConfig = useMemo(() => ({
+    supervisorMode: chatConfig.supervisorMode,
+    supervisorPrompt: "",
+    modelId: effectiveModelId,
+    modelOverride: chatConfig.modelOverride,
+  }), [chatConfig.supervisorMode, chatConfig.modelOverride, effectiveModelId]);
+
+  const handleConfigChange = useCallback((patch: Partial<typeof insightsConfig>) => {
+    setChatConfig((prev) => {
+      const next = {
+        ...prev,
+        ...(patch.supervisorMode !== undefined && { supervisorMode: patch.supervisorMode }),
+        ...(patch.modelId !== undefined && { modelId: patch.modelId }),
+        ...(patch.modelOverride !== undefined && { modelOverride: patch.modelOverride }),
+      };
+      persistConfig(next);
+      return next;
+    });
+  }, [persistConfig]);
+
+  const selectedExecution = useMemo<MessageExecutionData>(() => ({
+    activities,
+    memoryEntries: panelState.memory,
+    knowledgeData: panelState.knowledge.totalResults > 0 ? panelState.knowledge : null,
+    tokenUsage,
+    contextData: null,
+  }), [activities, panelState.memory, panelState.knowledge, tokenUsage]);
+
+  const noOpUpdateLayer = useCallback(async () => false, []);
+
   const activeConv = conversations.find((c) => c.id === activeConversationId);
   const activeTitle = activeConv?.title || "Chat";
 
@@ -292,14 +326,20 @@ export default function Chat() {
       {/* Right: Insights panel */}
       {panelOpen && (
         <InsightsPanel
-          supervisor={panelState.supervisor}
-          knowledge={panelState.knowledge}
-          memory={panelState.memory}
-          selectedModel={availableModels.find((m) => toEngineModelId(m) === effectiveModelId || m.id === effectiveModelId) ?? null}
-          supervisorMode={chatConfig.supervisorMode}
+          selectedExecution={selectedExecution}
+          liveActivities={activities}
+          isStreaming={isStreaming}
+          isLiveSelected={true}
+          config={insightsConfig}
+          onConfigChange={handleConfigChange}
+          models={models}
+          supervisorLayers={[]}
+          onUpdateLayer={noOpUpdateLayer}
+          selectedModelContextWindow={selectedModel?.context_window ?? null}
           enabledAgents={agents.filter((a) => enabledAgentIds.includes(a.id))}
           enabledGraphs={graphs.filter((g) => enabledGraphIds.includes(g.id))}
-          tokenUsage={tokenUsage}
+          allAgents={agents}
+          allGraphs={graphs}
         />
       )}
     </div>
