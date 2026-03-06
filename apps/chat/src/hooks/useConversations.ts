@@ -1,19 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { ConversationDetail, ConversationCreate, Conversation } from "@modularmind/api-client";
 import type { Message } from "./useChat";
+import { DEFAULT_CHAT_CONFIG } from "@modularmind/ui";
+import type { ChatConfig } from "@modularmind/ui";
 import { api } from "../lib/api";
-
-interface ChatConfig {
-  supervisorMode: boolean;
-  modelId: string | null;
-  modelOverride: boolean;
-}
-
-const DEFAULT_CONFIG: ChatConfig = {
-  supervisorMode: true,
-  modelId: null,
-  modelOverride: false,
-};
 
 interface UseConversationsOptions {
   /** User object -- conversations are loaded once this becomes truthy. */
@@ -64,13 +54,15 @@ export function useConversations({
   // Keep mutable refs for values read inside createConversation so the
   // callback identity stays stable while still seeing the latest values.
   const enabledAgentIdsRef = useRef(enabledAgentIds);
-  enabledAgentIdsRef.current = enabledAgentIds;
   const enabledGraphIdsRef = useRef(enabledGraphIds);
-  enabledGraphIdsRef.current = enabledGraphIds;
   const supervisorModeRef = useRef(supervisorMode);
-  supervisorModeRef.current = supervisorMode;
   const activeIdRef = useRef(activeConversationId);
-  activeIdRef.current = activeConversationId;
+  useEffect(() => {
+    enabledAgentIdsRef.current = enabledAgentIds;
+    enabledGraphIdsRef.current = enabledGraphIds;
+    supervisorModeRef.current = supervisorMode;
+    activeIdRef.current = activeConversationId;
+  });
 
   // ─── Load conversations on mount ──────────────────────────────────────────
   useEffect(() => {
@@ -112,6 +104,7 @@ export function useConversations({
         setEnabledGraphIds(convConfig.enabled_graph_ids || []);
         setChatConfig({
           supervisorMode: data.supervisor_mode ?? true,
+          supervisorPrompt: (convConfig as Record<string, unknown>).supervisor_prompt as string || "",
           modelId: convConfig.model_id || null,
           modelOverride: convConfig.model_override || false,
         });
@@ -143,7 +136,7 @@ export function useConversations({
         setConversations((prev) => [conv, ...prev]);
         setActiveConversationId(conv.id);
         setInitialMessages([]);
-        setChatConfig({ ...DEFAULT_CONFIG, supervisorMode: isSupervisor });
+        setChatConfig({ ...DEFAULT_CHAT_CONFIG, supervisorMode: isSupervisor });
         return conv.id;
       } catch {
         showError("Failed to create conversation");
@@ -162,7 +155,7 @@ export function useConversations({
         if (activeIdRef.current === id) {
           setActiveConversationId(null);
           setInitialMessages([]);
-          setChatConfig(DEFAULT_CONFIG);
+          setChatConfig(DEFAULT_CHAT_CONFIG);
         }
       } catch {
         showError("Failed to delete conversation");

@@ -4,7 +4,7 @@ import { useChat } from "../hooks/useChat";
 import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
 import { useConversations } from "../hooks/useConversations";
 import { ChatSidebar } from "../components/ChatSidebar";
-import { ChatMessages, ChatInput, InsightsPanel, useAuthStore, DEFAULT_CHAT_CONFIG } from "@modularmind/ui";
+import { ChatMessages, ChatInput, InsightsPanel, useAuthStore, DEFAULT_CHAT_CONFIG, toggleArrayItem } from "@modularmind/ui";
 import type { AttachedFile, MessageExecutionData, ChatConfig } from "@modularmind/ui";
 import { api } from "../lib/api";
 
@@ -164,15 +164,11 @@ export default function Chat() {
   }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, effectiveModelId, sendMessage, conversations, messages.length, setConversations]);
 
   const handleToggleAgent = useCallback((agentId: string) => {
-    setEnabledAgentIds((prev) =>
-      prev.includes(agentId) ? prev.filter((id) => id !== agentId) : [...prev, agentId],
-    );
+    setEnabledAgentIds((prev) => toggleArrayItem(prev, agentId));
   }, []);
 
   const handleToggleGraph = useCallback((graphId: string) => {
-    setEnabledGraphIds((prev) =>
-      prev.includes(graphId) ? prev.filter((id) => id !== graphId) : [...prev, graphId],
-    );
+    setEnabledGraphIds((prev) => toggleArrayItem(prev, graphId));
   }, []);
 
   const handleModelChange = useCallback(

@@ -14,8 +14,7 @@ export function useChatConfig() {
   const loadedRef = useRef(false);
   const loadingRef = useRef(false);
 
-  const load = useCallback(async () => {
-    if (loadedRef.current || loadingRef.current) return;
+  const _fetchConfig = useCallback(async () => {
     loadingRef.current = true;
     setLoading(true);
     try {
@@ -39,31 +38,16 @@ export function useChatConfig() {
     }
   }, []);
 
+  const load = useCallback(async () => {
+    if (loadedRef.current || loadingRef.current) return;
+    await _fetchConfig();
+  }, [_fetchConfig]);
+
   const reload = useCallback(async () => {
     loadedRef.current = false;
-    loadingRef.current = true;
     setLoaded(false);
-    setLoading(true);
-    try {
-      const [agentsRes, graphsRes, modelsRes] = await Promise.all([
-        api.get<{ items: EngineAgent[] }>("/agents?page=1&page_size=200").catch(() => ({ items: [] })),
-        api.get<{ items: EngineGraph[] }>("/graphs?page=1&page_size=200").catch(() => ({ items: [] })),
-        api.get<EngineModel[]>("/models").catch(() => []),
-      ]);
-
-      setAgents(agentsRes.items || []);
-      setGraphs(graphsRes.items || []);
-      setModels(Array.isArray(modelsRes) ? modelsRes : []);
-
-      loadedRef.current = true;
-      setLoaded(true);
-    } catch (err) {
-      console.error("[useChatConfig] Failed to reload config:", err);
-    } finally {
-      loadingRef.current = false;
-      setLoading(false);
-    }
-  }, []);
+    await _fetchConfig();
+  }, [_fetchConfig]);
 
   return {
     agents,

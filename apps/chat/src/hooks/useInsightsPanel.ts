@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import { mapKeysToCamel } from "@modularmind/api-client";
 import type {
   SupervisorData,
   KnowledgeCollection,
@@ -7,6 +6,7 @@ import type {
   KnowledgeData as KnowledgeDataBase,
   InsightsMemoryEntry,
 } from "@modularmind/ui";
+import { mapKnowledgeData } from "@modularmind/ui";
 
 export type { SupervisorData, KnowledgeCollection, KnowledgeChunk, InsightsMemoryEntry };
 
@@ -87,12 +87,7 @@ export function useInsightsPanel() {
       ...prev,
       knowledge: {
         status: "completed",
-        collections: (data.collections || []).map((c) => mapKeysToCamel(c) as unknown as KnowledgeCollection),
-        chunks: (data.chunks || []).map((ch) => ({
-          ...mapKeysToCamel(ch),
-          documentFilename: ch.document_filename ?? null,
-        }) as unknown as KnowledgeChunk),
-        totalResults: data.total_results || 0,
+        ...mapKnowledgeData(data),
       },
     }));
   }, []);
