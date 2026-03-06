@@ -354,7 +354,7 @@ async def get_execution(
 async def list_executions(
     user: CurrentUser,
     db: DbSession,
-    page: int = 1,
+    page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status_filter: ExecutionStatus | None = None,
 ) -> ExecutionListResponse:

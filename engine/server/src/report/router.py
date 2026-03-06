@@ -2,9 +2,11 @@
 
 from fastapi import APIRouter
 
+from src.auth import RequireAdmin
+
 from .service import ReportService
 
-router = APIRouter(prefix="/report", tags=["Report"])
+router = APIRouter(prefix="/report", tags=["Report"], dependencies=[RequireAdmin])
 
 
 @router.get("/status")

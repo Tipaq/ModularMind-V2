@@ -5,6 +5,7 @@ API endpoints for memory operations.
 """
 
 import logging
+import time
 
 import redis
 from fastapi import APIRouter, HTTPException, Query, Response
@@ -50,7 +51,7 @@ settings = get_settings()
 
 @router.get("/admin/stats/global", response_model=GlobalMemoryStatsResponse, dependencies=[RequireAdmin])
 async def get_global_stats(
-    db: DbSession = None,
+    db: DbSession,
 ) -> GlobalMemoryStatsResponse:
     """Get aggregate memory stats across all scopes (admin only)."""
     # Single-scan aggregate: conditional counts + avg/sum in one query
@@ -107,7 +108,7 @@ async def get_global_stats(
 
 @router.get("/admin/explore", response_model=MemoryListResponse, dependencies=[RequireAdmin])
 async def explore_memories(
-    db: DbSession = None,
+    db: DbSession,
     user_id: str | None = Query(default=None),
     scope: MemoryScope | None = Query(default=None),
     memory_type: MemoryType | None = Query(default=None),
@@ -160,7 +161,7 @@ async def explore_memories(
 
 @router.get("/admin/consolidation/logs", dependencies=[RequireAdmin])
 async def get_consolidation_logs(
-    db: DbSession = None,
+    db: DbSession,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> dict:
@@ -192,10 +193,9 @@ async def get_consolidation_logs(
     dependencies=[RequireAdmin],
 )
 async def trigger_consolidation(
-    db: DbSession = None,
+    db: DbSession,
 ) -> ConsolidationTriggerResponse:
     """Manually trigger a memory consolidation cycle (admin only)."""
-    import time
     from datetime import datetime, timedelta
 
     from sqlalchemy import delete as sa_delete
@@ -264,7 +264,7 @@ async def trigger_consolidation(
 @router.post("/admin/{entry_id}/invalidate", dependencies=[RequireAdmin])
 async def invalidate_memory(
     entry_id: str,
-    db: DbSession = None,
+    db: DbSession,
 ) -> dict[str, str]:
     """Manually invalidate (soft-delete) a memory entry (admin only)."""
     repo = MemoryRepository(db)
@@ -297,7 +297,7 @@ async def invalidate_memory(
 
 @router.get("/admin/graph", response_model=GraphResponse, dependencies=[RequireAdmin])
 async def get_graph_data(
-    db: DbSession = None,
+    db: DbSession,
     scope: MemoryScope | None = Query(default=None),
     scope_id: str | None = Query(default=None),
     user_id: str | None = Query(default=None),
@@ -375,7 +375,7 @@ async def get_graph_data(
 
 @router.get("/admin/users", response_model=list[MemoryUserResponse], dependencies=[RequireAdmin])
 async def get_memory_users(
-    db: DbSession = None,
+    db: DbSession,
 ) -> list[MemoryUserResponse]:
     """List users that have memories (for dropdown filter)."""
     result = await db.execute(

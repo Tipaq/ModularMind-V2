@@ -61,6 +61,18 @@ async def create_group(
     return _group_response(group)
 
 
+# User's own groups — must be defined BEFORE /{group_id} to avoid path collision.
+@router.get("/me/groups", response_model=list[GroupResponse])
+async def get_my_groups(
+    user: CurrentUser,
+    db: DbSession,
+) -> list[GroupResponse]:
+    """Get groups for the current authenticated user."""
+    service = GroupService(db)
+    groups = await service.get_user_groups(user.id)
+    return [_group_response(g) for g in groups]
+
+
 @router.get("/{group_id}", response_model=GroupDetailResponse)
 async def get_group(
     group_id: str,
@@ -160,19 +172,3 @@ async def remove_member(
     service = GroupService(db)
     await service.remove_member(group_id, user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# =============================================================================
-# User's own groups endpoint
-# =============================================================================
-
-
-@router.get("/me/groups", response_model=list[GroupResponse])
-async def get_my_groups(
-    user: CurrentUser,
-    db: DbSession,
-) -> list[GroupResponse]:
-    """Get groups for the current authenticated user."""
-    service = GroupService(db)
-    groups = await service.get_user_groups(user.id)
-    return [_group_response(g) for g in groups]
