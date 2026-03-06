@@ -118,7 +118,18 @@ export default function ChatPage() {
         const res = await fetch(`/api/chat/conversations?page_size=${CONVERSATION_PAGE_SIZE}`);
         if (!res.ok || !active) return;
         const data = await res.json();
-        if (active) setConversations(data.items || []);
+        const items: Conversation[] = data.items || [];
+
+        // Clean up orphaned conversations (created but cancelled before first response)
+        const orphans = items.filter((c) => c.message_count === 0);
+        const valid = items.filter((c) => c.message_count > 0);
+        if (orphans.length > 0) {
+          orphans.forEach((c) =>
+            fetch(`/api/chat/conversations/${c.id}`, { method: "DELETE" }).catch(() => {}),
+          );
+        }
+
+        if (active) setConversations(valid);
       } catch {
         // Silently ignore – component will show empty state
       }
