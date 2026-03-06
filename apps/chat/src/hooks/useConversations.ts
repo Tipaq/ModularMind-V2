@@ -80,8 +80,7 @@ export function useConversations({
       try {
         const data = await api.get<{ items: Conversation[] }>("/conversations?page_size=50");
         if (active) setConversations(data.items || []);
-      } catch (err) {
-        console.error("[Chat] load conversations:", err);
+      } catch {
         showError("Failed to load conversations");
       }
     }
@@ -116,8 +115,7 @@ export function useConversations({
           modelId: convConfig.model_id || null,
           modelOverride: convConfig.model_override || false,
         });
-      } catch (err) {
-        console.error("[Chat] select conversation:", err);
+      } catch {
         showError("Failed to load conversation");
       }
     },
@@ -147,8 +145,7 @@ export function useConversations({
         setInitialMessages([]);
         setChatConfig({ ...DEFAULT_CONFIG, supervisorMode: isSupervisor });
         return conv.id;
-      } catch (err) {
-        console.error("[Chat] create conversation:", err);
+      } catch {
         showError("Failed to create conversation");
         return null;
       }
@@ -167,8 +164,7 @@ export function useConversations({
           setInitialMessages([]);
           setChatConfig(DEFAULT_CONFIG);
         }
-      } catch (err) {
-        console.error("[Chat] delete conversation:", err);
+      } catch {
         showError("Failed to delete conversation");
       }
     },
@@ -183,8 +179,7 @@ export function useConversations({
         setConversations((prev) =>
           prev.map((c) => (c.id === id ? { ...c, title } : c)),
         );
-      } catch (err) {
-        console.error("[Chat] rename conversation:", err);
+      } catch {
         showError("Failed to rename conversation");
       }
     },
