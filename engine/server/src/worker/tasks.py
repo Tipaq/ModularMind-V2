@@ -209,6 +209,59 @@ async def _handle_cancellation(
     await redis_client.delete(f"revoke_intent:{execution_id}")
     logger.info("Execution %s marked as STOPPED (cancelled)", execution_id)
 
+    # Clean up orphaned conversations: if this was the first message in a new
+    # conversation and the LLM never responded, delete the conversation entirely
+    # so it doesn't linger in the sidebar with just the user's message.
+    await _cleanup_orphaned_conversation(session, execution_id)
+
+
+# --- Orphaned conversation cleanup ---
+
+
+async def _cleanup_orphaned_conversation(
+    session: AsyncSession,
+    execution_id: str,
+) -> None:
+    """Delete conversation if it only has a single user message (no assistant reply).
+
+    When a user starts a new conversation and cancels/refreshes before the LLM
+    responds, the conversation is left with just the initial user message and a
+    modified title. Since neither the message nor the response are visible after
+    refresh, we delete the conversation to avoid sidebar clutter.
+    """
+    from sqlalchemy import delete, func, select
+
+    from src.conversations.models import Conversation, ConversationMessage
+    from src.executions.models import ExecutionRun
+
+    # Find the conversation linked to this execution
+    result = await session.execute(
+        select(ExecutionRun.session_id).where(ExecutionRun.id == execution_id)
+    )
+    row = result.first()
+    if not row or not row[0]:
+        return
+
+    conversation_id = row[0]
+
+    # Count total messages in this conversation
+    msg_count = (await session.execute(
+        select(func.count())
+        .select_from(ConversationMessage)
+        .where(ConversationMessage.conversation_id == conversation_id)
+    )).scalar() or 0
+
+    # Only delete if there's exactly 1 message (the initial user message)
+    if msg_count <= 1:
+        await session.execute(
+            delete(Conversation).where(Conversation.id == conversation_id)
+        )
+        await session.commit()
+        logger.info(
+            "Deleted orphaned conversation %s (execution %s cancelled before first response)",
+            conversation_id, execution_id,
+        )
+
 
 # --- Persist assistant message after execution ---
 
