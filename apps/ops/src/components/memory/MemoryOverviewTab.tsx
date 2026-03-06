@@ -9,7 +9,6 @@ import {
   Activity,
   AlertCircle,
   Layers,
-  RefreshCw,
   Settings2,
 } from "lucide-react";
 import {

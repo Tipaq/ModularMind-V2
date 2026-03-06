@@ -74,7 +74,7 @@ export function MemoryGraphTab() {
     const map: Record<string, string> = {};
     uniqueIds.forEach((id, idx) => { map[id] = USER_ANCHOR_PALETTE[idx % USER_ANCHOR_PALETTE.length]; });
     return map;
-  }, [graphData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [graphData]);
 
   useEffect(() => {
     fetchMemoryUsers();

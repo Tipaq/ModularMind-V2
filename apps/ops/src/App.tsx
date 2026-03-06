@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { ThemeProvider, ErrorBoundary } from "@modularmind/ui";
+import { ThemeProvider, ErrorBoundary, RouteLoader } from "@modularmind/ui";
 
 import DashboardLayout from "./layouts/DashboardLayout";
 import Login from "./pages/Login";
@@ -18,14 +18,6 @@ const UserDetail = lazy(() => import("./pages/UserDetail"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Memory = lazy(() => import("./pages/Memory"));
-
-function RouteLoader() {
-  return (
-    <div className="flex items-center justify-center h-full">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-    </div>
-  );
-}
 
 export default function App() {
   return (
