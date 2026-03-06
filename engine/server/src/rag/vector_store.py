@@ -183,7 +183,7 @@ class QdrantRAGVectorStore(BaseHybridVectorStore):
                     )
                     for rr in reranked
                 ]
-            except Exception:
+            except Exception:  # Graceful degradation: reranker falls back to Qdrant scores
                 logger.warning("Reranking failed, using Qdrant scores", exc_info=True)
                 candidates = candidates[:limit]
         else:

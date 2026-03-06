@@ -10,6 +10,7 @@ import logging
 import unicodedata
 
 import redis.asyncio as redis
+import redis.exceptions
 
 from src.infra.redis import get_redis_pool
 
@@ -54,7 +55,7 @@ class EmbeddingCache:
             if data is None:
                 return None
             return json.loads(data)
-        except Exception as e:
+        except (redis.exceptions.RedisError, json.JSONDecodeError, OSError) as e:
             logger.debug("Embedding cache get error: %s", e)
             return None
 
@@ -64,7 +65,7 @@ class EmbeddingCache:
             r = self._get_client()
             key = cache_key(text)
             await r.set(key, json.dumps(embedding), ex=ttl or self.ttl)
-        except Exception as e:
+        except (redis.exceptions.RedisError, OSError) as e:
             logger.debug("Embedding cache set error: %s", e)
 
     async def close(self) -> None:

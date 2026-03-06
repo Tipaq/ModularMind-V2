@@ -11,6 +11,8 @@ import json
 import logging
 from typing import Any
 
+import sqlalchemy.exc
+
 from src.infra.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -105,7 +107,7 @@ async def summarizer_handler(data: dict[str, Any]) -> None:
             logger.info("Empty summary for conversation %s", conversation_id)
             return
 
-    except Exception as e:
+    except Exception as e:  # LLM providers raise heterogeneous errors
         logger.warning("LLM summarization failed for conversation %s: %s", conversation_id, e)
         return
 
@@ -123,7 +125,7 @@ async def summarizer_handler(data: dict[str, Any]) -> None:
         if embedding_provider:
             try:
                 embedding = await embedding_provider.embed_query(summary_text)
-            except Exception as e:
+            except Exception as e:  # LLM providers raise heterogeneous errors
                 logger.warning("Embedding failed for summary: %s", e)
 
         async with async_session_maker() as session:
@@ -170,5 +172,5 @@ async def summarizer_handler(data: dict[str, Any]) -> None:
             conversation_id, len(messages), len(summary_text),
         )
 
-    except Exception as e:
+    except sqlalchemy.exc.SQLAlchemyError as e:
         logger.error("Failed to store summary for conversation %s: %s", conversation_id, e)

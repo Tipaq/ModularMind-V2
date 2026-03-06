@@ -37,7 +37,7 @@ class ReportService:
                 }
                 # Execution counts from Redis sorted sets (if metrics module writes them)
                 metrics["dead_letter"] = await r.xlen("memory:dlq")
-            except Exception as e:
+            except (ConnectionError, OSError) as e:
                 logger.warning("Failed to collect queue metrics: %s", e)
             finally:
                 await r.aclose()

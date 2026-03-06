@@ -84,7 +84,7 @@ class RAGRetriever:
             logger.info("Found %d RAG results for query", len(results))
             return self.format_context(results)
 
-        except Exception as e:
+        except Exception as e:  # Graceful degradation: RAG retrieval falls back to empty context
             logger.error("Error retrieving RAG context: %s", e)
             return ""
 
@@ -124,7 +124,7 @@ class RAGRetriever:
                 threshold=threshold,
             )
 
-        except Exception as e:
+        except Exception as e:  # Graceful degradation: RAG retrieval falls back to empty results
             logger.error("Error retrieving RAG results: %s", e)
             return []
 

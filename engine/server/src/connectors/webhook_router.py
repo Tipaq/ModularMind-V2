@@ -178,7 +178,7 @@ async def send_discord_followup(
                 logger.warning(
                     "Discord followup failed (%s): %s", resp.status_code, resp.text
                 )
-    except Exception:
+    except httpx.HTTPError:
         logger.exception("Failed to send Discord followup")
 
 
@@ -230,7 +230,7 @@ async def _run_discord_agent(
               interaction_token,
               response_text or "No response generated.",
           )
-      except Exception:
+      except Exception:  # Background task catch-all; must not crash silently
           logger.exception("Discord background agent execution failed")
           await send_discord_followup(
               application_id,
@@ -243,7 +243,7 @@ async def _run_discord_agent(
 
 
 @webhook_router.post(
-    "/webhooks/{connector_id}",
+    "/{connector_id}",
     dependencies=[Depends(_webhook_rate_limit)],
 )
 async def receive_webhook(
@@ -316,7 +316,7 @@ async def receive_webhook(
     # Parse payload
     try:
         payload = await request.json()
-    except Exception:
+    except (ValueError, UnicodeDecodeError):
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     # ── Handle Slack URL verification ────────────────────────────────────
@@ -402,6 +402,6 @@ async def receive_webhook(
             "response": response_text,
         }
 
-    except Exception:
+    except Exception:  # Execution involves DB + Redis + LLM; logs and returns 500
         logger.exception("Webhook execution failed")
         raise HTTPException(status_code=500, detail="Execution failed")

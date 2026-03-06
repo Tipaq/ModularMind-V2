@@ -12,6 +12,8 @@ import json
 import logging
 from typing import Any
 
+import sqlalchemy.exc
+
 from src.embedding.resolver import get_memory_embedding_provider
 from src.infra.database import async_session_maker
 from src.memory.models import MemoryScope, MemoryTier, MemoryType
@@ -74,7 +76,7 @@ async def embedder_handler(data: dict[str, Any]) -> None:
 
             try:
                 embedding = await provider.embed_text(text)
-            except Exception:
+            except Exception:  # LLM providers raise heterogeneous errors
                 logger.exception("Failed to embed fact: %s", text[:80])
                 continue
 
@@ -103,7 +105,7 @@ async def embedder_handler(data: dict[str, Any]) -> None:
                     memory_type=memory_type,
                 )
                 stored += 1
-            except Exception:
+            except sqlalchemy.exc.SQLAlchemyError:
                 logger.exception(
                     "Failed to store memory entry for fact: %s", text[:80]
                 )

@@ -149,7 +149,7 @@ async def delete_collection(
         from .vector_store import QdrantRAGVectorStore
         vs = QdrantRAGVectorStore()
         await vs.delete_by_collection(collection_id)
-    except Exception as e:
+    except Exception as e:  # Qdrant client can raise various errors
         logger.error("Qdrant cleanup failed for collection %s: %s", collection_id, e)
 
 
@@ -375,7 +375,7 @@ async def reprocess_document(
         from .vector_store import QdrantRAGVectorStore
         vs = QdrantRAGVectorStore()
         await vs.delete_by_document(document_id)
-    except Exception as e:
+    except Exception as e:  # Qdrant client can raise various errors
         logger.warning("Qdrant chunk cleanup for reprocess of %s: %s", document_id, e)
 
     # Update collection chunk_count before resetting document
@@ -456,7 +456,7 @@ async def delete_document(
             from src.infra.object_store import get_object_store
             store = get_object_store()
             await store.delete(settings.S3_BUCKET_RAG, object_key)
-        except Exception as e:
+        except Exception as e:  # S3/MinIO client can raise various errors
             logger.warning("MinIO cleanup failed for document %s: %s", document_id, e)
 
     await db.delete(document)
@@ -480,7 +480,7 @@ async def delete_document(
         from .vector_store import QdrantRAGVectorStore
         vs = QdrantRAGVectorStore()
         await vs.delete_by_document(document_id)
-    except Exception as e:
+    except Exception as e:  # Qdrant client can raise various errors
         logger.error("Qdrant cleanup failed for document %s: %s", document_id, e)
 
 
@@ -507,7 +507,7 @@ async def search_rag(
         try:
             query_embedding = await embedding_provider.embed_text(request.query)
             await embedding_cache.set(request.query, query_embedding)
-        except Exception as e:
+        except Exception as e:  # LLM providers raise heterogeneous errors
             raise HTTPException(
                 status_code=503,
                 detail=f"Embedding service unavailable: {e}",
