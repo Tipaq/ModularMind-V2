@@ -78,3 +78,8 @@ export function formatCost(cost: number | null): string {
   if (cost < 0.01) return "<$0.01";
   return `$${cost.toFixed(2)}`;
 }
+
+/** Toggle an item in an array: remove if present, append if absent. */
+export function toggleArrayItem<T>(arr: T[], item: T): T[] {
+  return arr.includes(item) ? arr.filter((i) => i !== item) : [...arr, item];
+}

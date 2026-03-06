@@ -472,12 +472,13 @@ export function MemoryTab({
     rag: ragTokensUsed,
   };
 
-  const lastUsedRef = useRef({ history: 0, memory: 0, rag: 0 });
-  if (currentUsed.history > 0 || currentUsed.memory > 0 || currentUsed.rag > 0) {
-    lastUsedRef.current = currentUsed;
+  const [lastUsed, setLastUsed] = useState({ history: 0, memory: 0, rag: 0 });
+  const hasNonZero = currentUsed.history > 0 || currentUsed.memory > 0 || currentUsed.rag > 0;
+  if (hasNonZero && (currentUsed.history !== lastUsed.history || currentUsed.memory !== lastUsed.memory || currentUsed.rag !== lastUsed.rag)) {
+    setLastUsed(currentUsed);
   }
-  const used = isStreaming && currentUsed.history === 0 && currentUsed.memory === 0 && currentUsed.rag === 0
-    ? lastUsedRef.current
+  const used = isStreaming && !hasNonZero
+    ? lastUsed
     : currentUsed;
 
   return (

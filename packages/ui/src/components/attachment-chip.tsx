@@ -24,10 +24,11 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-function getIcon(contentType: string) {
-  if (contentType.startsWith("image/")) return Image;
-  if (contentType === "application/pdf" || contentType.startsWith("text/")) return FileText;
-  return File;
+function FileIcon({ contentType }: { contentType: string }) {
+  const cls = "h-3 w-3 shrink-0 text-muted-foreground";
+  if (contentType.startsWith("image/")) return <Image className={cls} />;
+  if (contentType === "application/pdf" || contentType.startsWith("text/")) return <FileText className={cls} />;
+  return <File className={cls} />;
 }
 
 export const AttachmentChip = memo(function AttachmentChip({
@@ -35,7 +36,6 @@ export const AttachmentChip = memo(function AttachmentChip({
   downloadBaseUrl = "/api/v1/conversations",
   className,
 }: AttachmentChipProps) {
-  const Icon = getIcon(attachment.content_type);
   const downloadUrl = `${downloadBaseUrl}/attachments/${attachment.id}`;
 
   return (
@@ -50,7 +50,7 @@ export const AttachmentChip = memo(function AttachmentChip({
       )}
       title={`${attachment.filename} (${formatSize(attachment.size_bytes)})`}
     >
-      <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
+      <FileIcon contentType={attachment.content_type} />
       <span className="max-w-[120px] truncate">{attachment.filename}</span>
       <span className="text-muted-foreground">{formatSize(attachment.size_bytes)}</span>
       <Download className="h-2.5 w-2.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />

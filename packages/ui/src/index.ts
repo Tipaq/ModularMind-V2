@@ -12,7 +12,11 @@ export { useExecutionActivities } from "./hooks/useExecutionActivities";
 export { extractResponse } from "./hooks/useChatUtils";
 
 // Utilities
-export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTime, stripProvider, isLocalModel, formatDurationMs, formatCost } from "./lib/utils";
+export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTime, stripProvider, isLocalModel, formatDurationMs, formatCost, toggleArrayItem } from "./lib/utils";
+
+// Mappers (snake_case API → camelCase UI)
+export { mapKnowledgeData, mapMemoryEntries } from "./lib/mappers";
+export type { RawKnowledgeData, RawMemoryEntry } from "./lib/mappers";
 
 // Color constants
 export { ACTIVITY_COLORS, CHANNEL_COLORS, STATUS_COLORS, ROLE_COLORS, HEALTH_COLORS } from "./lib/colors";
@@ -61,6 +65,7 @@ export { Textarea } from "./components/textarea";
 export type { TextareaProps } from "./components/textarea";
 export { AppearanceCard } from "./components/appearance-card";
 export { ErrorBoundary } from "./components/error-boundary";
+export { RouteLoader } from "./components/route-loader";
 export { LoginForm } from "./components/login-form";
 export type { LoginFormProps } from "./components/login-form";
 export { ProfilePage } from "./components/profile-page";

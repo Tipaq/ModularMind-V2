@@ -32,12 +32,11 @@ const DOT_BG: Record<string, string> = {
 function TimelineItem({
   activity,
   enabledAgents,
-  enabledGraphs,
   isLast,
 }: {
   activity: ExecutionActivity;
   enabledAgents: EngineAgent[];
-  enabledGraphs: EngineGraph[];
+  enabledGraphs?: EngineGraph[];
   isLast: boolean;
 }) {
   const dotColor = DOT_BG[activity.type] || "bg-muted-foreground";
@@ -58,7 +57,7 @@ function TimelineItem({
       </div>
 
       <div className="flex-1 min-w-0 pb-2">
-        {renderCard(activity, enabledAgents, enabledGraphs)}
+        {renderCard(activity, enabledAgents)}
       </div>
     </div>
   );
@@ -67,7 +66,6 @@ function TimelineItem({
 function renderCard(
   activity: ExecutionActivity,
   enabledAgents: EngineAgent[],
-  _enabledGraphs: EngineGraph[],
 ) {
   switch (activity.type) {
     case "routing":

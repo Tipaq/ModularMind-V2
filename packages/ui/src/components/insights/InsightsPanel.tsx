@@ -18,13 +18,7 @@ import type {
   MessageExecutionData,
 } from "../../types/chat";
 import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "../../types/engine";
-
-interface ChatConfig {
-  supervisorMode: boolean;
-  supervisorPrompt: string;
-  modelId: string | null;
-  modelOverride: boolean;
-}
+import type { ChatConfig } from "../../lib/chat-config";
 
 export interface InsightsPanelProps {
   selectedExecution: MessageExecutionData | null;
