@@ -4,8 +4,8 @@ Configures interval and cron jobs for:
 - Platform sync polling (every SYNC_INTERVAL_SECONDS)
 - Report to platform (every 15 minutes)
 - Stale execution cleanup (every 5 minutes)
-- Memory consolidation (every 6 hours)
-- Memory extraction scan (every MEMORY_EXTRACTION_SCAN_INTERVAL seconds)
+- Profile synthesis (every PROFILE_SYNTHESIS_INTERVAL seconds)
+- RAG consolidation (every RAG_CONSOLIDATION_INTERVAL seconds)
 """
 
 import logging
@@ -53,24 +53,23 @@ def create_scheduler() -> AsyncIOScheduler:
         name="Cleanup stuck executions",
     )
 
-    # Memory consolidation — merge duplicates, decay old entries
-    if settings.FACT_EXTRACTION_ENABLED:
-        scheduler.add_job(
-            memory_consolidation,
-            "cron",
-            hour="*/6",
-            id="memory_consolidation",
-            name="Consolidate memory entries",
-        )
+    # User profile auto-synthesis
+    scheduler.add_job(
+        profile_synthesis_scan,
+        "interval",
+        seconds=settings.PROFILE_SYNTHESIS_INTERVAL,
+        id="profile_synthesis_scan",
+        name="Synthesize user profiles from recent conversations",
+    )
 
-        # Memory extraction scan — idle + marathon triggers
-        scheduler.add_job(
-            memory_extraction_scan,
-            "interval",
-            seconds=settings.MEMORY_EXTRACTION_SCAN_INTERVAL,
-            id="memory_extraction_scan",
-            name="Scan conversations for memory extraction",
-        )
+    # RAG consolidation (decay + obsolescence detection)
+    scheduler.add_job(
+        rag_consolidation,
+        "interval",
+        seconds=settings.RAG_CONSOLIDATION_INTERVAL,
+        id="rag_consolidation",
+        name="RAG chunk decay and document obsolescence detection",
+    )
 
     # Orphaned attachment cleanup (every hour)
     scheduler.add_job(
@@ -121,245 +120,6 @@ async def report_to_platform() -> None:
             )
     except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
         logger.exception("Failed to report to platform")
-
-
-async def memory_consolidation() -> None:
-    """Consolidate memory entries — exponential decay, consolidation, promotion, graph rebuild."""
-    from datetime import datetime, timedelta
-
-    from sqlalchemy import delete
-
-    from src.infra.database import async_session_maker
-    from src.infra.redis import redis_client
-    from src.memory.consolidator import apply_exponential_decay
-    from src.memory.models import ConsolidationLog
-    from src.memory.repository import MemoryRepository
-    from src.memory.router import reload_memory_config
-
-    # Sync latest config from secrets_store (picks up admin API changes)
-    reload_memory_config()
-
-    # Acquire Redis lock to prevent concurrent runs
-    lock_key = "memory:consolidation:lock"
-    lock_acquired = await redis_client.set(lock_key, "1", nx=True, ex=1800)  # 30min TTL
-    if not lock_acquired:
-        logger.warning("Memory consolidation skipped — another run is in progress")
-        return
-
-    try:
-        async with async_session_maker() as session:
-            repo = MemoryRepository(session)
-
-            # Step 1: Apply exponential decay
-            decayed, invalidated = await apply_exponential_decay(session, settings)
-            logger.info(
-                "Consolidation step 1 (decay): %d decayed, %d invalidated",
-                decayed,
-                invalidated,
-            )
-
-            # Step 2: Enumerate active scopes (max 20 per cycle)
-            all_scopes = await repo.get_distinct_scopes()
-            scopes_to_process = all_scopes[:20]  # Round-robin limit
-
-            logger.info(
-                "Consolidation step 2: processing %d/%d scopes",
-                len(scopes_to_process),
-                len(all_scopes),
-            )
-
-            # Steps 3-4: LLM consolidation + promotion (placeholder — full implementation in future)
-            # TODO: Implement MemoryConsolidator.consolidate_scope() and promote_episodic_to_semantic()
-            # For now, just log the scopes that would be processed
-            for scope, scope_id in scopes_to_process:
-                logger.debug(
-                    "Would consolidate scope %s/%s", scope.value, scope_id
-                )
-
-            # Step 5: Cleanup old consolidation logs (> 30 days)
-            cutoff = datetime.now().replace(tzinfo=None) - timedelta(days=30)
-            result = await session.execute(
-                delete(ConsolidationLog).where(
-                    ConsolidationLog.created_at < cutoff
-                )
-            )
-            if result.rowcount:
-                logger.info("Cleaned up %d old consolidation logs", result.rowcount)
-
-            await session.commit()
-
-        logger.info("Memory consolidation complete")
-    except (sqlalchemy.exc.SQLAlchemyError, OSError, RuntimeError):
-        logger.exception("Memory consolidation failed")
-    finally:
-        # Release Redis lock
-        try:
-            await redis_client.delete(lock_key)
-        except (ConnectionError, OSError, redis.exceptions.RedisError):
-            logger.error("Failed to release consolidation lock", exc_info=True)
-
-
-async def _extract_new_messages(session, conv, now) -> None:
-    """Fetch new messages since last extraction and enqueue them."""
-    import json
-    from datetime import datetime
-
-    from sqlalchemy import select, update
-
-    from src.conversations.models import Conversation, ConversationMessage
-    from src.infra.metrics import memory_extraction_enqueued
-    from src.infra.publish import enqueue_memory_raw
-
-    from src.infra.config import get_settings
-    from src.infra.token_counter import count_tokens
-
-    settings = get_settings()
-    cutoff = conv.last_memory_extracted_at or datetime(2000, 1, 1)
-    result = await session.execute(
-        select(ConversationMessage)
-        .where(
-            ConversationMessage.conversation_id == conv.id,
-            ConversationMessage.created_at > cutoff,
-        )
-        .order_by(ConversationMessage.created_at)
-    )
-    messages = list(result.scalars().all())
-    if not messages:
-        return
-
-    # Check both message count and token thresholds
-    total_tokens = sum(count_tokens(m.content or "") for m in messages)
-    batch_ok = len(messages) >= settings.MEMORY_EXTRACTION_BATCH_SIZE
-    token_ok = total_tokens >= settings.MEMORY_BUFFER_TOKEN_THRESHOLD
-
-    if not batch_ok and not token_ok:
-        logger.debug(
-            "Skipping extraction for %s: %d msgs / %d tokens (below thresholds)",
-            conv.id, len(messages), total_tokens,
-        )
-        return
-
-    messages_json = json.dumps([
-        {"role": m.role.value, "content": m.content}
-        for m in messages
-    ])
-
-    await enqueue_memory_raw(
-        conversation_id=conv.id,
-        agent_id=conv.agent_id or "",
-        messages=messages_json,
-        user_id=conv.user_id,
-    )
-
-    latest_msg_time = messages[-1].created_at
-    await session.execute(
-        update(Conversation)
-        .where(Conversation.id == conv.id)
-        .values(last_memory_extracted_at=latest_msg_time)
-    )
-    memory_extraction_enqueued.labels(trigger="idle").inc()
-    logger.info(
-        "Enqueued %d new messages from conversation %s for extraction",
-        len(messages), conv.id,
-    )
-
-
-async def memory_extraction_scan() -> None:
-    """Scan for conversations needing memory extraction.
-
-    Two triggers:
-    1. Idle >= MEMORY_EXTRACTION_IDLE_SECONDS AND >= MIN_MESSAGES new messages
-    2. >= MEMORY_EXTRACTION_BATCH_SIZE new messages (marathon, regardless of idle)
-    """
-    from datetime import datetime, timedelta
-
-    import sqlalchemy as sa
-    from sqlalchemy import func, select
-
-    from src.conversations.models import Conversation, ConversationMessage
-    from src.infra.config import get_settings
-    from src.infra.database import async_session_maker
-    from src.infra.redis import redis_client
-    from src.memory.router import reload_memory_config
-
-    # Sync latest config from secrets_store (picks up admin API changes)
-    reload_memory_config()
-
-    settings = get_settings()
-
-    lock_key = "memory:extraction_scan:lock"
-    lock_acquired = await redis_client.set(
-        lock_key, "1", nx=True, ex=settings.MEMORY_EXTRACTION_SCAN_INTERVAL,
-    )
-    if not lock_acquired:
-        logger.debug("Memory extraction scan skipped — another scan in progress")
-        return
-
-    try:
-        now = utcnow()
-        idle_cutoff = now - timedelta(seconds=settings.MEMORY_EXTRACTION_IDLE_SECONDS)
-        min_messages = settings.FACT_EXTRACTION_MIN_MESSAGES
-        batch_size = settings.MEMORY_EXTRACTION_BATCH_SIZE
-
-        async with async_session_maker() as session:
-            # Subquery: count messages after last extraction per conversation
-            epoch = datetime(2000, 1, 1)
-            new_msg_count = (
-                select(
-                    ConversationMessage.conversation_id.label("conv_id"),
-                    func.count(ConversationMessage.id).label("new_count"),
-                )
-                .where(
-                    ConversationMessage.created_at > func.coalesce(
-                        Conversation.last_memory_extracted_at, epoch,
-                    )
-                )
-                .join(Conversation, ConversationMessage.conversation_id == Conversation.id)
-                .group_by(ConversationMessage.conversation_id)
-                .subquery()
-            )
-
-            # Main query: conversations matching either trigger
-            query = (
-                select(Conversation, new_msg_count.c.new_count)
-                .join(new_msg_count, Conversation.id == new_msg_count.c.conv_id)
-                .where(
-                    Conversation.is_active.is_(True),
-                    new_msg_count.c.new_count >= min_messages,
-                    sa.or_(
-                        Conversation.updated_at < idle_cutoff,
-                        new_msg_count.c.new_count >= batch_size,
-                    ),
-                )
-                .limit(20)
-            )
-
-            result = await session.execute(query)
-            rows = result.all()
-
-            if not rows:
-                logger.debug("Memory extraction scan: no conversations to process")
-                return
-
-            logger.info("Memory extraction scan: %d conversation(s) to process", len(rows))
-
-            for conv, _new_count in rows:
-                try:
-                    await _extract_new_messages(session, conv, now)
-                except (sqlalchemy.exc.SQLAlchemyError, redis.exceptions.RedisError, OSError):
-                    logger.exception(
-                        "Failed to enqueue extraction for conversation %s", conv.id,
-                    )
-
-            await session.commit()
-
-    except (sqlalchemy.exc.SQLAlchemyError, redis.exceptions.RedisError, OSError):
-        logger.exception("Memory extraction scan failed")
-    finally:
-        try:
-            await redis_client.delete(lock_key)
-        except (ConnectionError, OSError, redis.exceptions.RedisError):
-            logger.error("Failed to release extraction scan lock")
 
 
 async def cleanup_orphaned_attachments() -> None:
@@ -457,3 +217,114 @@ async def cleanup_stale_executions() -> None:
             await session.commit()
     except sqlalchemy.exc.SQLAlchemyError:
         logger.exception("Stale execution cleanup failed")
+
+
+async def profile_synthesis_scan() -> None:
+    """Synthesize user profiles from recent conversations.
+
+    Processes users with new conversations since their last synthesis,
+    in batches of 20 using asyncio.gather().
+    """
+    import asyncio
+
+    from sqlalchemy import func, select
+
+    from src.auth.models import User
+    from src.auth.profile_synthesizer import ProfileSynthesizer
+    from src.conversations.models import Conversation
+    from src.infra.database import async_session_maker
+
+    try:
+        async with async_session_maker() as session:
+            # Find users with conversations newer than their last synthesis
+            from datetime import datetime
+
+            epoch = datetime(2000, 1, 1)
+            result = await session.execute(
+                select(User.id)
+                .join(Conversation, Conversation.user_id == User.id)
+                .where(
+                    User.is_active.is_(True),
+                    Conversation.updated_at > func.coalesce(
+                        User.last_profile_synthesis_at, epoch,
+                    ),
+                )
+                .group_by(User.id)
+                .limit(100)
+            )
+            user_ids = [row[0] for row in result.all()]
+
+        if not user_ids:
+            logger.debug("Profile synthesis: no users to process")
+            return
+
+        logger.info("Profile synthesis: %d user(s) to process", len(user_ids))
+        synthesizer = ProfileSynthesizer()
+
+        # Process in batches of 20
+        for i in range(0, len(user_ids), 20):
+            batch = user_ids[i : i + 20]
+            results = await asyncio.gather(
+                *[_synthesize_one(synthesizer, uid) for uid in batch],
+                return_exceptions=True,
+            )
+            successes = sum(1 for r in results if r is True)
+            failures = sum(1 for r in results if isinstance(r, Exception))
+            logger.info(
+                "Profile synthesis batch %d-%d: %d successes, %d failures",
+                i, i + len(batch), successes, failures,
+            )
+
+    except (sqlalchemy.exc.SQLAlchemyError, OSError):
+        logger.exception("Profile synthesis scan failed")
+
+
+async def _synthesize_one(synthesizer, user_id: str) -> bool:
+    """Synthesize profile for a single user (for gather)."""
+    from src.infra.database import async_session_maker
+
+    try:
+        async with async_session_maker() as session:
+            result = await synthesizer.synthesize(user_id, session)
+            if result is not None:
+                await session.commit()
+                return True
+            return False
+    except Exception:
+        logger.warning("Profile synthesis failed for user %s", user_id, exc_info=True)
+        raise
+
+
+async def rag_consolidation() -> None:
+    """Periodic RAG data maintenance: decay unused chunks, detect obsolete documents."""
+    from sqlalchemy import select
+
+    from src.infra.database import async_session_maker
+    from src.rag.consolidator import RAGConsolidator
+    from src.rag.models import RAGCollection
+
+    consolidator = RAGConsolidator()
+
+    try:
+        async with async_session_maker() as session:
+            # Step 1: Decay unused chunks
+            decayed = await consolidator.decay_unused_chunks(session, batch_limit=1000)
+            if decayed:
+                logger.info("RAG consolidation: %d chunks decayed", decayed)
+
+            # Step 2: Detect obsolete documents per collection
+            collections = await session.execute(select(RAGCollection.id))
+            coll_ids = [row[0] for row in collections.all()]
+
+            total_obsolete = 0
+            for coll_id in coll_ids:
+                obsolete = await consolidator.detect_obsolete_documents(coll_id, session)
+                total_obsolete += len(obsolete)
+
+            if total_obsolete:
+                logger.info("RAG consolidation: %d obsolete documents found", total_obsolete)
+
+            await session.commit()
+
+    except (sqlalchemy.exc.SQLAlchemyError, OSError):
+        logger.exception("RAG consolidation failed")

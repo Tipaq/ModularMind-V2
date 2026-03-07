@@ -18,7 +18,7 @@ import redis.exceptions
 from src.infra.config import settings
 from src.infra.redis_streams import RedisStreamBus
 from src.worker.scheduler import create_scheduler
-from src.worker.tasks import document_process_handler, graph_execution_handler, model_pull_handler
+from src.worker.tasks import graph_execution_handler, model_pull_handler
 
 logger = logging.getLogger(__name__)
 
@@ -75,35 +75,55 @@ async def main() -> None:
     scheduler = create_scheduler()
     scheduler.start()
 
-    from src.pipeline.handlers.embedder import embedder_handler
-    from src.pipeline.handlers.extractor import extractor_handler
-    from src.pipeline.handlers.summarizer import summarizer_handler
-
     tasks = [
         # Task queues
         bus.subscribe("tasks:executions", "workers", "w-1", graph_execution_handler),
         bus.subscribe("tasks:models", "workers", "w-1", model_pull_handler),
-        bus.subscribe("tasks:documents", "doc-processors", "dp-1", document_process_handler),
-        # Memory pipeline: raw -> extractor -> [scorer ->] embedder
-        bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
-        # Summarizer: raw -> summary (parallel with extractor, own consumer group)
-        bus.subscribe("memory:raw", "summarizers", "sum-1", summarizer_handler),
     ]
 
-    # Conditional scorer wiring based on settings
-    if settings.MEMORY_SCORER_ENABLED:
-        from src.pipeline.handlers.scorer import scorer_handler
+    # Document processing: multi-stage RAG pipeline or monolithic handler
+    if settings.RAG_MULTI_STAGE_ENABLED:
+        from src.rag.handlers.embedder import document_embed_handler
+        from src.rag.handlers.extractor import document_extract_handler
+        from src.rag.handlers.storer import document_store_handler
 
         tasks.extend([
-            bus.subscribe("memory:extracted", "scorers", "scr-1", scorer_handler),
-            bus.subscribe("memory:scored", "embedders", "emb-1", embedder_handler),
+            bus.subscribe("tasks:documents", "rag-extractors", "ext-1", document_extract_handler),
+            bus.subscribe("rag:extracted", "rag-embedders", "emb-1", document_embed_handler),
+            bus.subscribe("rag:embedded", "rag-storers", "stor-1", document_store_handler),
         ])
-        logger.info("Memory scorer enabled: extracted -> scorer -> scored -> embedder")
+        logger.info("RAG multi-stage pipeline enabled: documents -> extractor -> embedder -> storer")
     else:
+        from src.worker.tasks import document_process_handler
+
         tasks.append(
-            bus.subscribe("memory:extracted", "embedders", "emb-1", embedder_handler),
+            bus.subscribe("tasks:documents", "doc-processors", "dp-1", document_process_handler),
         )
-        logger.info("Memory scorer disabled: extracted -> embedder (direct)")
+        logger.info("RAG monolithic handler enabled: documents -> process_document")
+
+    # Memory pipeline (legacy — will be removed in Phase 9)
+    try:
+        from src.pipeline.handlers.embedder import embedder_handler
+        from src.pipeline.handlers.extractor import extractor_handler
+        from src.pipeline.handlers.summarizer import summarizer_handler
+
+        tasks.extend([
+            bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
+            bus.subscribe("memory:raw", "summarizers", "sum-1", summarizer_handler),
+        ])
+        if settings.MEMORY_SCORER_ENABLED:
+            from src.pipeline.handlers.scorer import scorer_handler
+
+            tasks.extend([
+                bus.subscribe("memory:extracted", "scorers", "scr-1", scorer_handler),
+                bus.subscribe("memory:scored", "embedders", "emb-1", embedder_handler),
+            ])
+        else:
+            tasks.append(
+                bus.subscribe("memory:extracted", "embedders", "emb-1", embedder_handler),
+            )
+    except ImportError:
+        logger.info("Memory pipeline handlers not available (removed in Phase 9)")
 
     tasks.append(
         # Health
