@@ -7,11 +7,12 @@ Vector search delegated to Qdrant via QdrantRAGVectorStore.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
 from qdrant_client import models as qmodels
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import RAGChunk, RAGCollection, RAGDocument, RAGScope
@@ -21,6 +22,9 @@ if TYPE_CHECKING:
     from src.rag.reranker import BaseReranker
 
 logger = logging.getLogger(__name__)
+
+# Prevent GC of fire-and-forget tasks (standard Python pattern)
+_bg_tasks: set[asyncio.Task] = set()
 
 
 class RAGSearchResult:
@@ -196,7 +200,7 @@ class RAGRepository:
         )
         doc_map = {doc.id: doc for doc in result.scalars().all()}
 
-        return [
+        results = [
             RAGSearchResult(
                 score=qr.score,
                 content=qr.content,
@@ -208,6 +212,38 @@ class RAGRepository:
             )
             for qr in qdrant_results
         ]
+
+        # Fire-and-forget: update access counts for returned chunks
+        if results:
+            result_chunk_ids = [r.chunk_id for r in results]
+            self._track_chunk_access(result_chunk_ids)
+
+        return results
+
+    @staticmethod
+    def _track_chunk_access(chunk_ids: list[str]) -> None:
+        """Fire-and-forget update of access_count and last_accessed."""
+
+        async def _update():
+            try:
+                from src.infra.database import async_session_maker
+
+                async with async_session_maker() as session:
+                    await session.execute(
+                        update(RAGChunk)
+                        .where(RAGChunk.id.in_(chunk_ids))
+                        .values(
+                            access_count=RAGChunk.access_count + 1,
+                            last_accessed=func.now(),
+                        )
+                    )
+                    await session.commit()
+            except Exception:
+                logger.warning("Failed to update chunk access counts", exc_info=True)
+
+        task = asyncio.create_task(_update())
+        _bg_tasks.add(task)
+        task.add_done_callback(_bg_tasks.discard)
 
     async def get_document(self, document_id: str) -> RAGDocument | None:
         """Get document by ID."""

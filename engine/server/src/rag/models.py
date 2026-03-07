@@ -118,6 +118,9 @@ class RAGChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     chunk_index: Mapped[int] = mapped_column()
     meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    access_count: Mapped[int] = mapped_column(default=0)
+    last_accessed: Mapped[datetime | None] = mapped_column(nullable=True)
+    embedding_cache: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships

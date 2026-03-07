@@ -128,3 +128,65 @@ class SearchResponse(BaseModel):
     search_mode: str = "hybrid"
     reranked: bool = False
     warning: str | None = None
+
+
+# ─── Admin Schemas ──────────────────────────────────────────────────────────
+
+
+class KnowledgeGlobalStatsResponse(BaseModel):
+    """Global knowledge stats for admin dashboard."""
+
+    total_collections: int
+    total_documents: int
+    total_chunks: int
+    total_accesses: int
+    documents_by_status: dict[str, int]
+    collections_by_scope: dict[str, int]
+
+
+class ExplorerChunkResponse(BaseModel):
+    """Chunk entry for the admin explorer."""
+
+    id: str
+    content: str
+    chunk_index: int
+    collection_id: str
+    collection_name: str
+    document_id: str
+    document_filename: str
+    access_count: int
+    last_accessed: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ExplorerChunkListResponse(PaginatedResponse[ExplorerChunkResponse]):
+    """Paginated chunk explorer response."""
+
+
+class KnowledgeGraphNode(BaseModel):
+    """Node in the knowledge graph (document or collection)."""
+
+    id: str
+    label: str
+    node_type: str  # "collection" or "document"
+    scope: str | None = None
+    status: str | None = None
+    chunk_count: int = 0
+    size: int = 0  # visual size hint
+
+
+class KnowledgeGraphEdge(BaseModel):
+    """Edge in the knowledge graph."""
+
+    source: str
+    target: str
+    weight: float = 1.0
+
+
+class KnowledgeGraphResponse(BaseModel):
+    """Knowledge graph response."""
+
+    nodes: list[KnowledgeGraphNode]
+    edges: list[KnowledgeGraphEdge]
