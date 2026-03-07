@@ -294,9 +294,17 @@ class GraphCompiler:
             except Exception as e:  # MCP discovery raises heterogeneous errors
                 logger.warning("Failed to discover MCP tools for agent '%s': %s", agent.name, e)
 
+        # Append built-in tool definitions (static — don't need user_id)
+        from src.graph_engine.builtin_tools import (
+            BUILTIN_TOOL_NAMES,
+            get_builtin_tool_definitions,
+        )
+
+        lc_tools.extend(get_builtin_tool_definitions())
+
         # Capture for closure
         _lc_tools = lc_tools
-        _tool_executor = tool_executor
+        _mcp_executor = tool_executor
 
         async def agent_node(state: GraphState, config: RunnableConfig | None = None) -> dict:
             # Allow per-conversation model override via input_data
@@ -316,19 +324,43 @@ class GraphCompiler:
                 from src.executions.cancel import check_revoke_intent
                 return await check_revoke_intent(_exec_id) == "cancel"
 
+            # Build unified tool executor lazily (user_id only available at runtime)
+            user_id = (state.get("metadata") or {}).get("user_id")
+            active_tools = _lc_tools
+            unified_executor = _mcp_executor
+
+            if user_id:
+                from src.graph_engine.builtin_tools import (
+                    UnifiedToolExecutor,
+                    create_builtin_executor,
+                )
+                from src.infra.database import async_session_maker
+
+                builtin_exec = create_builtin_executor(user_id, async_session_maker)
+                unified_executor = UnifiedToolExecutor(
+                    builtin_exec, _mcp_executor, BUILTIN_TOOL_NAMES,
+                )
+            else:
+                # No user_id — filter out built-in tool defs to avoid LLM calling them
+                active_tools = [
+                    t for t in _lc_tools
+                    if t.get("function", {}).get("name") not in BUILTIN_TOOL_NAMES
+                ]
+                logger.debug("No user_id in state.metadata — built-in tools disabled")
+
             try:
                 llm = await self.llm_provider.get_model(effective_model)
 
-                if _lc_tools and _tool_executor:
+                if active_tools and unified_executor:
                     from src.infra.config import get_settings
 
                     from .tool_loop import run_tool_loop, try_bind_tools
-                    llm_with_tools, tools_bound = try_bind_tools(llm, _lc_tools)
+                    llm_with_tools, tools_bound = try_bind_tools(llm, active_tools)
                     if tools_bound:
                         response_text, _ = await run_tool_loop(
                             llm_with_tools,
                             llm_messages,
-                            _tool_executor,
+                            unified_executor,
                             max_iterations=10,
                             tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
                             cancel_check_fn=_is_cancelled,

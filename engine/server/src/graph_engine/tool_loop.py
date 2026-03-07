@@ -16,20 +16,24 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 
-from src.mcp.tool_adapter import MCPToolExecutor
-
 logger = logging.getLogger(__name__)
+
+
+class ToolExecutor(Protocol):
+    """Protocol for tool executors (MCP, built-in, or unified)."""
+
+    async def execute(self, name: str, args: dict[str, Any]) -> str: ...
 
 
 async def run_tool_loop(
     llm: BaseChatModel,
     messages: list[BaseMessage],
-    tool_executor: MCPToolExecutor,
+    tool_executor: ToolExecutor,
     *,
     max_iterations: int = 10,
     tool_call_timeout: float = 60.0,
