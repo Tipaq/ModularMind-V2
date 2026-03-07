@@ -2,7 +2,7 @@
 # ModularMind V2 — Development Commands
 # =============================================================================
 
-.PHONY: help setup dev dev-chat dev-ops dev-platform dev-engine dev-worker dev-infra dev-monitoring stop-monitoring build build-docker build-platform build-mcp-sidecars deploy deploy-platform test test-cov lint lint-fix migrate migrate-new db-push db-studio clean
+.PHONY: help setup dev dev-chat dev-ops dev-platform dev-engine dev-worker dev-gateway dev-infra dev-monitoring stop-monitoring build build-docker build-platform build-mcp-sidecars build-gateway build-sandbox deploy deploy-platform test test-cov lint lint-fix migrate migrate-new db-push db-studio clean
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -13,6 +13,7 @@ setup: ## Initial project setup
 	pnpm install
 	cd shared && pip install -e ".[dev]"
 	cd engine/server && pip install -e ".[dev]"
+	cd gateway && pip install -e ".[dev]"
 	cp -n .env.example .env 2>/dev/null || true
 	@echo "Setup complete!"
 
@@ -35,6 +36,9 @@ dev-engine: ## Start Engine server (uvicorn)
 
 dev-worker: ## Start Worker process (auto-reload)
 	cd engine/server && watchfiles "python -m src.worker.runner" src/
+
+dev-gateway: ## Start Gateway service (uvicorn --reload)
+	cd gateway && uvicorn src.main:app --reload --host 0.0.0.0 --port 8200
 
 dev-infra: ## Start infra only (db, redis, qdrant, ollama)
 	docker compose -f docker/docker-compose.dev.yml up db redis qdrant ollama
@@ -66,6 +70,12 @@ build-mcp-sidecars: ## Build MCP sidecar Docker images
 	docker build -t modularmind/mcp-motherduck:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.motherduck engine/mcp-sidecars/mcp-sidecars/
 	docker build -t modularmind/mcp-puppeteer:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.puppeteer engine/mcp-sidecars/mcp-sidecars/
 	docker build -t modularmind/mcp-whatsapp:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.whatsapp engine/mcp-sidecars/mcp-sidecars/
+
+build-gateway: ## Build Gateway Docker image
+	docker build -t modularmind/gateway:latest -f gateway/Dockerfile .
+
+build-sandbox: ## Build Gateway sandbox Docker image
+	docker build -t modularmind/gateway-sandbox:latest -f gateway/sandbox/Dockerfile .
 
 deploy: ## Deploy client stack
 	docker compose -f docker/docker-compose.yml up -d
