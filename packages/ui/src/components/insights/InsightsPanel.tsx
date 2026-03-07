@@ -74,7 +74,6 @@ export function InsightsPanel({
 
   const isLiveStreaming = isLiveSelected && isStreaming;
 
-  const memoryEntries = selectedExecution?.memoryEntries ?? [];
   const contextData = selectedExecution?.contextData ?? null;
   const knowledgeData = selectedExecution?.knowledgeData ?? null;
   const tokenUsage = selectedExecution?.tokenUsage ?? null;
@@ -155,7 +154,6 @@ export function InsightsPanel({
 
       <TabsContent value="context" className="mt-0">
         <MemoryTab
-          entries={memoryEntries}
           contextData={contextData}
           knowledgeData={knowledgeData}
           modelContextWindow={selectedModelContextWindow}

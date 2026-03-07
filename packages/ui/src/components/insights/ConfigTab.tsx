@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   AlertTriangle,
   Bot,
@@ -10,6 +10,7 @@ import {
   Loader2,
   Pencil,
   Route,
+  User,
   Workflow,
   Wrench,
   Zap,
@@ -50,6 +51,8 @@ export interface ConfigTabProps {
   enabledGraphs: EngineGraph[];
   allAgents: EngineAgent[];
   allGraphs: EngineGraph[];
+  userPreferences?: string | null;
+  onSavePreferences?: (prefs: string) => Promise<void>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -290,6 +293,57 @@ function LayerEditor({
   );
 }
 
+// ── User Profile Section ─────────────────────────────────────
+
+function UserProfileSection({
+  preferences,
+  onSave,
+}: {
+  preferences: string;
+  onSave: (prefs: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(preferences);
+  const [saving, setSaving] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleBlur = async () => {
+    if (draft === preferences) return;
+    setSaving(true);
+    try {
+      await onSave(draft);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const charCount = draft.length;
+  const overLimit = charCount > 2000;
+
+  return (
+    <SectionCard icon={User} title="User Profile" trailing={
+      saving ? <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" /> : null
+    }>
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={handleBlur}
+        placeholder="Tell the assistant about yourself — preferences, context, instructions that should persist across conversations..."
+        className="w-full min-h-[80px] max-h-[200px] text-[11px] font-mono bg-background border border-border/60 rounded-md p-2.5 resize-y leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary"
+        maxLength={2000}
+      />
+      <div className="flex items-center justify-between">
+        <span className={cn(
+          "text-[10px] font-mono",
+          overLimit ? "text-destructive" : "text-muted-foreground/50",
+        )}>
+          {charCount} / 2000
+        </span>
+        <span className="text-[10px] text-muted-foreground/40">Saves on blur</span>
+      </div>
+    </SectionCard>
+  );
+}
+
 // ── Config Tab Content ───────────────────────────────────────
 
 export function ConfigTab({
@@ -307,6 +361,8 @@ export function ConfigTab({
   enabledAgents,
   enabledGraphs,
   allAgents,
+  userPreferences,
+  onSavePreferences,
 }: ConfigTabProps) {
   const selectedModel = useMemo(() => {
     if (!selectedModelId) return null;
@@ -408,6 +464,16 @@ export function ConfigTab({
           />
         </div>
       </SectionCard>
+
+      {onSavePreferences && (
+        <>
+          <div className="border-t border-border/50" />
+          <UserProfileSection
+            preferences={userPreferences ?? ""}
+            onSave={onSavePreferences}
+          />
+        </>
+      )}
 
       <div className="border-t border-border/50" />
 

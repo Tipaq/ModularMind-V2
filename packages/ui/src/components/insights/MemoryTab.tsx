@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import {
   BookOpen,
-  Brain,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -21,12 +20,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../dialog";
-import type { InsightsMemoryEntry, ContextData, KnowledgeData, KnowledgeChunk } from "../../types/chat";
+import type { ContextData, KnowledgeData, KnowledgeChunk } from "../../types/chat";
 
 // ── Types ────────────────────────────────────────────────────
 
 export interface MemoryTabProps {
-  entries: InsightsMemoryEntry[];
   contextData: ContextData | null;
   knowledgeData: KnowledgeData | null;
   modelContextWindow?: number | null;
@@ -34,33 +32,6 @@ export interface MemoryTabProps {
   /** Optional callback for "Compact History" action. If not provided, the button is hidden. */
   onCompact?: () => Promise<{ summary_preview: string; compacted_count: number; duration_ms: number }>;
 }
-
-// ── Constants ────────────────────────────────────────────────
-
-const SCOPE_LABELS: Record<string, string> = {
-  cross_conversation: "Cross-conversation",
-  user_profile: "User profile",
-  agent: "Agent",
-  conversation: "Conversation",
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  episodic: "Episodic",
-  semantic: "Semantic",
-  procedural: "Procedural",
-};
-
-const TYPE_ACCENT: Record<string, { text: string; bg: string; border: string }> = {
-  episodic: { text: "text-info", bg: "bg-info", border: "border-info/20" },
-  semantic: { text: "text-primary", bg: "bg-primary", border: "border-primary/20" },
-  procedural: { text: "text-success", bg: "bg-success", border: "border-success/20" },
-};
-
-const TIER_LABELS: Record<string, string> = {
-  vector: "Vector store",
-  cache: "Cache",
-  core: "Core",
-};
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -268,109 +239,6 @@ function ContextUsageHeader({ allocated, used, cw }: {
   );
 }
 
-// ── Memory Detail Modal ──────────────────────────────────────
-
-function MemoryDetailModal({ entry }: { entry: InsightsMemoryEntry }) {
-  const pct = Math.round(entry.importance * 100);
-  const accent = TYPE_ACCENT[entry.memoryType] || { text: "text-muted-foreground", bg: "bg-muted-foreground", border: "border-border" };
-
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <button className="w-full text-left">
-          <MemoryCardInner entry={entry} />
-        </button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-sm">
-            <Brain className="h-4 w-4" />
-            Memory Detail
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <p className="text-sm leading-relaxed">{entry.content}</p>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Type</p>
-              <p className={cn("text-xs font-medium", accent.text)}>
-                {TYPE_LABELS[entry.memoryType] || entry.memoryType}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Scope</p>
-              <p className="text-xs font-medium">
-                {SCOPE_LABELS[entry.scope] || entry.scope}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Relevance</p>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div className={cn("h-full rounded-full", accent.bg)} style={{ width: `${pct}%` }} />
-                </div>
-                <span className="text-xs font-mono font-medium">{pct}%</span>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Tier</p>
-              <p className="text-xs font-medium">
-                {TIER_LABELS[entry.tier] || entry.tier}
-              </p>
-            </div>
-            {entry.category && (
-              <div className="space-y-1">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Category</p>
-                <p className="text-xs font-medium">{entry.category}</p>
-              </div>
-            )}
-          </div>
-
-          <p className="text-[10px] font-mono text-muted-foreground/50 truncate">{entry.id}</p>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── Memory Entry Card ──────────────────────────────────────
-
-function MemoryCardInner({ entry }: { entry: InsightsMemoryEntry }) {
-  const pct = Math.round(entry.importance * 100);
-  const accent = TYPE_ACCENT[entry.memoryType] || { text: "text-muted-foreground", bg: "bg-muted-foreground", border: "border-border" };
-
-  return (
-    <div className={cn(
-      "group relative rounded-md border bg-card/50 hover:bg-card transition-colors cursor-pointer",
-      accent.border,
-    )}>
-      <div className={cn("absolute left-0 top-2 bottom-2 w-0.5 rounded-full", accent.bg)} />
-
-      <div className="pl-3.5 pr-3 py-2.5 space-y-1.5">
-        <p className="text-[11px] leading-relaxed text-foreground/90 line-clamp-2">{entry.content}</p>
-
-        <div className="flex items-center gap-1.5 text-[9px]">
-          <span className={cn("font-medium uppercase tracking-wide", accent.text)}>
-            {TYPE_LABELS[entry.memoryType] || entry.memoryType}
-          </span>
-          <span className="text-muted-foreground/40">&middot;</span>
-          <span className="text-muted-foreground/60">
-            {SCOPE_LABELS[entry.scope] || entry.scope}
-          </span>
-          {entry.category && (
-            <>
-              <span className="text-muted-foreground/40">&middot;</span>
-              <span className="text-muted-foreground/60">{entry.category}</span>
-            </>
-          )}
-          <span className="ml-auto font-mono tabular-nums text-muted-foreground/50">{pct}%</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Knowledge Chunk Card ─────────────────────────────────────
 
 function KnowledgeChunkCard({ chunk }: { chunk: KnowledgeChunk }) {
@@ -426,7 +294,6 @@ function KnowledgeChunkCard({ chunk }: { chunk: KnowledgeChunk }) {
 // ── Context Tab Content ──────────────────────────────────────
 
 export function MemoryTab({
-  entries,
   contextData,
   knowledgeData,
   modelContextWindow,
@@ -455,7 +322,7 @@ export function MemoryTab({
   const budget = history?.budget;
   const messages = history?.messages ?? [];
   const historyTokens = budget ? Math.round(budget.totalChars / 4) : 0;
-  const memEntries = contextData?.memoryEntries ?? entries;
+  const userProfile = contextData?.userProfile ?? null;
 
   const cw = modelContextWindow ?? 0;
   const allocated = {
@@ -464,7 +331,7 @@ export function MemoryTab({
     rag: Math.round(cw * 15 / 100),
   };
 
-  const memoryTokensUsed = bo?.layers.memory?.used ?? Math.round(memEntries.reduce((sum, e) => sum + e.content.length, 0) / 4);
+  const memoryTokensUsed = bo?.layers.memory?.used ?? Math.round((userProfile?.length ?? 0) / 4);
   const ragTokensUsed = bo?.layers.rag?.used ?? Math.round((knowledgeData?.chunks ?? []).reduce((sum, c) => sum + (c.contentPreview?.length ?? 0), 0) / 4);
   const currentUsed = {
     history: bo?.layers.history?.used ?? historyTokens,
@@ -526,36 +393,6 @@ export function MemoryTab({
         </div>
         {consolidateResult && (
           <p className="text-[10px] text-muted-foreground text-center">{consolidateResult}</p>
-        )}
-      </div>
-
-      <div className="border-t border-border/50" />
-
-      <SectionHeader
-        icon={Brain}
-        title="Recalled Memories"
-        trailing={
-          cw > 0 ? (
-            <span className="text-[10px] font-mono tabular-nums text-muted-foreground">
-              {formatK(used.memory)} / {formatK(allocated.memory)} tok
-            </span>
-          ) : undefined
-        }
-      />
-      <div className="px-4 pb-3">
-        {memEntries.length > 0 ? (
-          <div className="space-y-1.5">
-            {memEntries.map((entry) => (
-              <MemoryDetailModal key={entry.id} entry={entry} />
-            ))}
-          </div>
-        ) : isStreaming ? (
-          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Retrieving relevant memories…
-          </p>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">No memories recalled for this message.</p>
         )}
       </div>
 

@@ -1,4 +1,4 @@
-import type { KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry } from "../types/chat";
+import type { KnowledgeCollection, KnowledgeChunk, KnowledgeData } from "../types/chat";
 
 /** Raw snake_case collection from API response. */
 interface RawCollection {
@@ -24,17 +24,6 @@ export interface RawKnowledgeData {
   collections?: RawCollection[];
   chunks?: RawChunk[];
   total_results?: number;
-}
-
-/** Raw snake_case memory entry from API response. */
-export interface RawMemoryEntry {
-  id: string;
-  content: string;
-  scope: string;
-  tier: string;
-  importance: number;
-  memory_type: string;
-  category: string;
 }
 
 /** Map a single snake_case API collection to a camelCase KnowledgeCollection. */
@@ -69,15 +58,3 @@ export function mapKnowledgeData(raw: RawKnowledgeData): KnowledgeData {
   };
 }
 
-/** Map snake_case API memory entries to camelCase UI types. */
-export function mapMemoryEntries(raw: RawMemoryEntry[]): InsightsMemoryEntry[] {
-  return raw.map((e) => ({
-    id: e.id,
-    content: e.content,
-    scope: e.scope,
-    tier: e.tier,
-    importance: e.importance,
-    memoryType: e.memory_type,
-    category: e.category,
-  }));
-}

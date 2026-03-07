@@ -101,16 +101,6 @@ export interface KnowledgeData {
   totalResults: number;
 }
 
-export interface InsightsMemoryEntry {
-  id: string;
-  content: string;
-  scope: string;
-  tier: string;
-  importance: number;
-  memoryType: string;
-  category: string;
-}
-
 export interface SupervisorData {
   routingStrategy: string | null;
   delegatedTo: string | null;
@@ -182,7 +172,7 @@ export interface BudgetOverview {
 /** Full context data for a message execution. */
 export interface ContextData {
   history: ContextHistory | null;
-  memoryEntries: InsightsMemoryEntry[];
+  userProfile: string | null;
   budgetOverview: BudgetOverview | null;
 }
 
@@ -195,7 +185,6 @@ export interface AttachedFile {
 /** Execution data associated with a specific message. */
 export interface MessageExecutionData {
   activities: ExecutionActivity[];
-  memoryEntries: InsightsMemoryEntry[];
   knowledgeData: KnowledgeData | null;
   tokenUsage: TokenUsage | null;
   contextData: ContextData | null;

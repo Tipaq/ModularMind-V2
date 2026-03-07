@@ -15,8 +15,8 @@ export { extractResponse } from "./hooks/useChatUtils";
 export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTime, stripProvider, isLocalModel, formatDurationMs, formatCost, toggleArrayItem } from "./lib/utils";
 
 // Mappers (snake_case API → camelCase UI)
-export { mapKnowledgeData, mapMemoryEntries } from "./lib/mappers";
-export type { RawKnowledgeData, RawMemoryEntry } from "./lib/mappers";
+export { mapKnowledgeData } from "./lib/mappers";
+export type { RawKnowledgeData } from "./lib/mappers";
 
 // Color constants
 export { ACTIVITY_COLORS, CHANNEL_COLORS, STATUS_COLORS, ROLE_COLORS, HEALTH_COLORS } from "./lib/colors";
@@ -26,7 +26,7 @@ export type { ChatConfig } from "./lib/chat-config";
 export { DEFAULT_CHAT_CONFIG } from "./lib/chat-config";
 
 // Chat types
-export type { ActivityType, ActivityStatus, ToolCallData, LlmCallData, RoutingData, ErrorData, ExecutionActivity, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, SupervisorData, TokenUsage, ExecutionOutputData, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData, AttachedFile } from "./types/chat";
+export type { ActivityType, ActivityStatus, ToolCallData, LlmCallData, RoutingData, ErrorData, ExecutionActivity, KnowledgeCollection, KnowledgeChunk, KnowledgeData, SupervisorData, TokenUsage, ExecutionOutputData, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData, AttachedFile } from "./types/chat";
 
 // Resource types (shared table/filter/pagination primitives)
 export type { ResourceColumn, ResourceFilterConfig, PaginationState, SortState } from "./types/resource";
