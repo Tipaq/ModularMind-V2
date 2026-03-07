@@ -8,8 +8,6 @@ export interface LocalSettings {
   sync_interval_minutes: number;
   ollama_keep_alive: string;
   max_execution_timeout: number;
-  memory_embedding_provider: string;
-  memory_embedding_model: string;
   knowledge_embedding_provider: string;
   knowledge_embedding_model: string;
 }

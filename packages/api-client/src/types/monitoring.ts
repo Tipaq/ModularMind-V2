@@ -229,18 +229,6 @@ export interface ActiveDocument {
   created_at: string;
 }
 
-export interface MemoryPipelineData {
-  memory_raw: StreamDetail;
-  memory_extracted: StreamDetail;
-  memory_scored: StreamDetail | null;
-  memory_dlq: StreamDetail;
-  scorer_enabled: boolean;
-  total_entries: number;
-  entries_by_tier: Record<string, number>;
-  entries_by_type: Record<string, number>;
-  avg_importance: number;
-}
-
 export interface KnowledgePipelineData {
   documents_stream: StreamDetail;
   status_counts: DocumentStatusCounts;
@@ -248,12 +236,11 @@ export interface KnowledgePipelineData {
 }
 
 export interface PipelineCounters {
-  facts_extracted_total: number;
-  embeddings_stored_total: number;
+  total_chunks: number;
+  total_chunk_accesses: number;
 }
 
 export interface PipelinesData {
-  memory: MemoryPipelineData;
   knowledge: KnowledgePipelineData;
   dlq_messages: DLQMessage[];
   counters: PipelineCounters;
