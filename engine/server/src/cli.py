@@ -444,32 +444,20 @@ def seed_configs(seed_dir: str, config_dir: str | None, force: bool) -> None:
 
 
 @cli.command("qdrant-snapshot")
-@click.option(
-    "--collection",
-    type=click.Choice(["knowledge", "memory", "all"]),
-    default="all",
-    help="Which collection(s) to snapshot",
-)
-def qdrant_snapshot(collection: str) -> None:
-    """Create Qdrant collection snapshot(s) for backup."""
+def qdrant_snapshot() -> None:
+    """Create Qdrant knowledge collection snapshot for backup."""
 
     async def _run() -> None:
         from src.infra.config import get_settings
         from src.infra.qdrant import qdrant_factory
 
         settings = get_settings()
-        collections: list[str] = []
-        if collection in ("knowledge", "all"):
-            collections.append(settings.QDRANT_COLLECTION_KNOWLEDGE)
-        if collection in ("memory", "all"):
-            collections.append(settings.QDRANT_COLLECTION_MEMORY)
-
-        for name in collections:
-            try:
-                snapshot_name = await qdrant_factory.create_snapshot(name)
-                click.echo(f"Snapshot created: {name} -> {snapshot_name}")
-            except Exception as e:
-                click.echo(f"ERROR: Failed to snapshot {name}: {e}", err=True)
+        name = settings.QDRANT_COLLECTION_KNOWLEDGE
+        try:
+            snapshot_name = await qdrant_factory.create_snapshot(name)
+            click.echo(f"Snapshot created: {name} -> {snapshot_name}")
+        except Exception as e:
+            click.echo(f"ERROR: Failed to snapshot {name}: {e}", err=True)
 
         await qdrant_factory.close()
 
@@ -478,17 +466,8 @@ def qdrant_snapshot(collection: str) -> None:
 
 @cli.command("backfill-qdrant")
 @click.option("--batch-size", default=500, help="Batch size for upsert")
-@click.option(
-    "--collection",
-    type=click.Choice(["knowledge", "memory", "all"]),
-    default="all",
-    help="Which data to backfill",
-)
-def backfill_qdrant(batch_size: int, collection: str) -> None:
-    """Backfill existing embeddings to Qdrant.
-
-    Must be run before migration 013 (drop embedding columns).
-    """
+def backfill_qdrant(batch_size: int) -> None:
+    """Backfill existing RAG chunk embeddings to Qdrant knowledge collection."""
 
     async def _run() -> None:
         from sqlalchemy import text
@@ -499,111 +478,62 @@ def backfill_qdrant(batch_size: int, collection: str) -> None:
 
         settings = get_settings()
 
-        if collection in ("knowledge", "all"):
-            click.echo("Backfilling RAG chunks to Qdrant knowledge collection...")
-            async with async_session_maker() as session:
-                # Read embeddings via raw SQL (no pgvector Python dep needed)
-                result = await session.execute(
-                    text(
-                        "SELECT c.id, c.content, c.embedding::float8[] as emb, "
-                        "c.document_id, c.collection_id, c.chunk_index, c.metadata, "
-                        "col.scope, col.allowed_groups, col.owner_user_id "
-                        "FROM rag_chunks c "
-                        "JOIN rag_collections col ON c.collection_id = col.id "
-                        "WHERE c.embedding IS NOT NULL"
-                    )
+        click.echo("Backfilling RAG chunks to Qdrant knowledge collection...")
+        async with async_session_maker() as session:
+            # Read embeddings via raw SQL (no pgvector Python dep needed)
+            result = await session.execute(
+                text(
+                    "SELECT c.id, c.content, c.embedding::float8[] as emb, "
+                    "c.document_id, c.collection_id, c.chunk_index, c.metadata, "
+                    "col.scope, col.allowed_groups, col.owner_user_id "
+                    "FROM rag_chunks c "
+                    "JOIN rag_collections col ON c.collection_id = col.id "
+                    "WHERE c.embedding IS NOT NULL"
                 )
-                rows = result.fetchall()
+            )
+            rows = result.fetchall()
 
-            total = len(rows)
-            click.echo(f"Found {total} chunks with embeddings")
+        total = len(rows)
+        click.echo(f"Found {total} chunks with embeddings")
 
-            vs = QdrantRAGVectorStore(settings.QDRANT_COLLECTION_KNOWLEDGE)
-            for i in range(0, total, batch_size):
-                batch_rows = rows[i : i + batch_size]
-                chunks = []
-                for row in batch_rows:
-                    scope = row.scope or "global"
-                    groups = list(row.allowed_groups) if row.allowed_groups else []
-                    agent_id = row.owner_user_id if scope == "agent" else None
-                    chunks.append(
-                        ChunkData(
-                            id=row.id,
-                            content=row.content,
-                            embedding=list(row.emb),
-                            scope=scope,
-                            group_slugs=groups,
-                            agent_id=agent_id,
-                            user_id=None,
-                            document_id=row.document_id,
-                            collection_id=row.collection_id,
-                            chunk_index=row.chunk_index,
-                            metadata=row.metadata or {},
-                        )
-                    )
-                await vs.upsert_chunks(chunks)
-                click.echo(f"Backfilled {min(i + batch_size, total)}/{total} chunks")
-
-            # Verify
-            stats = await vs.get_collection_stats()
-            click.echo(f"Qdrant knowledge: {stats['points_count']} points")
-            if stats["points_count"] < total:
-                click.echo(
-                    f"WARNING: Qdrant has {stats['points_count']} points "
-                    f"but PG has {total} chunks with embeddings",
-                    err=True,
-                )
-                raise SystemExit(1)
-
-        if collection in ("memory", "all"):
-            click.echo("Backfilling memory entries to Qdrant memory collection...")
-            from src.memory.vector_store import QdrantMemoryVectorStore
-
-            async with async_session_maker() as session:
-                result = await session.execute(
-                    text(
-                        "SELECT id, content, embedding::float8[] as emb, "
-                        "scope, scope_id, user_id, importance, metadata "
-                        "FROM memory_entries "
-                        "WHERE embedding IS NOT NULL"
-                    )
-                )
-                rows = result.fetchall()
-
-            total = len(rows)
-            click.echo(f"Found {total} memory entries with embeddings")
-
-            mvs = QdrantMemoryVectorStore()
-            for i in range(0, total, batch_size):
-                batch_rows = rows[i : i + batch_size]
-                for row in batch_rows:
-                    scope = row.scope or "agent"
-                    scope_id = row.scope_id or ""
-                    # Derive payload fields from scope
-                    agent_id = scope_id if scope == "agent" else None
-                    conversation_id = (
-                        scope_id
-                        if scope in ("conversation", "cross_conversation")
-                        else None
-                    )
-                    user_id_val = row.user_id or (
-                        scope_id if scope == "user_profile" else None
-                    )
-
-                    await mvs.upsert_entry(
-                        entry_id=row.id,
-                        embedding=list(row.emb),
+        vs = QdrantRAGVectorStore(settings.QDRANT_COLLECTION_KNOWLEDGE)
+        for i in range(0, total, batch_size):
+            batch_rows = rows[i : i + batch_size]
+            chunks = []
+            for row in batch_rows:
+                scope = row.scope or "global"
+                groups = list(row.allowed_groups) if row.allowed_groups else []
+                agent_id = row.owner_user_id if scope == "agent" else None
+                chunks.append(
+                    ChunkData(
+                        id=row.id,
                         content=row.content,
+                        embedding=list(row.emb),
                         scope=scope,
-                        scope_id=scope_id,
-                        user_id=user_id_val or "",
-                        conversation_id=conversation_id,
-                        importance=row.importance or 0.5,
+                        group_slugs=groups,
+                        agent_id=agent_id,
+                        user_id=None,
+                        document_id=row.document_id,
+                        collection_id=row.collection_id,
+                        chunk_index=row.chunk_index,
                         metadata=row.metadata or {},
                     )
-                click.echo(f"Backfilled {min(i + batch_size, total)}/{total} entries")
+                )
+            await vs.upsert_chunks(chunks)
+            click.echo(f"Backfilled {min(i + batch_size, total)}/{total} chunks")
 
-        click.echo("Backfill complete — safe to run migration 013")
+        # Verify
+        stats = await vs.get_collection_stats()
+        click.echo(f"Qdrant knowledge: {stats['points_count']} points")
+        if stats["points_count"] < total:
+            click.echo(
+                f"WARNING: Qdrant has {stats['points_count']} points "
+                f"but PG has {total} chunks with embeddings",
+                err=True,
+            )
+            raise SystemExit(1)
+
+        click.echo("Backfill complete")
 
         from src.infra.qdrant import qdrant_factory
         await qdrant_factory.close()

@@ -35,21 +35,6 @@ def _resolve_kwargs(provider: str) -> dict:
     return {"base_url": settings.OLLAMA_BASE_URL}
 
 
-def get_memory_embedding_provider() -> EmbeddingProvider:
-    """Get the embedding provider for the memory pipeline.
-
-    Used by: fact embedder, memory search, conversation indexer/search,
-    supervisor routing, prompt-layer memory context.
-    """
-    from src.embedding import get_embedding_provider
-
-    settings = get_settings()
-    provider = settings.MEMORY_EMBEDDING_PROVIDER or settings.EMBEDDING_PROVIDER
-    model = settings.MEMORY_EMBEDDING_MODEL or settings.EMBEDDING_MODEL
-    kwargs = _resolve_kwargs(provider)
-    return get_embedding_provider(provider, model=model, **kwargs)
-
-
 def get_knowledge_embedding_provider() -> EmbeddingProvider:
     """Get the embedding provider for the knowledge / RAG pipeline.
 

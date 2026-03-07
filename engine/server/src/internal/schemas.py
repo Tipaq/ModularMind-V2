@@ -133,18 +133,6 @@ class DLQMessage(BaseModel):
     data: str
 
 
-class MemoryPipelineData(BaseModel):
-    memory_raw: StreamDetail
-    memory_extracted: StreamDetail
-    memory_scored: StreamDetail | None = None
-    memory_dlq: StreamDetail
-    scorer_enabled: bool = True
-    total_entries: int = 0
-    entries_by_tier: dict[str, int] = Field(default_factory=dict)
-    entries_by_type: dict[str, int] = Field(default_factory=dict)
-    avg_importance: float = 0.0
-
-
 class DocumentStatusCounts(BaseModel):
     pending: int = 0
     processing: int = 0
@@ -166,17 +154,17 @@ class ActiveDocument(BaseModel):
 
 class KnowledgePipelineData(BaseModel):
     documents_stream: StreamDetail
+    dlq_stream: StreamDetail | None = None
     status_counts: DocumentStatusCounts
     active_documents: list[ActiveDocument] = Field(default_factory=list)
 
 
 class PipelineCounters(BaseModel):
-    facts_extracted_total: int = 0
-    embeddings_stored_total: int = 0
+    total_chunks: int = 0
+    total_chunk_accesses: int = 0
 
 
 class PipelinesResponse(BaseModel):
-    memory: MemoryPipelineData
     knowledge: KnowledgePipelineData
     dlq_messages: list[DLQMessage] = Field(default_factory=list)
     counters: PipelineCounters

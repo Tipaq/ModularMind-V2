@@ -36,7 +36,7 @@ class ReportService:
                     "memory_raw": await r.xlen("memory:raw"),
                 }
                 # Execution counts from Redis sorted sets (if metrics module writes them)
-                metrics["dead_letter"] = await r.xlen("memory:dlq")
+                metrics["dead_letter"] = await r.xlen("pipeline:dlq")
             except (ConnectionError, OSError) as e:
                 logger.warning("Failed to collect queue metrics: %s", e)
             finally:
@@ -79,5 +79,5 @@ class ReportService:
             "memory_extracted": await bus.stream_info("memory:extracted"),
             "tasks_executions": await bus.stream_info("tasks:executions"),
             "tasks_models": await bus.stream_info("tasks:models"),
-            "dlq": await bus.stream_info("memory:dlq"),
+            "dlq": await bus.stream_info("pipeline:dlq"),
         }

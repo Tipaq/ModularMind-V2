@@ -38,7 +38,6 @@ from src.health.router import router as health_router
 from src.internal.router import router as internal_router
 from src.mcp.router import router as mcp_admin_router
 from src.mcp.usage_router import usage_router as mcp_usage_router
-from src.memory.router import router as memory_router
 from src.models.router import router as models_admin_router
 from src.models.usage_router import usage_router as models_usage_router
 from src.rag.router import router as rag_router
@@ -85,7 +84,7 @@ async def lifespan(app: FastAPI):
 
         get_config_provider().set_redis(redis_client)
 
-    # 3. Initialize Qdrant collections (knowledge + memory)
+    # 3. Initialize Qdrant collections (knowledge)
     from src.infra.qdrant import qdrant_factory
 
     try:
@@ -306,7 +305,6 @@ app.include_router(agents_router, prefix=API_PREFIX)
 app.include_router(graphs_router, prefix=API_PREFIX)
 app.include_router(executions_router, prefix=API_PREFIX)
 app.include_router(conversations_router, prefix=API_PREFIX)
-app.include_router(memory_router, prefix=API_PREFIX)
 app.include_router(rag_router, prefix=API_PREFIX)
 app.include_router(models_usage_router, prefix=API_PREFIX)
 app.include_router(mcp_usage_router, prefix=API_PREFIX)

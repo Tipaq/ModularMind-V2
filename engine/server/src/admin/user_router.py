@@ -19,8 +19,6 @@ from src.conversations.models import Conversation, ConversationMessage
 from src.executions.models import ExecutionRun, ExecutionStatus
 from src.infra.database import DbSession
 from src.infra.token_pricing import estimate_cost, get_provider, parse_model_name
-from src.memory.models import MemoryEntry, MemoryScope, MemoryTier
-from src.memory.vector_store import QdrantMemoryVectorStore
 from src.rag.repository import RAGRepository
 
 from .schemas import (
@@ -33,8 +31,6 @@ from .schemas import (
     CollectionResponse,
     DailyTokenUsage,
     DeleteCountResponse,
-    MemoryEntryResponse,
-    MemoryListResponse,
     ModelTokenUsage,
     TokenUsageResponse,
     TokenUsageSummary,
@@ -551,49 +547,6 @@ async def get_user_token_usage(
     return TokenUsageResponse(summary=summary, daily=daily, by_model=by_model)
 
 
-@admin_user_router.get("/{user_id}/memory", response_model=MemoryListResponse)
-async def list_user_memory(
-    user_id: str,
-    user: CurrentUser,
-    db: DbSession,
-
-    scope: MemoryScope | None = None,
-    tier: MemoryTier | None = None,
-    search: str | None = None,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-) -> MemoryListResponse:
-    """List memory entries for a specific user (admin+)."""
-    await get_user_or_404(db, user_id)
-
-    base = select(MemoryEntry).where(MemoryEntry.user_id == user_id)
-    if scope:
-        base = base.where(MemoryEntry.scope == scope)
-    if tier:
-        base = base.where(MemoryEntry.tier == tier)
-    if search:
-        from src.infra.query_utils import escape_like
-        escaped = escape_like(search)
-        base = base.where(MemoryEntry.content.ilike(f"%{escaped}%", escape="\\"))
-
-    total = (await db.execute(
-        select(func.count()).select_from(base.subquery())
-    )).scalar() or 0
-
-    offset = (page - 1) * page_size
-    entries = (await db.execute(
-        base.order_by(MemoryEntry.created_at.desc())
-        .offset(offset).limit(page_size)
-    )).scalars().all()
-
-    return MemoryListResponse(
-        items=[MemoryEntryResponse.model_validate(e) for e in entries],
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
-
-
 @admin_user_router.get("/{user_id}/collections", response_model=list[CollectionResponse])
 async def list_user_collections(
     user_id: str,
@@ -728,34 +681,3 @@ async def delete_user_conversations(
     return DeleteCountResponse(deleted_count=count)
 
 
-@admin_user_router.delete(
-    "/{user_id}/memory", response_model=DeleteCountResponse
-)
-async def delete_user_memory(
-    user_id: str,
-    user: CurrentUser,
-    db: DbSession,
-
-) -> DeleteCountResponse:
-    """Clear ALL memory entries for a user from PostgreSQL and Qdrant. Admin+."""
-    await get_user_or_404(db, user_id)
-
-    # Delete from Qdrant first (best effort)
-    vector_store = QdrantMemoryVectorStore()
-    try:
-        await vector_store.delete_by_user_id(user_id)
-    except Exception:
-        logger.warning("Qdrant delete_by_user_id failed for %s", user_id, exc_info=True)
-
-    # Delete from PostgreSQL
-    count = (await db.execute(
-        select(func.count()).where(MemoryEntry.user_id == user_id)
-    )).scalar() or 0
-
-    await db.execute(
-        delete(MemoryEntry).where(MemoryEntry.user_id == user_id)
-    )
-    await db.commit()
-
-    logger.info("Admin %s cleared %d memory entries for user %s", user.email, count, user_id)
-    return DeleteCountResponse(deleted_count=count)

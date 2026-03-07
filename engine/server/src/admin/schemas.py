@@ -10,7 +10,6 @@ from pydantic import BaseModel, computed_field
 
 from src.auth import UserRole
 from src.infra.schemas import PaginatedResponse
-from src.memory.schemas import MemoryEntryResponse, MemoryListResponse  # noqa: F401
 from src.rag.models import RAGScope
 
 
@@ -120,9 +119,6 @@ class TokenUsageResponse(BaseModel):
     summary: TokenUsageSummary
     daily: list[DailyTokenUsage]
     by_model: list[ModelTokenUsage]
-
-
-# MemoryListResponse imported from src.memory.schemas above
 
 
 class CollectionResponse(BaseModel):

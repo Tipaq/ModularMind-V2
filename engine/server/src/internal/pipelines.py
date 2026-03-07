@@ -1,4 +1,4 @@
-"""Pipeline monitoring and actions — Memory and Knowledge pipeline visibility."""
+"""Pipeline monitoring and actions — Knowledge pipeline visibility."""
 
 import logging
 import os
@@ -14,7 +14,6 @@ from src.internal.schemas import (
     DLQMessage,
     DocumentStatusCounts,
     KnowledgePipelineData,
-    MemoryPipelineData,
     PipelineCounters,
     PipelinesResponse,
     StreamDetail,
@@ -46,32 +45,23 @@ async def _get_stream_detail(bus, stream: str) -> StreamDetail:
 
 @router.get("/pipelines", dependencies=[RequireAdmin])
 async def get_pipelines(user: CurrentUser, db: DbSession) -> PipelinesResponse:
-    """Aggregate all pipeline data: memory streams, document status, DLQ, counters."""
-    from src.infra.config import get_settings
+    """Aggregate all pipeline data: document status, DLQ, counters."""
     from src.infra.redis import get_redis_pool
     from src.infra.redis_streams import RedisStreamBus
-    from src.memory.models import MemoryEntry, MemoryTier, MemoryType
-    from src.rag.models import RAGCollection, RAGDocument
+    from src.rag.models import RAGChunk, RAGCollection, RAGDocument
 
-    settings = get_settings()
     pool = get_redis_pool()
     bus = RedisStreamBus(aioredis.Redis(connection_pool=pool))
 
     # --- Stream info ---
-    memory_raw = await _get_stream_detail(bus, "memory:raw")
-    memory_extracted = await _get_stream_detail(bus, "memory:extracted")
-    memory_dlq = await _get_stream_detail(bus, "memory:dlq")
     documents_stream = await _get_stream_detail(bus, "tasks:documents")
-
-    memory_scored = None
-    if settings.MEMORY_SCORER_ENABLED:
-        memory_scored = await _get_stream_detail(bus, "memory:scored")
+    dlq_stream = await _get_stream_detail(bus, "pipeline:dlq")
 
     # --- DLQ recent messages (last 20) ---
     dlq_messages: list[DLQMessage] = []
     try:
         r = aioredis.Redis(connection_pool=pool)
-        raw_entries = await r.xrevrange("memory:dlq", count=20)
+        raw_entries = await r.xrevrange("pipeline:dlq", count=20)
         for msg_id, data in raw_entries:
             mid = msg_id if isinstance(msg_id, str) else msg_id.decode()
             dlq_messages.append(DLQMessage(
@@ -83,32 +73,6 @@ async def get_pipelines(user: CurrentUser, db: DbSession) -> PipelinesResponse:
             ))
     except Exception as e:
         logger.warning("Failed to read DLQ messages: %s", e)
-
-    # --- Memory stats ---
-    tier_result = await db.execute(
-        select(MemoryEntry.tier, func.count(MemoryEntry.id))
-        .where(MemoryEntry.expired_at.is_(None))
-        .group_by(MemoryEntry.tier)
-    )
-    entries_by_tier = {t.value: 0 for t in MemoryTier}
-    for row in tier_result.all():
-        entries_by_tier[row[0].value] = row[1]
-
-    type_result = await db.execute(
-        select(MemoryEntry.memory_type, func.count(MemoryEntry.id))
-        .where(MemoryEntry.expired_at.is_(None))
-        .group_by(MemoryEntry.memory_type)
-    )
-    entries_by_type = {mt.value: 0 for mt in MemoryType}
-    for row in type_result.all():
-        entries_by_type[row[0].value] = row[1]
-
-    agg_result = await db.execute(
-        select(func.avg(MemoryEntry.importance))
-        .where(MemoryEntry.expired_at.is_(None))
-    )
-    avg_importance = float(agg_result.scalar() or 0)
-    total_entries = sum(entries_by_tier.values())
 
     # --- Document status counts ---
     status_result = await db.execute(
@@ -151,30 +115,24 @@ async def get_pipelines(user: CurrentUser, db: DbSession) -> PipelinesResponse:
         for row in active_result.all()
     ]
 
-    # --- Prometheus counters ---
-    counters = PipelineCounters()
-    try:
-        from src.infra.metrics import pipeline_embeddings_stored, pipeline_facts_extracted
+    # --- RAG chunk counters ---
+    chunk_agg = await db.execute(
+        select(
+            func.count(RAGChunk.id).label("total"),
+            func.coalesce(func.sum(RAGChunk.access_count), 0).label("accesses"),
+        )
+    )
+    chunk_row = chunk_agg.one()
 
-        counters.facts_extracted_total = int(pipeline_facts_extracted._value.get())
-        counters.embeddings_stored_total = int(pipeline_embeddings_stored._value.get())
-    except Exception:
-        logger.debug("Prometheus counters unavailable (e.g. multiprocess mode)")
+    counters = PipelineCounters(
+        total_chunks=int(chunk_row.total or 0),
+        total_chunk_accesses=int(chunk_row.accesses or 0),
+    )
 
     return PipelinesResponse(
-        memory=MemoryPipelineData(
-            memory_raw=memory_raw,
-            memory_extracted=memory_extracted,
-            memory_scored=memory_scored,
-            memory_dlq=memory_dlq,
-            scorer_enabled=settings.MEMORY_SCORER_ENABLED,
-            total_entries=total_entries,
-            entries_by_tier=entries_by_tier,
-            entries_by_type=entries_by_type,
-            avg_importance=round(avg_importance, 3),
-        ),
         knowledge=KnowledgePipelineData(
             documents_stream=documents_stream,
+            dlq_stream=dlq_stream,
             status_counts=counts,
             active_documents=active_documents,
         ),
@@ -285,33 +243,9 @@ async def purge_dlq(user: CurrentUser) -> dict[str, str]:
 
     r = aioredis.Redis(connection_pool=get_redis_pool())
     try:
-        await r.xtrim("memory:dlq", maxlen=0)
+        await r.xtrim("pipeline:dlq", maxlen=0)
         logger.info("DLQ purged by admin %s", user.id)
         return {"status": "purged"}
     except Exception as e:
         logger.error("Failed to purge DLQ: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to purge DLQ: {e}") from e
-
-
-# ---------------------------------------------------------------------------
-# POST /pipelines/memory/extract
-# ---------------------------------------------------------------------------
-
-
-@router.post("/pipelines/memory/extract", dependencies=[RequireAdmin])
-async def trigger_memory_extraction(user: CurrentUser) -> dict[str, str]:
-    """Trigger an immediate memory extraction scan (bypass cooldown lock)."""
-    import contextlib
-
-    from src.infra.redis import redis_client
-    from src.worker.scheduler import memory_extraction_scan
-
-    # Remove the cooldown lock so the scan runs immediately
-
-    with contextlib.suppress(Exception):
-        await redis_client.delete("memory:extraction_scan:lock")
-
-    await memory_extraction_scan()
-
-    logger.info("Memory extraction scan triggered by admin %s", user.id)
-    return {"status": "triggered"}
