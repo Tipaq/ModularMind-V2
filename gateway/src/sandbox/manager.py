@@ -1,0 +1,308 @@
+"""Sandbox manager — per-execution Docker container lifecycle.
+
+One sandbox per execution, reused across tool calls, released on completion.
+Gateway MUST run with --workers 1 for state consistency.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import time
+from dataclasses import dataclass, field
+from typing import Any
+
+from src.config import get_settings
+from src.infra.metrics import gateway_sandboxes_active
+from src.schemas import GatewayPermissions
+
+logger = logging.getLogger(__name__)
+
+SANDBOX_UID = 1000
+SANDBOX_GID = 1000
+
+SANDBOX_SAFE_ENV = {
+    "HOME": "/home/sandbox",
+    "USER": "sandbox",
+    "PATH": "/usr/local/bin:/usr/bin:/bin",
+    "LANG": "C.UTF-8",
+}
+
+SANDBOX_LABEL = "modularmind.gateway.sandbox"
+
+
+@dataclass
+class SandboxContainer:
+    """Tracks a running sandbox container."""
+
+    container_id: str
+    container_name: str
+    execution_id: str
+    agent_id: str
+    container: Any  # docker.models.containers.Container
+    last_used: float = field(default_factory=time.time)
+
+
+class SandboxManager:
+    """Manages per-execution Docker sandbox containers.
+
+    Sandboxes are reused across tool calls within the same execution.
+    Each agent gets an isolated workspace directory.
+    """
+
+    def __init__(self):
+        self._active: dict[str, SandboxContainer] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._docker = None
+        self._network: str | None = None
+        self._settings = get_settings()
+
+    async def _get_docker(self):
+        """Lazy-initialize Docker client."""
+        if self._docker is not None:
+            return self._docker
+
+        import docker
+
+        self._docker = docker.from_env()
+        self._docker.ping()
+
+        # Auto-detect network
+        if not self._network:
+            self._network = await self._detect_network()
+
+        return self._docker
+
+    async def _detect_network(self) -> str | None:
+        """Try to find the Docker network the gateway is on."""
+        if not self._docker:
+            return None
+        try:
+            import socket
+
+            hostname = socket.gethostname()
+            container = await asyncio.to_thread(self._docker.containers.get, hostname)
+            networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
+            for name in networks:
+                if name not in ("bridge", "host", "none"):
+                    logger.info("Auto-detected Docker network: %s", name)
+                    return name
+        except Exception:
+            logger.debug("Docker network detection failed", exc_info=True)
+        return None
+
+    def _get_lock(self, execution_id: str) -> asyncio.Lock:
+        """Get or create a lock for an execution_id."""
+        if execution_id not in self._locks:
+            self._locks[execution_id] = asyncio.Lock()
+        return self._locks[execution_id]
+
+    async def acquire_or_reuse(
+        self,
+        execution_id: str,
+        agent_id: str,
+        permissions: GatewayPermissions,
+    ) -> SandboxContainer:
+        """Reuse existing sandbox for this execution, or create new one."""
+        if execution_id in self._active:
+            self._active[execution_id].last_used = time.time()
+            return self._active[execution_id]
+
+        async with self._get_lock(execution_id):
+            # Double-check after lock
+            if execution_id in self._active:
+                self._active[execution_id].last_used = time.time()
+                return self._active[execution_id]
+
+            if len(self._active) >= self._settings.SANDBOX_MAX_ACTIVE:
+                raise RuntimeError(
+                    f"Maximum sandbox limit ({self._settings.SANDBOX_MAX_ACTIVE}) reached"
+                )
+
+            container = await self._create_sandbox(agent_id, permissions, execution_id)
+            self._active[execution_id] = container
+            gateway_sandboxes_active.set(len(self._active))
+            return container
+
+    async def _create_sandbox(
+        self,
+        agent_id: str,
+        permissions: GatewayPermissions,
+        execution_id: str,
+    ) -> SandboxContainer:
+        """Create a new sandbox container."""
+        docker_client = await self._get_docker()
+
+        # Prepare workspace
+        workspace_dir = os.path.join(self._settings.WORKSPACE_ROOT, agent_id)
+        os.makedirs(workspace_dir, exist_ok=True)
+
+        # Fix UID/GID so sandbox user can read/write
+        try:
+            os.chown(workspace_dir, SANDBOX_UID, SANDBOX_GID)
+        except OSError:
+            logger.debug("Could not chown workspace (expected on non-Linux hosts)")
+
+        # Build volume mounts
+        mounts = self._build_mounts(agent_id, permissions, workspace_dir)
+
+        container_name = f"mm-gw-sandbox-{execution_id[:12]}"
+
+        labels = {
+            SANDBOX_LABEL: "true",
+            f"{SANDBOX_LABEL}.execution_id": execution_id,
+            f"{SANDBOX_LABEL}.agent_id": agent_id,
+        }
+
+        try:
+            raw_container = await asyncio.to_thread(
+                docker_client.containers.run,
+                image=self._settings.GATEWAY_SANDBOX_IMAGE,
+                name=container_name,
+                detach=True,
+                network_mode="none",  # No network by default (SSRF prevention)
+                environment=SANDBOX_SAFE_ENV,
+                labels=labels,
+                volumes=mounts,
+                cap_drop=["ALL"],
+                security_opt=["no-new-privileges"],
+                mem_limit="256m",
+                pids_limit=100,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to create sandbox: {e}")
+
+        logger.info(
+            "Created sandbox %s for execution %s (agent %s)",
+            container_name, execution_id, agent_id,
+        )
+
+        return SandboxContainer(
+            container_id=raw_container.id,
+            container_name=container_name,
+            execution_id=execution_id,
+            agent_id=agent_id,
+            container=raw_container,
+        )
+
+    def _build_mounts(
+        self,
+        agent_id: str,
+        permissions: GatewayPermissions,
+        workspace_dir: str,
+    ) -> dict:
+        """Build Docker volume mounts for the sandbox."""
+        mounts = {}
+
+        if permissions.filesystem.write:
+            mounts[workspace_dir] = {"bind": "/workspace", "mode": "rw"}
+        elif permissions.filesystem.read:
+            mounts[workspace_dir] = {"bind": "/workspace", "mode": "ro"}
+
+        # Shared workspace (read-only, opt-in)
+        shared_dir = os.path.join(self._settings.WORKSPACE_ROOT, "shared")
+        if os.path.exists(shared_dir) and any(
+            "shared" in p for p in permissions.filesystem.read
+        ):
+            mounts[shared_dir] = {"bind": "/workspace/shared", "mode": "ro"}
+
+        return mounts
+
+    async def release(self, execution_id: str) -> bool:
+        """Release sandbox for this execution."""
+        container = self._active.pop(execution_id, None)
+        self._locks.pop(execution_id, None)
+
+        if not container:
+            return False
+
+        try:
+            await asyncio.to_thread(container.container.stop, timeout=5)
+            await asyncio.to_thread(container.container.remove)
+            logger.info("Released sandbox %s", container.container_name)
+        except Exception:
+            logger.warning(
+                "Error releasing sandbox %s", container.container_name, exc_info=True
+            )
+
+        gateway_sandboxes_active.set(len(self._active))
+        return True
+
+    async def exec_in_sandbox(
+        self,
+        execution_id: str,
+        command: list[str],
+        workdir: str = "/workspace",
+    ) -> tuple[int, str]:
+        """Execute a command in a sandbox container.
+
+        Returns (exit_code, output_string).
+        """
+        sandbox = self._active.get(execution_id)
+        if not sandbox:
+            raise RuntimeError(f"No sandbox found for execution {execution_id}")
+
+        sandbox.last_used = time.time()
+
+        result = await asyncio.to_thread(
+            sandbox.container.exec_run,
+            command,
+            workdir=workdir,
+            user="sandbox",
+        )
+
+        exit_code = result.exit_code
+        output = result.output.decode("utf-8", errors="replace") if result.output else ""
+        return exit_code, output
+
+    async def cleanup_stale(self) -> int:
+        """Remove sandboxes that have been idle beyond the timeout."""
+        timeout = self._settings.SANDBOX_TIMEOUT_SECONDS
+        now = time.time()
+        stale = [
+            eid for eid, sb in self._active.items()
+            if now - sb.last_used > timeout
+        ]
+
+        for eid in stale:
+            await self.release(eid)
+
+        if stale:
+            logger.info("Cleaned up %d stale sandbox(es)", len(stale))
+        return len(stale)
+
+    async def cleanup_orphaned(self) -> int:
+        """On startup, find and remove orphaned sandbox containers."""
+        try:
+            docker_client = await self._get_docker()
+        except Exception:
+            return 0
+
+        removed = 0
+        try:
+            containers = await asyncio.to_thread(
+                docker_client.containers.list,
+                filters={"label": f"{SANDBOX_LABEL}=true"},
+                all=True,
+            )
+            for container in containers:
+                eid = container.labels.get(f"{SANDBOX_LABEL}.execution_id", "")
+                if eid not in self._active:
+                    try:
+                        await asyncio.to_thread(container.stop, timeout=5)
+                        await asyncio.to_thread(container.remove)
+                        removed += 1
+                    except Exception:
+                        logger.warning("Failed to remove orphaned %s", container.name)
+        except Exception:
+            logger.warning("Failed to scan for orphaned sandboxes", exc_info=True)
+
+        if removed:
+            logger.info("Removed %d orphaned sandbox(es)", removed)
+        return removed
+
+    async def shutdown(self) -> None:
+        """Release all active sandboxes on shutdown."""
+        for eid in list(self._active.keys()):
+            await self.release(eid)
