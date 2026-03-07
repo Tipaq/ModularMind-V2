@@ -17,7 +17,6 @@ const Users = lazy(() => import("./pages/Users"));
 const UserDetail = lazy(() => import("./pages/UserDetail"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Profile = lazy(() => import("./pages/Profile"));
-const Memory = lazy(() => import("./pages/Memory"));
 
 export default function App() {
   return (
@@ -35,7 +34,6 @@ export default function App() {
           <Route path="/models" element={<Models />} />
           <Route path="/models/:id" element={<ModelDetail />} />
           <Route path="/knowledge" element={<Knowledge />} />
-          <Route path="/memory" element={<Memory />} />
           <Route path="/users" element={<Users />} />
           <Route path="/users/:userId" element={<UserDetail />} />
 

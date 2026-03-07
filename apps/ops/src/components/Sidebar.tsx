@@ -3,7 +3,6 @@ import { NavLink, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
-  Brain,
   Layers,
   Users,
   Bot,
@@ -29,7 +28,6 @@ const navItems: NavItem[] = [
   { name: "Dashboard", to: "/", icon: LayoutDashboard, end: true },
   { name: "Configuration", to: "/configuration", icon: Settings2 },
   { name: "Models", to: "/models", icon: Layers },
-  { name: "Memory", to: "/memory", icon: Brain },
   { name: "Knowledge", to: "/knowledge", icon: BookOpen },
   { name: "Users", to: "/users", icon: Users },
   { name: "Monitoring", to: "/monitoring", icon: Activity },
