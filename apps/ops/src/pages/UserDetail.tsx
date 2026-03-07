@@ -8,7 +8,6 @@ import {
   Pencil,
   MessageCircle,
   TrendingUp,
-  Brain,
   BookOpen,
   Trash2,
 } from "lucide-react";
@@ -33,7 +32,6 @@ import { EditUserDialog } from "../components/users/EditUserDialog";
 import { ConfirmDialog } from "../components/shared/ConfirmDialog";
 import { UserConversationsTab } from "../components/users/UserConversationsTab";
 import { UserTokenUsageTab } from "../components/users/UserTokenUsageTab";
-import { UserMemoryTab } from "../components/users/UserMemoryTab";
 import { UserKnowledgeTab } from "../components/users/UserKnowledgeTab";
 import type { UserStats } from "@modularmind/api-client";
 
@@ -46,7 +44,6 @@ export default function UserDetail() {
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteConvOpen, setDeleteConvOpen] = useState(false);
-  const [deleteMemOpen, setDeleteMemOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const fetchUser = async () => {
@@ -91,18 +88,6 @@ export default function UserDetail() {
     }
     setActionLoading(false);
     setDeleteConvOpen(false);
-    await fetchUser();
-  };
-
-  const handleDeleteMemory = async () => {
-    setActionLoading(true);
-    try {
-      await api.delete(`/admin/users/${userId}/memory`);
-    } catch (err) {
-      console.error("[UserDetail] Failed to delete memory:", err);
-    }
-    setActionLoading(false);
-    setDeleteMemOpen(false);
     await fetchUser();
   };
 
@@ -201,15 +186,6 @@ export default function UserDetail() {
           <Trash2 className="h-3.5 w-3.5 mr-1.5" />
           Delete All Conversations
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-destructive hover:text-destructive"
-          onClick={() => setDeleteMemOpen(true)}
-        >
-          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-          Clear Memory
-        </Button>
       </div>
 
       {/* Tabs */}
@@ -223,10 +199,6 @@ export default function UserDetail() {
             <TrendingUp className="h-3.5 w-3.5" />
             Token Usage
           </TabsTrigger>
-          <TabsTrigger value="memory" className="gap-1.5">
-            <Brain className="h-3.5 w-3.5" />
-            Memory
-          </TabsTrigger>
           <TabsTrigger value="knowledge" className="gap-1.5">
             <BookOpen className="h-3.5 w-3.5" />
             Knowledge
@@ -238,9 +210,6 @@ export default function UserDetail() {
         </TabsContent>
         <TabsContent value="token-usage">
           <UserTokenUsageTab userId={userId!} />
-        </TabsContent>
-        <TabsContent value="memory">
-          <UserMemoryTab userId={userId!} />
         </TabsContent>
         <TabsContent value="knowledge">
           <UserKnowledgeTab userId={userId!} />
@@ -269,16 +238,6 @@ export default function UserDetail() {
         onConfirm={handleDeleteConversations}
       />
 
-      <ConfirmDialog
-        open={deleteMemOpen}
-        onOpenChange={setDeleteMemOpen}
-        title="Clear All Memory"
-        description={`This will permanently delete all memory entries (PostgreSQL + Qdrant) for ${user.email}. This action cannot be undone.`}
-        confirmLabel="Clear Memory"
-        destructive
-        loading={actionLoading}
-        onConfirm={handleDeleteMemory}
-      />
     </div>
   );
 }

@@ -1,14 +1,13 @@
 import { useSearchParams } from "react-router-dom";
-import { Settings2, Key, Plug, Webhook, Brain, BookOpen, Cog } from "lucide-react";
+import { Settings2, Key, Plug, Webhook, BookOpen, Cog } from "lucide-react";
 import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
 import ProvidersTab from "../components/configuration/ProvidersTab";
 import McpServersTab from "../components/configuration/McpServersTab";
 import IntegrationsTab from "../components/configuration/IntegrationsTab";
-import MemoryConfigTab from "../components/configuration/MemoryConfigTab";
 import KnowledgeConfigTab from "../components/configuration/KnowledgeConfigTab";
 import SystemTab from "../components/configuration/SystemTab";
 
-type TabId = "providers" | "mcp" | "integrations" | "memory" | "knowledge" | "system";
+type TabId = "providers" | "mcp" | "integrations" | "knowledge" | "system";
 
 export default function Configuration() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -41,10 +40,6 @@ export default function Configuration() {
             <Webhook className="h-4 w-4" />
             Integrations
           </TabsTrigger>
-          <TabsTrigger value="memory">
-            <Brain className="h-4 w-4" />
-            Memory
-          </TabsTrigger>
           <TabsTrigger value="knowledge">
             <BookOpen className="h-4 w-4" />
             Knowledge
@@ -63,9 +58,6 @@ export default function Configuration() {
         </TabsContent>
         <TabsContent value="integrations" className="mt-6">
           <IntegrationsTab />
-        </TabsContent>
-        <TabsContent value="memory" className="mt-6">
-          <MemoryConfigTab />
         </TabsContent>
         <TabsContent value="knowledge" className="mt-6">
           <KnowledgeConfigTab />

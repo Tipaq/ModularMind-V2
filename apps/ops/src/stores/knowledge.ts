@@ -2,6 +2,51 @@ import { create } from "zustand";
 import type { Collection, KnowledgeDocument, RAGScope } from "@modularmind/api-client";
 import { api } from "../lib/api";
 
+// ── Admin types ──
+
+export interface KnowledgeGlobalStats {
+  total_collections: number;
+  total_documents: number;
+  total_chunks: number;
+  total_accesses: number;
+  documents_by_status: Record<string, number>;
+  collections_by_scope: Record<string, number>;
+}
+
+export interface ExplorerChunk {
+  id: string;
+  content: string;
+  chunk_index: number;
+  collection_id: string;
+  collection_name: string;
+  document_id: string;
+  document_filename: string;
+  access_count: number;
+  last_accessed: string | null;
+  created_at: string;
+}
+
+export interface KnowledgeGraphNode {
+  id: string;
+  label: string;
+  node_type: "collection" | "document";
+  scope?: string;
+  status?: string;
+  chunk_count: number;
+  size: number;
+}
+
+export interface KnowledgeGraphEdge {
+  source: string;
+  target: string;
+  weight: number;
+}
+
+export interface KnowledgeGraphData {
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+}
+
 interface KnowledgeState {
   // Collections
   collections: Collection[];
@@ -15,6 +60,23 @@ interface KnowledgeState {
 
   // Upload state
   uploading: boolean;
+
+  // Admin: global stats
+  globalStats: KnowledgeGlobalStats | null;
+  statsLoading: boolean;
+  statsError: string | null;
+
+  // Admin: explorer
+  explorerChunks: ExplorerChunk[];
+  explorerTotal: number;
+  explorerPage: number;
+  explorerLoading: boolean;
+  explorerFilters: { collection_id: string; document_id: string };
+
+  // Admin: graph
+  graphData: KnowledgeGraphData | null;
+  graphLoading: boolean;
+  graphError: string | null;
 
   // Actions
   fetchCollections: () => Promise<void>;
@@ -34,6 +96,12 @@ interface KnowledgeState {
   deleteDocument: (docId: string, collectionId: string) => Promise<void>;
   refreshDocument: (docId: string) => Promise<void>;
   clearError: () => void;
+
+  // Admin actions
+  fetchGlobalStats: () => Promise<void>;
+  fetchExplorerChunks: (page?: number) => Promise<void>;
+  setExplorerFilters: (f: Partial<{ collection_id: string; document_id: string }>) => void;
+  fetchGraphData: () => Promise<void>;
 }
 
 export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
@@ -45,6 +113,20 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   documents: [],
   documentsLoading: false,
   uploading: false,
+
+  globalStats: null,
+  statsLoading: false,
+  statsError: null,
+
+  explorerChunks: [],
+  explorerTotal: 0,
+  explorerPage: 1,
+  explorerLoading: false,
+  explorerFilters: { collection_id: "", document_id: "" },
+
+  graphData: null,
+  graphLoading: false,
+  graphError: null,
 
   fetchCollections: async () => {
     set({ collectionsLoading: true, collectionsError: null });
@@ -153,4 +235,55 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   },
 
   clearError: () => set({ collectionsError: null }),
+
+  // ── Admin actions ──
+
+  fetchGlobalStats: async () => {
+    set({ statsLoading: true, statsError: null });
+    try {
+      const data = await api.get<KnowledgeGlobalStats>("/rag/admin/stats/global");
+      set({ globalStats: data });
+    } catch (err) {
+      set({ statsError: err instanceof Error ? err.message : "Failed to fetch stats" });
+    } finally {
+      set({ statsLoading: false });
+    }
+  },
+
+  fetchExplorerChunks: async (page = 1) => {
+    set({ explorerLoading: true });
+    try {
+      const { explorerFilters } = get();
+      const params = new URLSearchParams({ page: String(page), page_size: "20" });
+      if (explorerFilters.collection_id) params.set("collection_id", explorerFilters.collection_id);
+      if (explorerFilters.document_id) params.set("document_id", explorerFilters.document_id);
+
+      const data = await api.get<{ items: ExplorerChunk[]; total: number; page: number }>(
+        `/rag/admin/explore?${params}`,
+      );
+      set({ explorerChunks: data.items, explorerTotal: data.total, explorerPage: data.page });
+    } catch (err) {
+      console.error("[knowledge] Failed to fetch explorer chunks:", err);
+    } finally {
+      set({ explorerLoading: false });
+    }
+  },
+
+  setExplorerFilters: (f) => {
+    set((state) => ({
+      explorerFilters: { ...state.explorerFilters, ...f },
+    }));
+  },
+
+  fetchGraphData: async () => {
+    set({ graphLoading: true, graphError: null });
+    try {
+      const data = await api.get<KnowledgeGraphData>("/rag/admin/graph?limit=200");
+      set({ graphData: data });
+    } catch (err) {
+      set({ graphError: err instanceof Error ? err.message : "Failed to fetch graph" });
+    } finally {
+      set({ graphLoading: false });
+    }
+  },
 }));

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   BookOpen, RefreshCw, Plus, Search, Globe, Users, User, AlertCircle, FolderKanban,
+  BarChart3, Database, GitFork,
 } from "lucide-react";
 import {
   Button, Input, Badge,
@@ -13,6 +15,9 @@ import { useAuthStore } from "@modularmind/ui";
 import { CollectionCard } from "../components/knowledge/CollectionCard";
 import { CreateCollectionDialog } from "../components/knowledge/CreateCollectionDialog";
 import { CollectionDetailPanel } from "../components/knowledge/CollectionDetailPanel";
+import { KnowledgeOverviewTab } from "../components/knowledge/KnowledgeOverviewTab";
+import { KnowledgeExplorerTab } from "../components/knowledge/KnowledgeExplorerTab";
+import { KnowledgeGraphTab } from "../components/knowledge/KnowledgeGraphTab";
 
 function EmptyCollections({ label }: { label: string }) {
   return (
@@ -68,20 +73,19 @@ function CollectionGrid({
   );
 }
 
-export default function Knowledge() {
+// ── Collections Tab Content ──
+
+function CollectionsContent() {
   const {
-    collections, collectionsLoading, collectionsError,
+    collections, collectionsLoading,
     selectedCollectionId, documents, documentsLoading,
-    fetchCollections, createCollection, deleteCollection, selectCollection, clearError,
+    fetchCollections, deleteCollection, selectCollection,
   } = useKnowledgeStore();
 
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "admin" || user?.role === "owner";
 
-  const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
-
-  useEffect(() => { fetchCollections(); }, [fetchCollections]);
 
   const selectedCollection = collections.find((c) => c.id === selectedCollectionId) ?? null;
 
@@ -105,46 +109,7 @@ export default function Knowledge() {
     isAdmin || (c.scope === "agent" && c.owner_user_id === user?.id);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={BookOpen}
-        gradient="from-info to-info/70"
-        title="Knowledge"
-        description="Curated document collections for company, groups, and personal use"
-        actions={
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchCollections}
-              disabled={collectionsLoading}
-            >
-              <RefreshCw className={cn("h-4 w-4", collectionsLoading && "animate-spin")} />
-            </Button>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              New Collection
-            </Button>
-          </div>
-        }
-      />
-
-      {/* Error banner */}
-      {collectionsError && (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span className="flex-1">{collectionsError}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-destructive hover:text-destructive"
-            onClick={clearError}
-          >
-            Dismiss
-          </Button>
-        </div>
-      )}
-
+    <>
       {/* Search */}
       <div className="relative max-w-xs">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -243,7 +208,6 @@ export default function Knowledge() {
               </TabsContent>
 
               <TabsContent value="groups">
-                {/* Clickable group tag filter */}
                 {groupCollections.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-3">
                     {[...new Set(groupCollections.flatMap((c) => c.allowed_groups))].map((g) => (
@@ -284,7 +248,6 @@ export default function Knowledge() {
           </Tabs>
         </div>
 
-        {/* Detail panel — slides in when a collection is selected */}
         {selectedCollection && (
           <CollectionDetailPanel
             collection={selectedCollection}
@@ -294,6 +257,107 @@ export default function Knowledge() {
           />
         )}
       </div>
+    </>
+  );
+}
+
+// ── Main Page ──
+
+export default function Knowledge() {
+  const {
+    collectionsLoading, collectionsError,
+    fetchCollections, createCollection, clearError,
+  } = useKnowledgeStore();
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const topTab = searchParams.get("tab") || "collections";
+
+  useEffect(() => { fetchCollections(); }, [fetchCollections]);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        icon={BookOpen}
+        gradient="from-info to-info/70"
+        title="Knowledge"
+        description="Curated document collections for company, groups, and personal use"
+        actions={
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchCollections}
+              disabled={collectionsLoading}
+            >
+              <RefreshCw className={cn("h-4 w-4", collectionsLoading && "animate-spin")} />
+            </Button>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              New Collection
+            </Button>
+          </div>
+        }
+      />
+
+      {collectionsError && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span className="flex-1">{collectionsError}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-destructive hover:text-destructive"
+            onClick={clearError}
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
+
+      {/* Top-level tabs */}
+      <Tabs
+        value={topTab}
+        onValueChange={(v) => setSearchParams({ tab: v })}
+      >
+        <TabsList>
+          <TabsTrigger value="collections" className="gap-1.5">
+            <BookOpen className="h-3.5 w-3.5" />
+            Collections
+          </TabsTrigger>
+          <TabsTrigger value="overview" className="gap-1.5">
+            <BarChart3 className="h-3.5 w-3.5" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="explorer" className="gap-1.5">
+            <Database className="h-3.5 w-3.5" />
+            Explorer
+          </TabsTrigger>
+          <TabsTrigger value="graph" className="gap-1.5">
+            <GitFork className="h-3.5 w-3.5" />
+            Graph
+          </TabsTrigger>
+        </TabsList>
+
+        <div className="mt-4 space-y-4">
+          <TabsContent value="collections">
+            <CollectionsContent />
+          </TabsContent>
+
+          <TabsContent value="overview">
+            <KnowledgeOverviewTab />
+          </TabsContent>
+
+          <TabsContent value="explorer">
+            <KnowledgeExplorerTab />
+          </TabsContent>
+
+          <TabsContent value="graph">
+            <KnowledgeGraphTab />
+          </TabsContent>
+        </div>
+      </Tabs>
 
       <CreateCollectionDialog
         open={createOpen}
