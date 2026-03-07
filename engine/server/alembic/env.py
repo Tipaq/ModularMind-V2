@@ -21,7 +21,6 @@ from src.conversations.models import Conversation, ConversationMessage  # noqa: 
 from src.executions.models import ExecutionRun, ExecutionStep  # noqa: F401
 from src.executions.feedback import ExecutionFeedback  # noqa: F401
 from src.connectors.models import Connector  # noqa: F401
-from src.memory.models import MemoryEntry, ConsolidationLog, MemoryEdge  # noqa: F401
 from src.rag.models import RAGCollection, RAGDocument, RAGChunk  # noqa: F401
 from src.groups.models import UserGroup, UserGroupMember  # noqa: F401
 from src.domain_config.models import AgentConfigVersion, GraphConfigVersion  # noqa: F401
