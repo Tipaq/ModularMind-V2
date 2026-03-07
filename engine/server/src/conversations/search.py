@@ -1,8 +1,8 @@
 """
 Cross-conversation search service.
 
-Searches the Qdrant memory collection for conversation-scoped entries
-(both per-message and summary) to enable cross-conversation search.
+Uses PG tsvector full-text search (GIN-indexed) for conversation message search.
+Replaces the previous Qdrant-based implementation.
 """
 
 from __future__ import annotations
@@ -10,11 +10,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from qdrant_client import models
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.embedding.resolver import get_memory_embedding_provider
-from src.infra.qdrant import qdrant_factory
-from src.infra.tokenizer import tokenize_bm25
+from src.conversations.models import Conversation, ConversationMessage
 
 logger = logging.getLogger(__name__)
 
@@ -32,93 +31,61 @@ class ConversationSearchResult:
 
 
 class ConversationSearchService:
-    """DB-agnostic service — only talks to Qdrant."""
+    """PG tsvector-based conversation search."""
 
-    def __init__(self, collection_name: str = "memory") -> None:
-        self._collection = collection_name
+    def __init__(self, db: AsyncSession) -> None:
+        self._db = db
 
     async def search(
         self,
         query: str,
         user_id: str,
         agent_id: str | None = None,
-        group_search: bool = False,
-        allowed_group_user_ids: list[str] | None = None,
         limit: int = 10,
-        threshold: float = 0.6,
+        **_kwargs,
     ) -> list[ConversationSearchResult]:
-        """Search cross-conversation content in Qdrant memory collection.
+        """Search conversation messages using PG tsvector.
 
-        Filters by scope IN (conversation, cross_conversation) and user_id.
-        If group_search, expands to allowed_group_user_ids.
+        Uses the 'simple' dictionary for multilingual support.
         """
-        embedding_provider = get_memory_embedding_provider()
-        query_embedding = await embedding_provider.embed_text(query)
+        if not query.strip():
+            return []
 
-        client = await qdrant_factory.get_client()
+        tsquery = func.plainto_tsquery("simple", query)
 
-        # Build filter: scope in (conversation, cross_conversation)
-        scope_filter = models.FieldCondition(
-            key="scope",
-            match=models.MatchAny(any=["conversation", "cross_conversation"]),
+        stmt = (
+            select(
+                ConversationMessage.conversation_id,
+                Conversation.title,
+                ConversationMessage.content,
+                func.ts_rank(ConversationMessage.search_vector, tsquery).label("rank"),
+                ConversationMessage.created_at,
+                Conversation.agent_id,
+            )
+            .join(Conversation, ConversationMessage.conversation_id == Conversation.id)
+            .where(
+                ConversationMessage.search_vector.op("@@")(tsquery),
+                Conversation.user_id == user_id,
+            )
         )
-
-        # User filter: own user_id or group members
-        if group_search and allowed_group_user_ids:
-            all_user_ids = list(set([user_id] + allowed_group_user_ids))
-            user_filter = models.FieldCondition(
-                key="user_id",
-                match=models.MatchAny(any=all_user_ids),
-            )
-        else:
-            user_filter = models.FieldCondition(
-                key="user_id",
-                match=models.MatchValue(value=user_id),
-            )
-
-        must_conditions: list[models.Condition] = [scope_filter, user_filter]
 
         if agent_id:
-            must_conditions.append(
-                models.FieldCondition(
-                    key="metadata.agent_id",
-                    match=models.MatchValue(value=agent_id),
-                )
-            )
+            stmt = stmt.where(Conversation.agent_id == agent_id)
 
-        filters = models.Filter(must=must_conditions)
+        stmt = stmt.order_by(
+            func.ts_rank(ConversationMessage.search_vector, tsquery).desc()
+        ).limit(limit)
 
-        # Hybrid prefetch
-        prefetch = [
-            models.Prefetch(query=query_embedding, using="dense", limit=50),
-        ]
-        if query.strip():
-            sparse = tokenize_bm25(query)
-            if sparse.indices:
-                prefetch.append(
-                    models.Prefetch(query=sparse, using="sparse", limit=50),
-                )
-
-        results = await client.query_points(
-            collection_name=self._collection,
-            prefetch=prefetch,
-            query=models.FusionQuery(fusion=models.Fusion.RRF),
-            query_filter=filters,
-            limit=limit,
-            with_payload=True,
-            score_threshold=threshold if threshold > 0 else None,
-        )
+        result = await self._db.execute(stmt)
 
         return [
             ConversationSearchResult(
-                conversation_id=point.payload.get("conversation_id", ""),
-                conversation_title=point.payload.get("metadata", {}).get(
-                    "conversation_title"
-                ),
-                message_content=point.payload.get("content", ""),
-                score=point.score,
-                timestamp=point.payload.get("metadata", {}).get("timestamp"),
-                agent_id=point.payload.get("metadata", {}).get("agent_id"),
+                conversation_id=row.conversation_id,
+                conversation_title=row.title,
+                message_content=row.content or "",
+                score=float(row.rank),
+                timestamp=row.created_at.isoformat() if row.created_at else None,
+                agent_id=row.agent_id,
             )
-            for point in results.points
+            for row in result.all()
         ]

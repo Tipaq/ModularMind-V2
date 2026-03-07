@@ -13,7 +13,7 @@ from src.infra.utils import utcnow
 
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infra.database import Base
@@ -52,6 +52,9 @@ class Conversation(Base):
     last_memory_extracted_at: Mapped[datetime | None] = mapped_column(
         nullable=True, default=None
     )
+    compaction_summary: Mapped[str | None] = mapped_column(
+        Text, nullable=True, default=None
+    )
 
     # Relationships
     messages: Mapped[list["ConversationMessage"]] = relationship(
@@ -87,6 +90,8 @@ class ConversationMessage(Base):
     meta: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
     attachments: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default="[]")
 
+    search_vector: Mapped[Any] = mapped_column(TSVECTOR, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationship
@@ -95,6 +100,7 @@ class ConversationMessage(Base):
     __table_args__ = (
         Index("ix_message_conversation_time", "conversation_id", "created_at"),
         Index("ix_message_execution_created", "execution_id", "created_at"),
+        Index("ix_message_search_vector", "search_vector", postgresql_using="gin"),
     )
 
     def __repr__(self) -> str:

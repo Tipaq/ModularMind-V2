@@ -101,18 +101,6 @@ class SendMessageRequest(BaseModel):
     attachment_ids: list[str] = Field(default_factory=list, max_length=5)
 
 
-class MemoryEntrySummary(BaseModel):
-    """Slim memory entry used during supervisor routing context."""
-
-    id: str
-    content: str
-    scope: str
-    tier: str
-    importance: float = 0.5
-    memory_type: str = "episodic"
-    category: str = ""
-
-
 class KnowledgeChunkResponse(BaseModel):
     """A single RAG chunk used during retrieval."""
 
@@ -197,7 +185,7 @@ class ContextData(BaseModel):
     """Full context injection data for frontend display."""
 
     history: ContextHistory | None = None
-    memory_entries: list[MemoryEntrySummary] = Field(default_factory=list)
+    user_profile: str | None = None
     budget_overview: BudgetOverview | None = None
 
 
@@ -213,7 +201,6 @@ class SendMessageResponse(BaseModel):
     delegated_to: str | None = None
     is_ephemeral: bool | None = None
     ephemeral_agent: EphemeralAgent | None = None
-    memory_entries: list[MemoryEntrySummary] = Field(default_factory=list)
     knowledge_data: KnowledgeDataResponse | None = None
     context_data: ContextData | None = None
 

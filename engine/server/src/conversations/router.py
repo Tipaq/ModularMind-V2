@@ -4,7 +4,6 @@ Conversation router.
 API endpoints for conversation management and message sending.
 """
 
-import asyncio
 import logging
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
@@ -44,98 +43,6 @@ MAX_RECENT_MESSAGES = 20
 """Maximum number of recent messages loaded for supervisor context."""
 
 
-async def _maybe_enqueue_marathon_extraction(conversation_id: str) -> None:
-    """Check marathon threshold and enqueue extraction if hit (fire-and-forget).
-
-    Uses its own DB session to avoid interfering with the request transaction.
-    """
-    import json
-    from datetime import datetime
-
-    import redis.exceptions
-    import sqlalchemy.exc
-    from sqlalchemy import select, update
-
-    from src.infra.database import async_session_maker
-    from src.infra.metrics import memory_extraction_enqueued
-    from src.infra.publish import enqueue_memory_raw
-
-    from .models import Conversation, ConversationMessage
-
-    s = get_settings()
-    if not s.FACT_EXTRACTION_ENABLED:
-        return
-
-    try:
-        async with async_session_maker() as session:
-            conv = await session.get(Conversation, conversation_id)
-            if not conv:
-                return
-
-            cutoff = conv.last_memory_extracted_at or datetime.min
-
-            # Fetch messages first so we can check both count and token budget
-            result = await session.execute(
-                select(ConversationMessage)
-                .where(
-                    ConversationMessage.conversation_id == conversation_id,
-                    ConversationMessage.created_at > cutoff,
-                )
-                .order_by(ConversationMessage.created_at)
-            )
-            messages = list(result.scalars().all())
-            if not messages:
-                return
-
-            new_count = len(messages)
-
-            # Must have at least the minimum message floor
-            if new_count < s.FACT_EXTRACTION_MIN_MESSAGES:
-                return
-
-            # Trigger if EITHER message batch threshold OR token threshold is met
-            from src.infra.token_counter import count_tokens
-
-            total_tokens = sum(count_tokens(m.content or "") for m in messages)
-            batch_ok = new_count >= s.MEMORY_EXTRACTION_BATCH_SIZE
-            token_ok = total_tokens >= s.MEMORY_BUFFER_TOKEN_THRESHOLD
-
-            if not batch_ok and not token_ok:
-                return
-
-            messages_json = json.dumps([
-                {"role": m.role.value, "content": m.content}
-                for m in messages
-            ])
-
-            await enqueue_memory_raw(
-                conversation_id=conv.id,
-                agent_id=conv.agent_id or "",
-                messages=messages_json,
-                user_id=conv.user_id,
-            )
-
-            latest_msg_time = messages[-1].created_at
-            await session.execute(
-                update(Conversation)
-                .where(Conversation.id == conv.id)
-                .values(last_memory_extracted_at=latest_msg_time)
-            )
-            await session.commit()
-
-            memory_extraction_enqueued.labels(trigger="marathon").inc()
-            logger.info(
-                "Marathon extraction: enqueued %d messages from conversation %s",
-                len(messages), conv.id,
-            )
-    except (OSError, redis.exceptions.RedisError, sqlalchemy.exc.SQLAlchemyError):
-        logger.debug(
-            "Marathon extraction check failed for conversation %s",
-            conversation_id,
-            exc_info=True,
-        )
-
-
 # ─── Cross-Conversation Search (MUST be before {conversation_id} routes) ──────
 
 
@@ -170,15 +77,12 @@ async def search_conversations(
         result = await db.execute(group_members_query)
         allowed_group_user_ids = [r[0] for r in result.all()]
 
-    service = ConversationSearchService()
+    service = ConversationSearchService(db)
     results = await service.search(
         query=request.query,
         user_id=user.id,
         agent_id=request.agent_id,
-        group_search=request.include_group and bool(allowed_group_user_ids),
-        allowed_group_user_ids=allowed_group_user_ids,
         limit=request.limit,
-        threshold=request.threshold,
     )
 
     return ConversationSearchResponse(
@@ -680,7 +584,6 @@ async def _build_supervisor_response(
                 else False
             )
 
-    memory_entries = result.get("memory_entries", [])
     knowledge_data_response = None
     raw_knowledge = result.get("knowledge_data")
     if raw_knowledge:
@@ -706,7 +609,7 @@ async def _build_supervisor_response(
                 ],
                 summary=raw_history.get("summary", ""),
             ),
-            memory_entries=raw_context.get("memory_entries", []),
+            user_profile=raw_context.get("user_profile"),
             budget_overview=BudgetOverview(
                 context_window=raw_bo["context_window"],
                 effective_context=raw_bo["effective_context"],
@@ -720,7 +623,6 @@ async def _build_supervisor_response(
     base_kwargs = dict(
         user_message=user_msg_response,
         routing_strategy=routing_strategy,
-        memory_entries=memory_entries,
         context_data=context_data_response,
     )
 
@@ -838,9 +740,6 @@ async def _handle_supervisor_message(
     )
 
     await db.commit()
-    asyncio.ensure_future(
-        _maybe_enqueue_marathon_extraction(conversation_id),
-    )
 
     return await _build_supervisor_response(result, user_msg_response)
 
@@ -890,10 +789,6 @@ async def _handle_direct_execution(
         user_id=user.id,
     )
     await db.commit()
-
-    asyncio.ensure_future(
-        _maybe_enqueue_marathon_extraction(conversation_id),
-    )
 
     acquired = await fair_scheduler.acquire(user.id, execution.id)
     if not acquired:
