@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, Brain, BookOpen, AlertTriangle, Check } from "lucide-react";
+import { RefreshCw, BookOpen, AlertTriangle, Check } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -215,12 +215,12 @@ export default function EmbeddingsTab() {
   }, []);
 
   const updateSetting = async (
-    key: "memory_embedding_model" | "knowledge_embedding_model",
+    key: "knowledge_embedding_model",
     value: string,
   ) => {
     if (!settings) return;
 
-    const pipeline = key === "memory_embedding_model" ? "memory" : "knowledge";
+    const pipeline = "knowledge";
     const updated = { ...settings, [key]: value };
     setSettings(updated);
     setSaving(pipeline);
@@ -251,9 +251,7 @@ export default function EmbeddingsTab() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
-        Configure which embedding models are used for each pipeline. Memory
-        handles conversation facts, user profiles, and cross-conversation search.
-        Knowledge handles RAG document chunks and semantic search.
+        Configure which embedding model is used for the knowledge (RAG) pipeline.
       </p>
 
       {saveError && (
@@ -262,18 +260,7 @@ export default function EmbeddingsTab() {
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <PipelineCard
-          title="Memory"
-          description="Conversation facts, user profiles, and cross-conversation search"
-          icon={Brain}
-          providerValue={settings?.memory_embedding_provider || "ollama"}
-          modelValue={settings?.memory_embedding_model || "nomic-embed-text"}
-          embeddingModels={embeddingModels}
-          onModelChange={(model) => updateSetting("memory_embedding_model", model)}
-          saving={saving === "memory"}
-          saveSuccess={saveSuccess === "memory"}
-        />
+      <div className="max-w-md">
         <PipelineCard
           title="Knowledge"
           description="RAG document chunks and knowledge search queries"

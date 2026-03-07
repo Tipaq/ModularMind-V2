@@ -32,8 +32,6 @@ def mask_key(value: str) -> str:
 def _load_persisted_overrides() -> None:
     """Load persisted overrides from secrets store into settings."""
     for attr in (
-        "MEMORY_EMBEDDING_PROVIDER",
-        "MEMORY_EMBEDDING_MODEL",
         "KNOWLEDGE_EMBEDDING_PROVIDER",
         "KNOWLEDGE_EMBEDDING_MODEL",
     ):
@@ -74,12 +72,6 @@ def build_settings_response() -> SettingsResponse:
         sync_interval_minutes=5,
         ollama_keep_alive=settings.OLLAMA_KEEP_ALIVE,
         max_execution_timeout=settings.MAX_EXECUTION_TIMEOUT,
-        memory_embedding_provider=(
-            settings.MEMORY_EMBEDDING_PROVIDER or settings.EMBEDDING_PROVIDER
-        ),
-        memory_embedding_model=(
-            settings.MEMORY_EMBEDDING_MODEL or settings.EMBEDDING_MODEL
-        ),
         knowledge_embedding_provider=(
             settings.KNOWLEDGE_EMBEDDING_PROVIDER or settings.EMBEDDING_PROVIDER
         ),
@@ -130,8 +122,6 @@ async def update_settings_endpoint(update: SettingsUpdate, user: CurrentUser) ->
 
     # Embedding pipeline overrides — persist via secrets store for restart survival
     for attr in (
-        "memory_embedding_provider",
-        "memory_embedding_model",
         "knowledge_embedding_provider",
         "knowledge_embedding_model",
     ):
