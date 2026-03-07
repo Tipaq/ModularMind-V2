@@ -14,7 +14,6 @@ export type * from "./types/rag";
 export type * from "./types/monitoring";
 export type * from "./types/auth";
 export type * from "./types/settings";
-export type * from "./types/memory";
 export type * from "./types/groups";
 export type * from "./types/supervisor";
 export type * from "./types/mcp";

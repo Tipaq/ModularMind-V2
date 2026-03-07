@@ -68,17 +68,6 @@ export interface SendMessageRequest {
 
 // ─── Send Message Response ───────────────────────────────────────────────────
 
-/** Slim memory entry returned in supervisor routing context. */
-export interface MemoryEntrySummary {
-  id: string;
-  content: string;
-  scope: string;
-  tier: string;
-  importance: number;
-  memory_type: string;
-  category: string;
-}
-
 export interface KnowledgeChunkResponse {
   chunk_id: string;
   document_id: string;
@@ -112,7 +101,6 @@ export interface SendMessageResponse {
   delegated_to: string | null;
   is_ephemeral: boolean | null;
   ephemeral_agent: { id: string; name: string } | null;
-  memory_entries: MemoryEntrySummary[];
   knowledge_data: KnowledgeDataResponse | null;
   context_data?: {
     history?: {
@@ -120,7 +108,7 @@ export interface SendMessageResponse {
       messages?: { role: string; content: string }[];
       summary?: string;
     };
-    memory_entries?: MemoryEntrySummary[];
+    user_profile?: string | null;
     budget_overview?: {
       context_window: number;
       effective_context: number;

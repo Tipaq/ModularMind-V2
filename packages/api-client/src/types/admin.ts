@@ -83,22 +83,6 @@ export interface TokenUsageResponse {
   by_model: ModelTokenUsage[];
 }
 
-// ─── Admin Memory ───────────────────────────────────────────────────────────
-
-export interface AdminMemoryEntry {
-  id: string;
-  scope: string;
-  scope_id: string;
-  tier: string;
-  content: string;
-  importance: number;
-  access_count: number;
-  last_accessed: string | null;
-  created_at: string;
-}
-
-export type AdminMemoryListResponse = PaginatedResponse<AdminMemoryEntry>;
-
 // ─── Admin Collections ──────────────────────────────────────────────────────
 
 export interface UserCollection {
