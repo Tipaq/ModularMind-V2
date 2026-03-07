@@ -326,8 +326,31 @@ class GraphCompiler:
 
             # Build unified tool executor lazily (user_id only available at runtime)
             user_id = (state.get("metadata") or {}).get("user_id")
-            active_tools = _lc_tools
+            active_tools = list(_lc_tools)
             unified_executor = _mcp_executor
+
+            # Gateway tool executor — created lazily with runtime execution_id
+            gateway_executor = None
+            if agent.gateway_permissions:
+                from src.infra.config import get_settings as _get_settings
+
+                _settings = _get_settings()
+                if _settings.GATEWAY_ENABLED:
+                    from src.gateway.executor import GatewayToolExecutor
+                    from src.gateway.tool_definitions import get_gateway_tool_definitions
+                    from src.internal.auth import get_internal_bearer_token
+
+                    gateway_tool_defs = get_gateway_tool_definitions(
+                        agent.gateway_permissions
+                    )
+                    active_tools.extend(gateway_tool_defs)
+                    gateway_executor = GatewayToolExecutor(
+                        gateway_url=_settings.GATEWAY_URL,
+                        agent_id=agent.id,
+                        execution_id=_exec_id or "",
+                        user_id=user_id or "",
+                        internal_token=get_internal_bearer_token(),
+                    )
 
             if user_id:
                 from src.graph_engine.builtin_tools import (
@@ -339,11 +362,12 @@ class GraphCompiler:
                 builtin_exec = create_builtin_executor(user_id, async_session_maker)
                 unified_executor = UnifiedToolExecutor(
                     builtin_exec, _mcp_executor, BUILTIN_TOOL_NAMES,
+                    gateway_executor=gateway_executor,
                 )
             else:
                 # No user_id — filter out built-in tool defs to avoid LLM calling them
                 active_tools = [
-                    t for t in _lc_tools
+                    t for t in active_tools
                     if t.get("function", {}).get("name") not in BUILTIN_TOOL_NAMES
                 ]
                 logger.debug("No user_id in state.metadata — built-in tools disabled")

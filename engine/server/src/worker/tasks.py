@@ -166,6 +166,25 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                         execution_id, exc,
                     )
 
+            # Release Gateway sandbox (if any was acquired for this execution)
+            from src.infra.config import get_settings
+
+            _settings = get_settings()
+            if _settings.GATEWAY_ENABLED and execution_id:
+                try:
+                    import httpx as _httpx
+
+                    from src.internal.auth import get_internal_bearer_token
+
+                    token = get_internal_bearer_token()
+                    async with _httpx.AsyncClient(timeout=5) as _client:
+                        await _client.post(
+                            f"{_settings.GATEWAY_URL}/api/v1/release/{execution_id}",
+                            headers={"Authorization": token},
+                        )
+                except Exception:
+                    pass  # Cleanup scheduler handles leaked sandboxes
+
 
 # --- Cancellation helper ---
 

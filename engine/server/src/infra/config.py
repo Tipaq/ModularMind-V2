@@ -318,6 +318,16 @@ class Settings(BaseSettings):
     FAIR_SCHEDULE_MAX_PER_TEAM: int = Field(default=10, ge=1, le=100)
     FAIR_SCHEDULE_GLOBAL_MAX: int = Field(default=50, ge=1, le=500)
 
+    # ---- Gateway ------------------------------------------------------------
+    GATEWAY_ENABLED: bool = Field(
+        default=False,
+        description="Enable Gateway service for system access tools (filesystem, shell, etc.)",
+    )
+    GATEWAY_URL: str = Field(
+        default="http://gateway:8200",
+        description="Gateway service URL for internal tool execution calls",
+    )
+
     # ---- Uvicorn ------------------------------------------------------------
     UVICORN_WORKERS: int = Field(default=4, ge=1, le=16)
 
