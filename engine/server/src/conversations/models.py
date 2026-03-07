@@ -49,9 +49,6 @@ class Conversation(Base):
     updated_at: Mapped[datetime] = mapped_column(
         default=utcnow, onupdate=utcnow
     )
-    last_memory_extracted_at: Mapped[datetime | None] = mapped_column(
-        nullable=True, default=None
-    )
     compaction_summary: Mapped[str | None] = mapped_column(
         Text, nullable=True, default=None
     )
