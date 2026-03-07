@@ -56,6 +56,7 @@ class SandboxManager:
         self._locks: dict[str, asyncio.Lock] = {}
         self._docker = None
         self._network: str | None = None
+        self._host_workspace_root: str | None = None
         self._settings = get_settings()
 
     async def _get_docker(self):
@@ -68,9 +69,11 @@ class SandboxManager:
         self._docker = docker.from_env()
         self._docker.ping()
 
-        # Auto-detect network
+        # Auto-detect network and workspace volume host path
         if not self._network:
             self._network = await self._detect_network()
+        if not self._host_workspace_root:
+            self._host_workspace_root = await self._detect_workspace_host_path()
 
         return self._docker
 
@@ -90,6 +93,32 @@ class SandboxManager:
                     return name
         except Exception:
             logger.debug("Docker network detection failed", exc_info=True)
+        return None
+
+    async def _detect_workspace_host_path(self) -> str | None:
+        """Detect the host-side path for the workspace volume.
+
+        When Gateway runs in a container with Docker socket passthrough,
+        bind mount sources must use HOST paths, not container-internal paths.
+        Inspects our own container mounts to find the volume source path.
+        """
+        if not self._docker:
+            return None
+        try:
+            import socket
+
+            hostname = socket.gethostname()
+            container = await asyncio.to_thread(self._docker.containers.get, hostname)
+            for mount in container.attrs.get("Mounts", []):
+                if mount.get("Destination") == self._settings.WORKSPACE_ROOT:
+                    source = mount.get("Source", "")
+                    logger.info(
+                        "Detected workspace host path: %s (type=%s)",
+                        source, mount.get("Type"),
+                    )
+                    return source
+        except Exception:
+            logger.debug("Workspace host path detection failed", exc_info=True)
         return None
 
     def _get_lock(self, execution_id: str) -> asyncio.Lock:
@@ -186,6 +215,20 @@ class SandboxManager:
             container=raw_container,
         )
 
+    def _resolve_host_path(self, container_path: str) -> str:
+        """Resolve a container-internal path to a host path for Docker bind mounts.
+
+        When Gateway runs inside Docker with socket passthrough, the Docker daemon
+        sees HOST paths, not container paths. This translates WORKSPACE_ROOT-relative
+        paths to their host equivalents using the detected volume source.
+        """
+        if self._host_workspace_root and container_path.startswith(
+            self._settings.WORKSPACE_ROOT
+        ):
+            relative = container_path[len(self._settings.WORKSPACE_ROOT) :]
+            return self._host_workspace_root + relative
+        return container_path
+
     def _build_mounts(
         self,
         agent_id: str,
@@ -195,17 +238,21 @@ class SandboxManager:
         """Build Docker volume mounts for the sandbox."""
         mounts = {}
 
+        # Resolve to host path for Docker socket passthrough
+        host_workspace_dir = self._resolve_host_path(workspace_dir)
+
         if permissions.filesystem.write:
-            mounts[workspace_dir] = {"bind": "/workspace", "mode": "rw"}
+            mounts[host_workspace_dir] = {"bind": "/workspace", "mode": "rw"}
         elif permissions.filesystem.read:
-            mounts[workspace_dir] = {"bind": "/workspace", "mode": "ro"}
+            mounts[host_workspace_dir] = {"bind": "/workspace", "mode": "ro"}
 
         # Shared workspace (read-only, opt-in)
         shared_dir = os.path.join(self._settings.WORKSPACE_ROOT, "shared")
         if os.path.exists(shared_dir) and any(
             "shared" in p for p in permissions.filesystem.read
         ):
-            mounts[shared_dir] = {"bind": "/workspace/shared", "mode": "ro"}
+            host_shared = self._resolve_host_path(shared_dir)
+            mounts[host_shared] = {"bind": "/workspace/shared", "mode": "ro"}
 
         return mounts
 
