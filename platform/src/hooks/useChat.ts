@@ -6,14 +6,13 @@ import type { SendMessageResponse } from "@modularmind/api-client";
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "@modularmind/ui";
 
-import type { ChatMessage, KnowledgeCollection, KnowledgeChunk, KnowledgeData, InsightsMemoryEntry, TokenUsage, ContextData, MessageExecutionData } from "@modularmind/ui";
-import { extractResponse, mapKnowledgeData, mapMemoryEntries } from "@modularmind/ui";
+import type { ChatMessage, KnowledgeCollection, KnowledgeChunk, KnowledgeData, TokenUsage, ContextData, MessageExecutionData } from "@modularmind/ui";
+import { extractResponse, mapKnowledgeData } from "@modularmind/ui";
 
 export type { KnowledgeCollection, KnowledgeChunk, KnowledgeData };
 export type { TokenUsage, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData } from "@modularmind/ui";
 
 export type Message = ChatMessage;
-export type MemoryEntry = InsightsMemoryEntry;
 
 export function useChat(conversationId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -27,7 +26,6 @@ export function useChat(conversationId: string | null) {
   // Refs for accumulating data during a single message exchange
   const currentAssistantIdRef = useRef("");
   const currentExecutionIdRef = useRef("");
-  const currentMemoryRef = useRef<MemoryEntry[]>([]);
   const currentKnowledgeRef = useRef<KnowledgeData | null>(null);
   const currentTokenUsageRef = useRef<TokenUsage | null>(null);
   const currentContextDataRef = useRef<ContextData | null>(null);
@@ -48,7 +46,6 @@ export function useChat(conversationId: string | null) {
       currentExecutionIdRef.current = "";
       const data: MessageExecutionData = {
         activities: [...activities],
-        memoryEntries: [...currentMemoryRef.current],
         knowledgeData: currentKnowledgeRef.current,
         tokenUsage: currentTokenUsageRef.current,
         contextData: currentContextDataRef.current,
@@ -128,7 +125,6 @@ export function useChat(conversationId: string | null) {
       setIsStreaming(true);
       streamBufferRef.current = "";
       resetActivities();
-      currentMemoryRef.current = [];
       currentKnowledgeRef.current = null;
       currentTokenUsageRef.current = null;
       currentContextDataRef.current = null;
@@ -196,7 +192,7 @@ export function useChat(conversationId: string | null) {
         return;
       }
 
-      const { execution_id, message_id, user_message, direct_response, routing_strategy, delegated_to, ephemeral_agent, memory_entries: resMemory, knowledge_data: resKnowledge, context_data: resContext } = res;
+      const { execution_id, message_id, user_message, direct_response, routing_strategy, delegated_to, ephemeral_agent, knowledge_data: resKnowledge, context_data: resContext } = res;
 
       // Track the stable key for localStorage persistence:
       // - delegated executions: use execution_id
@@ -205,11 +201,6 @@ export function useChat(conversationId: string | null) {
         currentExecutionIdRef.current = execution_id;
       } else if (message_id) {
         currentExecutionIdRef.current = message_id;
-      }
-
-      // Capture memory entries for this message (map snake_case API → camelCase UI)
-      if (resMemory && resMemory.length > 0) {
-        currentMemoryRef.current = mapMemoryEntries(resMemory);
       }
 
       // Capture context data from HTTP response (supervisor path)
@@ -230,7 +221,7 @@ export function useChat(conversationId: string | null) {
             messages: h.messages || [],
             summary: h.summary || "",
           } : null,
-          memoryEntries: mapMemoryEntries(resContext.memory_entries || []),
+          userProfile: resContext.user_profile || null,
           budgetOverview: bo ? {
             contextWindow: bo.context_window,
             effectiveContext: bo.effective_context,
@@ -316,7 +307,7 @@ export function useChat(conversationId: string | null) {
               setExecutionDataMap((prev) => ({
                 ...prev,
                 [assistantId]: {
-                  ...(prev[assistantId] || { activities: [], memoryEntries: [], knowledgeData: null, tokenUsage: null, contextData: null }),
+                  ...(prev[assistantId] || { activities: [], knowledgeData: null, tokenUsage: null, contextData: null }),
                   knowledgeData: currentKnowledgeRef.current,
                 },
               }));
@@ -326,7 +317,6 @@ export function useChat(conversationId: string | null) {
           if (data.type === "trace:memory") {
             const h = data.history;
             const bo = data.budget_overview;
-            const memEntries = (data.memory_entries || []) as MemoryEntry[];
             currentContextDataRef.current = {
               history: h ? {
                 budget: h.budget ? {
@@ -341,7 +331,7 @@ export function useChat(conversationId: string | null) {
                 messages: h.messages || [],
                 summary: h.summary || "",
               } : null,
-              memoryEntries: memEntries,
+              userProfile: data.user_profile || null,
               budgetOverview: bo ? {
                 contextWindow: bo.context_window,
                 effectiveContext: bo.effective_context,
@@ -354,18 +344,13 @@ export function useChat(conversationId: string | null) {
                 },
               } : null,
             };
-            // Also populate currentMemoryRef for backward compatibility
-            if (memEntries.length > 0) {
-              currentMemoryRef.current = memEntries;
-            }
             // Flush live context data to executionDataMap so UI updates during streaming
             if (assistantId) {
               setExecutionDataMap((prev) => ({
                 ...prev,
                 [assistantId]: {
-                  ...(prev[assistantId] || { activities: [], memoryEntries: [], knowledgeData: null, tokenUsage: null, contextData: null }),
+                  ...(prev[assistantId] || { activities: [], knowledgeData: null, tokenUsage: null, contextData: null }),
                   contextData: currentContextDataRef.current,
-                  memoryEntries: [...currentMemoryRef.current],
                 },
               }));
             }
