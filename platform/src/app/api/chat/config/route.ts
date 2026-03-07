@@ -16,13 +16,16 @@ export async function GET(): Promise<NextResponse> {
     engineFetch("/api/v1/mcp/servers", {}, email).catch(() => null),
   ]);
 
-  const agentsData = await agentsRes.json().catch(() => ({ items: [] }));
-  const graphsData = await graphsRes.json().catch(() => ({ items: [] }));
-  const mcpData = mcpRes ? await mcpRes.json().catch(() => []) : [];
+  const agentsData = agentsRes.ok ? await agentsRes.json().catch(() => ({ items: [] })) : { items: [] };
+  const graphsData = graphsRes.ok ? await graphsRes.json().catch(() => ({ items: [] })) : { items: [] };
+  const mcpData = mcpRes?.ok ? await mcpRes.json().catch(() => []) : [];
+
+  const agents = Array.isArray(agentsData.items) ? agentsData.items : Array.isArray(agentsData) ? agentsData : [];
+  const graphs = Array.isArray(graphsData.items) ? graphsData.items : Array.isArray(graphsData) ? graphsData : [];
 
   return NextResponse.json({
-    agents: agentsData.items || agentsData || [],
-    graphs: graphsData.items || graphsData || [],
-    mcpServers: Array.isArray(mcpData) ? mcpData : mcpData.items || [],
+    agents,
+    graphs,
+    mcpServers: Array.isArray(mcpData) ? mcpData : Array.isArray(mcpData.items) ? mcpData.items : [],
   });
 }

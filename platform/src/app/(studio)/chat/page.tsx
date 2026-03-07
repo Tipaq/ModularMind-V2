@@ -74,7 +74,7 @@ export default function ChatPage() {
       const availableIds = new Set(
         models.filter((m) => m.is_available && !m.is_embedding).map((m) => `${m.provider}:${m.model_id}`),
       );
-      if (agents.some((a) => a.model_id && !availableIds.has(a.model_id))) {
+      if (Array.isArray(agents) && agents.some((a) => a.model_id && !availableIds.has(a.model_id))) {
         config = { ...config, modelOverride: true };
       }
     }
@@ -429,10 +429,10 @@ export default function ChatPage() {
           supervisorLayers={supervisorLayers}
           onUpdateLayer={updateSupervisorLayer}
           selectedModelContextWindow={selectedModelContextWindow}
-          enabledAgents={agents.filter((a) => enabledAgentIds.includes(a.id))}
-          enabledGraphs={graphs.filter((g) => enabledGraphIds.includes(g.id))}
-          allAgents={agents}
-          allGraphs={graphs}
+          enabledAgents={(agents || []).filter((a) => enabledAgentIds.includes(a.id))}
+          enabledGraphs={(graphs || []).filter((g) => enabledGraphIds.includes(g.id))}
+          allAgents={agents || []}
+          allGraphs={graphs || []}
           onCompact={activeConversationId ? async () => {
             const res = await fetch("/api/chat/compact", {
               method: "POST",

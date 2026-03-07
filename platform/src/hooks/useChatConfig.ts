@@ -30,9 +30,9 @@ export function useChatConfig() {
 
       if (configRes.ok) {
         const data = await configRes.json();
-        setAgents(data.agents || []);
-        setGraphs(data.graphs || []);
-        setMcpServers(data.mcpServers || []);
+        setAgents(Array.isArray(data.agents) ? data.agents : []);
+        setGraphs(Array.isArray(data.graphs) ? data.graphs : []);
+        setMcpServers(Array.isArray(data.mcpServers) ? data.mcpServers : []);
       }
 
       if (modelsRes.ok) {
