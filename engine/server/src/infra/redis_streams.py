@@ -16,7 +16,7 @@ from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 
-DLQ_STREAM = "memory:dlq"
+DLQ_STREAM = "pipeline:dlq"
 INITIAL_BACKOFF = 1.0
 MAX_BACKOFF = 30.0
 

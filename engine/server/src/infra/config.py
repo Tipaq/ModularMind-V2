@@ -93,8 +93,6 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "nomic-embed-text"
 
     # Per-pipeline overrides (empty = use EMBEDDING_PROVIDER / EMBEDDING_MODEL)
-    MEMORY_EMBEDDING_PROVIDER: str = ""
-    MEMORY_EMBEDDING_MODEL: str = ""
     KNOWLEDGE_EMBEDDING_PROVIDER: str = ""
     KNOWLEDGE_EMBEDDING_MODEL: str = ""
 
@@ -102,7 +100,6 @@ class Settings(BaseSettings):
     QDRANT_URL: str = Field(default="http://localhost:6333")
     QDRANT_API_KEY: str | None = Field(default=None)
     QDRANT_COLLECTION_KNOWLEDGE: str = Field(default="knowledge")
-    QDRANT_COLLECTION_MEMORY: str = Field(default="memory")
     QDRANT_ON_DISK_PAYLOAD: bool = Field(
         default=True,
         description=(
@@ -164,66 +161,12 @@ class Settings(BaseSettings):
     MAX_INPUT_PROMPT_SIZE: int = Field(default=32768, ge=1024, le=131072)
     MAX_INPUT_DATA_SIZE: int = Field(default=1048576, ge=1024, le=10485760)
 
-    # ---- Memory -------------------------------------------------------------
-    MAX_MEMORY_ENTRIES: int = Field(default=1000, ge=100, le=10000)
-    FACT_EXTRACTION_ENABLED: bool = True
-    FACT_EXTRACTION_MODEL: str = Field(
-        default="",
-        description="LLM model for fact extraction. Empty = use runtime default.",
-    )
-    FACT_EXTRACTION_MIN_MESSAGES: int = Field(default=5, ge=1, le=100)
-
-    # ---- Memory Extraction Triggers ------------------------------------------
-    MEMORY_EXTRACTION_BATCH_SIZE: int = Field(
-        default=15, ge=5, le=100,
-        description="Marathon threshold: extract after this many new messages even if active",
-    )
-    MEMORY_EXTRACTION_IDLE_SECONDS: int = Field(
-        default=300, ge=60, le=3600,
-        description="Idle timeout: extract when conversation idle for this many seconds",
-    )
-    MEMORY_EXTRACTION_SCAN_INTERVAL: int = Field(
-        default=120, ge=30, le=600,
-        description="How often (seconds) the scheduler scans for conversations needing extraction",
-    )
-
-    # ---- Memory Scorer -------------------------------------------------------
-    MEMORY_SCORER_ENABLED: bool = True
-    MEMORY_SCORER_MODEL: str = Field(
-        default="",
-        description="LLM model for memory scoring. Empty = use runtime default.",
-    )
-    MEMORY_SCORER_MIN_IMPORTANCE: float = Field(default=0.2, ge=0.0, le=1.0)
-
-    # ---- Memory Decay --------------------------------------------------------
-    MEMORY_DECAY_EPISODIC_HALF_LIFE: int = Field(default=30, ge=1)
-    MEMORY_DECAY_SEMANTIC_HALF_LIFE: int = Field(default=365, ge=1)
-    MEMORY_DECAY_PROCEDURAL_HALF_LIFE: int = Field(default=730, ge=1)
-    MEMORY_DECAY_PRUNE_THRESHOLD: float = Field(default=0.05, ge=0.0, le=1.0)
-
-    # ---- Memory Extraction Token Trigger -------------------------------------
-    MEMORY_BUFFER_TOKEN_THRESHOLD: int = Field(
-        default=3000, ge=500, le=20000,
-        description="Token threshold for extraction: trigger when unextracted content exceeds this",
-    )
-
-    # ---- Memory Retrieval Scoring --------------------------------------------
-    MEMORY_SCORE_WEIGHT_RECENCY: float = Field(default=0.10, ge=0.0, le=1.0)
-    MEMORY_SCORE_WEIGHT_IMPORTANCE: float = Field(default=0.15, ge=0.0, le=1.0)
-    MEMORY_SCORE_WEIGHT_RELEVANCE: float = Field(default=0.65, ge=0.0, le=1.0)
-    MEMORY_SCORE_WEIGHT_FREQUENCY: float = Field(default=0.10, ge=0.0, le=1.0)
-    MEMORY_MIN_RELEVANCE_GATE: float = Field(
-        default=0.4, ge=0.0, le=1.0,
-        description="Minimum Qdrant relevance score (RRF) to consider a memory entry. "
-        "Entries below this are dropped regardless of importance/recency.",
-    )
-
     # ---- Context Budget (percentage of model context_window) -------------------
     CONTEXT_BUDGET_HISTORY_PCT: float = Field(
         default=30.0, ge=5.0, le=60.0,
         description="Percentage of model context_window allocated to conversation history",
     )
-    CONTEXT_BUDGET_MEMORY_PCT: float = Field(
+    CONTEXT_BUDGET_PROFILE_PCT: float = Field(
         default=10.0, ge=0.0, le=30.0,
         description="Percentage of model context_window allocated to memory retrieval",
     )
@@ -243,6 +186,24 @@ class Settings(BaseSettings):
         default=10.0, ge=0.0, le=30.0,
         description="Percentage of model context_window allocated to system/supervisor prompt layers",
     )
+    # ---- Profile Synthesis -------------------------------------------------
+    PROFILE_SYNTHESIS_MODEL: str = Field(
+        default="",
+        description="LLM model for auto-synthesis. Empty = use first available chat model.",
+    )
+    PROFILE_SYNTHESIS_INTERVAL: int = Field(
+        default=86400, ge=3600, le=604800,
+        description="Seconds between profile synthesis runs (default 24h)",
+    )
+    RAG_CONSOLIDATION_INTERVAL: int = Field(
+        default=21600, ge=3600, le=604800,
+        description="Seconds between RAG consolidation runs (default 6h)",
+    )
+    RAG_MULTI_STAGE_ENABLED: bool = Field(
+        default=False,
+        description="Enable multi-stage RAG pipeline (extractor->embedder->storer). Default OFF.",
+    )
+
     # ---- Conversation Indexing ----------------------------------------------
     CONVERSATION_INDEX_MODE: str = Field(
         default="summary",

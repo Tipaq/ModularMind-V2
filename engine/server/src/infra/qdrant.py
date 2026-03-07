@@ -55,9 +55,7 @@ def _dense_dim_for_collection(name: str, settings: Settings) -> int:
     """Resolve the dense vector dimension based on the configured embedding model."""
     from src.embedding.ollama import MODEL_DIMENSIONS
 
-    if name == settings.QDRANT_COLLECTION_MEMORY:
-        model = settings.MEMORY_EMBEDDING_MODEL or settings.EMBEDDING_MODEL
-    elif name == settings.QDRANT_COLLECTION_KNOWLEDGE:
+    if name == settings.QDRANT_COLLECTION_KNOWLEDGE:
         model = settings.KNOWLEDGE_EMBEDDING_MODEL or settings.EMBEDDING_MODEL
     else:
         model = settings.EMBEDDING_MODEL
@@ -103,7 +101,7 @@ class QdrantClientFactory:
         return self._client
 
     async def ensure_collections(self) -> None:
-        """Create knowledge + memory collections if they don't exist (idempotent)."""
+        """Create knowledge collection if it doesn't exist (idempotent)."""
         if self._client is None:
             await self.get_client()
             return  # get_client already called ensure_collections
@@ -111,10 +109,9 @@ class QdrantClientFactory:
         from src.infra.config import get_settings
 
         settings = get_settings()
-        for name in (settings.QDRANT_COLLECTION_KNOWLEDGE, settings.QDRANT_COLLECTION_MEMORY):
-            await self._ensure_one(name, settings)
+        await self._ensure_one(settings.QDRANT_COLLECTION_KNOWLEDGE, settings)
         self._collections_ensured = True
-        logger.info("Qdrant collections ensured: %s, %s", settings.QDRANT_COLLECTION_KNOWLEDGE, settings.QDRANT_COLLECTION_MEMORY)
+        logger.info("Qdrant collection ensured: %s", settings.QDRANT_COLLECTION_KNOWLEDGE)
 
     async def _ensure_one(self, name: str, settings: Settings) -> None:
         assert self._client is not None
@@ -177,12 +174,12 @@ class QdrantClientFactory:
         from src.infra.config import get_settings
 
         settings = get_settings()
-        for name in (settings.QDRANT_COLLECTION_KNOWLEDGE, settings.QDRANT_COLLECTION_MEMORY):
-            try:
-                info = await self._client.get_collection(name)
-                qdrant_points_total.labels(collection=name).set(info.points_count or 0)
-            except (ConnectionError, OSError, TimeoutError) as e:
-                logger.debug("Failed to refresh Qdrant metrics for %s: %s", name, e)
+        name = settings.QDRANT_COLLECTION_KNOWLEDGE
+        try:
+            info = await self._client.get_collection(name)
+            qdrant_points_total.labels(collection=name).set(info.points_count or 0)
+        except (ConnectionError, OSError, TimeoutError) as e:
+            logger.debug("Failed to refresh Qdrant metrics for %s: %s", name, e)
 
     async def create_snapshot(self, collection_name: str) -> str:
         """Create a snapshot of a collection. Returns snapshot description."""
