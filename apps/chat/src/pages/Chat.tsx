@@ -210,11 +210,10 @@ export default function Chat() {
 
   const selectedExecution = useMemo<MessageExecutionData>(() => ({
     activities,
-    memoryEntries: panelState.memory,
     knowledgeData: panelState.knowledge.totalResults > 0 ? panelState.knowledge : null,
     tokenUsage,
     contextData: null,
-  }), [activities, panelState.memory, panelState.knowledge, tokenUsage]);
+  }), [activities, panelState.knowledge, tokenUsage]);
 
   const handleCompactFromInput = useCallback(async () => {
     if (!activeConversationId) return;

@@ -4,11 +4,10 @@ import type {
   KnowledgeCollection,
   KnowledgeChunk,
   KnowledgeData as KnowledgeDataBase,
-  InsightsMemoryEntry,
 } from "@modularmind/ui";
 import { mapKnowledgeData } from "@modularmind/ui";
 
-export type { SupervisorData, KnowledgeCollection, KnowledgeChunk, InsightsMemoryEntry };
+export type { SupervisorData, KnowledgeCollection, KnowledgeChunk };
 
 /** Extended KnowledgeData with loading status for the panel. */
 export interface KnowledgeData extends KnowledgeDataBase {
@@ -20,7 +19,6 @@ export interface KnowledgeData extends KnowledgeDataBase {
 export interface InsightsPanelState {
   supervisor: SupervisorData | null;
   knowledge: KnowledgeData;
-  memory: InsightsMemoryEntry[];
 }
 
 const INITIAL_KNOWLEDGE: KnowledgeData = {
@@ -54,23 +52,17 @@ export function useInsightsPanel() {
   const [state, setState] = useState<InsightsPanelState>({
     supervisor: null,
     knowledge: INITIAL_KNOWLEDGE,
-    memory: [],
   });
 
   const reset = useCallback(() => {
     setState({
       supervisor: null,
       knowledge: INITIAL_KNOWLEDGE,
-      memory: [],
     });
   }, []);
 
   const setSupervisorData = useCallback((data: SupervisorData) => {
     setState((prev) => ({ ...prev, supervisor: data }));
-  }, []);
-
-  const setMemoryEntries = useCallback((entries: InsightsMemoryEntry[]) => {
-    setState((prev) => ({ ...prev, memory: entries }));
   }, []);
 
   const setKnowledgeLoading = useCallback(() => {
@@ -96,7 +88,6 @@ export function useInsightsPanel() {
     panelState: state,
     resetPanel: reset,
     setSupervisorData,
-    setMemoryEntries,
     setKnowledgeLoading,
     handlePanelEvent: handleTraceEvent,
   } as const;

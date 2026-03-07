@@ -8,6 +8,7 @@ export function useChatConfig() {
   const [agents, setAgents] = useState<EngineAgent[]>([]);
   const [graphs, setGraphs] = useState<EngineGraph[]>([]);
   const [models, setModels] = useState<EngineModel[]>([]);
+  const [userPreferences, setUserPreferences] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -18,15 +19,17 @@ export function useChatConfig() {
     loadingRef.current = true;
     setLoading(true);
     try {
-      const [agentsRes, graphsRes, modelsRes] = await Promise.all([
+      const [agentsRes, graphsRes, modelsRes, prefsRes] = await Promise.all([
         api.get<{ items: EngineAgent[] }>("/agents?page=1&page_size=200").catch(() => ({ items: [] })),
         api.get<{ items: EngineGraph[] }>("/graphs?page=1&page_size=200").catch(() => ({ items: [] })),
         api.get<EngineModel[]>("/models").catch(() => []),
+        api.get<{ preferences: string | null }>("/auth/me/preferences").catch(() => ({ preferences: null })),
       ]);
 
-      setAgents(agentsRes.items || []);
-      setGraphs(graphsRes.items || []);
+      setAgents(Array.isArray(agentsRes.items) ? agentsRes.items : []);
+      setGraphs(Array.isArray(graphsRes.items) ? graphsRes.items : []);
       setModels(Array.isArray(modelsRes) ? modelsRes : []);
+      setUserPreferences(prefsRes.preferences ?? null);
 
       loadedRef.current = true;
       setLoaded(true);
@@ -49,13 +52,20 @@ export function useChatConfig() {
     await _fetchConfig();
   }, [_fetchConfig]);
 
+  const savePreferences = useCallback(async (prefs: string) => {
+    await api.patch("/auth/me/preferences", { preferences: prefs });
+    setUserPreferences(prefs);
+  }, []);
+
   return {
     agents,
     graphs,
     models,
+    userPreferences,
     loaded,
     loading,
     load,
     reload,
+    savePreferences,
   };
 }

@@ -14,7 +14,6 @@ export type {
   KnowledgeChunk,
   InsightsPanelState,
 } from "./useInsightsPanel";
-export type { InsightsMemoryEntry } from "@modularmind/ui";
 export type { TokenUsage } from "@modularmind/ui";
 
 export type Message = ApiMessage;
@@ -39,7 +38,6 @@ export function useChat(conversationId: string | null) {
     panelState,
     resetPanel,
     setSupervisorData,
-    setMemoryEntries,
     setKnowledgeLoading,
     handlePanelEvent,
   } = useInsightsPanel();
@@ -124,7 +122,7 @@ export function useChat(conversationId: string | null) {
         return;
       }
 
-      const { execution_id, user_message, direct_response, routing_strategy, delegated_to, is_ephemeral, ephemeral_agent, memory_entries } = res;
+      const { execution_id, user_message, direct_response, routing_strategy, delegated_to, is_ephemeral, ephemeral_agent } = res;
 
       // Track execution ID for cancel button
       executionIdRef.current = execution_id || null;
@@ -139,19 +137,6 @@ export function useChat(conversationId: string | null) {
         isEphemeral: is_ephemeral || false,
         ephemeralAgent: ephemeral_agent || null,
       });
-      if (memory_entries?.length) {
-        setMemoryEntries(
-          memory_entries.map((e) => ({
-            id: e.id,
-            content: e.content,
-            scope: e.scope,
-            tier: e.tier,
-            importance: e.importance,
-            memoryType: e.memory_type,
-            category: e.category,
-          })),
-        );
-      }
       if (execution_id) {
         setKnowledgeLoading();
       }
@@ -298,7 +283,7 @@ export function useChat(conversationId: string | null) {
         setIsStreaming(false);
       };
     },
-    [conversationId, isStreaming, handleTraceEvent, resetActivities, finalizeActivities, resetPanel, setSupervisorData, setMemoryEntries, setKnowledgeLoading, handlePanelEvent],
+    [conversationId, isStreaming, handleTraceEvent, resetActivities, finalizeActivities, resetPanel, setSupervisorData, setKnowledgeLoading, handlePanelEvent],
   );
 
   const cancelStream = useCallback(() => {
