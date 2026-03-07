@@ -65,6 +65,10 @@ class AgentConfig(BaseModel):
     rag_config: RAGConfig = Field(default_factory=RAGConfig)
     capabilities: list[str] = Field(default_factory=list)  # ["code", "research", "email"]
     routing_metadata: dict[str, Any] = Field(default_factory=dict)
+    gateway_permissions: dict[str, Any] | None = Field(
+        default=None,
+        description="Gateway permissions for system access tools (filesystem, shell, etc.)",
+    )
 
     @field_validator("version", mode="before")
     @classmethod
