@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from src.groups.models import UserGroupMember
 
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import String
+from sqlalchemy import String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infra.database import Base
@@ -61,6 +61,10 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         default=utcnow,
         onupdate=utcnow,
+    )
+    preferences: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    last_profile_synthesis_at: Mapped[datetime | None] = mapped_column(
+        nullable=True, default=None
     )
 
     group_memberships: Mapped[list[UserGroupMember]] = relationship(

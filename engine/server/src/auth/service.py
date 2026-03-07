@@ -149,6 +149,25 @@ class AuthService:
         )
         return result.scalar_one_or_none()
 
+    async def update_preferences(self, user_id: str, preferences: str) -> None:
+        """Update user preferences (profile text).
+
+        Args:
+            user_id: User ID
+            preferences: Free-text user profile (max 2000 chars)
+
+        Raises:
+            ValueError: If preferences exceed 2000 characters
+            ValueError: If user not found
+        """
+        if len(preferences) > 2000:
+            raise ValueError("Preferences must be at most 2000 characters")
+        user = await self.get_user_by_id(user_id)
+        if not user:
+            raise ValueError("User not found")
+        user.preferences = preferences
+        await self.db.flush()
+
     async def update_password(self, user: User, new_password: str) -> None:
         """Update user password.
 

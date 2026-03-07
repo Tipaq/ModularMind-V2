@@ -85,6 +85,18 @@ class PasswordChange(BaseModel):
     new_password: str = Field(min_length=10)
 
 
+class PreferencesResponse(BaseModel):
+    """User preferences response."""
+
+    preferences: str | None = None
+
+
+class PreferencesUpdate(BaseModel):
+    """User preferences update request."""
+
+    preferences: str = Field(max_length=2000)
+
+
 class UserListResponse(BaseModel):
     """Admin user listing response with extended fields."""
 

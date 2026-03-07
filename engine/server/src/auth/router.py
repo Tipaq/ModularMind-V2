@@ -18,7 +18,7 @@ from src.infra.database import DbSession
 from src.infra.rate_limit import RateLimitDependency
 
 from .dependencies import CurrentUser
-from .schemas import LoginResponse, PasswordChange, UserResponse
+from .schemas import LoginResponse, PasswordChange, PreferencesResponse, PreferencesUpdate, UserResponse
 from .service import AuthService
 
 logger = logging.getLogger(__name__)
@@ -241,6 +241,28 @@ async def get_current_user_info(user: CurrentUser) -> UserResponse:
     """Get current user information."""
     return UserResponse.model_validate(user)
 
+
+
+@router.get("/me/preferences", response_model=PreferencesResponse)
+async def get_preferences(user: CurrentUser) -> PreferencesResponse:
+    """Get current user's preferences (profile text)."""
+    return PreferencesResponse(preferences=user.preferences)
+
+
+@router.patch("/me/preferences", response_model=PreferencesResponse)
+async def update_preferences(
+    user: CurrentUser,
+    body: PreferencesUpdate,
+    db: DbSession,
+) -> PreferencesResponse:
+    """Update current user's preferences (profile text, max 2000 chars)."""
+    auth_service = AuthService(db)
+    try:
+        await auth_service.update_preferences(user.id, body.preferences)
+        await db.commit()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return PreferencesResponse(preferences=body.preferences)
 
 
 @router.put("/me", response_model=UserResponse, dependencies=[Depends(_password_rate_limit)])
