@@ -189,7 +189,7 @@ def build_routing_task_prompt(
     conversation_summary = build_conversation_summary(history)
     last_agent_info = last_agent or "(none — new conversation or topic change)"
     memory_section = (
-        f"Known facts about the user:\n{memory_context}" if memory_context else ""
+        f"User profile:\n{memory_context}" if memory_context else ""
     )
     knowledge_section = (
         f"Relevant knowledge from documents (use this to answer directly when sufficient):\n{knowledge_context}"

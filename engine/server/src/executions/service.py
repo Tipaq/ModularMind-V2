@@ -550,21 +550,22 @@ class ExecutionService:
                 "total_results": data["total_results"],
             }
 
-        # Emit memory context trace event for the frontend right panel
+        # Emit context trace event for the frontend right panel
         context_details = context_builder.get_context_details()
         yield {
             "type": "trace:memory",
             "history": context_details["history"],
-            "memory_entries": context_details["memory_entries"],
+            "user_profile": context_details["user_profile"],
             "budget_overview": context_details["budget_overview"],
         }
 
-        # Create initial state
+        # Create initial state (user_id in metadata for built-in tool access)
         state = create_initial_state(
             prompt=execution.input_prompt,
             input_data=input_data,
             messages=[HumanMessage(content=execution.input_prompt)],
         )
+        state["metadata"]["user_id"] = execution.user_id
 
         # Create step record
         step = ExecutionStep(

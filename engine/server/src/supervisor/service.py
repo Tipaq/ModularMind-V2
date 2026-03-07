@@ -136,7 +136,7 @@ class SuperSupervisorService:
             decision, conversation_id, effective_content, user_id, conv_config,
         )
         result["routing_metadata"] = routing_metadata
-        result["memory_entries"] = getattr(self, "_last_memory_entries", [])
+        result["user_profile"] = getattr(self, "_last_user_profile", None)
         result["knowledge_data"] = getattr(self, "_last_knowledge_data", None)
         from src.infra.config import get_settings as _get_settings
         _settings = _get_settings()
@@ -153,7 +153,7 @@ class SuperSupervisorService:
         _hist_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_HISTORY_PCT / 100)
         _total_chars = sum(len(m.get("content") or "") for m in (messages or []))
         _max_chars = _hist_budget * 4
-        _mem_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_MEMORY_PCT / 100)
+        _mem_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_PROFILE_PCT / 100)
         _rag_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_RAG_PCT / 100)
         _sys_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_SYSTEM_PCT / 100)
         # Count supervisor prompt layer token usage
@@ -165,8 +165,8 @@ class SuperSupervisorService:
         )
         _sys_used = _sys_chars // 4
         _history_used = _total_chars // 4
-        _mem_entries = getattr(self, "_last_memory_entries", [])
-        _mem_used = sum(len(e.get("content", "")) for e in _mem_entries) // 4
+        _profile_text = getattr(self, "_last_user_profile", None) or ""
+        _mem_used = len(_profile_text) // 4
         _knowledge = getattr(self, "_last_knowledge_data", None)
         _rag_used = 0
         if _knowledge and isinstance(_knowledge, list) and len(_knowledge) > 0:
@@ -192,7 +192,7 @@ class SuperSupervisorService:
                 ],
                 "summary": "",
             },
-            "memory_entries": _mem_entries,
+            "user_profile": _profile_text or None,
             "budget_overview": {
                 "context_window": _cw,
                 "effective_context": _effective_cw,
@@ -204,7 +204,7 @@ class SuperSupervisorService:
                         "used": _history_used,
                     },
                     "memory": {
-                        "pct": _settings.CONTEXT_BUDGET_MEMORY_PCT,
+                        "pct": _settings.CONTEXT_BUDGET_PROFILE_PCT,
                         "allocated": _mem_budget,
                         "used": _mem_used,
                     },
@@ -306,13 +306,12 @@ class SuperSupervisorService:
         # No explicit routing — use LLM with session affinity
         last_agent = await self.context_manager.get_last_agent(conversation_id)
 
-        # Retrieve memory context for routing (enriches DIRECT_RESPONSE)
+        # Retrieve user profile for routing context
         memory_context = ""
-        self._last_memory_entries: list[dict[str, Any]] = []
+        self._last_user_profile: str | None = None
         if user_id:
-            memory_context, self._last_memory_entries = await self._get_memory_context(
-                user_id, content,
-            )
+            memory_context = await self._get_memory_context(user_id)
+            self._last_user_profile = memory_context or None
 
         # Retrieve knowledge context from agents' RAG collections
         knowledge_context = ""
@@ -684,93 +683,23 @@ class SuperSupervisorService:
 
         return execution, publish_fn
 
-    async def _get_memory_context(
-        self, user_id: str, query: str,
-    ) -> tuple[str, list[dict[str, Any]]]:
-        """Retrieve user memory context for supervisor inline responses.
-
-        Returns:
-            Tuple of (formatted_text, raw_entries_as_dicts) for prompt injection
-            and frontend display respectively.
-        """
-        from uuid import UUID
-
+    async def _get_memory_context(self, user_id: str) -> str:
+        """Retrieve user profile context for supervisor inline responses."""
         try:
-            from src.embedding.resolver import get_memory_embedding_provider
-            from src.infra.config import get_settings
+            from src.auth.models import User
             from src.infra.database import async_session_maker
-            from src.memory.manager import MemoryManager
-            from src.memory.models import MemoryScope
-            from src.memory.repository import MemoryRepository
-
-            settings = get_settings()
-            if not settings.FACT_EXTRACTION_ENABLED:
-                return "", []
-
-            embedding_provider = get_memory_embedding_provider()
 
             async with async_session_maker() as session:
-                repo = MemoryRepository(session)
-                manager = MemoryManager(repo, embedding_provider)
+                user = await session.get(User, user_id)
+                profile = user.preferences if user else None
 
-                uid = UUID(user_id) if len(user_id) == 36 else UUID(int=0)
+            if profile:
+                return f"User profile:\n{profile}"
+            return ""
 
-                entries = await manager.get_context(
-                    query=query,
-                    scope=MemoryScope.CROSS_CONVERSATION,
-                    scope_id=uid,
-                    user_id=user_id,
-                    limit=5,
-                )
-
-                profile_entries = await manager.get_context(
-                    query=query,
-                    scope=MemoryScope.USER_PROFILE,
-                    scope_id=uid,
-                    user_id=user_id,
-                    limit=5,
-                )
-
-                all_entries = entries + profile_entries
-                seen: set[str] = set()
-                unique = []
-                for e in all_entries:
-                    eid = str(e.id)
-                    if eid not in seen:
-                        seen.add(eid)
-                        unique.append(e)
-                unique = unique[:5]
-
-                result = manager.format_context_for_prompt(unique, max_tokens=2000)
-
-                # Build raw entry dicts for frontend display
-                raw_entries = [
-                    {
-                        "id": str(e.id),
-                        "content": e.content,
-                        "scope": e.scope.value if hasattr(e.scope, "value") else str(e.scope),
-                        "tier": e.tier.value if hasattr(e.tier, "value") else str(e.tier),
-                        "importance": e.importance,
-                        "memory_type": (
-                            e.memory_type.value
-                            if hasattr(e.memory_type, "value")
-                            else str(e.memory_type)
-                        ),
-                        "category": (e.meta or {}).get("category", ""),
-                    }
-                    for e in unique
-                ]
-
-                if unique:
-                    logger.info(
-                        "Memory context: %d entries, %d chars for user %s",
-                        len(unique), len(result), user_id[:8],
-                    )
-                return result, raw_entries
-
-        except Exception as e:  # Resilience: mixed DB + vector + embedding ops
-            logger.warning("Memory retrieval for supervisor failed: %s", e, exc_info=True)
-            return "", []
+        except Exception as e:
+            logger.warning("User profile retrieval for supervisor failed: %s", e, exc_info=True)
+            return ""
 
     async def _get_knowledge_context(
         self,

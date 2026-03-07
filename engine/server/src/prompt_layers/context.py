@@ -9,7 +9,6 @@ empty context (the agent still works, just without augmentation).
 
 import logging
 from typing import Any
-from uuid import UUID
 
 from langchain_core.messages import SystemMessage
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +33,7 @@ class AgentContextBuilder:
         self._last_history_budget: dict[str, Any] = {}
         self._last_history_messages: list[dict[str, str]] = []
         self._last_summary_text: str = ""
-        self._last_memory_entries: list[dict[str, Any]] = []
+        self._last_user_profile: str | None = None
         self._last_budget_overview: dict[str, Any] = {}
 
     async def build_context_messages(
@@ -57,7 +56,7 @@ class AgentContextBuilder:
         self._last_history_budget = {}
         self._last_history_messages = []
         self._last_summary_text = ""
-        self._last_memory_entries = []
+        self._last_user_profile = None
         self._last_budget_overview = {}
         messages: list[SystemMessage] = []
 
@@ -75,13 +74,13 @@ class AgentContextBuilder:
         effective_context = int(context_window * max_pct / 100)
 
         history_budget = int(effective_context * settings.CONTEXT_BUDGET_HISTORY_PCT / 100)
-        memory_budget = int(effective_context * settings.CONTEXT_BUDGET_MEMORY_PCT / 100)
+        profile_budget = int(effective_context * settings.CONTEXT_BUDGET_PROFILE_PCT / 100)
         rag_budget = int(effective_context * settings.CONTEXT_BUDGET_RAG_PCT / 100)
         system_budget = int(effective_context * settings.CONTEXT_BUDGET_SYSTEM_PCT / 100)
 
         # Track actual token usage per layer
         history_used = 0
-        memory_used = 0
+        profile_used = 0
         rag_used = 0
         system_used = system_prompt_chars // 4
 
@@ -100,11 +99,11 @@ class AgentContextBuilder:
         if agent.memory_enabled:
             memory_text = await self._get_memory_context(
                 agent, query, session, user_id,
-                max_tokens=memory_budget,
+                max_tokens=profile_budget,
             )
             if memory_text:
                 messages.append(SystemMessage(content=memory_text))
-                memory_used = len(memory_text) // 4
+                profile_used = len(memory_text) // 4
 
         if agent.rag_config and agent.rag_config.enabled and agent.rag_config.collection_ids:
             rag_text = await self._get_rag_context(
@@ -127,9 +126,9 @@ class AgentContextBuilder:
                     "used": history_used,
                 },
                 "memory": {
-                    "pct": settings.CONTEXT_BUDGET_MEMORY_PCT,
-                    "allocated": memory_budget,
-                    "used": memory_used,
+                    "pct": settings.CONTEXT_BUDGET_PROFILE_PCT,
+                    "allocated": profile_budget,
+                    "used": profile_used,
                 },
                 "rag": {
                     "pct": settings.CONTEXT_BUDGET_RAG_PCT,
@@ -162,7 +161,7 @@ class AgentContextBuilder:
                 "messages": self._last_history_messages,
                 "summary": self._last_summary_text,
             },
-            "memory_entries": self._last_memory_entries,
+            "user_profile": self._last_user_profile,
             "budget_overview": self._last_budget_overview,
         }
 
@@ -253,7 +252,6 @@ class AgentContextBuilder:
             from sqlalchemy import select
 
             from src.conversations.models import Conversation, ConversationMessage
-            from src.memory.models import MemoryEntry, MemoryScope, MemoryTier
 
             max_chars = max_tokens * 4  # ~4 chars/token
 
@@ -326,22 +324,15 @@ class AgentContextBuilder:
             if compacted_before_id or budget_exceeded:
                 try:
                     summary_result = await session.execute(
-                        select(MemoryEntry)
-                        .where(
-                            MemoryEntry.scope == MemoryScope.CONVERSATION,
-                            MemoryEntry.scope_id == conversation_id,
-                            MemoryEntry.tier == MemoryTier.SUMMARY,
-                            MemoryEntry.expired_at.is_(None),
-                        )
-                        .order_by(MemoryEntry.created_at.desc())
-                        .limit(1)
+                        select(Conversation.compaction_summary)
+                        .where(Conversation.id == conversation_id)
                     )
-                    summary_entry = summary_result.scalar_one_or_none()
-                    if summary_entry:
+                    summary_text = summary_result.scalar_one_or_none()
+                    if summary_text:
                         summary_prefix = (
-                            f"**Earlier context (summary)**: {summary_entry.content}\n\n---\n\n"
+                            f"**Earlier context (summary)**: {summary_text}\n\n---\n\n"
                         )
-                        self._last_summary_text = summary_entry.content or ""
+                        self._last_summary_text = summary_text
                 except Exception:
                     pass  # Summary lookup is best-effort
 
@@ -383,96 +374,37 @@ class AgentContextBuilder:
 
     async def _get_memory_context(
         self,
-        agent: AgentConfig,
-        query: str,
+        agent: AgentConfig,  # vestigial — kept for call-site signature stability
+        query: str,  # vestigial — kept for call-site signature stability
         session: AsyncSession,
         user_id: str | None,
         *,
         max_tokens: int = 2000,
     ) -> str:
-        """Retrieve memory context for the agent."""
+        """Load user profile preferences and inject as context."""
+        if not user_id:
+            return ""
         try:
-            from src.memory.manager import MemoryManager
-            from src.memory.models import MemoryScope
-            from src.memory.repository import MemoryRepository
+            from sqlalchemy import select
 
-            embedding_provider = self._get_memory_embedding_provider()
-            if embedding_provider is None:
+            from src.auth.models import User
+
+            result = await session.execute(
+                select(User.preferences).where(User.id == user_id)
+            )
+            preferences = result.scalar_one_or_none()
+            if not preferences:
                 return ""
 
-            repo = MemoryRepository(session)
-            manager = MemoryManager(repo, embedding_provider)
+            # Truncate to budget (max_tokens * 4 chars ≈ max_tokens tokens)
+            max_chars = max_tokens * 4
+            if len(preferences) > max_chars:
+                preferences = preferences[:max_chars]
 
-            entries = await manager.get_context(
-                query=query,
-                scope=MemoryScope.AGENT,
-                scope_id=UUID(str(agent.id)),
-                user_id=user_id,
-                limit=3,
-            )
-
-            # Also search user profile memories (facts extracted from conversations)
-            if user_id:
-                profile_entries = await manager.get_context(
-                    query=query,
-                    scope=MemoryScope.USER_PROFILE,
-                    scope_id=UUID(user_id) if len(user_id) == 36 else UUID(int=0),
-                    user_id=user_id,
-                    limit=3,
-                )
-                all_entries = entries + profile_entries
-
-                # Search conversation summaries for cross-conversation recall
-                try:
-                    from src.memory.models import MemoryTier
-
-                    summary_entries = await manager.get_context(
-                        query=query,
-                        scope=MemoryScope.CONVERSATION,
-                        scope_id=UUID(user_id) if len(user_id) == 36 else UUID(int=0),
-                        user_id=user_id,
-                        limit=2,
-                    )
-                    # Only include SUMMARY tier entries
-                    summary_entries = [
-                        e for e in summary_entries if e.tier == MemoryTier.SUMMARY
-                    ]
-                    all_entries.extend(summary_entries)
-                except Exception:
-                    pass  # Cross-conversation summary search is best-effort
-
-                seen: set[str] = set()
-                unique = []
-                for e in all_entries:
-                    eid = str(e.id)
-                    if eid not in seen:
-                        seen.add(eid)
-                        unique.append(e)
-                entries = unique[:6]
-
-            self._last_memory_entries = [
-                {
-                    "id": str(e.id),
-                    "content": e.content,
-                    "scope": e.scope.value if hasattr(e.scope, "value") else str(e.scope),
-                    "tier": e.tier.value if hasattr(e.tier, "value") else str(e.tier),
-                    "importance": e.importance,
-                    "memory_type": (
-                        e.memory_type.value
-                        if hasattr(e.memory_type, "value")
-                        else str(e.memory_type)
-                    ),
-                    "category": (e.meta or {}).get("category", ""),
-                }
-                for e in entries
-            ]
-
-            return manager.format_context_for_prompt(entries, max_tokens=max_tokens)
+            return f"## User Profile\n{preferences}"
 
         except Exception as e:
-            logger.warning(
-                "Memory retrieval failed for agent %s: %s", agent.id, e,
-            )
+            logger.warning("User profile retrieval failed for user %s: %s", user_id, e)
             return ""
 
     async def _get_rag_context(
@@ -563,16 +495,6 @@ class AgentContextBuilder:
                 "RAG retrieval failed for agent %s: %s", agent.id, e,
             )
             return ""
-
-    @staticmethod
-    def _get_memory_embedding_provider():
-        """Get the embedding provider for memory context."""
-        try:
-            from src.embedding.resolver import get_memory_embedding_provider
-            return get_memory_embedding_provider()
-        except Exception as e:
-            logger.warning("Could not initialise memory embedding provider: %s", e)
-            return None
 
     @staticmethod
     def _get_knowledge_embedding_provider():
