@@ -37,20 +37,25 @@ def upgrade() -> None:
         sa.Column("compaction_summary", sa.Text(), nullable=True),
     )
 
-    # Backfill compaction_summary from existing memory entries
+    # Backfill compaction_summary from existing memory entries (best-effort)
     op.execute(
         """
-        UPDATE conversations c
-        SET compaction_summary = (
-            SELECT content
-            FROM memory_entries me
-            WHERE me.scope = 'conversation'
-              AND me.scope_id = c.id
-              AND me.tier = 'summary'
-              AND me.expired_at IS NULL
-            ORDER BY me.created_at DESC
-            LIMIT 1
-        )
+        DO $$
+        BEGIN
+            UPDATE conversations c
+            SET compaction_summary = (
+                SELECT content
+                FROM memory_entries me
+                WHERE me.scope::text = 'conversation'
+                  AND me.scope_id = c.id
+                  AND me.tier::text = 'summary'
+                  AND me.expired_at IS NULL
+                ORDER BY me.created_at DESC
+                LIMIT 1
+            );
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Skipping memory backfill: %', SQLERRM;
+        END $$;
         """
     )
 
