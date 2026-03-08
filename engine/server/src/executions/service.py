@@ -439,7 +439,10 @@ class ExecutionService:
             }
 
         finally:
-            await self.db.flush()
+            try:
+                await self.db.flush()
+            except Exception:
+                pass  # Session may already be flushing from caller's commit
 
     async def execute_agent(
         self,
@@ -583,6 +586,7 @@ class ExecutionService:
 
         yield {
             "type": "step",
+            "event": "step_started",
             "step_id": step.id,
             "step_number": 1,
             "node_id": "agent",
@@ -590,11 +594,49 @@ class ExecutionService:
             "status": "running",
             "output": None,
             "timestamp": utcnow().isoformat(),
+            "agent_name": agent.name,
         }
 
-        # Execute
-        config = {"configurable": {"thread_id": execution.id}}
-        result = await graph.ainvoke(state, config)
+        # Set up trace handler to capture LLM/tool/chain events during execution.
+        # The handler's publish_fn pushes events into an asyncio.Queue which we
+        # drain concurrently while the graph executes.
+        from src.graph_engine.callbacks import ExecutionTraceHandler
+
+        trace_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+        def _enqueue_trace(event: dict[str, Any]) -> None:
+            trace_queue.put_nowait(event)
+
+        trace_handler = ExecutionTraceHandler(
+            execution_id=execution.id,
+            publish_fn=_enqueue_trace,
+        )
+
+        # Execute with callbacks so LLM/tool/chain events are captured
+        config = {
+            "configurable": {"thread_id": execution.id},
+            "callbacks": [trace_handler],
+        }
+
+        # Run graph.ainvoke as background task so we can drain trace events
+        # in real-time as the callbacks fire during LLM/tool calls.
+        invoke_task = asyncio.create_task(graph.ainvoke(state, config))
+
+        while not invoke_task.done():
+            try:
+                event = await asyncio.wait_for(
+                    trace_queue.get(), timeout=0.5,
+                )
+                yield event
+            except TimeoutError:
+                continue
+
+        # Re-raise if the graph task failed
+        result = invoke_task.result()
+
+        # Drain any remaining events
+        while not trace_queue.empty():
+            yield trace_queue.get_nowait()
 
         # Get response
         messages = result.get("messages", [])
@@ -606,12 +648,26 @@ class ExecutionService:
         step.completed_at = utcnow()
         step.duration_ms = int((step.completed_at - step.started_at).total_seconds() * 1000)
         step.output_data = {"response": response}
+        step.tokens_prompt = trace_handler.tokens.prompt_tokens
+        step.tokens_completion = trace_handler.tokens.completion_tokens
 
-        # Update execution
+        # Update execution with token counts
         execution.output_data = {"response": response, "node_outputs": node_outputs}
+        execution.tokens_prompt = trace_handler.tokens.prompt_tokens
+        execution.tokens_completion = trace_handler.tokens.completion_tokens
+
+        # Emit accumulated token usage
+        if trace_handler.tokens.total > 0:
+            yield {
+                "type": "tokens",
+                "prompt_tokens": trace_handler.tokens.prompt_tokens,
+                "completion_tokens": trace_handler.tokens.completion_tokens,
+                "total_tokens": trace_handler.tokens.total,
+            }
 
         yield {
             "type": "step",
+            "event": "step_completed",
             "step_id": step.id,
             "step_number": 1,
             "node_id": "agent",
@@ -619,6 +675,8 @@ class ExecutionService:
             "status": "completed",
             "output": {"response": response[:OUTPUT_TRUNCATION_LENGTH]},
             "timestamp": utcnow().isoformat(),
+            "duration_ms": step.duration_ms,
+            "agent_name": agent.name,
         }
 
     async def execute_graph(
@@ -644,12 +702,32 @@ class ExecutionService:
             messages=[HumanMessage(content=execution.input_prompt)],
         )
 
+        # Set up trace handler for LLM/tool/chain events
+        from src.graph_engine.callbacks import ExecutionTraceHandler
+
+        trace_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+        def _enqueue_trace(event: dict[str, Any]) -> None:
+            trace_queue.put_nowait(event)
+
+        trace_handler = ExecutionTraceHandler(
+            execution_id=execution.id,
+            publish_fn=_enqueue_trace,
+        )
+
         # Execute with streaming (with timeout to prevent infinite blocking)
         step_number = 0
-        config = {"configurable": {"thread_id": execution.id}}
+        config = {
+            "configurable": {"thread_id": execution.id},
+            "callbacks": [trace_handler],
+        }
 
         async for event in graph.astream(state, config):
             step_number += 1
+
+            # Drain any trace events that arrived during this node's execution
+            while not trace_queue.empty():
+                yield trace_queue.get_nowait()
 
             for node_id, output in event.items():
                 step = ExecutionStep(
@@ -675,6 +753,14 @@ class ExecutionService:
                     "output": output if isinstance(output, dict) else {"value": str(output)[:OUTPUT_TRUNCATION_LENGTH]},
                     "timestamp": utcnow().isoformat(),
                 }
+
+        # Drain remaining trace events
+        while not trace_queue.empty():
+            yield trace_queue.get_nowait()
+
+        # Update execution with token counts
+        execution.tokens_prompt = trace_handler.tokens.prompt_tokens
+        execution.tokens_completion = trace_handler.tokens.completion_tokens
 
         # Get final state
         final_state = await graph.aget_state(config)

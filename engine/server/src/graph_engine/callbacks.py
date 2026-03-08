@@ -453,6 +453,8 @@ class ExecutionTraceHandler(BaseCallbackHandler):
         **kwargs: Any,
     ) -> None:
         try:
+            if serialized is None:
+                return
             name = serialized.get("name", "")
             if not name:
                 id_parts = serialized.get("id", [])
