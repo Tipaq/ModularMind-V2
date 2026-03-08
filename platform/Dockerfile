@@ -20,6 +20,7 @@ RUN cd platform && npx prisma generate && pnpm build
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/platform/.next/standalone ./
 COPY --from=builder /app/platform/.next/static ./platform/.next/static
 COPY --from=builder /app/platform/public ./platform/public
