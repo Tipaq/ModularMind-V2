@@ -23,6 +23,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.auth.models import User, UserRole
+from src.groups.models import UserGroupMember  # noqa: F401 — register model for SQLAlchemy mapper
 from src.infra.database import Base, get_db, get_db_readonly
 
 # ---------------------------------------------------------------------------
