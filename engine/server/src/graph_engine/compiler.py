@@ -78,6 +78,39 @@ def _inject_context_layers(
             llm_messages.append(SystemMessage(content=ctx))
 
 
+def _extract_tool_publish_fn(
+    config: RunnableConfig | None,
+) -> Callable[[dict[str, Any]], Awaitable[None]] | None:
+    """Extract an async publish_fn from LangGraph callbacks config.
+
+    If an ExecutionTraceHandler is among the callbacks, return an async
+    wrapper around its _publish method so that tool_loop can emit
+    trace:tool_start / trace:tool_end events.
+    """
+    if not config:
+        return None
+    callbacks = config.get("callbacks", [])
+    if callbacks is None:
+        return None
+    # LangGraph may wrap callbacks in an AsyncCallbackManager;
+    # extract the raw handler list from it.
+    if hasattr(callbacks, "handlers"):
+        handlers = callbacks.handlers
+    elif isinstance(callbacks, list):
+        handlers = callbacks
+    else:
+        return None
+    for cb in handlers:
+        if hasattr(cb, "_publish") and hasattr(cb, "tokens"):
+            sync_publish = cb._publish
+
+            async def _async_publish(event: dict[str, Any]) -> None:
+                sync_publish(event)
+
+            return _async_publish
+    return None
+
+
 class GraphCompiler:
     """Compiles graph configurations into LangGraph StateGraphs.
 
@@ -352,6 +385,24 @@ class GraphCompiler:
                         internal_token=get_internal_bearer_token(),
                     )
 
+            # Automation tool executor — for agents with automation-manager capability
+            automation_executor = None
+            if "automation-manager" in (agent.capabilities or []):
+                from src.infra.config import get_settings as _get_auto_settings
+
+                _auto_settings = _get_auto_settings()
+                if _auto_settings.PLATFORM_URL and _auto_settings.ENGINE_API_KEY:
+                    from src.automations.tool_definitions import (
+                        get_automation_tool_definitions,
+                    )
+                    from src.automations.tool_executor import AutomationToolExecutor
+
+                    active_tools.extend(get_automation_tool_definitions())
+                    automation_executor = AutomationToolExecutor(
+                        platform_url=_auto_settings.PLATFORM_URL,
+                        engine_api_key=_auto_settings.ENGINE_API_KEY,
+                    )
+
             if user_id:
                 from src.graph_engine.builtin_tools import (
                     UnifiedToolExecutor,
@@ -363,6 +414,7 @@ class GraphCompiler:
                 unified_executor = UnifiedToolExecutor(
                     builtin_exec, _mcp_executor, BUILTIN_TOOL_NAMES,
                     gateway_executor=gateway_executor,
+                    automation_executor=automation_executor,
                 )
             else:
                 # No user_id — filter out built-in tool defs to avoid LLM calling them
@@ -371,6 +423,17 @@ class GraphCompiler:
                     if t.get("function", {}).get("name") not in BUILTIN_TOOL_NAMES
                 ]
                 logger.debug("No user_id in state.metadata — built-in tools disabled")
+                # Still create UnifiedToolExecutor for gateway/automation tools
+                if gateway_executor or automation_executor:
+                    from src.graph_engine.builtin_tools import UnifiedToolExecutor
+
+                    unified_executor = UnifiedToolExecutor(
+                        lambda *a: (_ for _ in ()).throw(ValueError("No builtin tools")),
+                        _mcp_executor,
+                        set(),
+                        gateway_executor=gateway_executor,
+                        automation_executor=automation_executor,
+                    )
 
             try:
                 llm = await self.llm_provider.get_model(effective_model)
@@ -381,6 +444,9 @@ class GraphCompiler:
                     from .tool_loop import run_tool_loop, try_bind_tools
                     llm_with_tools, tools_bound = try_bind_tools(llm, active_tools)
                     if tools_bound:
+                        # Extract publish_fn from callbacks (if ExecutionTraceHandler present)
+                        _tool_publish_fn = _extract_tool_publish_fn(config)
+
                         response_text, _ = await run_tool_loop(
                             llm_with_tools,
                             llm_messages,
@@ -388,6 +454,7 @@ class GraphCompiler:
                             max_iterations=10,
                             tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
                             cancel_check_fn=_is_cancelled,
+                            publish_fn=_tool_publish_fn,
                         )
                     else:
                         response = await llm.ainvoke(llm_messages, config=config)

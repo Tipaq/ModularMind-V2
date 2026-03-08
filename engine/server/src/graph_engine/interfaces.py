@@ -111,6 +111,27 @@ class GraphConfig(BaseModel):
         return _coerce_version(v)
 
 
+class AutomationConfig(BaseModel):
+    """Automation configuration model (synced from Platform)."""
+
+    id: str
+    name: str = ""
+    description: str = ""
+    enabled: bool = False
+    trigger: dict[str, Any] = Field(default_factory=dict)
+    triage: dict[str, Any] | None = None
+    execution: dict[str, Any] = Field(default_factory=dict)
+    post_actions: list[dict[str, Any]] = Field(default_factory=list)
+    settings: dict[str, Any] = Field(default_factory=dict)
+    version: int = 1
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def coerce_version(cls, v: Any) -> int:
+        return _coerce_version(v)
+
+
 class ConfigVersion(BaseModel):
     """Version information for a configuration."""
 

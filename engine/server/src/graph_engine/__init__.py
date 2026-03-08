@@ -6,6 +6,7 @@ from .compiler import GraphCompiler
 from .condition_eval import build_condition_context, safe_eval_condition
 from .interfaces import (
     AgentConfig,
+    AutomationConfig,
     ConfigProviderProtocol,
     ConfigVersion,
     EdgeConfig,
@@ -30,6 +31,7 @@ __all__ = [
     "LLMProviderProtocol",
     # Data models
     "AgentConfig",
+    "AutomationConfig",
     "GraphConfig",
     "NodeConfig",
     "EdgeConfig",
