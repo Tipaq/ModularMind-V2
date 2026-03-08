@@ -1,0 +1,48 @@
+# =============================================================================
+# Docker build context exclusions
+# =============================================================================
+# Reduces build context size significantly (excludes deps, VCS, IDE, etc.)
+
+.git
+.gitignore
+
+# Dependencies (installed inside containers)
+node_modules
+**/node_modules
+**/.pnpm-store
+
+# Build artifacts
+coverage
+.next
+**/dist
+**/__pycache__
+*.pyc
+*.pyo
+
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# IDE / tooling
+.claude
+.vscode
+.idea
+*.swp
+*.swo
+
+# Documentation (not needed in images)
+*.md
+
+# Docker configs (avoid recursive context)
+docker/docker-compose*.yml
+docker/.env*
+docker/proxy-examples
+
+# Monitoring configs (not needed for app images)
+monitoring/
+
+# CI / coverage
+.coverage-threshold.json
+.github

@@ -178,9 +178,17 @@ jobs:
           - image: nginx
             dockerfile: docker/nginx/Dockerfile
             context: .
+          - image: gateway
+            dockerfile: gateway/Dockerfile
+            context: .
           - image: platform
             dockerfile: platform/Dockerfile
             context: .
+            target: runner
+          - image: platform-migrate
+            dockerfile: platform/Dockerfile
+            context: .
+            target: migrate
 
     steps:
       - uses: actions/checkout@v4
@@ -199,6 +207,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/modularmind-${{ matrix.image }}:latest
@@ -226,6 +235,7 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
         with:
           host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_SSH_PORT }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           envs: REGISTRY,OWNER,SHA,GHCR_TOKEN,GITHUB_ACTOR
@@ -235,31 +245,31 @@ jobs:
             DEPLOY_DIR="${{ secrets.VPS_DEPLOY_PATH }}"
             cd "$DEPLOY_DIR"
 
-            # --- Pull latest code (for compose files, nginx config, migrations) ---
+            # --- Pull latest code (for compose files, nginx config, etc.) ---
             git pull origin main
 
             # --- Login to GHCR & pull pre-built images ---
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-            docker pull "$REGISTRY/$OWNER/modularmind-engine:sha-$SHA"
-            docker pull "$REGISTRY/$OWNER/modularmind-nginx:sha-$SHA"
-            docker pull "$REGISTRY/$OWNER/modularmind-platform:sha-$SHA"
+            for img in engine nginx gateway platform platform-migrate; do
+              docker pull "$REGISTRY/$OWNER/modularmind-$img:sha-$SHA"
+              docker tag "$REGISTRY/$OWNER/modularmind-$img:sha-$SHA" \
+                         "$REGISTRY/$OWNER/modularmind-$img:latest"
+            done
 
-            # Re-tag to match docker-compose image names
-            docker tag "$REGISTRY/$OWNER/modularmind-engine:sha-$SHA" modularmind/engine:latest
-            docker tag "$REGISTRY/$OWNER/modularmind-nginx:sha-$SHA" modularmind/nginx:latest
-            docker tag "$REGISTRY/$OWNER/modularmind-platform:sha-$SHA" modularmind/platform:latest
+            # --- Deploy platform (migrate runs via service_completed_successfully) ---
+            docker compose -f docker/docker-compose.platform.yml \
+              --env-file docker/.env.platform up -d
 
-            # --- Run database migrations ---
-            docker compose -f docker/docker-compose.yml run --rm engine alembic upgrade head
-            docker compose -f docker/docker-compose.platform.yml run --rm platform npx prisma db push --skip-generate
+            # --- Run engine DB migrations (Alembic) ---
+            docker compose -f docker/docker-compose.client.yml \
+              run --rm engine alembic upgrade head
 
-            # --- Deploy ---
-            docker compose -f docker/docker-compose.yml up -d
-            docker compose -f docker/docker-compose.platform.yml up -d
+            # --- Deploy client stack ---
+            docker compose -f docker/docker-compose.client.yml up -d
 
             # --- Health check ---
-            sleep 10
+            sleep 15
             curl -sf http://localhost:8000/health || { echo "Engine health check failed"; exit 1; }
             curl -sf http://localhost:3000 || { echo "Platform health check failed"; exit 1; }
 

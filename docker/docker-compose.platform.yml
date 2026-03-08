@@ -12,10 +12,7 @@
 
 services:
   platform-migrate:
-    build:
-      context: ..
-      dockerfile: platform/Dockerfile
-      target: migrate
+    image: ghcr.io/tipaq/modularmind-platform-migrate:${MM_VERSION:-latest}
     environment:
       DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@platform-db:5432/modularmind_platform
     depends_on:
@@ -23,10 +20,7 @@ services:
     restart: "no"
 
   platform:
-    build:
-      context: ..
-      dockerfile: platform/Dockerfile
-      target: runner
+    image: ghcr.io/tipaq/modularmind-platform:${MM_VERSION:-latest}
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@platform-db:5432/modularmind_platform
