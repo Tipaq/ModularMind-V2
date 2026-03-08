@@ -33,6 +33,23 @@ gateway_approval_rules_total = Gauge(
     "Total number of active pre-approval rules",
 )
 
+# Rate limiting
+gateway_rate_limited_total = Counter(
+    "gateway_rate_limited_total",
+    "Total requests rejected by rate limiter",
+)
+
+# Cleanup metrics
+gateway_cleanup_workspaces_total = Counter(
+    "gateway_cleanup_workspaces_total",
+    "Workspaces removed by cleanup",
+)
+
+gateway_cleanup_audit_total = Counter(
+    "gateway_cleanup_audit_total",
+    "Audit log entries removed by cleanup",
+)
+
 # Circuit breaker (reported by engine, but defined here for reference)
 gateway_circuit_breaker_state = Gauge(
     "gateway_circuit_breaker_state",

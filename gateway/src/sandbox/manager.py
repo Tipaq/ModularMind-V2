@@ -197,7 +197,11 @@ class SandboxManager:
                 cap_drop=["ALL"],
                 security_opt=["no-new-privileges"],
                 mem_limit="256m",
+                memswap_limit="256m",   # No swap — hard memory cap
+                cpu_period=100000,
+                cpu_quota=50000,         # 50% of one CPU core
                 pids_limit=100,
+                tmpfs={"/tmp": "size=64m,noexec,nosuid"},
             )
         except Exception as e:
             raise RuntimeError(f"Failed to create sandbox: {e}")

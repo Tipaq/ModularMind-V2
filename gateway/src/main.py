@@ -12,10 +12,16 @@ from starlette.responses import Response
 
 from src.config import get_settings
 from src.infra.database import close_db
+from src.infra.middleware import (
+    BodySizeLimitMiddleware,
+    RateLimitMiddleware,
+    RequestIdMiddleware,
+    RequestTimeoutMiddleware,
+)
 from src.infra.redis import close_redis, get_redis_client
 from src.audit.router import router as audit_router
 from src.router import router
-from src.sandbox.cleanup import cleanup_stale_sandboxes
+from src.sandbox.cleanup import cleanup_stale_sandboxes, cleanup_stale_workspaces
 from src.sandbox.manager import SandboxManager
 
 logger = logging.getLogger(__name__)
@@ -93,6 +99,18 @@ async def lifespan(app: FastAPI):
         hour=3, minute=0,
         id="approval_cleanup",
     )
+    scheduler.add_job(
+        cleanup_stale_workspaces,
+        "cron",
+        hour=4, minute=0,
+        id="workspace_cleanup",
+    )
+    scheduler.add_job(
+        _run_audit_cleanup,
+        "cron",
+        hour=3, minute=30,
+        id="audit_cleanup",
+    )
     scheduler.start()
     app.state.scheduler = scheduler
 
@@ -116,6 +134,29 @@ async def _run_approval_cleanup() -> None:
             await cleanup_resolved_approvals(session)
     except Exception:
         logger.warning("Approval cleanup job failed", exc_info=True)
+
+
+async def _run_audit_cleanup() -> None:
+    """Scheduled task: clean up old audit log entries beyond retention period."""
+    from datetime import timedelta
+
+    from sqlalchemy import delete
+
+    from src.audit.models import GatewayAuditLog
+    from src.infra.database import async_session_maker, utcnow
+
+    try:
+        async with async_session_maker() as session:
+            cutoff = utcnow() - timedelta(days=settings.APPROVAL_RETENTION_DAYS)
+            result = await session.execute(
+                delete(GatewayAuditLog).where(GatewayAuditLog.created_at < cutoff)
+            )
+            await session.commit()
+            if result.rowcount:
+                logger.info("Audit cleanup: deleted %d entries older than %d days",
+                            result.rowcount, settings.APPROVAL_RETENTION_DAYS)
+    except Exception:
+        logger.warning("Audit cleanup job failed", exc_info=True)
 
 
 app = FastAPI(
@@ -144,7 +185,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# Middleware stack (applied bottom-to-top: RequestId runs first, then BodySize, etc.)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RequestTimeoutMiddleware)
+app.add_middleware(BodySizeLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestIdMiddleware)
 
 # Prometheus instrumentation
 if settings.PROMETHEUS_ENABLED:
