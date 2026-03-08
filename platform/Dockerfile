@@ -10,7 +10,7 @@ RUN pnpm install --frozen-lockfile --filter @modularmind/platform...
 
 FROM base AS builder
 WORKDIR /app
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/platform/node_modules ./platform/node_modules
 COPY --from=deps /app/packages/ ./packages/
