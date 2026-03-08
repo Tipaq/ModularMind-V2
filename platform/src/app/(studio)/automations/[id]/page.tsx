@@ -599,12 +599,12 @@ export default function AutomationDetailPage() {
               </div>
             ) : (
               <div className="space-y-1">
-                {execution.agent_id && (
+                {!!execution.agent_id && (
                   <PropRow label="Agent">
                     <span className="text-xs font-mono">{execution.agent_id as string}</span>
                   </PropRow>
                 )}
-                {execution.graph_id && (
+                {!!execution.graph_id && (
                   <PropRow label="Graph">
                     <span className="text-xs font-mono">{execution.graph_id as string}</span>
                   </PropRow>
@@ -726,7 +726,7 @@ export default function AutomationDetailPage() {
                       <span className="text-[10px] text-muted-foreground">
                         on {pa.on as string}
                       </span>
-                      {pa.method && (
+                      {!!pa.method && (
                         <span className="text-[10px] text-muted-foreground">
                           ({pa.method as string})
                         </span>
