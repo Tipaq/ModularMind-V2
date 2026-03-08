@@ -1,6 +1,6 @@
 # ModularMind V2
 
-AI Agent Orchestration Platform — multi-model, multi-provider, with memory, RAG, and visual graph workflows.
+AI Agent Orchestration Platform — multi-model, multi-provider, with memory, RAG, visual graph workflows, and secure tool execution.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ ModularMind-V2/
 │   ├── chat/          # Vite + React SPA (user-facing chat)
 │   └── ops/           # Vite + React SPA (admin console)
 ├── packages/
-│   ├── ui/            # shadcn/ui shared components
+│   ├── ui/            # shadcn/ui shared components (@modularmind/ui)
 │   └── api-client/    # Typed HTTP client (@modularmind/api-client)
 ├── engine/
 │   └── server/        # Python FastAPI (API + worker)
@@ -18,18 +18,30 @@ ModularMind-V2/
 │           ├── agents/         # Agent config (read-only from ConfigProvider)
 │           ├── auth/           # JWT auth, roles, dependencies
 │           ├── conversations/  # Chat conversations + messages
+│           ├── domain_config/  # ConfigProvider (DB-backed config source)
 │           ├── executions/     # Execution runs, SSE streaming
+│           ├── gateway/        # Gateway tool executor + tool definitions
 │           ├── graph_engine/   # LangGraph compiler, state, tool loop
 │           ├── graphs/         # Graph config (read-only)
-│           ├── infra/          # DB, Redis, Qdrant, config, SSE, rate limit
-│           ├── llm/            # LLM providers (Ollama, OpenAI, Anthropic)
-│           ├── mcp/            # MCP tool registry + sidecars
+│           ├── infra/          # DB, Redis, Qdrant, S3, SSE, rate limit
+│           ├── llm/            # LLM providers (Ollama, OpenAI, Anthropic, vLLM, TGI)
+│           ├── mcp/            # MCP tool registry + Docker sidecars
 │           ├── memory/         # Memory system (fact extraction, vector store)
+│           ├── models/         # Model discovery + usage tracking
 │           ├── pipeline/       # Memory pipeline handlers (extractor, embedder)
 │           ├── rag/            # RAG pipeline (chunker, retriever, reranker)
-│           ├── sync/           # Platform sync (pull-based polling)
 │           ├── report/         # Metrics reporting to Platform
+│           ├── supervisor/     # Hierarchical agent routing (multi-agent)
+│           ├── sync/           # Platform sync (pull-based polling)
 │           └── worker/         # Redis Streams consumer + APScheduler
+├── gateway/           # Secure system access for agents (browser, shell, fs, network)
+│   └── src/
+│       ├── executors/          # Browser, network, filesystem, shell executors
+│       ├── approval/           # Human-in-the-loop approval workflow
+│       ├── audit/              # Audit logging for all tool executions
+│       ├── sandbox/            # Docker sandbox manager (isolated containers)
+│       ├── infra/              # DB, Redis, middleware, metrics
+│       └── permission_engine.py # Permission checks per agent config
 ├── platform/          # Next.js 16 full-stack (admin + studio + marketing)
 │   └── src/
 │       ├── app/
@@ -40,7 +52,12 @@ ModularMind-V2/
 │       │   └── api/        # API routes (sync, engines, CRUD)
 │       └── lib/            # Prisma, next-auth, engine-auth
 ├── shared/            # Python shared schemas (modularmind_shared)
-└── docker/            # Docker Compose + Nginx configs
+├── docker/            # Docker Compose + Nginx configs
+│   ├── docker-compose.yml           # Production client stack
+│   ├── docker-compose.dev.yml       # Dev infra (db, redis, qdrant, minio)
+│   ├── docker-compose.platform.yml  # Platform stack
+│   └── docker-compose.monitoring.yml # Prometheus + Grafana
+└── monitoring/        # Prometheus + Grafana dashboards
 ```
 
 ## Key Patterns
@@ -49,10 +66,14 @@ ModularMind-V2/
 
 - **No Celery** — all background work uses Redis Streams via `RedisStreamBus`
 - **No WebSocket** — streaming uses SSE (`infra/sse.py`)
-- **Config source**: `ConfigProvider` reads from DB (synced from Platform)
+- **Config source**: `ConfigProvider` (`domain_config/provider.py`) reads from DB (synced from Platform)
 - **Worker**: single process runs Redis Streams consumers + APScheduler (`worker/runner.py`)
-- **Streams**: `tasks:executions`, `tasks:models`, `memory:raw`, `memory:extracted`
+- **Streams**: `tasks:executions`, `tasks:models`, `tasks:documents`, `memory:raw`, `memory:extracted`
 - **Memory pipeline**: raw → extractor (LLM fact extraction) → embedder (Qdrant + PG)
+- **RAG pipeline**: upload → extract text → chunk (4 strategies) → embed → Qdrant + PG metadata
+- **Supervisor**: hierarchical agent routing — parses user intent, delegates to sub-agents
+- **Gateway integration**: engine defines gateway tools in `gateway/tool_definitions.py`, executor calls gateway API
+- **LLM model IDs**: `provider:model` format (e.g., `ollama:llama3.2`, `openai:gpt-4o`)
 - **Imports**: `from src.xxx` for engine code, `from modularmind_shared.xxx` for shared
 
 ### Frontend (TypeScript)
@@ -92,36 +113,69 @@ Always use the generic components from `@modularmind/ui` — never re-implement 
 - **ChatPanel**: For side-panel tabs (chat insights), use the `ChatPanel` wrapper from `@modularmind/ui` which adds drag-to-scroll and compact sizing on top of the base Tabs.
 - Do **not** use raw Radix primitives (`@radix-ui/react-tabs`, `@radix-ui/react-select`) directly — always go through the `@modularmind/ui` wrappers which apply the design system styling.
 
+### Gateway (Python)
+
+- **Separate FastAPI service** on :8200 — provides browser, shell, filesystem, network tools to agents
+- **Permission engine**: agent config defines allowed actions per executor (paths, commands, domains)
+- **Approval workflow**: high-risk actions trigger SSE event → user approves/denies in chat (5 min timeout)
+- **Sandbox**: Docker containers (`modularmind/gateway-sandbox`) with resource limits, isolated per-agent workspaces
+- **Audit logging**: every tool execution logged with full context
+- **Imports**: `from src.xxx` (same pattern as engine)
+
 ### Platform (Next.js)
 
-- **Auth**: next-auth v5 with credentials provider, JWT sessions
+- **Auth**: next-auth v5 with credentials provider, JWT sessions (1h sliding, 7d hard expiry)
 - **DB**: Prisma 6 + PostgreSQL
 - **Sync**: Engine polls `GET /api/sync/manifest` with `X-Engine-Key` header
+- **Engine proxy**: API routes proxy to engine with HMAC-SHA256 token + `X-Platform-User-Email` header
 
 ### Docker
 
-- **Client deployment**: 7 containers (nginx, engine, worker, db, redis, qdrant, ollama)
+- **Client deployment**: 7+ containers (nginx, engine, worker, gateway, db, redis, qdrant, minio, ollama)
 - **Platform deployment**: 3 containers (platform, nginx, db)
+- **Monitoring stack**: Prometheus + Grafana + Node Exporter + cAdvisor + PG/Redis exporters
 - **Static SPAs**: baked into nginx image via multi-stage Dockerfile
 - **Dev**: `docker compose -f docker/docker-compose.dev.yml up` for infra
+- **MCP sidecars**: Docker images for tool servers (Brave, DuckDuckGo, Puppeteer, etc.)
 
 ## Commands
 
 ```bash
-make setup          # Install all dependencies
-make dev            # Start all services (Docker)
-make dev-infra      # Start infra only (db, redis, qdrant, ollama)
-make dev-engine     # Start engine (uvicorn --reload)
-make dev-worker     # Start worker (redis streams + scheduler)
-make dev-chat       # Start chat app (vite dev)
-make dev-ops        # Start ops app (vite dev)
-make dev-platform   # Start platform (next dev)
-make build          # Build all apps
-make deploy         # Deploy client stack
-make test           # Run Python tests
-make lint           # Run all linters
-make migrate        # Run Alembic migrations
-make db-push        # Push Prisma schema
+# Setup
+make setup              # Install all dependencies (pnpm + pip), copy .env
+
+# Development
+make dev                # Start all services (Docker Compose)
+make dev-infra          # Start infra only (db, redis, qdrant, minio, ollama)
+make dev-engine         # Start engine (uvicorn --reload :8000)
+make dev-worker         # Start worker (redis streams + scheduler)
+make dev-gateway        # Start gateway (uvicorn --reload :8200)
+make dev-chat           # Start chat app (vite dev :3002)
+make dev-ops            # Start ops app (vite dev :3003)
+make dev-platform       # Start platform (next dev :3000)
+make dev-monitoring     # Start Prometheus + Grafana
+
+# Build
+make build              # Build all apps (turbo)
+make build-docker       # Build Docker images (client stack)
+make build-platform     # Build Platform Docker image
+make build-gateway      # Build Gateway Docker image
+make build-mcp-sidecars # Build MCP sidecar Docker images
+
+# Deploy
+make deploy             # Deploy client stack
+make deploy-platform    # Deploy platform stack
+
+# Test & Lint
+make test               # Run Python tests (shared + engine)
+make test-cov           # Run tests with coverage report
+make lint               # Run all linters (ruff + turbo lint)
+make lint-fix           # Auto-fix lint issues
+
+# Database
+make migrate            # Run Alembic migrations (engine)
+make migrate-new        # Create new auto-generated migration
+make db-push            # Push Prisma schema (platform)
 ```
 
 ## Conventions
@@ -135,3 +189,25 @@ make db-push        # Push Prisma schema
 - Reusable UI components go in `packages/ui`, not duplicated across apps
 - All React components using hooks in `packages/ui` must have `"use client"` directive
 - Always use generic UI components from `@modularmind/ui` (Tabs, Select, etc.) — never re-implement with raw HTML/buttons
+- LLM model IDs: `provider:model` format (e.g., `ollama:llama3.2`, `openai:gpt-4o`)
+- Gateway imports: `from src.xxx` (same pattern as engine)
+- MCP servers: bootstrap via `MCP_BOOTSTRAP_SERVERS` env var or register via API
+
+## Service Ports
+
+| Service | Port | Notes |
+|---------|------|-------|
+| Nginx | 80, 443 | External entry point |
+| Engine | 8000 | Internal (via nginx /api) |
+| Worker Health | 8001 | Docker healthcheck |
+| Gateway | 8200 | Internal (via nginx /gateway) |
+| PostgreSQL | 5432 | Internal |
+| Redis | 6379 | Internal |
+| Qdrant | 6333 | Internal |
+| MinIO | 9000, 9001 | Internal (S3 + console) |
+| Ollama | 11434 | Internal |
+| Platform | 3000 | Internal (via nginx) |
+| Chat (dev) | 3002 | Dev only |
+| Ops (dev) | 3003 | Dev only |
+| Grafana | 3333 | Optional |
+| Prometheus | 9090 | Optional |
