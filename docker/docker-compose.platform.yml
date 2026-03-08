@@ -11,10 +11,22 @@
 #   docker compose -f docker-compose.platform.yml --env-file .env.platform up -d
 
 services:
+  platform-migrate:
+    build:
+      context: ..
+      dockerfile: platform/Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@platform-db:5432/modularmind_platform
+    depends_on:
+      platform-db: { condition: service_healthy }
+    restart: "no"
+
   platform:
     build:
       context: ..
       dockerfile: platform/Dockerfile
+      target: runner
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@platform-db:5432/modularmind_platform
@@ -22,6 +34,7 @@ services:
       NEXTAUTH_URL: https://${PLATFORM_DOMAIN}
     depends_on:
       platform-db: { condition: service_healthy }
+      platform-migrate: { condition: service_completed_successfully }
     labels:
       traefik.enable: "true"
       traefik.http.routers.modularmind-platform.rule: Host(`${PLATFORM_DOMAIN}`)
