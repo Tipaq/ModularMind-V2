@@ -25,17 +25,24 @@ export function computeSummary(
   activities: ExecutionActivity[],
   tokenUsage: { prompt: number; completion: number; total: number } | null,
 ): ExecutionSummary {
-  const llmActivities = activities.filter((a) => a.type === "llm");
-  const toolActivities = activities.filter((a) => a.type === "tool");
+  // Flatten children for counting
+  const allActivities = activities.flatMap((a) => [a, ...(a.children || [])]);
+  const llmActivities = allActivities.filter((a) => a.type === "llm");
+  const toolActivities = allActivities.filter((a) => a.type === "tool");
 
   let totalDurationMs: number | null = null;
+  const agentExec = activities.find(
+    (a) => a.type === "agent_execution" && a.status !== "running" && a.durationMs,
+  );
   const delegationEnd = activities.find(
     (a) => a.type === "delegation" && a.status !== "running" && a.durationMs,
   );
   const directResponse = activities.find(
     (a) => a.type === "direct_response" && a.durationMs,
   );
-  if (delegationEnd?.durationMs) {
+  if (agentExec?.durationMs) {
+    totalDurationMs = agentExec.durationMs;
+  } else if (delegationEnd?.durationMs) {
     totalDurationMs = delegationEnd.durationMs;
   } else if (directResponse?.durationMs) {
     totalDurationMs = directResponse.durationMs;

@@ -10,7 +10,8 @@ export type ActivityType =
   | "delegation"
   | "direct_response"
   | "agent_created"
-  | "compaction";
+  | "compaction"
+  | "agent_execution";
 
 export type ActivityStatus = "running" | "completed" | "failed";
 
@@ -72,6 +73,18 @@ export interface ExecutionActivity {
   loopItems?: number;
   query?: string;
   numResults?: number;
+  /** For agent_execution: nested tool/LLM activities under this agent */
+  children?: ExecutionActivity[];
+  /** For agent_execution: the prompt given to the agent */
+  inputPrompt?: string;
+  /** For agent_execution: the agent's final response */
+  agentResponse?: string;
+  /** For agent_execution: count of tool calls */
+  toolCallCount?: number;
+  /** For agent_execution: count of LLM calls */
+  llmCallCount?: number;
+  /** For agent_execution: number of tool-loop iterations */
+  iterationCount?: number;
 }
 
 // ─── Shared camelCase types for Insights / Knowledge / Memory panels ─────────

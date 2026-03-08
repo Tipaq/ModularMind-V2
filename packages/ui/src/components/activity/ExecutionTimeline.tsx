@@ -1,11 +1,13 @@
 "use client";
 
+import React from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { ExecutionActivity } from "../../types/chat";
 import type { EngineAgent, EngineGraph } from "../../types/engine";
 import { RoutingCard } from "./RoutingCard";
 import { DelegationCard } from "./DelegationCard";
+import { AgentExecutionCard } from "./AgentExecutionCard";
 import { LlmCallCard } from "./LlmCallCard";
 import { EnhancedToolCallCard } from "./EnhancedToolCallCard";
 import { RetrievalCard } from "./RetrievalCard";
@@ -17,6 +19,7 @@ import { StepCard } from "./StepCard";
 const DOT_BG: Record<string, string> = {
   routing: "bg-warning",
   delegation: "bg-warning",
+  agent_execution: "bg-info",
   llm: "bg-primary",
   tool: "bg-warning",
   retrieval: "bg-info",
@@ -33,20 +36,23 @@ function TimelineItem({
   activity,
   enabledAgents,
   isLast,
+  depth = 0,
 }: {
   activity: ExecutionActivity;
   enabledAgents: EngineAgent[];
-  enabledGraphs?: EngineGraph[];
   isLast: boolean;
+  depth?: number;
 }) {
   const dotColor = DOT_BG[activity.type] || "bg-muted-foreground";
+  const isNested = depth > 0;
 
   return (
-    <div className="relative flex gap-3">
+    <div className={cn("relative flex gap-3", isNested && "ml-6")}>
       <div className="flex flex-col items-center shrink-0">
         <div
           className={cn(
-            "h-2.5 w-2.5 rounded-full border-2 border-card z-10 mt-2.5",
+            "rounded-full border-2 border-card z-10 mt-2.5",
+            isNested ? "h-2 w-2" : "h-2.5 w-2.5",
             dotColor,
             activity.status === "running" && "animate-pulse",
           )}
@@ -72,6 +78,8 @@ function renderCard(
       return <RoutingCard activity={activity} />;
     case "delegation":
       return <DelegationCard activity={activity} enabledAgents={enabledAgents} />;
+    case "agent_execution":
+      return <AgentExecutionCard activity={activity} enabledAgents={enabledAgents} />;
     case "llm":
       return <LlmCallCard activity={activity} />;
     case "tool":
@@ -102,15 +110,26 @@ export function ExecutionTimeline({
 }) {
   if (activities.length === 0 && !isStreaming) return null;
 
+  // Flatten activities with children for rendering
+  const items: { activity: ExecutionActivity; depth: number }[] = [];
+  for (const activity of activities) {
+    items.push({ activity, depth: 0 });
+    if (activity.children?.length) {
+      for (const child of activity.children) {
+        items.push({ activity: child, depth: 1 });
+      }
+    }
+  }
+
   return (
     <div className="px-4 py-2">
-      {activities.map((activity, i) => (
+      {items.map(({ activity, depth }, i) => (
         <TimelineItem
           key={activity.id}
           activity={activity}
           enabledAgents={enabledAgents}
-          enabledGraphs={enabledGraphs}
-          isLast={i === activities.length - 1 && !isStreaming}
+          isLast={i === items.length - 1 && !isStreaming}
+          depth={depth}
         />
       ))}
       {isStreaming && (

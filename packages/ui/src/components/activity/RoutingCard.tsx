@@ -18,10 +18,19 @@ const STRATEGY_VARIANT: Record<string, "default" | "secondary" | "outline" | "in
 export function RoutingCard({ activity }: { activity: ExecutionActivity }) {
   const [expanded, setExpanded] = useState(false);
   const routing = activity.routingData;
-  const strategy = routing?.strategy || activity.detail || "unknown";
+  const strategy = routing?.strategy || activity.detail || "";
   const strategyLabel = strategy.replace(/_/g, " ").toLowerCase();
   const variant = STRATEGY_VARIANT[strategy] || "outline";
-  const hasExpandable = routing?.reasoning || routing?.confidence != null;
+  const isCompleted = activity.status !== "running";
+  const hasExpandable = routing?.reasoning || routing?.confidence != null || routing?.targetAgent || routing?.targetGraph;
+
+  // Label: "Supervisor" while running, "Supervisor · strategy" when completed
+  const displayLabel = isCompleted && strategyLabel
+    ? `Supervisor \u00b7 ${strategyLabel}`
+    : "Supervisor";
+
+  // Target summary for collapsed state
+  const targetSummary = routing?.targetAgent || routing?.targetGraph || (strategy === "DIRECT_RESPONSE" ? "Direct response" : undefined);
 
   return (
     <div className="rounded-lg overflow-hidden border border-border/40 bg-muted/10">
@@ -31,10 +40,16 @@ export function RoutingCard({ activity }: { activity: ExecutionActivity }) {
       >
         <StatusIcon status={activity.status} color="text-warning" />
         <Route className="h-3.5 w-3.5 text-warning shrink-0" />
-        <span className="text-xs font-medium flex-1 truncate">{activity.label}</span>
-        <Badge variant={variant as "default"} className="text-[10px] shrink-0">
-          {strategyLabel}
-        </Badge>
+        <span className="text-xs font-medium truncate">{displayLabel}</span>
+        {isCompleted && targetSummary && (
+          <span className="text-[10px] text-muted-foreground truncate">\u2192 {targetSummary}</span>
+        )}
+        <span className="flex-1" />
+        {isCompleted && strategy && (
+          <Badge variant={variant as "default"} className="text-[10px] shrink-0">
+            {strategyLabel}
+          </Badge>
+        )}
         <DurationBadge durationMs={activity.durationMs} />
         {hasExpandable && <ChevronToggle expanded={expanded} />}
       </button>

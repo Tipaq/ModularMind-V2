@@ -38,6 +38,7 @@ const ACTIVITY_ICON: Record<ActivityType, React.ElementType> = {
   direct_response: MessageSquare,
   agent_created: Sparkles,
   compaction: RefreshCw,
+  agent_execution: Bot,
 };
 
 const ActivityItem = memo(function ActivityItem({ activity }: { activity: ExecutionActivity }) {

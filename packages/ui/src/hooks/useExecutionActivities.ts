@@ -25,30 +25,81 @@ function completeLastRunning(
   return updated;
 }
 
+/** Append a child activity to an agent_execution by ID. */
+function appendChild(
+  prev: ExecutionActivity[],
+  parentId: string,
+  child: ExecutionActivity,
+): ExecutionActivity[] {
+  return prev.map((a) =>
+    a.id === parentId
+      ? { ...a, children: [...(a.children || []), child] }
+      : a,
+  );
+}
+
+/** Complete the last running child of a given type inside an agent_execution. */
+function completeChild(
+  prev: ExecutionActivity[],
+  parentId: string,
+  childType: ActivityType,
+  patch: Partial<ExecutionActivity>,
+): ExecutionActivity[] {
+  return prev.map((a) => {
+    if (a.id !== parentId) return a;
+    const children = [...(a.children || [])];
+    const idx = children.findLastIndex((c) => c.type === childType && c.status === "running");
+    if (idx === -1) return a;
+    children[idx] = {
+      ...children[idx],
+      status: "completed",
+      durationMs: patch.durationMs ?? Date.now() - children[idx].startedAt,
+      ...patch,
+    };
+    return { ...a, children };
+  });
+}
+
 /**
- * Shared hook that converts SSE trace events into a list of ExecutionActivity items.
+ * Shared hook that converts SSE trace events into a hierarchical list of
+ * ExecutionActivity items.
  *
- * The `handleEvent` callback accepts a permissive `Record<string, unknown>` so
- * that it works in both the chat app (which has typed SSE events from api-client)
- * and the platform app (which uses plain JSON objects).
+ * Agent execution activities (type "agent_execution") have nested `children`
+ * arrays containing their tool and LLM call activities.
  */
 export function useExecutionActivities() {
   const [activities, setActivities] = useState<ExecutionActivity[]>([]);
   const seqRef = useRef(0);
+  /** ID of the currently active agent_execution whose children we append to. */
+  const currentAgentIdRef = useRef<string | null>(null);
 
   const reset = useCallback(() => {
     setActivities([]);
     seqRef.current = 0;
+    currentAgentIdRef.current = null;
   }, []);
 
   const finalize = useCallback(() => {
     setActivities((prev) =>
-      prev.map((a) =>
-        a.status === "running"
+      prev.map((a) => {
+        const base = a.status === "running"
           ? { ...a, status: "completed" as const, durationMs: Date.now() - a.startedAt }
-          : a,
-      ),
+          : a;
+        // Also finalize children
+        if (base.children?.length) {
+          return {
+            ...base,
+            children: base.children.map((c) =>
+              c.status === "running"
+                ? { ...c, status: "completed" as const, durationMs: Date.now() - c.startedAt }
+                : c,
+            ),
+          };
+        }
+        return base;
+      }),
     );
+    currentAgentIdRef.current = null;
   }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,63 +107,74 @@ export function useExecutionActivities() {
     const eventType = data?.type as string | undefined;
     if (!eventType) return;
 
+    const agentParent = currentAgentIdRef.current;
+
     // --- LLM ---
     if (eventType === "trace:llm_start") {
       const id = `llm-${++seqRef.current}`;
       const model = (data.model as string) || "LLM";
       let detail: string | undefined;
       if (data.message_count) detail = `${data.message_count} messages`;
-      setActivities((prev) => [
-        ...prev,
-        {
-          id,
-          type: "llm",
-          status: "running",
-          label: `Calling ${model}`,
-          detail,
+      const activity: ExecutionActivity = {
+        id,
+        type: "llm",
+        status: "running",
+        label: `Calling ${model}`,
+        detail,
+        model,
+        preview: data.prompt_preview ? truncate(data.prompt_preview as string, 120) : undefined,
+        startedAt: Date.now(),
+        llmData: {
           model,
-          preview: data.prompt_preview ? truncate(data.prompt_preview as string, 120) : undefined,
-          startedAt: Date.now(),
-          llmData: {
-            model,
-            messageCount: data.message_count as number | undefined,
-            messageTypes: data.message_types as Record<string, number> | undefined,
-          },
+          messageCount: data.message_count as number | undefined,
+          messageTypes: data.message_types as Record<string, number> | undefined,
         },
-      ]);
+      };
+      if (agentParent) {
+        setActivities((prev) => appendChild(prev, agentParent, activity));
+      } else {
+        setActivities((prev) => [...prev, activity]);
+      }
       return;
     }
     if (eventType === "trace:llm_end") {
-      setActivities((prev) => {
-        const realIdx = prev.findLastIndex((a) => a.type === "llm" && a.status === "running");
-        if (realIdx === -1) return prev;
-        const updated = [...prev];
-        const existing = updated[realIdx];
-
-        const tokens = data.tokens as { prompt: number; completion: number; total: number } | undefined;
-        let detail: string | undefined;
-        if (tokens) {
-          const parts: string[] = [];
-          if (tokens.total) parts.push(`${tokens.total} tokens`);
-          if (tokens.prompt && tokens.completion)
-            parts.push(`${tokens.prompt}\u2192${tokens.completion}`);
-          detail = parts.join(" \u00b7 ");
-        }
-
-        updated[realIdx] = {
-          ...existing,
-          status: "completed",
-          durationMs: (data.duration_ms as number | undefined) ?? Date.now() - existing.startedAt,
-          detail,
-          preview: data.response_preview ? truncate(data.response_preview as string, 150) : existing.preview,
-          llmData: {
-            ...existing.llmData!,
-            tokens: tokens ? { ...tokens, estimated: data.tokens_estimated as boolean | undefined } : undefined,
-            responsePreview: data.response_preview ? truncate(data.response_preview as string, 300) : undefined,
-          },
-        };
-        return updated;
-      });
+      const tokens = data.tokens as { prompt: number; completion: number; total: number } | undefined;
+      let detail: string | undefined;
+      if (tokens) {
+        const parts: string[] = [];
+        if (tokens.total) parts.push(`${tokens.total} tokens`);
+        if (tokens.prompt && tokens.completion)
+          parts.push(`${tokens.prompt}\u2192${tokens.completion}`);
+        detail = parts.join(" \u00b7 ");
+      }
+      const patch: Partial<ExecutionActivity> = {
+        durationMs: data.duration_ms as number | undefined,
+        detail,
+        preview: data.response_preview ? truncate(data.response_preview as string, 150) : undefined,
+        llmData: {
+          model: (data.model as string) || "LLM",
+          tokens: tokens ? { ...tokens, estimated: data.tokens_estimated as boolean | undefined } : undefined,
+          responsePreview: data.response_preview ? truncate(data.response_preview as string, 300) : undefined,
+        },
+      };
+      if (agentParent) {
+        setActivities((prev) => completeChild(prev, agentParent, "llm", patch));
+      } else {
+        setActivities((prev) => {
+          const realIdx = prev.findLastIndex((a) => a.type === "llm" && a.status === "running");
+          if (realIdx === -1) return prev;
+          const updated = [...prev];
+          const existing = updated[realIdx];
+          updated[realIdx] = {
+            ...existing,
+            status: "completed",
+            durationMs: patch.durationMs ?? Date.now() - existing.startedAt,
+            ...patch,
+            llmData: { ...existing.llmData!, ...patch.llmData },
+          };
+          return updated;
+        });
+      }
       return;
     }
 
@@ -122,39 +184,68 @@ export function useExecutionActivities() {
       const rawName = (data.tool_name as string) || "tool";
       const displayName = rawName.includes("__") ? rawName.split("__").slice(1).join("__") : rawName;
       const serverHint = rawName.includes("__") ? rawName.split("__")[0] : undefined;
-      setActivities((prev) => [
-        ...prev,
-        {
-          id,
-          type: "tool",
-          status: "running",
-          label: `Running ${displayName}`,
-          preview: data.input_preview ? truncate(data.input_preview as string, 120) : undefined,
-          startedAt: Date.now(),
-          toolData: {
-            toolName: displayName,
-            serverName: (data.server_name as string) || serverHint,
-            args: data.input_preview as string | undefined,
-          },
+      const activity: ExecutionActivity = {
+        id,
+        type: "tool",
+        status: "running",
+        label: `Running ${displayName}`,
+        preview: data.input_preview ? truncate(data.input_preview as string, 120) : undefined,
+        startedAt: Date.now(),
+        toolData: {
+          toolName: displayName,
+          serverName: (data.server_name as string) || serverHint,
+          args: data.input_preview as string | undefined,
         },
-      ]);
+      };
+      if (agentParent) {
+        setActivities((prev) => appendChild(prev, agentParent, activity));
+      } else {
+        setActivities((prev) => [...prev, activity]);
+      }
       return;
     }
     if (eventType === "trace:tool_end") {
-      setActivities((prev) => {
-        const realIdx = prev.findLastIndex((a) => a.type === "tool" && a.status === "running");
-        if (realIdx === -1) return prev;
-        const updated = [...prev];
-        const existing = updated[realIdx];
-        updated[realIdx] = {
-          ...existing,
-          status: "completed",
-          durationMs: (data.duration_ms as number | undefined) ?? Date.now() - existing.startedAt,
-          preview: data.output_preview ? truncate(data.output_preview as string, 150) : existing.preview,
-          toolData: { ...existing.toolData!, result: data.output_preview as string | undefined },
-        };
-        return updated;
-      });
+      const patch: Partial<ExecutionActivity> = {
+        durationMs: data.duration_ms as number | undefined,
+        preview: data.output_preview ? truncate(data.output_preview as string, 150) : undefined,
+        toolData: {
+          toolName: "",
+          result: data.output_preview as string | undefined,
+        },
+      };
+      if (agentParent) {
+        setActivities((prev) => {
+          return prev.map((a) => {
+            if (a.id !== agentParent) return a;
+            const children = [...(a.children || [])];
+            const idx = children.findLastIndex((c) => c.type === "tool" && c.status === "running");
+            if (idx === -1) return a;
+            children[idx] = {
+              ...children[idx],
+              status: "completed",
+              durationMs: patch.durationMs ?? Date.now() - children[idx].startedAt,
+              preview: patch.preview ?? children[idx].preview,
+              toolData: { ...children[idx].toolData!, result: data.output_preview as string | undefined },
+            };
+            return { ...a, children };
+          });
+        });
+      } else {
+        setActivities((prev) => {
+          const realIdx = prev.findLastIndex((a) => a.type === "tool" && a.status === "running");
+          if (realIdx === -1) return prev;
+          const updated = [...prev];
+          const existing = updated[realIdx];
+          updated[realIdx] = {
+            ...existing,
+            status: "completed",
+            durationMs: (data.duration_ms as number | undefined) ?? Date.now() - existing.startedAt,
+            preview: data.output_preview ? truncate(data.output_preview as string, 150) : existing.preview,
+            toolData: { ...existing.toolData!, result: data.output_preview as string | undefined },
+          };
+          return updated;
+        });
+      }
       return;
     }
 
@@ -250,7 +341,7 @@ export function useExecutionActivities() {
       const id = `route-${++seqRef.current}`;
       setActivities((prev) => [
         ...prev,
-        { id, type: "routing", status: "running", label: "Analyzing request", startedAt: Date.now() },
+        { id, type: "routing", status: "running", label: "Supervisor", startedAt: Date.now() },
       ]);
       return;
     }
@@ -270,25 +361,48 @@ export function useExecutionActivities() {
       );
       return;
     }
+
+    // --- Supervisor delegate → create agent_execution ---
     if (eventType === "trace:supervisor_delegate") {
-      const id = `delegate-${++seqRef.current}`;
+      const id = `agent-${++seqRef.current}`;
+      currentAgentIdRef.current = id;
       setActivities((prev) => [
         ...prev,
         {
           id,
-          type: "delegation",
+          type: "agent_execution",
           status: "running",
-          label: `Delegating to ${data.agent_name || "agent"}`,
+          label: (data.agent_name as string) || "Agent",
           detail: data.is_ephemeral ? "ephemeral" : undefined,
           startedAt: Date.now(),
           isEphemeral: data.is_ephemeral as boolean | undefined,
           agentName: data.agent_name as string | undefined,
+          children: [],
+          toolCallCount: 0,
+          llmCallCount: 0,
+          iterationCount: 0,
         },
       ]);
       return;
     }
     if (eventType === "trace:supervisor_delegate_end") {
-      setActivities((prev) => completeLastRunning(prev, "delegation", { durationMs: data.duration_ms as number | undefined }));
+      // Complete agent_execution (backup — step_completed usually handles this)
+      setActivities((prev) => {
+        const idx = prev.findLastIndex((a) => a.type === "agent_execution" && a.status === "running");
+        if (idx === -1) return completeLastRunning(prev, "delegation", { durationMs: data.duration_ms as number | undefined });
+        const updated = [...prev];
+        const agent = updated[idx];
+        const children = agent.children || [];
+        updated[idx] = {
+          ...agent,
+          status: "completed",
+          durationMs: (data.duration_ms as number | undefined) ?? Date.now() - agent.startedAt,
+          toolCallCount: children.filter((c) => c.type === "tool").length,
+          llmCallCount: children.filter((c) => c.type === "llm").length,
+        };
+        return updated;
+      });
+      currentAgentIdRef.current = null;
       return;
     }
     if (eventType === "trace:supervisor_direct") {
@@ -354,19 +468,61 @@ export function useExecutionActivities() {
 
     // --- Step events (execution) ---
     if (eventType === "step" && data.event === "step_started") {
-      const id = `step-${++seqRef.current}`;
       const agentName = data.agent_name as string | undefined;
-      const label = agentName
-        ? `${agentName}${data.is_ephemeral ? " (ephemeral)" : ""}`
-        : "Agent executing";
-      setActivities((prev) => [
-        ...prev,
-        { id, type: "step", status: "running", label, startedAt: Date.now(), agentName },
-      ]);
+      const inputPrompt = data.input_prompt as string | undefined;
+      const model = data.model as string | undefined;
+
+      // If an agent_execution already exists (from supervisor_delegate), enrich it
+      setActivities((prev) => {
+        if (currentAgentIdRef.current) {
+          return prev.map((a) =>
+            a.id === currentAgentIdRef.current
+              ? { ...a, inputPrompt, model, agentName: agentName ?? a.agentName }
+              : a,
+          );
+        }
+        // No supervisor — create agent_execution directly
+        const id = `agent-${++seqRef.current}`;
+        currentAgentIdRef.current = id;
+        return [
+          ...prev,
+          {
+            id,
+            type: "agent_execution",
+            status: "running",
+            label: agentName || "Agent executing",
+            startedAt: Date.now(),
+            agentName,
+            inputPrompt,
+            model,
+            children: [],
+            toolCallCount: 0,
+            llmCallCount: 0,
+            iterationCount: 0,
+          },
+        ];
+      });
       return;
     }
     if (eventType === "step" && data.event === "step_completed") {
-      setActivities((prev) => completeLastRunning(prev, "step", { durationMs: data.duration_ms as number | undefined }));
+      const agentResponse = data.agent_response as string | undefined;
+      setActivities((prev) => {
+        const idx = prev.findLastIndex((a) => a.type === "agent_execution" && a.status === "running");
+        if (idx === -1) return completeLastRunning(prev, "step", { durationMs: data.duration_ms as number | undefined });
+        const updated = [...prev];
+        const agent = updated[idx];
+        const children = agent.children || [];
+        updated[idx] = {
+          ...agent,
+          status: "completed",
+          durationMs: (data.duration_ms as number | undefined) ?? Date.now() - agent.startedAt,
+          agentResponse,
+          toolCallCount: children.filter((c) => c.type === "tool").length,
+          llmCallCount: children.filter((c) => c.type === "llm").length,
+        };
+        return updated;
+      });
+      currentAgentIdRef.current = null;
       return;
     }
 
