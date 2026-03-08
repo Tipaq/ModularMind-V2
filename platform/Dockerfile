@@ -17,11 +17,7 @@ COPY --from=deps /app/packages/ ./packages/
 COPY platform/ ./platform/
 RUN cd platform && npx prisma generate && pnpm build
 
-FROM node:22-alpine AS runner
+FROM base AS debug
 WORKDIR /app
-ENV NODE_ENV=production
 COPY --from=builder /app/platform/.next/standalone ./
-COPY --from=builder /app/platform/.next/static ./.next/static
-COPY --from=builder /app/platform/public ./public
-EXPOSE 3000
-CMD ["node", "server.js"]
+RUN find . -name "server.js" -type f && echo "---" && ls -la
