@@ -34,6 +34,7 @@ def _transform_agent(raw: dict[str, Any]) -> dict[str, Any]:
         "version": raw.get("version", 1),
         "timeout_seconds": config_block.get("timeout_seconds", 120),
         "memory_enabled": config_block.get("memory_enabled", True),
+        "gateway_permissions": config_block.get("gateway_permissions"),
     }
 
 
@@ -80,6 +81,29 @@ def _transform_graph(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _transform_automation(raw: dict[str, Any]) -> dict[str, Any]:
+    """Transform a Platform automation manifest entry into Engine AutomationConfig format.
+
+    Platform sends:  id, name, description, enabled, config, version, tags
+    Engine expects:  id, name, description, enabled, trigger, triage, execution,
+                     post_actions, settings, version, tags
+    """
+    config_block = raw.get("config") or {}
+    return {
+        "id": raw["id"],
+        "name": raw.get("name", ""),
+        "description": raw.get("description", ""),
+        "enabled": raw.get("enabled", False),
+        "trigger": config_block.get("trigger", {}),
+        "triage": config_block.get("triage"),
+        "execution": config_block.get("execution", {}),
+        "post_actions": config_block.get("post_actions", []),
+        "settings": config_block.get("settings", {}),
+        "version": raw.get("version", 1),
+        "tags": raw.get("tags", []),
+    }
+
+
 class SyncService:
     """Handles config synchronization with the platform."""
 
@@ -118,6 +142,7 @@ class SyncService:
             # Transform Platform format → Engine format, then write to DB
             await self._apply_agents(manifest.get("agents", []))
             await self._apply_graphs(manifest.get("graphs", []))
+            await self._apply_automations(manifest.get("automations", []))
 
             self._local_version = remote_version
 
@@ -179,6 +204,46 @@ class SyncService:
                 except (ValueError, KeyError, sqlalchemy.exc.SQLAlchemyError):
                     logger.exception("Failed to apply graph %s", graph_id)
             await session.commit()
+
+    async def _apply_automations(self, automations: list[dict]) -> None:
+        """Transform and store automation configs in Redis for the AutomationRunner."""
+        if not automations:
+            return
+
+        from src.graph_engine.interfaces import AutomationConfig
+
+        import json
+        import redis.asyncio as aioredis
+        from src.infra.config import get_settings
+
+        s = get_settings()
+        r = aioredis.from_url(s.REDIS_URL, decode_responses=True)
+        try:
+            pipe = r.pipeline()
+            automation_ids = []
+            for raw_automation in automations:
+                aid = raw_automation.get("id", "")
+                if not aid:
+                    continue
+                try:
+                    engine_config = _transform_automation(raw_automation)
+                    # Validate via pydantic
+                    AutomationConfig.model_validate(engine_config)
+                    pipe.set(
+                        f"automation:config:{aid}",
+                        json.dumps(engine_config),
+                    )
+                    automation_ids.append(aid)
+                    logger.info("Applied automation config: %s (%s)", aid, raw_automation.get("name"))
+                except (ValueError, KeyError):
+                    logger.exception("Failed to apply automation %s", aid)
+            # Store index of all automation IDs
+            if automation_ids:
+                pipe.delete("automation:ids")
+                pipe.sadd("automation:ids", *automation_ids)
+            await pipe.execute()
+        finally:
+            await r.aclose()
 
     async def close(self) -> None:
         if self._client:

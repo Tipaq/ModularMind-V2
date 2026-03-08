@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # Always-on routers
 from src.admin.user_router import admin_user_router
 from src.agents.router import router as agents_router
+from src.automations.router import router as automations_router
 from src.auth.router import router as auth_router
 from src.connectors.router import router as connectors_router
 from src.connectors.webhook_router import webhook_router
@@ -316,6 +317,7 @@ app.include_router(sync_router, prefix=API_PREFIX)
 app.include_router(recall_router, prefix=API_PREFIX)
 app.include_router(supervisor_router, prefix=API_PREFIX)
 app.include_router(groups_router, prefix=API_PREFIX)
+app.include_router(automations_router)
 
 # ── Admin routers ────────────────────────────────────────────────────────
 app.include_router(internal_router, prefix=f"{API_PREFIX}/internal")

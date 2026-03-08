@@ -75,6 +75,13 @@ async def main() -> None:
     scheduler = create_scheduler()
     scheduler.start()
 
+    # Wire AutomationRunner into the scheduler for dynamic automation jobs
+    from src.automations.runner import AutomationRunner
+    from src.worker.scheduler import set_automation_runner
+
+    automation_runner = AutomationRunner(scheduler)
+    set_automation_runner(automation_runner)
+
     tasks = [
         # Task queues
         bus.subscribe("tasks:executions", "workers", "w-1", graph_execution_handler),
@@ -124,6 +131,20 @@ async def main() -> None:
             )
     except ImportError:
         logger.info("Memory pipeline handlers not available (removed in Phase 9)")
+
+    # Automation manual trigger consumer
+    async def automation_trigger_handler(data: dict) -> None:
+        aid = data.get("automation_id", "")
+        if aid:
+            logger.info("Manual automation trigger: %s", aid)
+            await automation_runner._execute_trigger(aid)
+
+    tasks.append(
+        bus.subscribe(
+            "tasks:automation_trigger", "automation-triggers", "at-1",
+            automation_trigger_handler,
+        ),
+    )
 
     tasks.append(
         # Health

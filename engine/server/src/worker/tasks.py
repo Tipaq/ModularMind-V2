@@ -115,6 +115,9 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                     await session.commit()
                     logger.info("Execution %s completed", execution_id)
 
+                    # Run automation post-hooks if this was an automation execution
+                    await _run_automation_post_hooks(session, execution_id, complete_event)
+
                 # Stream auto-expires after 5 minutes (cleanup)
                 await r.expire(stream_key, 300)
             finally:
@@ -280,6 +283,91 @@ async def _cleanup_orphaned_conversation(
             "Deleted orphaned conversation %s (execution %s cancelled before first response)",
             conversation_id, execution_id,
         )
+
+
+# --- Automation post-execution hooks ---
+
+
+async def _run_automation_post_hooks(
+    session: AsyncSession,
+    execution_id: str,
+    complete_event: dict[str, Any] | None,
+) -> None:
+    """Run post-execution hooks if this was an automation-triggered execution."""
+    import json as json_mod
+
+    from sqlalchemy import select
+
+    from src.executions.models import ExecutionRun
+
+    try:
+        result = await session.execute(
+            select(ExecutionRun.input_data).where(ExecutionRun.id == execution_id)
+        )
+        row = result.first()
+        if not row or not row[0]:
+            return
+        input_data = row[0]
+
+        automation_id = input_data.get("_automation_id")
+        run_id = input_data.get("_automation_run_id")
+        if not automation_id or not run_id:
+            return
+
+        import redis.asyncio as aioredis
+
+        from src.automations.hooks import run_post_actions
+        from src.automations.models import AutomationRun, AutomationRunStatus
+        from src.graph_engine.interfaces import AutomationConfig
+        from src.infra.config import get_settings
+
+        settings = get_settings()
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        try:
+            raw = await r.get(f"automation:config:{automation_id}")
+            if not raw:
+                logger.warning("Automation config %s not found for post-hooks", automation_id)
+                return
+
+            config = AutomationConfig.model_validate(json_mod.loads(raw))
+
+            # Update automation run status
+            from src.infra.database import async_session_maker
+            from src.infra.utils import utcnow
+
+            async with async_session_maker() as hook_session:
+                run_result = await hook_session.execute(
+                    select(AutomationRun).where(AutomationRun.id == run_id)
+                )
+                run = run_result.scalar_one_or_none()
+                if not run:
+                    return
+
+                run.status = AutomationRunStatus.COMPLETED
+                run.execution_id = execution_id
+                run.completed_at = utcnow()
+                run.result_summary = (complete_event or {}).get("content", "")[:2000]
+
+                # Calculate duration
+                if run.created_at:
+                    run.duration_seconds = (
+                        run.completed_at - run.created_at
+                    ).total_seconds()
+
+                await hook_session.commit()
+
+                # Run post-actions
+                execution_result = {
+                    "summary": run.result_summary,
+                    "content": (complete_event or {}).get("content", ""),
+                }
+                await run_post_actions(config, run, execution_result)
+
+        finally:
+            await r.aclose()
+
+    except Exception:
+        logger.exception("Automation post-hooks failed for execution %s", execution_id)
 
 
 # --- Persist assistant message after execution ---

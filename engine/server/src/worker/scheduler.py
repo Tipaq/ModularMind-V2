@@ -83,6 +83,15 @@ def create_scheduler() -> AsyncIOScheduler:
     return scheduler
 
 
+_automation_runner = None
+
+
+def set_automation_runner(runner) -> None:
+    """Set the global AutomationRunner instance (called from worker startup)."""
+    global _automation_runner
+    _automation_runner = runner
+
+
 async def sync_platform() -> None:
     """Poll platform for manifest changes and apply updates."""
     from src.sync.service import SyncService
@@ -93,6 +102,12 @@ async def sync_platform() -> None:
         updated = await svc.poll()
         if updated:
             logger.info("Config updated from platform")
+            # Sync automation scheduler jobs after config update
+            if _automation_runner:
+                try:
+                    await _automation_runner.sync_jobs()
+                except Exception:
+                    logger.exception("Failed to sync automation jobs")
     except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError):
         logger.exception("Platform sync failed")
     finally:
