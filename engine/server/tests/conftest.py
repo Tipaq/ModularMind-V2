@@ -34,7 +34,7 @@ _engine = create_async_engine(os.environ["DATABASE_URL"], echo=False)
 _Session = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
 async def _schema():
     """Create all tables once; drop after the session."""
     async with _engine.begin() as conn:
