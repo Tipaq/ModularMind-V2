@@ -1,0 +1,18 @@
+# =============================================================================
+# Caddy — Reverse proxy config for ModularMind
+# =============================================================================
+# Caddy automatically provisions HTTPS via Let's Encrypt.
+# Assumes ModularMind's built-in nginx runs on localhost:8080 (proxy profile).
+#
+# Place this file at /etc/caddy/Caddyfile or run:
+#   caddy run --config Caddyfile
+
+mm.example.com {
+	reverse_proxy localhost:8080 {
+		# SSE support (engine streaming)
+		flush_interval -1
+		transport http {
+			read_timeout 600s
+		}
+	}
+}

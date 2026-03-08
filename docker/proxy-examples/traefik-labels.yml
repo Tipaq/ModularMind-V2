@@ -1,0 +1,32 @@
+# =============================================================================
+# Traefik — Docker Compose override for ModularMind client stack
+# =============================================================================
+# Use this instead of the 'proxy' profile when Traefik is your reverse proxy.
+#
+# 1. Remove 'proxy' from COMPOSE_PROFILES in .env
+# 2. Set DOMAIN=mm.example.com in .env
+# 3. Run:
+#    docker compose -f docker-compose.client.yml -f proxy-examples/traefik-labels.yml up -d
+#
+# This routes all traffic through Traefik → engine:8000 directly.
+# Chat and Ops SPAs are served by the nginx container (still needed).
+# =============================================================================
+
+services:
+  # Route via Traefik to the internal nginx (which serves SPAs + proxies API)
+  nginx:
+    profiles: []  # Force-enable nginx even without 'proxy' profile
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.modularmind.rule: "Host(`${DOMAIN}`)"
+      traefik.http.routers.modularmind.entrypoints: "websecure"
+      traefik.http.routers.modularmind.tls.certresolver: "letsencrypt"
+      traefik.http.services.modularmind.loadbalancer.server.port: "8080"
+    networks:
+      - default
+      - traefik
+    ports: []  # Remove host port binding — Traefik handles external access
+
+networks:
+  traefik:
+    external: true
