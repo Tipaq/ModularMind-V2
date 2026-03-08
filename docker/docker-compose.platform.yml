@@ -2,44 +2,54 @@
 # ModularMind V2 — Platform Deployment (Owner's home server)
 # =============================================================================
 # Platform = Next.js full-stack (vitrine + studio + admin)
+#
+# Designed for Traefik reverse proxy. Set PLATFORM_DOMAIN in .env.platform.
+#
+# Usage:
+#   cd docker
+#   cp .env.platform.example .env.platform   # fill in values
+#   docker compose -f docker-compose.platform.yml --env-file .env.platform up -d
 
 services:
   platform:
     build:
       context: ..
       dockerfile: platform/Dockerfile
-    ports:
-      - "3000:3000"
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@db:5432/modularmind_platform
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      NEXTAUTH_URL: ${PLATFORM_URL:-http://localhost:3000}
+      DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@platform-db:5432/modularmind_platform
+      AUTH_SECRET: ${AUTH_SECRET}
+      NEXTAUTH_URL: https://${PLATFORM_DOMAIN}
     depends_on:
-      db: { condition: service_healthy }
+      platform-db: { condition: service_healthy }
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.modularmind-platform.rule: Host(`${PLATFORM_DOMAIN}`)
+      traefik.http.routers.modularmind-platform.entrypoints: websecure
+      traefik.http.routers.modularmind-platform.tls.certresolver: letsencrypt
+      traefik.http.services.modularmind-platform.loadbalancer.server.port: "3000"
+    networks:
+      - default
+      - proxy-network
 
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/platform.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - platform
-
-  db:
+  platform-db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-modularmind}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-modularmind}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: modularmind_platform
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - platform-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-modularmind}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+networks:
+  proxy-network:
+    external: true
+
 volumes:
-  postgres-data:
+  platform-postgres-data:
