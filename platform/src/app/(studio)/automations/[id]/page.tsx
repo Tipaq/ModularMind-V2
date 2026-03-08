@@ -470,7 +470,7 @@ export default function AutomationDetailPage() {
                     {(trigger.source as string) || "Not set"}
                   </Badge>
                 </PropRow>
-                {trigger.interval_seconds && (
+                {!!trigger.interval_seconds && (
                   <PropRow label="Interval">
                     <span className="text-sm">{trigger.interval_seconds as number}s</span>
                   </PropRow>
