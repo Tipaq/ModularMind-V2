@@ -1,0 +1,30 @@
+# =============================================================================
+# ModularMind V2 — Client Build Override (for testing from source)
+# =============================================================================
+# Usage:
+#   docker compose -f docker-compose.client.yml -f docker-compose.client.build.yml up -d --build
+
+services:
+  engine:
+    build:
+      context: ..
+      dockerfile: engine/server/Dockerfile
+    image: modularmind-engine:local
+
+  worker:
+    build:
+      context: ..
+      dockerfile: engine/server/Dockerfile
+    image: modularmind-engine:local
+
+  nginx:
+    build:
+      context: ..
+      dockerfile: docker/nginx/Dockerfile
+    image: modularmind-nginx:local
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    image: modularmind-gateway:local
