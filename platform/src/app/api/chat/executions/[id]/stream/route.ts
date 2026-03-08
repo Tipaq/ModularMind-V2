@@ -4,7 +4,11 @@ import { INTERNAL_TOKEN } from "@/lib/engine-proxy";
 
 const ENGINE_URL = process.env.ENGINE_URL || "http://localhost:8000";
 
-// GET /api/chat/executions/:id/stream — SSE proxy passthrough
+// Force Node.js runtime + disable static optimization for SSE
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// GET /api/chat/executions/:id/stream — SSE proxy with per-chunk flushing
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -23,18 +27,19 @@ export async function GET(
     headers["X-Platform-User-Email"] = session.user.email;
   }
 
-  const engineRes = await fetch(engineUrl, {
-    headers,
-    // @ts-expect-error -- Node.js fetch supports duplex for streaming
-    duplex: "half",
-  });
+  const engineRes = await fetch(engineUrl, { headers });
 
   if (!engineRes.ok || !engineRes.body) {
     return errorResponse("Failed to connect to execution stream", engineRes.status);
   }
 
-  // Pipe the Engine SSE stream through to the client
-  return new Response(engineRes.body, {
+  // Use TransformStream as pass-through to break Next.js response buffering.
+  // pipeTo() runs in the background, pushing each chunk from the engine
+  // through to the client immediately.
+  const { readable, writable } = new TransformStream();
+  engineRes.body.pipeTo(writable).catch(() => {});
+
+  return new Response(readable, {
     status: 200,
     headers: {
       "Content-Type": "text/event-stream",

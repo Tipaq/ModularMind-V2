@@ -48,6 +48,24 @@ export const updateGraphSchema = z.object({
   edges: z.array(z.record(z.string(), z.unknown())).optional(),
 });
 
+// ─── Automation schemas ─────────────────────────────────────────────────────
+
+export const createAutomationSchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().max(2000).optional().default(""),
+  enabled: z.boolean().optional().default(false),
+  config: z.record(z.string(), z.unknown()).optional().default({}),
+  tags: z.array(z.string()).optional().default([]),
+});
+
+export const updateAutomationSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(2000).optional(),
+  enabled: z.boolean().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  tags: z.array(z.string()).optional(),
+});
+
 // ─── Report schemas ─────────────────────────────────────────────────────────
 
 export const reportSchema = z.object({

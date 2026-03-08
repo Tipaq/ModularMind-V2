@@ -6,10 +6,12 @@ import {
   Bot,
   Copy,
   Edit,
+  Globe,
   RefreshCw,
   Save,
   Shield,
   SlidersHorizontal,
+  Terminal,
   Trash2,
   X,
   Brain,
@@ -93,6 +95,23 @@ export default function AgentDetailPage() {
     rag_enabled: false,
     rag_retrieval_count: 5,
     rag_similarity_threshold: 0.7,
+    gateway_enabled: false,
+    gw_fs_read: "",
+    gw_fs_write: "",
+    gw_fs_deny: "",
+    gw_shell_enabled: false,
+    gw_shell_allow: "",
+    gw_shell_deny: "",
+    gw_shell_require_approval: true,
+    gw_shell_timeout: 30,
+    gw_browser_enabled: false,
+    gw_browser_allow_urls: "",
+    gw_browser_deny_urls: "",
+    gw_browser_require_approval: true,
+    gw_browser_timeout: 30,
+    gw_net_enabled: false,
+    gw_net_allow_domains: "",
+    gw_net_deny_domains: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -104,6 +123,11 @@ export default function AgentDetailPage() {
 
   const startEditing = () => {
     if (!agent) return;
+    const gw = (config.gateway_permissions ?? {}) as Record<string, unknown>;
+    const gwFs = (gw.filesystem ?? {}) as Record<string, unknown>;
+    const gwSh = (gw.shell ?? {}) as Record<string, unknown>;
+    const gwBr = (gw.browser ?? {}) as Record<string, unknown>;
+    const gwNet = (gw.network ?? {}) as Record<string, unknown>;
     setEditValues({
       name: agent.name,
       description: agent.description || "",
@@ -116,16 +140,66 @@ export default function AgentDetailPage() {
       rag_enabled: (config.rag_enabled as boolean) || false,
       rag_retrieval_count: (config.rag_retrieval_count as number) || 5,
       rag_similarity_threshold: (config.rag_similarity_threshold as number) || 0.7,
+      gateway_enabled: !!config.gateway_permissions,
+      gw_fs_read: ((gwFs.read as string[]) || []).join(", "),
+      gw_fs_write: ((gwFs.write as string[]) || []).join(", "),
+      gw_fs_deny: ((gwFs.deny as string[]) || []).join(", "),
+      gw_shell_enabled: (gwSh.enabled as boolean) || false,
+      gw_shell_allow: ((gwSh.allow as string[]) || []).join(", "),
+      gw_shell_deny: ((gwSh.deny as string[]) || []).join(", "),
+      gw_shell_require_approval: gwSh.require_approval !== false,
+      gw_shell_timeout: (gwSh.max_execution_seconds as number) || 30,
+      gw_browser_enabled: (gwBr.enabled as boolean) || false,
+      gw_browser_allow_urls: ((gwBr.allow_urls as string[]) || []).join(", "),
+      gw_browser_deny_urls: ((gwBr.deny_urls as string[]) || []).join(", "),
+      gw_browser_require_approval: gwBr.require_approval !== false,
+      gw_browser_timeout: (gwBr.max_page_load_seconds as number) || 30,
+      gw_net_enabled: (gwNet.enabled as boolean) || false,
+      gw_net_allow_domains: ((gwNet.allow_domains as string[]) || []).join(", "),
+      gw_net_deny_domains: ((gwNet.deny_domains as string[]) || []).join(", "),
     });
     setIsEditing(true);
   };
 
   const cancelEditing = () => setIsEditing(false);
 
+  const splitPatterns = (s: string) =>
+    s.split(",").map((p) => p.trim()).filter(Boolean);
+
   const handleSave = async () => {
     if (!agent) return;
     setSaving(true);
     try {
+      const gatewayPermissions = editValues.gateway_enabled
+        ? {
+            filesystem: {
+              read: splitPatterns(editValues.gw_fs_read),
+              write: splitPatterns(editValues.gw_fs_write),
+              deny: splitPatterns(editValues.gw_fs_deny),
+            },
+            shell: {
+              enabled: editValues.gw_shell_enabled,
+              allow: splitPatterns(editValues.gw_shell_allow),
+              deny: splitPatterns(editValues.gw_shell_deny),
+              require_approval: editValues.gw_shell_require_approval,
+              max_execution_seconds: editValues.gw_shell_timeout,
+            },
+            browser: {
+              enabled: editValues.gw_browser_enabled,
+              allow_urls: splitPatterns(editValues.gw_browser_allow_urls),
+              deny_urls: splitPatterns(editValues.gw_browser_deny_urls),
+              require_approval: editValues.gw_browser_require_approval,
+              max_page_load_seconds: editValues.gw_browser_timeout,
+              headless_only: true,
+            },
+            network: {
+              enabled: editValues.gw_net_enabled,
+              allow_domains: splitPatterns(editValues.gw_net_allow_domains),
+              deny_domains: splitPatterns(editValues.gw_net_deny_domains),
+            },
+          }
+        : undefined;
+
       await updateAgent(agentId, {
         name: editValues.name,
         description: editValues.description,
@@ -140,6 +214,7 @@ export default function AgentDetailPage() {
           rag_enabled: editValues.rag_enabled,
           rag_retrieval_count: editValues.rag_retrieval_count,
           rag_similarity_threshold: editValues.rag_similarity_threshold,
+          gateway_permissions: gatewayPermissions,
         },
       });
       setIsEditing(false);
@@ -183,6 +258,8 @@ export default function AgentDetailPage() {
   const ragEnabled = (config.rag_enabled as boolean) || false;
   const ragRetrievalCount = (config.rag_retrieval_count as number) || 5;
   const ragSimilarityThreshold = (config.rag_similarity_threshold as number) || 0.7;
+  const gatewayPerms = (config.gateway_permissions ?? null) as Record<string, unknown> | null;
+  const gatewayEnabled = !!gatewayPerms;
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)]">
@@ -412,6 +489,235 @@ export default function AgentDetailPage() {
                     <p className="text-[10px] text-muted-foreground">Threshold</p>
                     <p className="text-sm font-medium">{ragSimilarityThreshold}</p>
                   </div>
+                </div>
+              </div>
+            )}
+          </Section>
+
+          <Separator />
+
+          {/* Gateway (System Access) */}
+          <Section
+            icon={Terminal}
+            title="Gateway (System Access)"
+            actions={
+              isEditing ? (
+                <Switch
+                  checked={editValues.gateway_enabled}
+                  onCheckedChange={(checked) => setEditValues((v) => ({ ...v, gateway_enabled: checked }))}
+                />
+              ) : (
+                <Badge variant={gatewayEnabled ? "default" : "secondary"} className="text-[10px]">
+                  {gatewayEnabled ? "On" : "Off"}
+                </Badge>
+              )
+            }
+          >
+            {isEditing && editValues.gateway_enabled ? (
+              <div className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Grant this agent system access — filesystem, shell, browser, and HTTP via the Gateway.
+                </p>
+
+                {/* Filesystem */}
+                <div className="space-y-2">
+                  <span className="text-xs font-medium">Filesystem</span>
+                  <div className="space-y-1.5">
+                    <div>
+                      <label className="text-[11px] text-muted-foreground">Read patterns</label>
+                      <Input
+                        value={editValues.gw_fs_read}
+                        onChange={(e) => setEditValues((v) => ({ ...v, gw_fs_read: e.target.value }))}
+                        className="h-8 text-xs font-mono"
+                        placeholder="/workspace/**"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-muted-foreground">Write patterns</label>
+                      <Input
+                        value={editValues.gw_fs_write}
+                        onChange={(e) => setEditValues((v) => ({ ...v, gw_fs_write: e.target.value }))}
+                        className="h-8 text-xs font-mono"
+                        placeholder="/workspace/output/**"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-muted-foreground">Deny patterns</label>
+                      <Input
+                        value={editValues.gw_fs_deny}
+                        onChange={(e) => setEditValues((v) => ({ ...v, gw_fs_deny: e.target.value }))}
+                        className="h-8 text-xs font-mono"
+                        placeholder="/workspace/.env, /workspace/**/.env"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Comma-separated glob patterns</p>
+                </div>
+
+                {/* Shell */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">Shell</span>
+                    <Switch
+                      checked={editValues.gw_shell_enabled}
+                      onCheckedChange={(checked) => setEditValues((v) => ({ ...v, gw_shell_enabled: checked }))}
+                    />
+                  </div>
+                  {editValues.gw_shell_enabled && (
+                    <div className="space-y-1.5">
+                      <div>
+                        <label className="text-[11px] text-muted-foreground">Allow patterns</label>
+                        <Input
+                          value={editValues.gw_shell_allow}
+                          onChange={(e) => setEditValues((v) => ({ ...v, gw_shell_allow: e.target.value }))}
+                          className="h-8 text-xs font-mono"
+                          placeholder="ls *, cat *, echo *, python3 *"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-muted-foreground">Deny patterns</label>
+                        <Input
+                          value={editValues.gw_shell_deny}
+                          onChange={(e) => setEditValues((v) => ({ ...v, gw_shell_deny: e.target.value }))}
+                          className="h-8 text-xs font-mono"
+                          placeholder="rm -rf *, sudo *, chmod *"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[11px] text-muted-foreground">Require approval</span>
+                        <Switch
+                          checked={editValues.gw_shell_require_approval}
+                          onCheckedChange={(checked) => setEditValues((v) => ({ ...v, gw_shell_require_approval: checked }))}
+                        />
+                      </div>
+                      <PropRow label="Timeout">
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            type="number"
+                            value={editValues.gw_shell_timeout}
+                            onChange={(e) => setEditValues((v) => ({ ...v, gw_shell_timeout: Number(e.target.value) }))}
+                            className="w-20 h-8 text-sm"
+                            min={5}
+                            max={300}
+                          />
+                          <span className="text-xs text-muted-foreground">sec</span>
+                        </div>
+                      </PropRow>
+                    </div>
+                  )}
+                </div>
+
+                {/* Browser */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">Browser</span>
+                    <Switch
+                      checked={editValues.gw_browser_enabled}
+                      onCheckedChange={(checked) => setEditValues((v) => ({ ...v, gw_browser_enabled: checked }))}
+                    />
+                  </div>
+                  {editValues.gw_browser_enabled && (
+                    <div className="space-y-1.5">
+                      <div>
+                        <label className="text-[11px] text-muted-foreground">Allow URL patterns</label>
+                        <Input
+                          value={editValues.gw_browser_allow_urls}
+                          onChange={(e) => setEditValues((v) => ({ ...v, gw_browser_allow_urls: e.target.value }))}
+                          className="h-8 text-xs font-mono"
+                          placeholder="https://docs.*, https://api.*"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-muted-foreground">Deny URL patterns</label>
+                        <Input
+                          value={editValues.gw_browser_deny_urls}
+                          onChange={(e) => setEditValues((v) => ({ ...v, gw_browser_deny_urls: e.target.value }))}
+                          className="h-8 text-xs font-mono"
+                          placeholder="*://localhost/*, *://127.0.0.1/*"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[11px] text-muted-foreground">Require approval</span>
+                        <Switch
+                          checked={editValues.gw_browser_require_approval}
+                          onCheckedChange={(checked) => setEditValues((v) => ({ ...v, gw_browser_require_approval: checked }))}
+                        />
+                      </div>
+                      <PropRow label="Page timeout">
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            type="number"
+                            value={editValues.gw_browser_timeout}
+                            onChange={(e) => setEditValues((v) => ({ ...v, gw_browser_timeout: Number(e.target.value) }))}
+                            className="w-20 h-8 text-sm"
+                            min={5}
+                            max={120}
+                          />
+                          <span className="text-xs text-muted-foreground">sec</span>
+                        </div>
+                      </PropRow>
+                    </div>
+                  )}
+                </div>
+
+                {/* Network */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">Network (HTTP)</span>
+                    <Switch
+                      checked={editValues.gw_net_enabled}
+                      onCheckedChange={(checked) => setEditValues((v) => ({ ...v, gw_net_enabled: checked }))}
+                    />
+                  </div>
+                  {editValues.gw_net_enabled && (
+                    <div className="space-y-1.5">
+                      <div>
+                        <label className="text-[11px] text-muted-foreground">Allow domains</label>
+                        <Input
+                          value={editValues.gw_net_allow_domains}
+                          onChange={(e) => setEditValues((v) => ({ ...v, gw_net_allow_domains: e.target.value }))}
+                          className="h-8 text-xs font-mono"
+                          placeholder="api.github.com, *.openai.com"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-muted-foreground">Deny domains</label>
+                        <Input
+                          value={editValues.gw_net_deny_domains}
+                          onChange={(e) => setEditValues((v) => ({ ...v, gw_net_deny_domains: e.target.value }))}
+                          className="h-8 text-xs font-mono"
+                          placeholder="localhost, *.internal"
+                        />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">Comma-separated domain patterns. SSRF protection is always active.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (isEditing ? !editValues.gateway_enabled : !gatewayEnabled) ? (
+              <p className="text-xs text-muted-foreground">
+                Enable to give this agent system access (filesystem, shell, browser, HTTP) via the Gateway.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">System access is active via Gateway sandbox.</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(() => {
+                    const fs = (gatewayPerms?.filesystem ?? {}) as Record<string, unknown>;
+                    const sh = (gatewayPerms?.shell ?? {}) as Record<string, unknown>;
+                    const br = (gatewayPerms?.browser ?? {}) as Record<string, unknown>;
+                    const net = (gatewayPerms?.network ?? {}) as Record<string, unknown>;
+                    const badges = [];
+                    if ((fs.read as string[])?.length || (fs.write as string[])?.length)
+                      badges.push(<Badge key="fs" variant="outline" className="text-[10px]">Filesystem</Badge>);
+                    if (sh.enabled)
+                      badges.push(<Badge key="sh" variant="outline" className="text-[10px]">Shell</Badge>);
+                    if (br.enabled)
+                      badges.push(<Badge key="br" variant="outline" className="text-[10px]">Browser</Badge>);
+                    if (net.enabled)
+                      badges.push(<Badge key="net" variant="outline" className="text-[10px]">Network</Badge>);
+                    return badges.length ? badges : <span className="text-[10px] text-muted-foreground">No categories configured</span>;
+                  })()}
                 </div>
               </div>
             )}

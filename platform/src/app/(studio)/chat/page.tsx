@@ -166,6 +166,7 @@ export default function ChatPage() {
           supervisorPrompt: convConfig.supervisor_prompt || "",
           modelId: convConfig.model_id || null,
           modelOverride: convConfig.model_override || false,
+          userPreferences: convConfig.user_preferences || null,
         });
       } catch {
         // Fetch failed – conversation panel stays in previous state

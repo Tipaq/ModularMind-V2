@@ -21,10 +21,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     orderBy: { updatedAt: "desc" },
   });
 
+  const automations = await db.automation.findMany({
+    orderBy: { updatedAt: "desc" },
+  });
+
   // Compute version as max of all updatedAt timestamps
   const timestamps = [
     ...agents.map((a) => a.updatedAt.getTime()),
     ...graphs.map((g) => g.updatedAt.getTime()),
+    ...automations.map((a) => a.updatedAt.getTime()),
   ];
   const version = timestamps.length > 0 ? Math.max(...timestamps) : 0;
 
@@ -48,7 +53,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       edges: g.edges,
       version: g.version,
     })),
+    automations: automations.map((a) => ({
+      id: a.id,
+      name: a.name,
+      description: a.description,
+      enabled: a.enabled,
+      config: a.config,
+      version: a.version,
+      tags: a.tags,
+    })),
     agent_count: agents.length,
     graph_count: graphs.length,
+    automation_count: automations.length,
   });
 }
