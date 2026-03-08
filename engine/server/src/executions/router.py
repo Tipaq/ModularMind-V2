@@ -194,7 +194,10 @@ async def stream_execution(
                     for entry_id, fields in entries:
                         last_id = entry_id
                         try:
-                            event = json.loads(fields[b"data"])
+                            raw = fields.get("data") or fields.get(b"data")
+                            if raw is None:
+                                continue
+                            event = json.loads(raw)
                             yield event
                             if event.get("type") in ("complete", "error"):
                                 completed = True

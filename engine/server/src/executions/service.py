@@ -595,6 +595,8 @@ class ExecutionService:
             "output": None,
             "timestamp": utcnow().isoformat(),
             "agent_name": agent.name,
+            "input_prompt": execution.input_prompt,
+            "model": agent.model_id,
         }
 
         # Set up trace handler to capture LLM/tool/chain events during execution.
@@ -677,6 +679,7 @@ class ExecutionService:
             "timestamp": utcnow().isoformat(),
             "duration_ms": step.duration_ms,
             "agent_name": agent.name,
+            "agent_response": response[:OUTPUT_TRUNCATION_LENGTH],
         }
 
     async def execute_graph(
