@@ -131,6 +131,7 @@ async def list_models(user: CurrentUser) -> list[ModelResponse]:
     ollama_details = await svc.get_ollama_model_details()
 
     from src.infra.secrets import secrets_store
+
     configured_providers = secrets_store.get_configured_providers()
 
     results = []
@@ -158,26 +159,28 @@ async def list_models(user: CurrentUser) -> list[ModelResponse]:
         elif provider in configured_providers:
             is_available = configured_providers[provider]
 
-        results.append(ModelResponse(
-            id=m.get("id", ""),
-            name=m.get("name", ""),
-            provider=m.get("provider", ""),
-            model_id=m.get("model_id", ""),
-            display_name=m.get("display_name"),
-            model_type=m.get("model_type", "local"),
-            context_window=m.get("context_window"),
-            max_output_tokens=m.get("max_output_tokens"),
-            parameter_size=parameter_size,
-            disk_size=disk_size,
-            quantization=quantization,
-            family=family,
-            is_required=m.get("is_required", False),
-            is_active=m.get("is_active", True),
-            is_available=is_available,
-            is_embedding=m.get("is_embedding", False),
-            pull_progress=pull_progress,
-            model_metadata=m.get("model_metadata", {}),
-        ))
+        results.append(
+            ModelResponse(
+                id=m.get("id", ""),
+                name=m.get("name", ""),
+                provider=m.get("provider", ""),
+                model_id=m.get("model_id", ""),
+                display_name=m.get("display_name"),
+                model_type=m.get("model_type", "local"),
+                context_window=m.get("context_window"),
+                max_output_tokens=m.get("max_output_tokens"),
+                parameter_size=parameter_size,
+                disk_size=disk_size,
+                quantization=quantization,
+                family=family,
+                is_required=m.get("is_required", False),
+                is_active=m.get("is_active", True),
+                is_available=is_available,
+                is_embedding=m.get("is_embedding", False),
+                pull_progress=pull_progress,
+                model_metadata=m.get("model_metadata", {}),
+            )
+        )
 
     return results
 
@@ -194,6 +197,7 @@ async def list_catalog(
     ollama_details = await svc.get_ollama_model_details()
 
     from src.infra.secrets import secrets_store
+
     configured_providers = secrets_store.get_configured_providers()
 
     catalog: list[CatalogModelResponse] = []
@@ -230,27 +234,29 @@ async def list_catalog(
             # Cloud model — pull status not applicable
             pull_status = "ready" if configured_providers.get(provider) else None
 
-        catalog.append(CatalogModelResponse(
-            id=m.get("id", ""),
-            provider=provider,
-            model_name=model_id_raw,
-            display_name=m.get("display_name") or m.get("name", model_id_raw),
-            model_type=m.get("model_type", "local"),
-            context_window=m.get("context_window"),
-            max_output_tokens=m.get("max_output_tokens"),
-            family=family,
-            size=size,
-            disk_size=disk_size,
-            quantization=quantization,
-            capabilities=_derive_capabilities(model_id_raw, provider, is_embedding),
-            is_required=m.get("is_required", False),
-            is_enabled=m.get("is_active", True),
-            is_global=True,
-            pull_status=pull_status,
-            pull_progress=pull_progress,
-            pull_error=pull_error,
-            model_metadata=m.get("model_metadata", {}),
-        ))
+        catalog.append(
+            CatalogModelResponse(
+                id=m.get("id", ""),
+                provider=provider,
+                model_name=model_id_raw,
+                display_name=m.get("display_name") or m.get("name", model_id_raw),
+                model_type=m.get("model_type", "local"),
+                context_window=m.get("context_window"),
+                max_output_tokens=m.get("max_output_tokens"),
+                family=family,
+                size=size,
+                disk_size=disk_size,
+                quantization=quantization,
+                capabilities=_derive_capabilities(model_id_raw, provider, is_embedding),
+                is_required=m.get("is_required", False),
+                is_enabled=m.get("is_active", True),
+                is_global=True,
+                pull_status=pull_status,
+                pull_progress=pull_progress,
+                pull_error=pull_error,
+                model_metadata=m.get("model_metadata", {}),
+            )
+        )
 
     total = len(catalog)
     total_pages = max(1, math.ceil(total / page_size))
@@ -302,6 +308,7 @@ async def get_catalog_model(model_id: str, user: CurrentUser) -> CatalogModelRes
             pull_status, pull_progress, pull_error = _decode_progress(raw_progress)
     else:
         from src.infra.secrets import secrets_store
+
         configured_providers = secrets_store.get_configured_providers()
         pull_status = "ready" if configured_providers.get(provider) else None
 
@@ -350,7 +357,8 @@ async def list_providers(user: CurrentUser) -> list[ProviderConfigResponse]:
     ollama_connected = False
     try:
         async with httpx.AsyncClient(
-            base_url=settings.OLLAMA_BASE_URL, timeout=3.0,
+            base_url=settings.OLLAMA_BASE_URL,
+            timeout=3.0,
         ) as client:
             resp = await client.get("/api/tags")
             ollama_connected = resp.status_code == 200
@@ -360,21 +368,25 @@ async def list_providers(user: CurrentUser) -> list[ProviderConfigResponse]:
     results: list[ProviderConfigResponse] = []
     for provider, display_name in PROVIDER_NAMES.items():
         if provider == "ollama":
-            results.append(ProviderConfigResponse(
-                provider=provider,
-                name=display_name,
-                base_url=settings.OLLAMA_BASE_URL,
-                is_configured=True,
-                is_connected=ollama_connected,
-            ))
+            results.append(
+                ProviderConfigResponse(
+                    provider=provider,
+                    name=display_name,
+                    base_url=settings.OLLAMA_BASE_URL,
+                    is_configured=True,
+                    is_connected=ollama_connected,
+                )
+            )
         else:
             has_key = configured.get(provider, False)
-            results.append(ProviderConfigResponse(
-                provider=provider,
-                name=display_name,
-                is_configured=has_key,
-                is_connected=has_key,
-            ))
+            results.append(
+                ProviderConfigResponse(
+                    provider=provider,
+                    name=display_name,
+                    is_configured=has_key,
+                    is_connected=has_key,
+                )
+            )
 
     return results
 
@@ -400,18 +412,20 @@ async def browse_models(
     if provider is None or provider == "ollama":
         ollama_models: list[BrowsableModelResponse] = []
         for m in CURATED_OLLAMA_MODELS:
-            ollama_models.append(BrowsableModelResponse(
-                provider="ollama",
-                model_name=m["model_name"],
-                display_name=m["display_name"],
-                context_window=m.get("context_window"),
-                size=m.get("size"),
-                disk_size=m.get("disk_size"),
-                family=m.get("family"),
-                capabilities=m.get("capabilities", {}),
-                model_type="local",
-                source="curated",
-            ))
+            ollama_models.append(
+                BrowsableModelResponse(
+                    provider="ollama",
+                    model_name=m["model_name"],
+                    display_name=m["display_name"],
+                    context_window=m.get("context_window"),
+                    size=m.get("size"),
+                    disk_size=m.get("disk_size"),
+                    family=m.get("family"),
+                    capabilities=m.get("capabilities", {}),
+                    model_type="local",
+                    source="curated",
+                )
+            )
         result["ollama"] = ollama_models
 
     # ── Cloud providers ──────────────────────────────────────────
@@ -427,16 +441,18 @@ async def browse_models(
 
         for m in curated:
             curated_names.add(m["model_name"])
-            models.append(BrowsableModelResponse(
-                provider=prov,
-                model_name=m["model_name"],
-                display_name=m["display_name"],
-                context_window=m.get("context_window"),
-                max_output_tokens=m.get("max_output_tokens"),
-                capabilities=m.get("capabilities", {}),
-                model_type="remote",
-                source="curated",
-            ))
+            models.append(
+                BrowsableModelResponse(
+                    provider=prov,
+                    model_name=m["model_name"],
+                    display_name=m["display_name"],
+                    context_window=m.get("context_window"),
+                    max_output_tokens=m.get("max_output_tokens"),
+                    capabilities=m.get("capabilities", {}),
+                    model_type="remote",
+                    source="curated",
+                )
+            )
 
         # Merge dynamic models if API key is configured
         api_key = secrets_store.get_provider_key(prov)
@@ -444,16 +460,18 @@ async def browse_models(
             dynamic = await fetch_provider_models(prov, api_key)
             for dm in dynamic:
                 if dm["model_name"] not in curated_names:
-                    models.append(BrowsableModelResponse(
-                        provider=prov,
-                        model_name=dm["model_name"],
-                        display_name=dm.get("display_name", dm["model_name"]),
-                        context_window=dm.get("context_window"),
-                        max_output_tokens=dm.get("max_output_tokens"),
-                        capabilities=dm.get("capabilities", {}),
-                        model_type="remote",
-                        source="dynamic",
-                    ))
+                    models.append(
+                        BrowsableModelResponse(
+                            provider=prov,
+                            model_name=dm["model_name"],
+                            display_name=dm.get("display_name", dm["model_name"]),
+                            context_window=dm.get("context_window"),
+                            max_output_tokens=dm.get("max_output_tokens"),
+                            capabilities=dm.get("capabilities", {}),
+                            model_type="remote",
+                            source="dynamic",
+                        )
+                    )
 
         result[prov] = models
 

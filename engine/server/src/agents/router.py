@@ -33,10 +33,7 @@ async def list_agents(
     # Filter by search term (name or description)
     if search:
         q = search.lower()
-        agents = [
-            a for a in agents
-            if q in a.name.lower() or q in (a.description or "").lower()
-        ]
+        agents = [a for a in agents if q in a.name.lower() or q in (a.description or "").lower()]
 
     total = len(agents)
 

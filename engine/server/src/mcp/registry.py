@@ -88,8 +88,7 @@ class MCPRegistry:
         if project_id is None:
             return list(self._servers.values())
         return [
-            s for s in self._servers.values()
-            if s.project_id is None or s.project_id == project_id
+            s for s in self._servers.values() if s.project_id is None or s.project_id == project_id
         ]
 
     def get_server(self, server_id: str) -> MCPServerConfig | None:
@@ -128,8 +127,10 @@ class MCPRegistry:
 
             # Resolve secrets for STDIO configs (env stays empty on disk)
             from .schemas import MCPTransport
+
             if config.transport == MCPTransport.STDIO and not config.env:
                 from src.infra.secrets import secrets_store
+
                 resolved_env = {}
                 prefix = f"MCP_{config.id}_"
                 for key in secrets_store.list_keys(prefix):
@@ -182,7 +183,9 @@ class MCPRegistry:
         config = self._servers.get(server_id)
         if not config:
             return MCPServerStatus(
-                server_id=server_id, name="unknown", connected=False,
+                server_id=server_id,
+                name="unknown",
+                connected=False,
                 error="Server not registered",
             )
 

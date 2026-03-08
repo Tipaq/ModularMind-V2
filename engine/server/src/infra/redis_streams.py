@@ -5,6 +5,7 @@ dead-letter queue (DLQ) for messages that exceed max retries.
 """
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -93,10 +94,8 @@ class RedisStreamBus(EventBus):
                 backoff = min(backoff * 2, MAX_BACKOFF)
 
     async def ensure_group(self, stream: str, group: str) -> None:
-        try:
+        with contextlib.suppress(ResponseError):  # Group already exists
             await self.redis.xgroup_create(stream, group, id="0", mkstream=True)
-        except ResponseError:
-            pass  # Group already exists
 
     async def stream_info(self, stream: str) -> dict[str, Any]:
         try:

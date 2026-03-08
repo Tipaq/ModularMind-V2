@@ -41,28 +41,22 @@ class OpenAIFineTuningProvider(FineTuningProvider):
         """Upload JSONL file to OpenAI for fine-tuning."""
         try:
             with open(file_path, "rb") as f:
-                response = await self._client.files.create(
-                    file=f, purpose="fine-tune"
-                )
+                response = await self._client.files.create(file=f, purpose="fine-tune")
             logger.info("Uploaded dataset to OpenAI: file_id=%s", response.id)
             return response.id
         except PermissionDeniedError:
             raise PermissionError(
                 "Your OpenAI API key does not have fine-tuning permissions. "
                 "Generate a key with 'Fine-tuning' scope at platform.openai.com/api-keys."
-            )
+            ) from None
 
-    async def create_job(
-        self, file_id: str, base_model: str, hyperparameters: dict
-    ) -> str:
+    async def create_job(self, file_id: str, base_model: str, hyperparameters: dict) -> str:
         """Create an OpenAI fine-tuning job."""
         hp = {}
         if "n_epochs" in hyperparameters:
             hp["n_epochs"] = hyperparameters["n_epochs"]
         if "learning_rate_multiplier" in hyperparameters:
-            hp["learning_rate_multiplier"] = hyperparameters[
-                "learning_rate_multiplier"
-            ]
+            hp["learning_rate_multiplier"] = hyperparameters["learning_rate_multiplier"]
         if "batch_size" in hyperparameters and hyperparameters["batch_size"] != "auto":
             hp["batch_size"] = hyperparameters["batch_size"]
 
@@ -83,7 +77,7 @@ class OpenAIFineTuningProvider(FineTuningProvider):
             raise PermissionError(
                 "Your OpenAI API key does not have fine-tuning permissions. "
                 "Generate a key with 'Fine-tuning' scope at platform.openai.com/api-keys."
-            )
+            ) from None
 
     async def get_job_status(self, job_id: str) -> dict:
         """Get status of an OpenAI fine-tuning job."""

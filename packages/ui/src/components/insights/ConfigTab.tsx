@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import {
   AlertTriangle,
   Bot,
@@ -304,8 +304,6 @@ function UserProfileSection({
 }) {
   const [draft, setDraft] = useState(preferences);
   const [saving, setSaving] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
   const handleBlur = async () => {
     if (draft === preferences) return;
     setSaving(true);

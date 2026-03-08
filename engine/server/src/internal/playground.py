@@ -17,7 +17,6 @@ from src.infra.secrets import secrets_store
 from src.internal.schemas import (
     PlaygroundCompletionRequest,
     PlaygroundCompletionResponseBody,
-    PlaygroundMessage,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,7 +70,7 @@ async def playground_completion(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid provider configuration",
-        )
+        ) from e
 
     # Build LangChain messages
     lc_messages = []
@@ -113,9 +112,8 @@ async def playground_completion(
         # Fallback: estimate tokens with tiktoken if provider returned nothing
         if not usage["total_tokens"]:
             from src.infra.token_counter import count_tokens
-            prompt_text = " ".join(
-                msg.content for msg in body.messages if msg.content
-            )
+
+            prompt_text = " ".join(msg.content for msg in body.messages if msg.content)
             resp_text = result.content if isinstance(result.content, str) else str(result.content)
             usage["prompt_tokens"] = count_tokens(prompt_text)
             usage["completion_tokens"] = count_tokens(resp_text)
@@ -127,9 +125,11 @@ async def playground_completion(
             usage=usage,
             latency_ms=latency_ms,
         )
-    except Exception:
-        logger.warning("Playground completion failed for provider=%s model=%s", body.provider, body.model)
+    except Exception as e:
+        logger.warning(
+            "Playground completion failed for provider=%s model=%s", body.provider, body.model
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Completion failed due to an internal error",
-        )
+        ) from e

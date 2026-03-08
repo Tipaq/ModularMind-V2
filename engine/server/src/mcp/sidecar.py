@@ -75,16 +75,18 @@ class SidecarManager:
         try:
             import docker
         except ImportError:
-            raise SidecarError(
+            raise SidecarError(  # noqa: B904
                 "Docker SDK not installed. Run: pip install docker"
             )
 
         try:
             self._docker = docker.from_env()
             self._docker.ping()
-        except Exception as e:  # Docker SDK raises heterogeneous errors (APIError, DockerException, etc.)
+        except (
+            Exception
+        ) as e:  # Docker SDK raises heterogeneous errors (APIError, DockerException, etc.)
             self._docker = None
-            raise SidecarError(f"Cannot connect to Docker daemon: {e}")
+            raise SidecarError(f"Cannot connect to Docker daemon: {e}") from e
 
         # Auto-detect network if not set
         if not self._network:
@@ -99,10 +101,9 @@ class SidecarManager:
         try:
             # Run in thread to avoid blocking
             import socket
+
             hostname = socket.gethostname()
-            container = await asyncio.to_thread(
-                self._docker.containers.get, hostname
-            )
+            container = await asyncio.to_thread(self._docker.containers.get, hostname)
             networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
             # Return the first non-default network
             for name in networks:
@@ -119,6 +120,7 @@ class SidecarManager:
         """Check if Docker is accessible (without connecting)."""
         try:
             import docker  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -168,10 +170,7 @@ class SidecarManager:
                 secrets.setdefault(k, v)
 
         # Validate required secrets (after defaults merge)
-        missing = [
-            s.key for s in entry.required_secrets
-            if s.required and s.key not in secrets
-        ]
+        missing = [s.key for s in entry.required_secrets if s.required and s.key not in secrets]
         if missing:
             raise SidecarError(f"Missing required secrets: {', '.join(missing)}")
 
@@ -211,7 +210,9 @@ class SidecarManager:
                 f"--port={SIDECAR_INTERNAL_PORT}",
                 "--host=0.0.0.0",
                 "--",
-                "npx", "-y", entry.npm_package,
+                "npx",
+                "-y",
+                entry.npm_package,
                 *entry.default_args,
             ]
             # Postgres positional arg (npm-mode only)
@@ -242,8 +243,10 @@ class SidecarManager:
                 volumes=vols,
                 restart_policy={"Name": "unless-stopped"},
             )
-        except Exception as e:  # Docker SDK raises heterogeneous errors (APIError, ImageNotFound, etc.)
-            raise SidecarError(f"Failed to create sidecar container: {e}")
+        except (
+            Exception
+        ) as e:  # Docker SDK raises heterogeneous errors (APIError, ImageNotFound, etc.)
+            raise SidecarError(f"Failed to create sidecar container: {e}") from e
 
         internal_url = f"http://{container_name}:{SIDECAR_INTERNAL_PORT}/mcp"
 
@@ -259,7 +262,9 @@ class SidecarManager:
 
         logger.info(
             "Deployed MCP sidecar %s for %s → %s",
-            container_name, entry.name, internal_url,
+            container_name,
+            entry.name,
+            internal_url,
         )
         return info
 
@@ -271,9 +276,7 @@ class SidecarManager:
 
         try:
             docker_client = await self._get_docker()
-            container = await asyncio.to_thread(
-                docker_client.containers.get, info.container_id
-            )
+            container = await asyncio.to_thread(docker_client.containers.get, info.container_id)
             await asyncio.to_thread(container.stop, timeout=CONTAINER_STOP_TIMEOUT_SECS)
             await asyncio.to_thread(container.remove)
             logger.info("Removed MCP sidecar %s", info.container_name)
@@ -291,9 +294,7 @@ class SidecarManager:
 
         try:
             docker_client = await self._get_docker()
-            container = await asyncio.to_thread(
-                docker_client.containers.get, info.container_id
-            )
+            container = await asyncio.to_thread(docker_client.containers.get, info.container_id)
             return {
                 "server_id": server_id,
                 "container_id": info.container_id,
@@ -367,9 +368,7 @@ class SidecarManager:
                 continue
             try:
                 docker_client = await self._get_docker()
-                container = await asyncio.to_thread(
-                    docker_client.containers.get, info.container_id
-                )
+                container = await asyncio.to_thread(docker_client.containers.get, info.container_id)
                 await asyncio.to_thread(container.stop, timeout=CONTAINER_STOP_TIMEOUT_SECS)
                 logger.info("Stopped sidecar %s", info.container_name)
             except Exception:  # Resilience: shutdown must attempt all sidecars
@@ -379,6 +378,7 @@ class SidecarManager:
         """Update the Prometheus gauge for active sidecars."""
         try:
             from src.infra.metrics import mcp_sidecars_active
+
             mcp_sidecars_active.set(len(self._sidecars))
         except (ImportError, AttributeError):
             logger.debug("Failed to update sidecar gauge metric")

@@ -117,6 +117,7 @@ export function useConversations({
           supervisorPrompt: (convConfig as Record<string, unknown>).supervisor_prompt as string || "",
           modelId: convConfig.model_id || null,
           modelOverride: convConfig.model_override || false,
+          userPreferences: (convConfig as Record<string, unknown>).user_preferences as string | null ?? null,
         });
       } catch {
         showError("Failed to load conversation");

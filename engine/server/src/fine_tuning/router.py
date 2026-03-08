@@ -11,7 +11,6 @@ import logging
 from pathlib import Path
 
 import redis as redis_mod
-
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
@@ -69,7 +68,7 @@ async def create_dataset(
         dataset = await svc.create_dataset(data, str(user.id))
         return DatasetResponse.model_validate(dataset)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/datasets", response_model=DatasetListResponse)
@@ -97,7 +96,7 @@ async def get_dataset(
         dataset = await svc.get_dataset(dataset_id)
         return DatasetResponse.model_validate(dataset)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/datasets/{dataset_id}/progress", response_model=DatasetProgress)
@@ -114,7 +113,7 @@ async def get_dataset_progress(
     try:
         dataset = await svc.get_dataset(dataset_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
     # Get Redis progress (async — avoids blocking the event loop)
     try:
@@ -148,7 +147,7 @@ async def delete_dataset(
         svc = FineTuningService(db)
         await svc.delete_dataset(dataset_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/datasets/{dataset_id}/download")
@@ -162,7 +161,7 @@ async def download_dataset(
     try:
         dataset = await svc.get_dataset(dataset_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
     if dataset.status != DatasetStatus.READY or not dataset.file_path:
         raise HTTPException(status_code=400, detail="Dataset not ready for download")
@@ -200,7 +199,7 @@ async def list_examples(
             dataset_id, status=status, page=page, page_size=page_size
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
     return {
         "items": [ExampleResponse.model_validate(ex) for ex in examples],
@@ -223,7 +222,7 @@ async def update_example(
         example = await svc.update_example(example_id, data, str(user.id))
         return ExampleResponse.model_validate(example)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post(
@@ -263,7 +262,7 @@ async def create_job(
         job = await svc.create_job(data, str(user.id))
         return JobResponse.model_validate(job)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/jobs", response_model=JobListResponse)
@@ -277,9 +276,7 @@ async def list_jobs(
 ) -> JobListResponse:
     """List fine-tuning jobs."""
     svc = FineTuningService(db)
-    return await svc.list_jobs(
-        agent_id=agent_id, status=status, page=page, page_size=page_size
-    )
+    return await svc.list_jobs(agent_id=agent_id, status=status, page=page, page_size=page_size)
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
@@ -298,7 +295,7 @@ async def get_job(
         response.progress = progress
         return response
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post(
@@ -316,7 +313,7 @@ async def cancel_job(
         await svc.cancel_job(job_id)
         return {"status": "cancelled"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post(
@@ -335,7 +332,7 @@ async def deploy_model(
         await svc.deploy_model(job_id, agent_id)
         return {"status": "deployed", "job_id": job_id, "agent_id": agent_id}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post(
@@ -354,7 +351,7 @@ async def rollback_model(
         await svc.rollback_model(job_id, agent_id)
         return {"status": "rolled_back", "job_id": job_id, "agent_id": agent_id}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 # Cost estimation (placed before /jobs/{id} to avoid route conflict)
@@ -369,7 +366,7 @@ async def estimate_cost(
     try:
         return await svc.estimate_cost(data)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 # ---------------------------------------------------------------------------
@@ -394,7 +391,7 @@ async def create_experiment(
         experiment = await svc.create_experiment(data, str(user.id))
         return ExperimentResponse.model_validate(experiment)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/experiments", response_model=ExperimentListResponse)
@@ -407,9 +404,7 @@ async def list_experiments(
 ) -> ExperimentListResponse:
     """List experiments."""
     svc = FineTuningService(db)
-    return await svc.list_experiments(
-        agent_id=agent_id, page=page, page_size=page_size
-    )
+    return await svc.list_experiments(agent_id=agent_id, page=page, page_size=page_size)
 
 
 @router.get("/experiments/{experiment_id}", response_model=ExperimentResponse)
@@ -424,7 +419,7 @@ async def get_experiment(
         experiment = await svc.get_experiment(experiment_id)
         return ExperimentResponse.model_validate(experiment)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post(
@@ -442,7 +437,7 @@ async def start_experiment(
         await svc.start_experiment(experiment_id)
         return {"status": "started", "experiment_id": experiment_id}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post(
@@ -460,7 +455,7 @@ async def stop_experiment(
         await svc.stop_experiment(experiment_id)
         return {"status": "stopped", "experiment_id": experiment_id}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 # ---------------------------------------------------------------------------

@@ -39,9 +39,7 @@ class GroupService:
 
         # Check uniqueness
         existing = await self.db.execute(
-            select(UserGroup).where(
-                (UserGroup.name == name) | (UserGroup.slug == slug)
-            )
+            select(UserGroup).where((UserGroup.name == name) | (UserGroup.slug == slug))
         )
         if existing.scalar_one_or_none():
             raise HTTPException(
@@ -57,9 +55,7 @@ class GroupService:
 
     async def list_groups(self) -> list[UserGroup]:
         """List all groups."""
-        result = await self.db.execute(
-            select(UserGroup).order_by(UserGroup.name)
-        )
+        result = await self.db.execute(select(UserGroup).order_by(UserGroup.name))
         return list(result.scalars().all())
 
     async def get_group(self, group_id: str) -> UserGroup:
@@ -75,8 +71,11 @@ class GroupService:
         return group
 
     async def update_group(
-        self, group_id: str, name: str | None = None,
-        description: str | None = None, is_active: bool | None = None
+        self,
+        group_id: str,
+        name: str | None = None,
+        description: str | None = None,
+        is_active: bool | None = None,
     ) -> UserGroup:
         """Update a group."""
         group = await self.get_group(group_id)
@@ -113,9 +112,7 @@ class GroupService:
         if existing:
             raise HTTPException(status_code=409, detail="User already in group")
 
-        member = UserGroupMember(
-            user_id=user_id, group_id=group_id, role=role
-        )
+        member = UserGroupMember(user_id=user_id, group_id=group_id, role=role)
         self.db.add(member)
         await self.db.commit()
         await self.db.refresh(member)
@@ -125,9 +122,7 @@ class GroupService:
         """Remove a user from a group."""
         member = await self.db.get(UserGroupMember, (user_id, group_id))
         if not member:
-            raise HTTPException(
-                status_code=404, detail="User is not a member of this group"
-            )
+            raise HTTPException(status_code=404, detail="User is not a member of this group")
         await self.db.delete(member)
         await self.db.commit()
 
@@ -160,10 +155,12 @@ class GroupService:
         )
         members = []
         for member, user in result.all():
-            members.append({
-                "user_id": member.user_id,
-                "email": user.email,
-                "role": member.role,
-                "joined_at": member.joined_at,
-            })
+            members.append(
+                {
+                    "user_id": member.user_id,
+                    "email": user.email,
+                    "role": member.role,
+                    "joined_at": member.joined_at,
+                }
+            )
         return members

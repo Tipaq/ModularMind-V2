@@ -33,7 +33,9 @@ class HierarchicalContextManager:
         self._redis = redis_client
 
     async def get_global_context(
-        self, conversation_id: str, messages: list[dict],
+        self,
+        conversation_id: str,
+        messages: list[dict],
     ) -> list[dict]:
         """Get conversation history for routing decisions.
 
@@ -42,7 +44,9 @@ class HierarchicalContextManager:
         return messages[-_MAX_GLOBAL_MESSAGES:]
 
     async def get_sub_context(
-        self, conversation_id: str, agent_id: str,
+        self,
+        conversation_id: str,
+        agent_id: str,
     ) -> SubContext | None:
         """Get agent-specific sub-context from Redis."""
         key = f"{_CTX_PREFIX}{conversation_id}:{agent_id}"
@@ -52,7 +56,10 @@ class HierarchicalContextManager:
         return None
 
     async def update_sub_context(
-        self, conversation_id: str, agent_id: str, messages: list[dict],
+        self,
+        conversation_id: str,
+        agent_id: str,
+        messages: list[dict],
     ) -> None:
         """Update sub-context in Redis after agent execution."""
         key = f"{_CTX_PREFIX}{conversation_id}:{agent_id}"
@@ -80,11 +87,15 @@ class HierarchicalContextManager:
         return await self._redis.get(f"{_AFFINITY_PREFIX}{conversation_id}")
 
     async def set_last_agent(
-        self, conversation_id: str, agent_id: str,
+        self,
+        conversation_id: str,
+        agent_id: str,
     ) -> None:
         """Set session affinity in Redis."""
         await self._redis.set(
-            f"{_AFFINITY_PREFIX}{conversation_id}", agent_id, ex=_CTX_TTL,
+            f"{_AFFINITY_PREFIX}{conversation_id}",
+            agent_id,
+            ex=_CTX_TTL,
         )
 
     async def cleanup(self, conversation_id: str) -> None:
@@ -95,16 +106,16 @@ class HierarchicalContextManager:
         agent_ids = await self._redis.smembers(
             f"{_CTX_AGENT_INDEX}{conversation_id}",
         )
-        keys_to_delete = [
-            f"{_CTX_PREFIX}{conversation_id}:{aid}" for aid in agent_ids
-        ]
+        keys_to_delete = [f"{_CTX_PREFIX}{conversation_id}:{aid}" for aid in agent_ids]
         keys_to_delete.append(f"{_AFFINITY_PREFIX}{conversation_id}")
         keys_to_delete.append(f"{_CTX_AGENT_INDEX}{conversation_id}")
         if keys_to_delete:
             await self._redis.delete(*keys_to_delete)
 
     async def rebuild_from_messages(
-        self, conversation_id: str, messages: list[dict],
+        self,
+        conversation_id: str,
+        messages: list[dict],
     ) -> None:
         """Reconstruct sub-contexts from conversation message history.
 
@@ -133,8 +144,7 @@ def get_context_manager() -> HierarchicalContextManager:
     """Get the singleton context manager. Raises if not initialized."""
     if _context_manager is None:
         raise RuntimeError(
-            "HierarchicalContextManager not initialized. "
-            "Call init_context_manager() at startup."
+            "HierarchicalContextManager not initialized. Call init_context_manager() at startup."
         )
     return _context_manager
 

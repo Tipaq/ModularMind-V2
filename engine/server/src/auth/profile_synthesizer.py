@@ -104,7 +104,8 @@ class ProfileSynthesizer:
         if not self._validate_output(new_profile):
             logger.warning(
                 "Profile synthesis output rejected for user %s (len=%d)",
-                user_id, len(new_profile) if new_profile else 0,
+                user_id,
+                len(new_profile) if new_profile else 0,
             )
             return None
 
@@ -126,9 +127,7 @@ class ProfileSynthesizer:
         # Refusal detection
         lower = text.strip().lower()
         refusal_prefixes = ("i cannot", "i'm sorry", "i am sorry", "i can't", "as an ai")
-        if any(lower.startswith(prefix) for prefix in refusal_prefixes):
-            return False
-        return True
+        return not any(lower.startswith(prefix) for prefix in refusal_prefixes)
 
     @staticmethod
     async def _call_llm(prompt: str, settings) -> str:
@@ -155,10 +154,7 @@ class ProfileSynthesizer:
         if ":" in model_id:
             prefix, model_name = model_id.split(":", 1)
             known_providers = {"openai", "anthropic", "ollama"}
-            if prefix.lower() in known_providers:
-                provider_name = prefix.lower()
-            else:
-                provider_name = "ollama"
+            provider_name = prefix.lower() if prefix.lower() in known_providers else "ollama"
         else:
             provider_name = "ollama"
 

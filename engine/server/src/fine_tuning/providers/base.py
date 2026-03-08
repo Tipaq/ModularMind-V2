@@ -26,9 +26,7 @@ class FineTuningProvider(ABC):
         ...
 
     @abstractmethod
-    async def create_job(
-        self, file_id: str, base_model: str, hyperparameters: dict
-    ) -> str:
+    async def create_job(self, file_id: str, base_model: str, hyperparameters: dict) -> str:
         """Create a fine-tuning job.
 
         Returns:

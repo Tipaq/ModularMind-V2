@@ -68,6 +68,14 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E402"]  # late imports used to avoid circular dependencies
+
+[tool.ruff.lint.per-file-ignores]
+"seed/**" = ["E501"]  # seed data has long description strings
+"src/supervisor/prompts.py" = ["E501"]  # prompt templates
+"src/mcp/catalog.py" = ["E501"]  # tool description strings
+"src/gateway/tool_definitions.py" = ["E501"]  # tool description strings
+"src/graph_engine/builtin_tools.py" = ["E501"]  # tool description strings
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

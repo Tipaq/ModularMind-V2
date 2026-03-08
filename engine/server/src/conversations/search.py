@@ -72,9 +72,9 @@ class ConversationSearchService:
         if agent_id:
             stmt = stmt.where(Conversation.agent_id == agent_id)
 
-        stmt = stmt.order_by(
-            func.ts_rank(ConversationMessage.search_vector, tsquery).desc()
-        ).limit(limit)
+        stmt = stmt.order_by(func.ts_rank(ConversationMessage.search_vector, tsquery).desc()).limit(
+            limit
+        )
 
         result = await self._db.execute(stmt)
 

@@ -5,14 +5,14 @@ Reusable response models to avoid duplication across modules.
 """
 
 import math
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel, computed_field
 
 T = TypeVar("T")
 
 
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     """Generic paginated list response.
 
     Usage::

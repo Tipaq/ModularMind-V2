@@ -137,5 +137,3 @@ class ConfigVersion(BaseModel):
 
     config_hash: str  # SHA256 of normalized JSON
     loaded_at: datetime
-
-

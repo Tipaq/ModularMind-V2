@@ -5,7 +5,7 @@ SQLAlchemy models for execution tracking.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -18,7 +18,7 @@ from src.infra.database import Base
 from src.infra.utils import utcnow
 
 
-class ExecutionStatus(str, Enum):
+class ExecutionStatus(StrEnum):
     """Execution status enumeration."""
 
     PENDING = "pending"
@@ -30,7 +30,7 @@ class ExecutionStatus(str, Enum):
     STOPPED = "stopped"
 
 
-class ExecutionType(str, Enum):
+class ExecutionType(StrEnum):
     """Execution type enumeration."""
 
     AGENT = "agent"
@@ -43,9 +43,7 @@ class ExecutionRun(Base):
 
     __tablename__ = "execution_runs"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     execution_type: Mapped[ExecutionType] = mapped_column(
         SQLEnum(ExecutionType, values_callable=lambda x: [e.value for e in x])
     )
@@ -54,19 +52,15 @@ class ExecutionRun(Base):
     session_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True
     )
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), index=True
-    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
 
     status: Mapped[ExecutionStatus] = mapped_column(
         SQLEnum(ExecutionStatus, values_callable=lambda x: [e.value for e in x]),
-        default=ExecutionStatus.PENDING
+        default=ExecutionStatus.PENDING,
     )
     config_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     config_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    stream_task_id: Mapped[str | None] = mapped_column(
-        String(100), nullable=True, index=True
-    )
+    stream_task_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
     input_prompt: Mapped[str] = mapped_column(Text)
     input_data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
@@ -118,9 +112,7 @@ class ExecutionStep(Base):
 
     __tablename__ = "execution_steps"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     run_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("execution_runs.id", ondelete="CASCADE"), index=True
     )
@@ -135,7 +127,7 @@ class ExecutionStep(Base):
 
     status: Mapped[ExecutionStatus] = mapped_column(
         SQLEnum(ExecutionStatus, values_callable=lambda x: [e.value for e in x]),
-        default=ExecutionStatus.PENDING
+        default=ExecutionStatus.PENDING,
     )
     input_data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     output_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
@@ -151,7 +143,8 @@ class ExecutionStep(Base):
     # Relationships
     run: Mapped["ExecutionRun"] = relationship(back_populates="steps")
     parent_step: Mapped["ExecutionStep | None"] = relationship(
-        back_populates="sub_steps", remote_side="ExecutionStep.id",
+        back_populates="sub_steps",
+        remote_side="ExecutionStep.id",
     )
     sub_steps: Mapped[list["ExecutionStep"]] = relationship(
         back_populates="parent_step",

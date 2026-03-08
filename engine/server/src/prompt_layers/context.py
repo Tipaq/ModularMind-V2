@@ -87,7 +87,8 @@ class AgentContextBuilder:
         # Inject recent conversation history for continuity
         if conversation_id:
             history_text = await self._get_conversation_history(
-                conversation_id, session,
+                conversation_id,
+                session,
                 max_tokens=history_budget,
                 context_window=context_window,
                 history_pct=settings.CONTEXT_BUDGET_HISTORY_PCT,
@@ -98,7 +99,10 @@ class AgentContextBuilder:
 
         if agent.memory_enabled:
             memory_text = await self._get_memory_context(
-                agent, query, session, user_id,
+                agent,
+                query,
+                session,
+                user_id,
                 max_tokens=profile_budget,
             )
             if memory_text:
@@ -107,7 +111,10 @@ class AgentContextBuilder:
 
         if agent.rag_config and agent.rag_config.enabled and agent.rag_config.collection_ids:
             rag_text = await self._get_rag_context(
-                agent, query, session, user_id,
+                agent,
+                query,
+                session,
+                user_id,
                 max_total_chars=rag_budget * 4,
             )
             if rag_text:
@@ -259,8 +266,7 @@ class AgentContextBuilder:
             compacted_before_id: str | None = None
             try:
                 conv_result = await session.execute(
-                    select(Conversation.config)
-                    .where(Conversation.id == conversation_id)
+                    select(Conversation.config).where(Conversation.id == conversation_id)
                 )
                 conv_config = conv_result.scalar_one_or_none() or {}
                 compacted_before_id = conv_config.get("compacted_before_message_id")
@@ -268,15 +274,15 @@ class AgentContextBuilder:
                 pass  # Best-effort
 
             # Build message query — skip compacted messages if boundary exists
-            msg_query = (
-                select(ConversationMessage)
-                .where(ConversationMessage.conversation_id == conversation_id)
+            msg_query = select(ConversationMessage).where(
+                ConversationMessage.conversation_id == conversation_id
             )
             if compacted_before_id:
                 try:
                     cutoff_result = await session.execute(
-                        select(ConversationMessage.created_at)
-                        .where(ConversationMessage.id == compacted_before_id)
+                        select(ConversationMessage.created_at).where(
+                            ConversationMessage.id == compacted_before_id
+                        )
                     )
                     cutoff_time = cutoff_result.scalar_one_or_none()
                     if cutoff_time:
@@ -289,9 +295,7 @@ class AgentContextBuilder:
             # Load recent messages (newest first, then reverse).
             # Safety limit of 200 rows to avoid loading entire conversation.
             result = await session.execute(
-                msg_query
-                .order_by(ConversationMessage.created_at.desc())
-                .limit(200)
+                msg_query.order_by(ConversationMessage.created_at.desc()).limit(200)
             )
             rows = list(result.scalars().all())
             if not rows:
@@ -324,14 +328,13 @@ class AgentContextBuilder:
             if compacted_before_id or budget_exceeded:
                 try:
                     summary_result = await session.execute(
-                        select(Conversation.compaction_summary)
-                        .where(Conversation.id == conversation_id)
+                        select(Conversation.compaction_summary).where(
+                            Conversation.id == conversation_id
+                        )
                     )
                     summary_text = summary_result.scalar_one_or_none()
                     if summary_text:
-                        summary_prefix = (
-                            f"**Earlier context (summary)**: {summary_text}\n\n---\n\n"
-                        )
+                        summary_prefix = f"**Earlier context (summary)**: {summary_text}\n\n---\n\n"
                         self._last_summary_text = summary_text
                 except Exception:
                     pass  # Summary lookup is best-effort
@@ -352,19 +355,20 @@ class AgentContextBuilder:
                 if line.startswith("**") and "**: " in line:
                     role_end = line.index("**: ")
                     role = line[2:role_end]
-                    content = line[role_end + 4:]
-                    self._last_history_messages.append({
-                        "role": role,
-                        "content": content[:200],
-                    })
+                    content = line[role_end + 4 :]
+                    self._last_history_messages.append(
+                        {
+                            "role": role,
+                            "content": content[:200],
+                        }
+                    )
 
             parts = ["### Recent Conversation History\n"]
             if summary_prefix:
                 parts.append(summary_prefix)
             parts.append("\n".join(lines))
             parts.append(
-                "\n\n(Use this conversation history for context."
-                " The user's new message follows.)"
+                "\n\n(Use this conversation history for context. The user's new message follows.)"
             )
             return "\n".join(parts)
 
@@ -389,9 +393,7 @@ class AgentContextBuilder:
 
             from src.auth.models import User
 
-            result = await session.execute(
-                select(User.preferences).where(User.id == user_id)
-            )
+            result = await session.execute(select(User.preferences).where(User.id == user_id))
             preferences = result.scalar_one_or_none()
             if not preferences:
                 return ""
@@ -449,9 +451,7 @@ class AgentContextBuilder:
             # Hydrate collection names
             coll_ids = {r.collection_id for r in raw_results}
             rows = await session.execute(
-                select(RAGCollection.id, RAGCollection.name).where(
-                    RAGCollection.id.in_(coll_ids)
-                )
+                select(RAGCollection.id, RAGCollection.name).where(RAGCollection.id.in_(coll_ids))
             )
             coll_map = {row[0]: row[1] for row in rows.all()}
 
@@ -468,31 +468,38 @@ class AgentContextBuilder:
                         "chunk_count": 0,
                     }
                 collections_seen[cid]["chunk_count"] += 1
-                chunks.append({
-                    "chunk_id": r.chunk_id,
-                    "document_id": r.document_id,
-                    "collection_id": cid,
-                    "collection_name": cname,
-                    "document_filename": r.document.filename if r.document else None,
-                    "content_preview": (r.content or "")[:300],
-                    "score": round(r.score, 4),
-                    "chunk_index": r.chunk_index,
-                })
+                chunks.append(
+                    {
+                        "chunk_id": r.chunk_id,
+                        "document_id": r.document_id,
+                        "collection_id": cid,
+                        "collection_name": cname,
+                        "document_filename": r.document.filename if r.document else None,
+                        "content_preview": (r.content or "")[:300],
+                        "score": round(r.score, 4),
+                        "chunk_index": r.chunk_index,
+                    }
+                )
 
-            self._last_rag_results = [{
-                "collections": list(collections_seen.values()),
-                "chunks": chunks,
-                "total_results": len(raw_results),
-            }]
+            self._last_rag_results = [
+                {
+                    "collections": list(collections_seen.values()),
+                    "chunks": chunks,
+                    "total_results": len(raw_results),
+                }
+            ]
 
             logger.info("Found %d RAG results for agent %s", len(raw_results), agent.id)
             return retriever.format_context(
-                raw_results, max_total_chars=max_total_chars,
+                raw_results,
+                max_total_chars=max_total_chars,
             )
 
         except Exception as e:
             logger.warning(
-                "RAG retrieval failed for agent %s: %s", agent.id, e,
+                "RAG retrieval failed for agent %s: %s",
+                agent.id,
+                e,
             )
             return ""
 
@@ -501,6 +508,7 @@ class AgentContextBuilder:
         """Get the embedding provider for RAG / knowledge context."""
         try:
             from src.embedding.resolver import get_knowledge_embedding_provider
+
             return get_knowledge_embedding_provider()
         except Exception as e:
             logger.warning("Could not initialise knowledge embedding provider: %s", e)

@@ -193,7 +193,8 @@ export default function Chat() {
     supervisorPrompt: "",
     modelId: effectiveModelId,
     modelOverride: chatConfig.modelOverride,
-  }), [chatConfig.supervisorMode, chatConfig.modelOverride, effectiveModelId]);
+    userPreferences: chatConfig.userPreferences,
+  }), [chatConfig.supervisorMode, chatConfig.modelOverride, effectiveModelId, chatConfig.userPreferences]);
 
   const handleConfigChange = useCallback((patch: Partial<typeof insightsConfig>) => {
     setChatConfig((prev) => {

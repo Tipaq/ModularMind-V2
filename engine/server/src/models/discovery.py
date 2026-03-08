@@ -35,14 +35,16 @@ async def fetch_openai_models(api_key: str) -> list[dict]:
             # Skip fine-tune variants and snapshots
             if ":ft-" in model_id or model_id.count("-") > 4:
                 continue
-            results.append({
-                "model_name": model_id,
-                "display_name": model_id,
-                "context_window": None,
-                "max_output_tokens": None,
-                "capabilities": {"chat": True},
-                "source": "dynamic",
-            })
+            results.append(
+                {
+                    "model_name": model_id,
+                    "display_name": model_id,
+                    "context_window": None,
+                    "max_output_tokens": None,
+                    "capabilities": {"chat": True},
+                    "source": "dynamic",
+                }
+            )
         return results
     except httpx.HTTPError as e:
         logger.warning("Failed to fetch OpenAI models: %s", e)
@@ -68,14 +70,16 @@ async def fetch_anthropic_models(api_key: str) -> list[dict]:
         for m in data.get("data", []):
             model_id = m.get("id", "")
             display = m.get("display_name", model_id)
-            results.append({
-                "model_name": model_id,
-                "display_name": display,
-                "context_window": 200000,
-                "max_output_tokens": 8192,
-                "capabilities": {"chat": True, "function_calling": True},
-                "source": "dynamic",
-            })
+            results.append(
+                {
+                    "model_name": model_id,
+                    "display_name": display,
+                    "context_window": 200000,
+                    "max_output_tokens": 8192,
+                    "capabilities": {"chat": True, "function_calling": True},
+                    "source": "dynamic",
+                }
+            )
         return results
     except httpx.HTTPError as e:
         logger.warning("Failed to fetch Anthropic models: %s", e)
@@ -101,14 +105,16 @@ async def fetch_google_models(api_key: str) -> list[dict]:
             methods = m.get("supportedGenerationMethods", [])
             if "generateContent" not in methods:
                 continue
-            results.append({
-                "model_name": model_id,
-                "display_name": display,
-                "context_window": m.get("inputTokenLimit"),
-                "max_output_tokens": m.get("outputTokenLimit"),
-                "capabilities": {"chat": True},
-                "source": "dynamic",
-            })
+            results.append(
+                {
+                    "model_name": model_id,
+                    "display_name": display,
+                    "context_window": m.get("inputTokenLimit"),
+                    "max_output_tokens": m.get("outputTokenLimit"),
+                    "capabilities": {"chat": True},
+                    "source": "dynamic",
+                }
+            )
         return results
     except httpx.HTTPError as e:
         logger.warning("Failed to fetch Google models: %s", e)
@@ -129,14 +135,16 @@ async def fetch_mistral_models(api_key: str) -> list[dict]:
         results = []
         for m in data.get("data", []):
             model_id = m.get("id", "")
-            results.append({
-                "model_name": model_id,
-                "display_name": model_id,
-                "context_window": m.get("max_context_length"),
-                "max_output_tokens": None,
-                "capabilities": {"chat": True},
-                "source": "dynamic",
-            })
+            results.append(
+                {
+                    "model_name": model_id,
+                    "display_name": model_id,
+                    "context_window": m.get("max_context_length"),
+                    "max_output_tokens": None,
+                    "capabilities": {"chat": True},
+                    "source": "dynamic",
+                }
+            )
         return results
     except httpx.HTTPError as e:
         logger.warning("Failed to fetch Mistral models: %s", e)
@@ -160,14 +168,16 @@ async def fetch_cohere_models(api_key: str) -> list[dict]:
             endpoints = m.get("endpoints", [])
             if "chat" not in endpoints and "generate" not in endpoints:
                 continue
-            results.append({
-                "model_name": model_id,
-                "display_name": model_id,
-                "context_window": m.get("context_length"),
-                "max_output_tokens": None,
-                "capabilities": {"chat": True},
-                "source": "dynamic",
-            })
+            results.append(
+                {
+                    "model_name": model_id,
+                    "display_name": model_id,
+                    "context_window": m.get("context_length"),
+                    "max_output_tokens": None,
+                    "capabilities": {"chat": True},
+                    "source": "dynamic",
+                }
+            )
         return results
     except httpx.HTTPError as e:
         logger.warning("Failed to fetch Cohere models: %s", e)
@@ -189,14 +199,16 @@ async def fetch_groq_models(api_key: str) -> list[dict]:
         for m in data.get("data", []):
             model_id = m.get("id", "")
             context = m.get("context_window")
-            results.append({
-                "model_name": model_id,
-                "display_name": model_id,
-                "context_window": context,
-                "max_output_tokens": None,
-                "capabilities": {"chat": True},
-                "source": "dynamic",
-            })
+            results.append(
+                {
+                    "model_name": model_id,
+                    "display_name": model_id,
+                    "context_window": context,
+                    "max_output_tokens": None,
+                    "capabilities": {"chat": True},
+                    "source": "dynamic",
+                }
+            )
         return results
     except httpx.HTTPError as e:
         logger.warning("Failed to fetch Groq models: %s", e)

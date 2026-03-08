@@ -59,6 +59,7 @@ class EphemeralAgentFactory:
         """
         if not model_id:
             from src.infra.config import get_settings
+
             model_id = get_settings().SUPERVISOR_MODEL_ID
 
         await self._check_rate_limit(conversation_id)
@@ -92,7 +93,9 @@ class EphemeralAgentFactory:
 
         logger.info(
             "Created ephemeral agent %s (%s) for conversation %s",
-            agent_id, name, conversation_id,
+            agent_id,
+            name,
+            conversation_id,
         )
         return config
 
@@ -110,13 +113,10 @@ class EphemeralAgentFactory:
         if conv_count > MAX_EPHEMERAL_PER_CONVERSATION:
             await self._redis.decr(rate_key)
             raise ValueError(
-                f"Max ephemeral agents per conversation "
-                f"({MAX_EPHEMERAL_PER_CONVERSATION}) reached"
+                f"Max ephemeral agents per conversation ({MAX_EPHEMERAL_PER_CONVERSATION}) reached"
             )
 
         global_count = len(await self.config_provider.list_ephemeral_agents())
         if global_count >= MAX_EPHEMERAL_GLOBAL:
             await self._redis.decr(rate_key)
-            raise ValueError(
-                f"Max global ephemeral agents ({MAX_EPHEMERAL_GLOBAL}) reached"
-            )
+            raise ValueError(f"Max global ephemeral agents ({MAX_EPHEMERAL_GLOBAL}) reached")

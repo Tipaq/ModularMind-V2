@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     )
     OLLAMA_KEEP_ALIVE: str = Field(
         default="24h",
-        description="How long Ollama keeps models in VRAM (e.g. '5m', '1h', '24h', '-1' for forever)",
+        description="How long Ollama keeps models in VRAM (e.g. '5m', '1h', '24h', '-1' for forever)",  # noqa: E501
     )
     DEFAULT_LLM_PROVIDER: str = "ollama"
     LLM_TIMEOUT_SECONDS: int = Field(default=60, ge=10, le=300)
@@ -125,7 +125,9 @@ class Settings(BaseSettings):
         description="Bucket for chat message attachments",
     )
     S3_PRESIGNED_EXPIRY: int = Field(
-        default=3600, ge=60, le=86400,
+        default=3600,
+        ge=60,
+        le=86400,
         description="Presigned URL expiry in seconds",
     )
 
@@ -163,28 +165,40 @@ class Settings(BaseSettings):
 
     # ---- Context Budget (percentage of model context_window) -------------------
     CONTEXT_BUDGET_HISTORY_PCT: float = Field(
-        default=30.0, ge=5.0, le=60.0,
+        default=30.0,
+        ge=5.0,
+        le=60.0,
         description="Percentage of model context_window allocated to conversation history",
     )
     CONTEXT_BUDGET_PROFILE_PCT: float = Field(
-        default=10.0, ge=0.0, le=30.0,
+        default=10.0,
+        ge=0.0,
+        le=30.0,
         description="Percentage of model context_window allocated to memory retrieval",
     )
     CONTEXT_BUDGET_RAG_PCT: float = Field(
-        default=15.0, ge=0.0, le=40.0,
+        default=15.0,
+        ge=0.0,
+        le=40.0,
         description="Percentage of model context_window allocated to RAG chunks",
     )
     CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW: int = Field(
-        default=8192, ge=2048, le=200000,
+        default=8192,
+        ge=2048,
+        le=200000,
         description="Fallback context_window when model metadata is unavailable",
     )
     CONTEXT_BUDGET_MAX_PCT: float = Field(
-        default=100.0, ge=10.0, le=100.0,
+        default=100.0,
+        ge=10.0,
+        le=100.0,
         description="Soft limit: max total % of context_window usable by all layers combined",
     )
     CONTEXT_BUDGET_SYSTEM_PCT: float = Field(
-        default=10.0, ge=0.0, le=30.0,
-        description="Percentage of model context_window allocated to system/supervisor prompt layers",
+        default=10.0,
+        ge=0.0,
+        le=30.0,
+        description="Percentage of model context_window allocated to system/supervisor prompt layers",  # noqa: E501
     )
     # ---- Profile Synthesis -------------------------------------------------
     PROFILE_SYNTHESIS_MODEL: str = Field(
@@ -192,11 +206,15 @@ class Settings(BaseSettings):
         description="LLM model for auto-synthesis. Empty = use first available chat model.",
     )
     PROFILE_SYNTHESIS_INTERVAL: int = Field(
-        default=86400, ge=3600, le=604800,
+        default=86400,
+        ge=3600,
+        le=604800,
         description="Seconds between profile synthesis runs (default 24h)",
     )
     RAG_CONSOLIDATION_INTERVAL: int = Field(
-        default=21600, ge=3600, le=604800,
+        default=21600,
+        ge=3600,
+        le=604800,
         description="Seconds between RAG consolidation runs (default 6h)",
     )
     RAG_MULTI_STAGE_ENABLED: bool = Field(
@@ -350,13 +368,13 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def reject_default_secret_in_production(self) -> "Settings":
         """Prevent the engine from starting with the default SECRET_KEY in production."""
-        if (
-            self.SECRET_KEY == "change-me-in-production"
-            and self.ENVIRONMENT not in ("development", "test")
+        if self.SECRET_KEY == "change-me-in-production" and self.ENVIRONMENT not in (
+            "development",
+            "test",
         ):
             raise ValueError(
-                "SECRET_KEY must be changed from its default value in non-development environments. "
-                "Generate one with: openssl rand -hex 32"
+                "SECRET_KEY must be changed from its default value in "
+                "non-development environments. Generate one with: openssl rand -hex 32"
             )
         return self
 
@@ -365,12 +383,19 @@ class Settings(BaseSettings):
         """Reject URLs pointing to cloud metadata endpoints (SSRF)
         and warn on embedded credentials in service URLs.
         """
-        _CLOUD_METADATA = frozenset({
-            "169.254.169.254", "metadata.google.internal", "100.100.100.200",
-        })
+        _CLOUD_METADATA = frozenset(
+            {
+                "169.254.169.254",
+                "metadata.google.internal",
+                "100.100.100.200",
+            }
+        )
         for field_name in (
-            "OLLAMA_BASE_URL", "VLLM_BASE_URL", "TGI_BASE_URL",
-            "QDRANT_URL", "SYNC_SOURCE",
+            "OLLAMA_BASE_URL",
+            "VLLM_BASE_URL",
+            "TGI_BASE_URL",
+            "QDRANT_URL",
+            "SYNC_SOURCE",
         ):
             url = getattr(self, field_name, "")
             if not url:
@@ -382,11 +407,10 @@ class Settings(BaseSettings):
                     f"{field_name} points to a cloud metadata endpoint "
                     f"({hostname}). This is a critical SSRF risk."
                 )
-            if field_name == "SYNC_SOURCE" and not self.DEBUG:
+            if field_name == "SYNC_SOURCE" and not self.DEBUG:  # noqa: SIM102
                 if parsed.scheme != "https":
                     _config_logger.warning(
-                        "SYNC_SOURCE uses %s instead of https — "
-                        "sync traffic will not be encrypted",
+                        "SYNC_SOURCE uses %s instead of https — sync traffic will not be encrypted",
                         parsed.scheme,
                     )
             if parsed.username or parsed.password:

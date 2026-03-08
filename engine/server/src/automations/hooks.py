@@ -4,16 +4,14 @@ After an automation execution completes, these hooks perform post-actions
 like commenting on PRs, committing code, merging, or calling webhooks.
 """
 
-import json
 import logging
 import os
 from typing import Any
 
 import httpx
 
-from src.automations.models import AutomationRun, AutomationRunStatus
+from src.automations.models import AutomationRun
 from src.graph_engine.interfaces import AutomationConfig
-from src.infra.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +49,7 @@ async def run_post_actions(
             else:
                 logger.warning("Unknown post-action type: %s", action_type)
         except Exception:
-            logger.exception(
-                "Post-action '%s' failed for run %s", action_type, run.id
-            )
+            logger.exception("Post-action '%s' failed for run %s", action_type, run.id)
 
 
 def _get_github_headers(config: AutomationConfig) -> dict[str, str]:
@@ -148,7 +144,9 @@ async def _github_commit(
 
     logger.info(
         "Committing %d file changes to %s branch %s",
-        len(file_changes), run.source_ref, branch,
+        len(file_changes),
+        run.source_ref,
+        branch,
     )
 
 

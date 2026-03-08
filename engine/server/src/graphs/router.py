@@ -38,10 +38,7 @@ async def list_graphs(
     # Filter by search term (name or description)
     if search:
         q = search.lower()
-        graphs = [
-            g for g in graphs
-            if q in g.name.lower() or q in (g.description or "").lower()
-        ]
+        graphs = [g for g in graphs if q in g.name.lower() or q in (g.description or "").lower()]
 
     total = len(graphs)
 
@@ -59,12 +56,12 @@ async def list_graphs(
                 all_agent_ids.add(str(agent_id))
 
     import asyncio
+
     agent_configs = dict(
         zip(
             all_agent_ids,
-            await asyncio.gather(
-                *(config_provider.get_agent_config(aid) for aid in all_agent_ids)
-            ),
+            await asyncio.gather(*(config_provider.get_agent_config(aid) for aid in all_agent_ids)),
+            strict=False,
         )
     )
 

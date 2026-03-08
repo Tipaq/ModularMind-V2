@@ -128,13 +128,10 @@ class ConversationService:
         total = (await self.db.execute(count_base)).scalar() or 0
 
         offset = (page - 1) * page_size
-        query = (
-            select(
-                Conversation,
-                func.coalesce(msg_count_sq.c.msg_count, 0).label("message_count"),
-            )
-            .outerjoin(msg_count_sq, Conversation.id == msg_count_sq.c.conversation_id)
-        )
+        query = select(
+            Conversation,
+            func.coalesce(msg_count_sq.c.msg_count, 0).label("message_count"),
+        ).outerjoin(msg_count_sq, Conversation.id == msg_count_sq.c.conversation_id)
         if needs_user_join:
             query = query.join(User, Conversation.user_id == User.id)
         if base_filter:
@@ -193,9 +190,7 @@ class ConversationService:
             .where(ExecutionRun.session_id == conversation_id)
             .scalar_subquery()
         )
-        await self.db.execute(
-            delete(ExecutionStep).where(ExecutionStep.run_id.in_(step_subq))
-        )
+        await self.db.execute(delete(ExecutionStep).where(ExecutionStep.run_id.in_(step_subq)))
 
         # Delete execution runs linked to this conversation
         await self.db.execute(
@@ -227,9 +222,7 @@ class ConversationService:
             return await self.get_conversation_by_id(conversation_id)
 
         await self.db.execute(
-            update(Conversation)
-            .where(Conversation.id == conversation_id)
-            .values(**values)
+            update(Conversation).where(Conversation.id == conversation_id).values(**values)
         )
         await self.db.flush()
         return await self.get_conversation_by_id(conversation_id)

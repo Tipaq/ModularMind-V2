@@ -34,6 +34,7 @@ async def _verify_agent_exists(agent_id: str) -> None:
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
+
 router = APIRouter(prefix="/connectors", tags=["Connectors"])
 
 
@@ -101,9 +102,7 @@ async def list_connectors(
     db: DbSession,
 ) -> ConnectorListResponse:
     """List all connectors."""
-    result = await db.execute(
-        select(Connector).order_by(Connector.created_at.desc())
-    )
+    result = await db.execute(select(Connector).order_by(Connector.created_at.desc()))
     connectors = list(result.scalars().all())
 
     return ConnectorListResponse(
@@ -112,7 +111,9 @@ async def list_connectors(
     )
 
 
-@router.post("", response_model=ConnectorCreateResponse, status_code=201, dependencies=[RequireAdmin])
+@router.post(
+    "", response_model=ConnectorCreateResponse, status_code=201, dependencies=[RequireAdmin]
+)
 async def create_connector(
     data: ConnectorCreate,
     user: CurrentUser,
@@ -147,9 +148,7 @@ async def get_connector(
     db: DbSession,
 ) -> ConnectorResponse:
     """Get a specific connector."""
-    result = await db.execute(
-        select(Connector).where(Connector.id == connector_id)
-    )
+    result = await db.execute(select(Connector).where(Connector.id == connector_id))
     connector = result.scalar_one_or_none()
 
     if not connector:
@@ -166,9 +165,7 @@ async def update_connector(
     db: DbSession,
 ) -> ConnectorResponse:
     """Update a connector."""
-    result = await db.execute(
-        select(Connector).where(Connector.id == connector_id)
-    )
+    result = await db.execute(select(Connector).where(Connector.id == connector_id))
     connector = result.scalar_one_or_none()
 
     if not connector:
@@ -198,9 +195,7 @@ async def delete_connector(
     db: DbSession,
 ) -> None:
     """Delete a connector."""
-    result = await db.execute(
-        select(Connector).where(Connector.id == connector_id)
-    )
+    result = await db.execute(select(Connector).where(Connector.id == connector_id))
     connector = result.scalar_one_or_none()
 
     if not connector:

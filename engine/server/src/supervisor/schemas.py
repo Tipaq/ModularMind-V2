@@ -8,12 +8,12 @@ parsed messages, sub-contexts, and configuration.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class RoutingStrategy(str, Enum):
+class RoutingStrategy(StrEnum):
     """Routing strategy decided by the supervisor."""
 
     DIRECT_RESPONSE = "DIRECT_RESPONSE"

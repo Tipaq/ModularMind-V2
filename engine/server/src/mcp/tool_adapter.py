@@ -76,16 +76,14 @@ class MCPToolExecutor:
         mapping = self._map.get(namespaced_name)
         if not mapping:
             raise MCPClientError(
-                f"Unknown tool '{namespaced_name}'. "
-                f"Available: {list(self._map.keys())}"
+                f"Unknown tool '{namespaced_name}'. Available: {list(self._map.keys())}"
             )
 
         server_id, real_name = mapping
 
         if not _mcp_tool_bucket.allow(server_id):
             raise MCPClientError(
-                f"Rate limit exceeded for MCP server '{server_id}'. "
-                "Try again shortly."
+                f"Rate limit exceeded for MCP server '{server_id}'. Try again shortly."
             )
 
         client = await self.registry.get_client(server_id)
@@ -98,9 +96,7 @@ class MCPToolExecutor:
         )
 
         if result.is_error:
-            error_texts = [
-                c.get("text", "") for c in result.content if c.get("type") == "text"
-            ]
+            error_texts = [c.get("text", "") for c in result.content if c.get("type") == "text"]
             raise MCPClientError(
                 f"Tool '{real_name}' returned error: "
                 + ("\n".join(error_texts) or str(result.content))
@@ -132,7 +128,8 @@ def _tool_to_langchain_dict(ns_name: str, tool: MCPToolDefinition) -> dict[str, 
         "function": {
             "name": ns_name,
             "description": tool.description or tool.name,
-            "parameters": tool.input_schema or {
+            "parameters": tool.input_schema
+            or {
                 "type": "object",
                 "properties": {},
             },
@@ -157,8 +154,7 @@ def mcp_tools_to_langchain(
         List of tool dicts ready for ``llm.bind_tools(result)``.
     """
     return [
-        _tool_to_langchain_dict(_namespace_tool_name(server_id, tool.name), tool)
-        for tool in tools
+        _tool_to_langchain_dict(_namespace_tool_name(server_id, tool.name), tool) for tool in tools
     ]
 
 
@@ -176,6 +172,7 @@ async def discover_and_convert(
         Tuple of ``(langchain_tool_dicts, executor)``.
         If no tools are discovered, returns ``([], None)``.
     """
+
     async def _discover_one(sid: str) -> tuple[str, list[MCPToolDefinition]]:
         try:
             tools = await registry.discover_tools(sid)
@@ -183,7 +180,8 @@ async def discover_and_convert(
         except Exception as e:
             logger.warning(
                 "Failed to discover tools from MCP server %s: %s",
-                sid, e,
+                sid,
+                e,
             )
             return sid, []
 

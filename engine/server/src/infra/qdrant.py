@@ -62,6 +62,7 @@ def _dense_dim_for_collection(name: str, settings: Settings) -> int:
 
     return MODEL_DIMENSIONS.get(model, _DENSE_DIM_DEFAULT)
 
+
 # Payload indexes to create on every collection
 _PAYLOAD_INDEXES: list[tuple[str, models.PayloadSchemaType]] = [
     ("scope", models.PayloadSchemaType.KEYWORD),

@@ -96,6 +96,7 @@ async def health_check() -> dict[str, Any]:
     # Check worker (Redis Streams consumer health)
     try:
         from src.infra.redis_streams import RedisStreamBus
+
         bus = RedisStreamBus(redis.Redis(connection_pool=get_redis_pool()))
         exec_info = await bus.stream_info("tasks:executions")
         worker_groups = exec_info.get("groups", [])

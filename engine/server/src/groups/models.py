@@ -14,19 +14,13 @@ class UserGroup(Base):
 
     __tablename__ = "user_groups"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    allow_cross_conversation_search: Mapped[bool] = mapped_column(
-        Boolean, default=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    allow_cross_conversation_search: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), onupdate=func.now()
     )
@@ -47,12 +41,8 @@ class UserGroupMember(Base):
     group_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("user_groups.id", ondelete="CASCADE"), primary_key=True
     )
-    role: Mapped[str] = mapped_column(
-        String(20), default="member"
-    )  # "owner" | "admin" | "member"
-    joined_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    role: Mapped[str] = mapped_column(String(20), default="member")  # "owner" | "admin" | "member"
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="group_memberships")
     group: Mapped["UserGroup"] = relationship(back_populates="members")

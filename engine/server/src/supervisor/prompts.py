@@ -188,12 +188,11 @@ def build_routing_task_prompt(
     mcp_tool_catalog = build_mcp_tool_catalog(mcp_tools or {})
     conversation_summary = build_conversation_summary(history)
     last_agent_info = last_agent or "(none — new conversation or topic change)"
-    memory_section = (
-        f"User profile:\n{memory_context}" if memory_context else ""
-    )
+    memory_section = f"User profile:\n{memory_context}" if memory_context else ""
     knowledge_section = (
         f"Relevant knowledge from documents (use this to answer directly when sufficient):\n{knowledge_context}"
-        if knowledge_context else ""
+        if knowledge_context
+        else ""
     )
 
     fmt_kwargs = dict(

@@ -258,9 +258,7 @@ def add_user(email: str, role: str, groups: str) -> None:
                 from src.groups.models import UserGroup, UserGroupMember
 
                 for slug in group_slugs:
-                    result = await session.execute(
-                        select(UserGroup).where(UserGroup.slug == slug)
-                    )
+                    result = await session.execute(select(UserGroup).where(UserGroup.slug == slug))
                     group = result.scalar_one_or_none()
                     if not group:
                         click.echo(f"  Warning: group '{slug}' not found, skipping.")
@@ -307,9 +305,7 @@ def add_group(name: str, description: str) -> None:
         from src.groups.models import UserGroup
 
         async with async_session_maker() as session:
-            result = await session.execute(
-                select(UserGroup).where(UserGroup.slug == slug)
-            )
+            result = await session.execute(select(UserGroup).where(UserGroup.slug == slug))
             if result.scalar_one_or_none():
                 raise click.ClickException(f"Group '{slug}' already exists.")
 
@@ -410,7 +406,9 @@ def seed_configs(seed_dir: str, config_dir: str | None, force: bool) -> None:
             manifest_data["created"] = datetime.now(UTC).isoformat()
             target.mkdir(parents=True, exist_ok=True)
             manifest_dst.write_text(
-                yaml.dump(manifest_data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                yaml.dump(
+                    manifest_data, default_flow_style=False, allow_unicode=True, sort_keys=False
+                )
             )
             click.echo("  Seeded manifest.yaml")
             copied += 1
@@ -536,6 +534,7 @@ def backfill_qdrant(batch_size: int) -> None:
         click.echo("Backfill complete")
 
         from src.infra.qdrant import qdrant_factory
+
         await qdrant_factory.close()
 
     asyncio.run(_run())
@@ -589,7 +588,9 @@ def recall_test(
         click.echo("-" * 90)
 
         for r in result.results:
-            query_display = r.test_case.query[:47] + "..." if len(r.test_case.query) > 50 else r.test_case.query
+            query_display = (
+                r.test_case.query[:47] + "..." if len(r.test_case.query) > 50 else r.test_case.query
+            )
             click.echo(
                 f"{query_display:<50} {r.recall_at_k:>10.3f} {r.mrr:>8.3f} "
                 f"{r.ndcg:>8.3f} {r.latency_ms:>8.1f}ms"
@@ -610,6 +611,7 @@ def recall_test(
 
         # Close Qdrant
         from src.infra.qdrant import qdrant_factory
+
         await qdrant_factory.close()
 
     asyncio.run(_run())

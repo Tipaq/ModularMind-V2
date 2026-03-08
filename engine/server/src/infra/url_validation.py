@@ -12,16 +12,18 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
-_BLOCKED_HOSTNAMES = frozenset({
-    "localhost",
-    "127.0.0.1",
-    "0.0.0.0",
-    "169.254.169.254",  # AWS/GCP metadata
-    "metadata.google.internal",  # GCP metadata
-    "100.100.100.200",  # Alibaba Cloud metadata
-    "::1",
-    "::ffff:127.0.0.1",
-})
+_BLOCKED_HOSTNAMES = frozenset(
+    {
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "169.254.169.254",  # AWS/GCP metadata
+        "metadata.google.internal",  # GCP metadata
+        "100.100.100.200",  # Alibaba Cloud metadata
+        "::1",
+        "::ffff:127.0.0.1",
+    }
+)
 
 _BLOCKED_SUFFIXES = (".internal", ".local", ".localhost")
 
@@ -105,9 +107,12 @@ def validate_url_ssrf(
         if resolve_dns and not _is_ip_literal(bare_host):
             try:
                 resolved_ips = socket.getaddrinfo(
-                    bare_host, None, socket.AF_UNSPEC, socket.SOCK_STREAM,
+                    bare_host,
+                    None,
+                    socket.AF_UNSPEC,
+                    socket.SOCK_STREAM,
                 )
-                for family, _, _, _, sockaddr in resolved_ips:
+                for _family, _, _, _, sockaddr in resolved_ips:
                     ip = sockaddr[0]
                     if _is_private_ip(ip):
                         return (

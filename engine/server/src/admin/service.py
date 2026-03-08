@@ -22,8 +22,7 @@ async def compute_user_cost(db: AsyncSession, user_id: str) -> float | None:
             ExecutionRun.model,
             ExecutionRun.tokens_prompt,
             ExecutionRun.tokens_completion,
-        )
-        .where(
+        ).where(
             ExecutionRun.user_id == user_id,
             ExecutionRun.status == ExecutionStatus.COMPLETED,
             ExecutionRun.model.isnot(None),

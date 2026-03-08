@@ -80,9 +80,7 @@ class LocalExportProvider(FineTuningProvider):
         logger.info("Exported dataset to: %s", dest_dir)
         return str(dest_file)
 
-    async def create_job(
-        self, file_id: str, base_model: str, hyperparameters: dict
-    ) -> str:
+    async def create_job(self, file_id: str, base_model: str, hyperparameters: dict) -> str:
         """Write job config alongside the exported JSONL. Completes immediately."""
         dest_file = Path(file_id)
         dest_dir = dest_file.parent
@@ -101,9 +99,7 @@ class LocalExportProvider(FineTuningProvider):
         }
 
         config_path = dest_dir / "job_config.json"
-        config_path.write_text(
-            json.dumps(config, indent=2, default=str), encoding="utf-8"
-        )
+        config_path.write_text(json.dumps(config, indent=2, default=str), encoding="utf-8")
 
         logger.info("Created local export job: %s at %s", job_id, dest_dir)
         return job_id
@@ -130,9 +126,7 @@ class LocalExportProvider(FineTuningProvider):
             return []
 
         jobs = []
-        for config_file in sorted(
-            export_dir.glob("*/job_config.json"), reverse=True
-        ):
+        for config_file in sorted(export_dir.glob("*/job_config.json"), reverse=True):
             try:
                 config = json.loads(config_file.read_text(encoding="utf-8"))
                 jobs.append(

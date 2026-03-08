@@ -9,8 +9,6 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from src.infra.utils import utcnow
-
 from pydantic import BaseModel, Field
 from sqlalchemy import Index, String, Text, select
 from sqlalchemy.dialects.postgresql import JSONB
@@ -18,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infra.database import Base
+from src.infra.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +26,13 @@ class ExecutionFeedback(Base):
 
     __tablename__ = "execution_feedback"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     execution_id: Mapped[str] = mapped_column(String(36), index=True)
     step_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     agent_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True,
+        String(36),
+        nullable=True,
+        index=True,
     )
     user_id: Mapped[str] = mapped_column(String(36), index=True)
 
@@ -42,14 +41,14 @@ class ExecutionFeedback(Base):
     original_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     tags: Mapped[list] = mapped_column(JSONB, default=list)
     metadata_: Mapped[dict] = mapped_column(
-        "metadata", JSONB, default=dict,
+        "metadata",
+        JSONB,
+        default=dict,
     )
 
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
-    __table_args__ = (
-        Index("ix_feedback_agent_rating", "agent_id", "rating"),
-    )
+    __table_args__ = (Index("ix_feedback_agent_rating", "agent_id", "rating"),)
 
     def __repr__(self) -> str:
         return f"<ExecutionFeedback {self.id[:8]} rating={self.rating}>"
@@ -121,12 +120,15 @@ class FeedbackService:
 
         logger.info(
             "Feedback created: execution=%s, rating=%d, has_correction=%s",
-            execution_id, data.rating, data.correction is not None,
+            execution_id,
+            data.rating,
+            data.correction is not None,
         )
         return feedback
 
     async def get_feedback(
-        self, execution_id: str,
+        self,
+        execution_id: str,
     ) -> list[ExecutionFeedback]:
         """Get all feedback for an execution."""
         stmt = (
@@ -138,7 +140,9 @@ class FeedbackService:
         return list(result.scalars().all())
 
     async def get_agent_corrections(
-        self, agent_id: str, limit: int = 5,
+        self,
+        agent_id: str,
+        limit: int = 5,
     ) -> list[dict[str, Any]]:
         """Get recent corrections for an agent — used for few-shot injection.
 

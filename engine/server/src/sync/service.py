@@ -135,9 +135,7 @@ class SyncService:
             if remote_version <= self._local_version:
                 return False
 
-            logger.info(
-                "New config version detected: %d → %d", self._local_version, remote_version
-            )
+            logger.info("New config version detected: %d → %d", self._local_version, remote_version)
 
             # Transform Platform format → Engine format, then write to DB
             await self._apply_agents(manifest.get("agents", []))
@@ -148,6 +146,7 @@ class SyncService:
 
             # Reload ConfigProvider in-memory cache so API serves updated configs
             from src.domain_config.provider import get_config_provider
+
             await get_config_provider().reload_async()
 
             logger.info("Config sync complete — now at version %d", remote_version)
@@ -210,10 +209,11 @@ class SyncService:
         if not automations:
             return
 
-        from src.graph_engine.interfaces import AutomationConfig
-
         import json
+
         import redis.asyncio as aioredis
+
+        from src.graph_engine.interfaces import AutomationConfig
         from src.infra.config import get_settings
 
         s = get_settings()
@@ -234,7 +234,9 @@ class SyncService:
                         json.dumps(engine_config),
                     )
                     automation_ids.append(aid)
-                    logger.info("Applied automation config: %s (%s)", aid, raw_automation.get("name"))
+                    logger.info(
+                        "Applied automation config: %s (%s)", aid, raw_automation.get("name")
+                    )
                 except (ValueError, KeyError):
                     logger.exception("Failed to apply automation %s", aid)
             # Store index of all automation IDs

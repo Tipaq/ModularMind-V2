@@ -23,8 +23,8 @@ router = APIRouter(prefix="/api/v1/automations", tags=["automations"])
 @router.post("/{automation_id}/trigger")
 async def trigger_automation(
     automation_id: str,
-    user=Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),  # noqa: B008
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     """Manually trigger an automation to run now."""
     import redis.asyncio as aioredis
@@ -58,8 +58,8 @@ async def get_automation_runs(
     automation_id: str,
     limit: int = 20,
     offset: int = 0,
-    user=Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),  # noqa: B008
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     """Get run history for an automation."""
     from src.automations.models import AutomationRun

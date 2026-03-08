@@ -38,15 +38,11 @@ class AgentConfigVersion(Base):
     config: Mapped[dict] = mapped_column(JSONB, nullable=False)
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     created_by: Mapped[str | None] = mapped_column(
         String(36), nullable=True
     )  # NO FK — informational only
-    change_note: Mapped[str | None] = mapped_column(
-        String(500), nullable=True
-    )
+    change_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     __table_args__ = (
         # Ensure exactly one active version per agent
@@ -80,15 +76,9 @@ class GraphConfigVersion(Base):
     config: Mapped[dict] = mapped_column(JSONB, nullable=False)
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now()
-    )
-    created_by: Mapped[str | None] = mapped_column(
-        String(36), nullable=True
-    )
-    change_note: Mapped[str | None] = mapped_column(
-        String(500), nullable=True
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    change_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     __table_args__ = (
         Index(

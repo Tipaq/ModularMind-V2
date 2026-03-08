@@ -18,7 +18,13 @@ from src.infra.database import DbSession
 from src.infra.rate_limit import RateLimitDependency
 
 from .dependencies import CurrentUser
-from .schemas import LoginResponse, PasswordChange, PreferencesResponse, PreferencesUpdate, UserResponse
+from .schemas import (
+    LoginResponse,
+    PasswordChange,
+    PreferencesResponse,
+    PreferencesUpdate,
+    UserResponse,
+)
 from .service import AuthService
 
 logger = logging.getLogger(__name__)
@@ -126,9 +132,7 @@ async def logout(request: Request, response: Response) -> dict[str, str]:
                         exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
                         remaining = int((exp - datetime.now(UTC)).total_seconds())
                         if remaining > 0:
-                            await redis_client.set(
-                                f"refresh_blacklist:{jti}", "1", ex=remaining
-                            )
+                            await redis_client.set(f"refresh_blacklist:{jti}", "1", ex=remaining)
                     finally:
                         await redis_client.aclose()
         except (pyjwt.InvalidTokenError, KeyError, ConnectionError, OSError):
@@ -175,9 +179,7 @@ async def refresh_tokens(
     redis_client = await get_redis_client()
     if redis_client:
         try:
-            is_blacklisted = await redis_client.exists(
-                f"refresh_blacklist:{token_data.jti}"
-            )
+            is_blacklisted = await redis_client.exists(f"refresh_blacklist:{token_data.jti}")
             if is_blacklisted:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -198,13 +200,9 @@ async def refresh_tokens(
     redis_client = await get_redis_client()
     if redis_client:
         try:
-            remaining_ttl = int(
-                (token_data.exp - datetime.now(UTC)).total_seconds()
-            )
+            remaining_ttl = int((token_data.exp - datetime.now(UTC)).total_seconds())
             if remaining_ttl > 0:
-                await redis_client.set(
-                    f"refresh_blacklist:{token_data.jti}", "1", ex=remaining_ttl
-                )
+                await redis_client.set(f"refresh_blacklist:{token_data.jti}", "1", ex=remaining_ttl)
         finally:
             await redis_client.aclose()
 
@@ -242,7 +240,6 @@ async def get_current_user_info(user: CurrentUser) -> UserResponse:
     return UserResponse.model_validate(user)
 
 
-
 @router.get("/me/preferences", response_model=PreferencesResponse)
 async def get_preferences(user: CurrentUser) -> PreferencesResponse:
     """Get current user's preferences (profile text)."""
@@ -261,7 +258,7 @@ async def update_preferences(
         await auth_service.update_preferences(user.id, body.preferences)
         await db.commit()
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     return PreferencesResponse(preferences=body.preferences)
 
 

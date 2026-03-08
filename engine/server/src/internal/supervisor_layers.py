@@ -36,9 +36,9 @@ _LAYER_LABELS: dict[str, str] = {
 }
 
 _LAYER_DESCRIPTIONS: dict[str, str] = {
-    "supervisor_identity": "Defines who the supervisor is — its role, capabilities, and core purpose. Stable layer, rarely changed.",
-    "supervisor_personality": "Defines how the supervisor communicates — tone, style, behavior patterns. Can be overridden per conversation.",
-    "tool_task": "Instructions for the supervisor when using external tools (web search, APIs). Defines the tool-use workflow.",
+    "supervisor_identity": "Defines who the supervisor is — its role, capabilities, and core purpose. Stable layer, rarely changed.",  # noqa: E501
+    "supervisor_personality": "Defines how the supervisor communicates — tone, style, behavior patterns. Can be overridden per conversation.",  # noqa: E501
+    "tool_task": "Instructions for the supervisor when using external tools (web search, APIs). Defines the tool-use workflow.",  # noqa: E501
 }
 
 
@@ -68,6 +68,7 @@ def _invalidate_loader_cache() -> None:
     """Clear the lru_cache in loader.py so next read picks up disk changes."""
     try:
         from src.prompt_layers.loader import load_layer
+
         load_layer.cache_clear()
     except Exception as e:
         logger.warning("Failed to clear layer loader cache: %s", e)
@@ -81,13 +82,15 @@ async def get_supervisor_layers(user: CurrentUser) -> LayersResponse:
     """Get all supervisor prompt layers."""
     layers = []
     for key, filename in _ALLOWED_LAYERS.items():
-        layers.append(LayerInfo(
-            key=key,
-            label=_LAYER_LABELS.get(key, key),
-            description=_LAYER_DESCRIPTIONS.get(key, ""),
-            content=_read_layer(key),
-            filename=filename,
-        ))
+        layers.append(
+            LayerInfo(
+                key=key,
+                label=_LAYER_LABELS.get(key, key),
+                description=_LAYER_DESCRIPTIONS.get(key, ""),
+                content=_read_layer(key),
+                filename=filename,
+            )
+        )
     return LayersResponse(layers=layers)
 
 
@@ -104,6 +107,7 @@ async def update_supervisor_layer(
     """Update a single supervisor prompt layer."""
     if layer_key not in _ALLOWED_LAYERS:
         from fastapi import HTTPException
+
         raise HTTPException(
             status_code=404,
             detail=f"Unknown layer '{layer_key}'. Valid: {list(_ALLOWED_LAYERS.keys())}",
@@ -114,7 +118,9 @@ async def update_supervisor_layer(
 
     logger.info(
         "Supervisor layer '%s' updated by user %s (%d chars)",
-        layer_key, user.id, len(body.content),
+        layer_key,
+        user.id,
+        len(body.content),
     )
 
     return LayerUpdateResponse(key=layer_key, content=body.content)

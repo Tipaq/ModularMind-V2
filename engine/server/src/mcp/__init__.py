@@ -8,7 +8,6 @@ from .catalog import (
     get_catalog_entry,
     get_free_catalog_entries,
 )
-from .sdk_client import MCPClient, MCPClientError, MCPConnectionError, MCPToolError
 from .registry import MCPRegistry
 from .schemas import (
     MCPServerConfig,
@@ -18,6 +17,7 @@ from .schemas import (
     MCPToolDefinition,
     MCPTransport,
 )
+from .sdk_client import MCPClient, MCPClientError, MCPConnectionError, MCPToolError
 from .tool_adapter import MCPToolExecutor, discover_and_convert, mcp_tools_to_langchain
 from .usage_router import usage_router as mcp_usage_router
 

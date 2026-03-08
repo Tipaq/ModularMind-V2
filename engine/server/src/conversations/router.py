@@ -55,7 +55,6 @@ async def search_conversations(
     """Search across conversations via hybrid search (dense + BM25)."""
     from .search import ConversationSearchService
 
-    allowed_group_user_ids: list[str] = []
     if request.include_group:
         from sqlalchemy import select
 
@@ -69,13 +68,12 @@ async def search_conversations(
             .where(
                 UserGroup.allow_cross_conversation_search == True,  # noqa: E712
                 UserGroup.id.in_(
-                    select(UserGroupMember.group_id)
-                    .where(UserGroupMember.user_id == user.id)
+                    select(UserGroupMember.group_id).where(UserGroupMember.user_id == user.id)
                 ),
             )
         )
         result = await db.execute(group_members_query)
-        allowed_group_user_ids = [r[0] for r in result.all()]
+        [r[0] for r in result.all()]
 
     service = ConversationSearchService(db)
     results = await service.search(
@@ -112,7 +110,10 @@ def check_conversation_access(conversation: Conversation, user_id: str) -> None:
 
 # Document MIME types that can have text extracted
 _DOCUMENT_CONTENT_TYPES = {
-    "application/pdf", "text/plain", "text/csv", "text/markdown",
+    "application/pdf",
+    "text/plain",
+    "text/csv",
+    "text/markdown",
     "application/json",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
@@ -138,7 +139,8 @@ async def _enrich_prompt_with_attachments(
             continue
         try:
             file_bytes = await store.download(
-                settings.S3_BUCKET_ATTACHMENTS, att["object_key"],
+                settings.S3_BUCKET_ATTACHMENTS,
+                att["object_key"],
             )
             text = await extract_text(file_bytes, att["filename"])
             if text:
@@ -149,7 +151,8 @@ async def _enrich_prompt_with_attachments(
                 )
         except (OSError, ValueError, RuntimeError):
             logger.warning(
-                "Failed to extract text from attachment %s", att.get("filename"),
+                "Failed to extract text from attachment %s",
+                att.get("filename"),
                 exc_info=True,
             )
 
@@ -161,7 +164,9 @@ async def _enrich_prompt_with_attachments(
 
 
 def build_conversation_response(
-    conv: Conversation, msg_count: int, user_email: str | None = None,
+    conv: Conversation,
+    msg_count: int,
+    user_email: str | None = None,
 ) -> ConversationResponse:
     """Build a ConversationResponse."""
     return ConversationResponse(
@@ -197,9 +202,7 @@ async def list_conversations(
         for conv, msg_count in conversations_with_counts
     ]
 
-    return ConversationListResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    return ConversationListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.post("", response_model=ConversationResponse, status_code=201)
@@ -329,15 +332,30 @@ async def delete_conversation(
 
 ATTACHMENT_ALLOWED_TYPES = {
     # Documents
-    "application/pdf", "text/plain", "text/csv", "text/markdown",
+    "application/pdf",
+    "text/plain",
+    "text/csv",
+    "text/markdown",
     "application/json",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     # Images
-    "image/png", "image/jpeg", "image/gif", "image/webp",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
 }
 ATTACHMENT_ALLOWED_EXTENSIONS = {
-    ".pdf", ".txt", ".csv", ".md", ".json", ".docx",
-    ".png", ".jpg", ".jpeg", ".gif", ".webp",
+    ".pdf",
+    ".txt",
+    ".csv",
+    ".md",
+    ".json",
+    ".docx",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
 }
 ATTACHMENT_MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 ATTACHMENT_REDIS_TTL = 3600  # 1 hour
@@ -348,7 +366,7 @@ async def upload_attachment(
     conversation_id: str,
     user: CurrentUser,
     db: DbSession,
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
 ) -> AttachmentResponse:
     """Upload a file attachment for a future message in this conversation."""
     import os
@@ -403,6 +421,7 @@ async def upload_attachment(
 
     # Store pending metadata in Redis (TTL = 1 hour)
     import json
+
     redis = await get_redis_client()
     meta = {
         "id": attachment_id,
@@ -529,11 +548,13 @@ async def _dispatch_supervisor_executions(
     if not acquired:
         await db.rollback()
         raise HTTPException(
-            status_code=429, detail="Too many concurrent executions",
+            status_code=429,
+            detail="Too many concurrent executions",
             headers={"Retry-After": "10"},
         )
     await exec_service.dispatch_execution(
-        execution, ab_model_override=model_override,
+        execution,
+        ab_model_override=model_override,
     )
 
     if result.get("routing_metadata"):
@@ -548,7 +569,8 @@ async def _dispatch_supervisor_executions(
             sub_exec = await exec_service.get_execution(eid)
             if sub_exec:
                 await exec_service.dispatch_execution(
-                    sub_exec, ab_model_override=model_override,
+                    sub_exec,
+                    ab_model_override=model_override,
                 )
 
 
@@ -579,9 +601,7 @@ async def _build_supervisor_response(
         if _agent:
             delegated_to = _agent.name
             is_ephemeral = (
-                bool(_agent.routing_metadata.get("ephemeral"))
-                if _agent.routing_metadata
-                else False
+                bool(_agent.routing_metadata.get("ephemeral")) if _agent.routing_metadata else False
             )
 
     knowledge_data_response = None
@@ -603,10 +623,7 @@ async def _build_supervisor_response(
         context_data_response = ContextData(
             history=ContextHistory(
                 budget=ContextHistoryBudget(**raw_budget) if raw_budget else None,
-                messages=[
-                    ContextHistoryMessage(**m)
-                    for m in raw_history.get("messages", [])
-                ],
+                messages=[ContextHistoryMessage(**m) for m in raw_history.get("messages", [])],
                 summary=raw_history.get("summary", ""),
             ),
             user_profile=raw_context.get("user_profile"),
@@ -614,10 +631,10 @@ async def _build_supervisor_response(
                 context_window=raw_bo["context_window"],
                 effective_context=raw_bo["effective_context"],
                 max_pct=raw_bo["max_pct"],
-                layers={
-                    k: BudgetLayerInfo(**v) for k, v in raw_bo["layers"].items()
-                },
-            ) if raw_bo else None,
+                layers={k: BudgetLayerInfo(**v) for k, v in raw_bo["layers"].items()},
+            )
+            if raw_bo
+            else None,
         )
 
     base_kwargs = dict(
@@ -651,11 +668,7 @@ async def _build_supervisor_response(
         return SendMessageResponse(
             **base_kwargs,
             execution_id=exec_id,
-            stream_url=(
-                f"/api/v1/executions/{exec_id}/stream"
-                if exec_id
-                else None
-            ),
+            stream_url=(f"/api/v1/executions/{exec_id}/stream" if exec_id else None),
             delegated_to=delegated_to,
             is_ephemeral=is_ephemeral,
             ephemeral_agent=result.get("ephemeral_agent"),
@@ -704,21 +717,28 @@ async def _handle_supervisor_message(
         )
 
     supervisor = SuperSupervisorService(
-        db, get_config_provider(), llm_provider, redis_client,
+        db,
+        get_config_provider(),
+        llm_provider,
+        redis_client,
     )
 
     # Get recent messages for context (bounded SQL query)
-    recent_rows = (await db.execute(
-        sa_select(ConversationMessage)
-        .where(ConversationMessage.conversation_id == conversation_id)
-        .order_by(ConversationMessage.created_at.desc())
-        .limit(MAX_RECENT_MESSAGES)
-    )).scalars().all()
+    recent_rows = (
+        (
+            await db.execute(
+                sa_select(ConversationMessage)
+                .where(ConversationMessage.conversation_id == conversation_id)
+                .order_by(ConversationMessage.created_at.desc())
+                .limit(MAX_RECENT_MESSAGES)
+            )
+        )
+        .scalars()
+        .all()
+    )
     recent_messages = [
         {
-            "role": (
-                m.role.value if hasattr(m.role, "value") else m.role
-            ),
+            "role": (m.role.value if hasattr(m.role, "value") else m.role),
             "content": m.content,
             "meta": m.meta,
         }
@@ -736,7 +756,12 @@ async def _handle_supervisor_message(
     model_override = _get_model_override(conv_config)
 
     await _dispatch_supervisor_executions(
-        result, user.id, db, exec_service, redis_client, model_override,
+        result,
+        user.id,
+        db,
+        exec_service,
+        redis_client,
+        model_override,
     )
 
     await db.commit()
@@ -763,11 +788,8 @@ async def _handle_direct_execution(
             settings = get_settings()
             if settings.MCP_AUTO_ENABLE:
                 from src.mcp.service import get_mcp_registry
-                _mcp_ids = [
-                    s.id
-                    for s in get_mcp_registry().list_servers()
-                    if s.enabled
-                ]
+
+                _mcp_ids = [s.id for s in get_mcp_registry().list_servers() if s.enabled]
         except (RuntimeError, ValueError, KeyError):
             logger.debug(
                 "MCP auto-enable failed, continuing without MCP",
@@ -800,7 +822,8 @@ async def _handle_direct_execution(
 
     model_override = _get_model_override(conv_config)
     await exec_service.dispatch_execution(
-        execution, ab_model_override=model_override,
+        execution,
+        ab_model_override=model_override,
     )
     await db.commit()
 
@@ -833,6 +856,7 @@ async def send_message(
         import json as _json
 
         from src.infra.redis import get_redis_client
+
         redis = await get_redis_client()
         try:
             for att_id in data.attachment_ids:
@@ -850,13 +874,15 @@ async def send_message(
                     )
                 if att_meta.get("user_id") != user.id:
                     raise HTTPException(status_code=403, detail="Access denied")
-                attachments_list.append({
-                    "id": att_meta["id"],
-                    "filename": att_meta["filename"],
-                    "content_type": att_meta.get("content_type"),
-                    "size_bytes": att_meta.get("size_bytes"),
-                    "object_key": att_meta["object_key"],
-                })
+                attachments_list.append(
+                    {
+                        "id": att_meta["id"],
+                        "filename": att_meta["filename"],
+                        "content_type": att_meta.get("content_type"),
+                        "size_bytes": att_meta.get("size_bytes"),
+                        "object_key": att_meta["object_key"],
+                    }
+                )
                 # Delete from Redis (claimed)
                 await redis.delete(f"attachment:{att_id}")
         finally:
@@ -892,7 +918,8 @@ async def send_message(
         # Enrich prompt with text extracted from document attachments
         if attachments_list:
             enriched_content = await _enrich_prompt_with_attachments(
-                data.content, attachments_list,
+                data.content,
+                attachments_list,
             )
             data = SendMessageRequest(
                 content=enriched_content,
@@ -901,22 +928,32 @@ async def send_message(
 
         if getattr(conversation, "supervisor_mode", False):
             return await _handle_supervisor_message(
-                conversation_id, conversation, data,
-                user_msg_response, user, db, exec_service,
+                conversation_id,
+                conversation,
+                data,
+                user_msg_response,
+                user,
+                db,
+                exec_service,
             )
         else:
             return await _handle_direct_execution(
-                conversation_id, conversation, data,
-                user_msg_response, user, db, exec_service,
+                conversation_id,
+                conversation,
+                data,
+                user_msg_response,
+                user,
+                db,
+                exec_service,
             )
 
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except (RuntimeError, OSError, KeyError, TypeError) as e:
         logger.exception("Failed to create execution: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to start execution")
+        raise HTTPException(status_code=500, detail="Failed to start execution") from e
 
 
 @router.post("/{conversation_id}/compact", response_model=CompactResponse)
@@ -953,12 +990,14 @@ async def compact_conversation(
     compaction = CompactionService(db)
     try:
         result = await compaction.compact(
-            conversation_id, model_id=model_id, user_id=user.id,
+            conversation_id,
+            model_id=model_id,
+            user_id=user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
     await db.commit()
     return CompactResponse(**result)
@@ -991,25 +1030,31 @@ async def admin_list_conversations(
 
     service = ConversationService(db)
     conversations_with_counts, total = await service.list_all_conversations(
-        page=page, page_size=page_size, agent_id=agent_id, search=search,
+        page=page,
+        page_size=page_size,
+        agent_id=agent_id,
+        search=search,
     )
 
     # Batch-resolve user emails
     user_ids = {conv.user_id for conv, _ in conversations_with_counts}
     email_map: dict[str, str] = {}
     if user_ids:
-        result = await db.execute(
-            sa_select(User.id, User.email).where(User.id.in_(user_ids))
-        )
+        result = await db.execute(sa_select(User.id, User.email).where(User.id.in_(user_ids)))
         email_map = {row[0]: row[1] for row in result.all()}
 
     items = [
         build_conversation_response(
-            conv, msg_count, user_email=email_map.get(conv.user_id),
+            conv,
+            msg_count,
+            user_email=email_map.get(conv.user_id),
         )
         for conv, msg_count in conversations_with_counts
     ]
 
     return ConversationListResponse(
-        items=items, total=total, page=page, page_size=page_size,
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
     )

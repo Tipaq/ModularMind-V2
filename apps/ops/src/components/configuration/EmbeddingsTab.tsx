@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, BookOpen, AlertTriangle, Check } from "lucide-react";
+import { RefreshCw, BookOpen, AlertTriangle, Check, Brain } from "lucide-react";
 import {
   Card,
   CardContent,

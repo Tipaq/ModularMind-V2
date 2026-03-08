@@ -72,14 +72,14 @@ class CompactionService:
         compacted_before_id: str | None = config.get("compacted_before_message_id")
 
         # Load messages after the compaction boundary (or all if no boundary)
-        query = (
-            select(ConversationMessage)
-            .where(ConversationMessage.conversation_id == conversation_id)
+        query = select(ConversationMessage).where(
+            ConversationMessage.conversation_id == conversation_id
         )
         if compacted_before_id:
             cutoff = await self.session.execute(
-                select(ConversationMessage.created_at)
-                .where(ConversationMessage.id == compacted_before_id)
+                select(ConversationMessage.created_at).where(
+                    ConversationMessage.id == compacted_before_id
+                )
             )
             cutoff_time = cutoff.scalar_one_or_none()
             if cutoff_time:
@@ -95,7 +95,8 @@ class CompactionService:
         # Determine budget boundary — keep last N messages that fit
         max_chars = int(
             settings.CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW
-            * settings.CONTEXT_BUDGET_HISTORY_PCT / 100
+            * settings.CONTEXT_BUDGET_HISTORY_PCT
+            / 100
             * 4  # tokens → chars
         )
         kept_ids: set[str] = set()
@@ -154,7 +155,9 @@ class CompactionService:
         elapsed_ms = int((time.monotonic() - start) * 1000)
         logger.info(
             "Compacted %d messages for conversation %s in %dms",
-            len(compactable), conversation_id, elapsed_ms,
+            len(compactable),
+            conversation_id,
+            elapsed_ms,
         )
 
         return {

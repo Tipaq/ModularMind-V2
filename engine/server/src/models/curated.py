@@ -150,7 +150,10 @@ CURATED_OLLAMA_MODELS: list[dict] = [
         "disk_size": "9.0 GB",
         "context_window": 32768,
         "capabilities": {
-            "chat": True, "code": True, "function_calling": True, "reasoning": True,
+            "chat": True,
+            "code": True,
+            "function_calling": True,
+            "reasoning": True,
         },
     },
     {
@@ -170,7 +173,10 @@ CURATED_OLLAMA_MODELS: list[dict] = [
         "disk_size": "18 GB",
         "context_window": 32768,
         "capabilities": {
-            "chat": True, "code": True, "function_calling": True, "reasoning": True,
+            "chat": True,
+            "code": True,
+            "function_calling": True,
+            "reasoning": True,
         },
     },
     {
@@ -199,7 +205,10 @@ CURATED_OLLAMA_MODELS: list[dict] = [
         "disk_size": "20 GB",
         "context_window": 32768,
         "capabilities": {
-            "chat": True, "code": True, "function_calling": True, "reasoning": True,
+            "chat": True,
+            "code": True,
+            "function_calling": True,
+            "reasoning": True,
         },
     },
     {
@@ -380,7 +389,10 @@ CURATED_CLOUD_MODELS: dict[str, list[dict]] = {
             "context_window": 200000,
             "max_output_tokens": 16384,
             "capabilities": {
-                "chat": True, "vision": True, "function_calling": True, "code": True,
+                "chat": True,
+                "vision": True,
+                "function_calling": True,
+                "code": True,
             },
         },
         {
@@ -412,7 +424,10 @@ CURATED_CLOUD_MODELS: dict[str, list[dict]] = {
             "context_window": 1048576,
             "max_output_tokens": 65536,
             "capabilities": {
-                "chat": True, "vision": True, "function_calling": True, "reasoning": True,
+                "chat": True,
+                "vision": True,
+                "function_calling": True,
+                "reasoning": True,
             },
         },
         {

@@ -161,7 +161,9 @@ class FairScheduler:
                     cleaned += 1
                     logger.info(
                         "Cleaned stale slot: execution=%s team=%s status=%s",
-                        exec_id, team_id, status,
+                        exec_id,
+                        team_id,
+                        status,
                     )
                 else:
                     # Slot key already expired (TTL), just remove from set
@@ -187,9 +189,7 @@ class FairScheduler:
     # Internals
     # ------------------------------------------------------------------
 
-    async def try_acquire(
-        self, r: redis.Redis, team_id: str, execution_id: str
-    ) -> bool:
+    async def try_acquire(self, r: redis.Redis, team_id: str, execution_id: str) -> bool:
         """Atomically try to acquire both global and team semaphores.
 
         Uses a Lua script so the INCR/check/DECR sequence is executed
@@ -202,9 +202,15 @@ class FairScheduler:
         result = await r.eval(
             self._ACQUIRE_LUA,
             4,  # number of KEYS
-            global_key, team_key, slot_key, "scheduler:active_slots",
-            self._global_max, self._team_max, self._slot_ttl,
-            team_id, execution_id,
+            global_key,
+            team_key,
+            slot_key,
+            "scheduler:active_slots",
+            self._global_max,
+            self._team_max,
+            self._slot_ttl,
+            team_id,
+            execution_id,
         )
 
         acquired = bool(result[0])
@@ -214,22 +220,26 @@ class FairScheduler:
         if acquired:
             logger.debug(
                 "Acquired slot: execution=%s team=%s (global=%d/%d, team=%d/%d)",
-                execution_id, team_id, global_count, self._global_max,
-                team_count, self._team_max,
+                execution_id,
+                team_id,
+                global_count,
+                self._global_max,
+                team_count,
+                self._team_max,
             )
         else:
             logger.warning(
-                "Backpressure: limit reached for execution %s "
-                "(global=%d/%d, team=%d/%d)",
-                execution_id, global_count, self._global_max,
-                team_count, self._team_max,
+                "Backpressure: limit reached for execution %s (global=%d/%d, team=%d/%d)",
+                execution_id,
+                global_count,
+                self._global_max,
+                team_count,
+                self._team_max,
             )
 
         return acquired
 
-    async def do_release(
-        self, r: redis.Redis, team_id: str, execution_id: str
-    ) -> None:
+    async def do_release(self, r: redis.Redis, team_id: str, execution_id: str) -> None:
         """Atomically release semaphores and clean up slot tracking.
 
         Uses a Lua script to ensure counters never go below 0 and
@@ -242,13 +252,17 @@ class FairScheduler:
         await r.eval(
             self._RELEASE_LUA,
             4,  # number of KEYS
-            global_key, team_key, slot_key, "scheduler:active_slots",
+            global_key,
+            team_key,
+            slot_key,
+            "scheduler:active_slots",
             execution_id,
         )
 
         logger.debug(
             "Released slot: execution=%s team=%s",
-            execution_id, team_id,
+            execution_id,
+            team_id,
         )
 
 

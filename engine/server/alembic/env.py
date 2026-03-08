@@ -7,30 +7,30 @@ Configured for async SQLAlchemy with PostgreSQL.
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from src.infra.config import get_settings
-from src.infra.database import Base
+from alembic import context
 
 # Import all models to ensure they're registered with Base.metadata
 from src.auth.models import User  # noqa: F401
-from src.conversations.models import Conversation, ConversationMessage  # noqa: F401
-from src.executions.models import ExecutionRun, ExecutionStep  # noqa: F401
-from src.executions.feedback import ExecutionFeedback  # noqa: F401
 from src.connectors.models import Connector  # noqa: F401
-from src.rag.models import RAGCollection, RAGDocument, RAGChunk  # noqa: F401
-from src.groups.models import UserGroup, UserGroupMember  # noqa: F401
+from src.conversations.models import Conversation, ConversationMessage  # noqa: F401
 from src.domain_config.models import AgentConfigVersion, GraphConfigVersion  # noqa: F401
+from src.executions.feedback import ExecutionFeedback  # noqa: F401
+from src.executions.models import ExecutionRun, ExecutionStep  # noqa: F401
 from src.fine_tuning.models import (  # noqa: F401
-    FineTuningDataset,
-    FineTuningJob,
-    DatasetExample,
     ABTestExperiment,
     AgentFineTuningConfig,
+    DatasetExample,
+    FineTuningDataset,
+    FineTuningJob,
 )
+from src.groups.models import UserGroup, UserGroupMember  # noqa: F401
+from src.infra.config import get_settings
+from src.infra.database import Base
+from src.rag.models import RAGChunk, RAGCollection, RAGDocument  # noqa: F401
 from src.recall.models import RecallTestRun  # noqa: F401
 
 # Alembic Config object

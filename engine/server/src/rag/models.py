@@ -6,7 +6,7 @@ Supports both synced-from-platform and locally-created collections/documents.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import uuid4
 
 from sqlalchemy import Enum as SQLEnum
@@ -18,7 +18,7 @@ from src.infra.database import Base
 from src.infra.utils import utcnow
 
 
-class DocumentStatus(str, Enum):
+class DocumentStatus(StrEnum):
     """Document processing status."""
 
     PENDING = "pending"
@@ -27,7 +27,7 @@ class DocumentStatus(str, Enum):
     FAILED = "failed"
 
 
-class RAGScope(str, Enum):
+class RAGScope(StrEnum):
     """RAG collection access scope."""
 
     GLOBAL = "global"  # Everyone can access
@@ -40,9 +40,7 @@ class RAGCollection(Base):
 
     __tablename__ = "rag_collections"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
     document_count: Mapped[int] = mapped_column(default=0)
@@ -88,9 +86,7 @@ class RAGDocument(Base):
     content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(nullable=True)
     chunk_count: Mapped[int] = mapped_column(default=0)
-    status: Mapped[str] = mapped_column(
-        String(20), default=DocumentStatus.PENDING.value
-    )
+    status: Mapped[str] = mapped_column(String(20), default=DocumentStatus.PENDING.value)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
@@ -111,9 +107,7 @@ class RAGChunk(Base):
     __tablename__ = "rag_chunks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    document_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("rag_documents.id"), index=True
-    )
+    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("rag_documents.id"), index=True)
     collection_id: Mapped[str] = mapped_column(String(36), index=True)
     content: Mapped[str] = mapped_column(Text)
     chunk_index: Mapped[int] = mapped_column()

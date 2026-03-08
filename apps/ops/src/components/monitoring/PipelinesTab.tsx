@@ -24,7 +24,7 @@ function QueueSummaryCard({ pipelines }: { pipelines: PipelinesData }) {
   );
 
   const dlqDepth = knowledge.dlq_stream
-    ? knowledge.dlq_stream.groups.reduce((s, g) => s + g.pending, 0)
+    ? knowledge.dlq_stream.groups.reduce((s: number, g: { pending: number }) => s + g.pending, 0)
     : 0;
 
   return (

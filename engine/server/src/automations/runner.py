@@ -5,6 +5,7 @@ APScheduler jobs dynamically. When a job triggers, it fetches source data,
 triages items, and enqueues executions.
 """
 
+import contextlib
 import json
 import logging
 from typing import Any
@@ -46,7 +47,7 @@ class AutomationRunner:
             results = await pipe.execute()
 
             remote_configs: dict[str, AutomationConfig] = {}
-            for aid, raw in zip(automation_ids, results):
+            for aid, raw in zip(automation_ids, results, strict=False):
                 if raw:
                     try:
                         data = json.loads(raw)
@@ -103,16 +104,16 @@ class AutomationRunner:
         self._active_jobs[config.id] = config.version
         logger.info(
             "Scheduled automation '%s' (%s) every %ds",
-            config.name, config.id, interval,
+            config.name,
+            config.id,
+            interval,
         )
 
     def _remove_job(self, automation_id: str) -> None:
         """Remove the APScheduler job for an automation."""
         job_id = f"{JOB_PREFIX}{automation_id}"
-        try:
+        with contextlib.suppress(Exception):  # Job may not exist
             self._scheduler.remove_job(job_id)
-        except Exception:
-            pass  # Job may not exist
         self._active_jobs.pop(automation_id, None)
         logger.info("Removed automation job: %s", automation_id)
 
@@ -158,9 +159,7 @@ class AutomationRunner:
         finally:
             await r.aclose()
 
-    async def _enqueue_item(
-        self, config: AutomationConfig, item: dict[str, Any]
-    ) -> None:
+    async def _enqueue_item(self, config: AutomationConfig, item: dict[str, Any]) -> None:
         """Enqueue an execution for a single source item."""
         from uuid import uuid4
 
@@ -208,5 +207,7 @@ class AutomationRunner:
         )
         logger.info(
             "Enqueued execution for automation %s, run %s, target %s",
-            config.id, run_id, target_id,
+            config.id,
+            run_id,
+            target_id,
         )

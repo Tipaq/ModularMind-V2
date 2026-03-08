@@ -5,11 +5,9 @@ SQLAlchemy models for conversation tracking.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
-
-from src.infra.utils import utcnow
 
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Index, String, Text
@@ -17,9 +15,10 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infra.database import Base
+from src.infra.utils import utcnow
 
 
-class MessageRole(str, Enum):
+class MessageRole(StrEnum):
     """Message role enumeration."""
 
     USER = "user"
@@ -33,25 +32,17 @@ class Conversation(Base):
 
     __tablename__ = "conversations"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     agent_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), index=True
-    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(default=True)
     supervisor_mode: Mapped[bool] = mapped_column(default=False)
     config: Mapped[dict[str, Any]] = mapped_column("config", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        default=utcnow, onupdate=utcnow
-    )
-    compaction_summary: Mapped[str | None] = mapped_column(
-        Text, nullable=True, default=None
-    )
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+    compaction_summary: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
     # Relationships
     messages: Mapped[list["ConversationMessage"]] = relationship(
@@ -70,9 +61,7 @@ class ConversationMessage(Base):
 
     __tablename__ = "conversation_messages"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     conversation_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("conversations.id", ondelete="CASCADE"), index=True
     )

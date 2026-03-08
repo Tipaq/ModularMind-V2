@@ -9,9 +9,10 @@ import logging
 from typing import Any
 
 import httpx
-from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
+
+from mcp import ClientSession, StdioServerParameters
 
 from .schemas import (
     MCPServerConfig,
@@ -72,9 +73,7 @@ class MCPClient:
             await self._connect_stdio()
         else:
             if not self.config.url:
-                raise MCPConnectionError(
-                    f"No URL configured for server '{self.config.id}'"
-                )
+                raise MCPConnectionError(f"No URL configured for server '{self.config.id}'")
             await self._connect_http()
 
     async def _connect_http(self) -> None:
@@ -160,7 +159,8 @@ class MCPClient:
         ]
         logger.info(
             "Discovered %d tools from MCP server '%s'",
-            len(self._tools), self.config.name,
+            len(self._tools),
+            self.config.name,
         )
         return self._tools
 
@@ -172,14 +172,10 @@ class MCPClient:
         result = await self._session.call_tool(request.tool_name, request.arguments)
 
         if result.is_error:
-            raise MCPToolError(
-                f"Tool '{request.tool_name}' on '{self.config.name}' returned error"
-            )
+            raise MCPToolError(f"Tool '{request.tool_name}' on '{self.config.name}' returned error")
 
         content = [
-            {"type": "text", "text": item.text}
-            for item in result.content
-            if hasattr(item, "text")
+            {"type": "text", "text": item.text} for item in result.content if hasattr(item, "text")
         ]
         return MCPToolCallResult(content=content, is_error=False)
 
@@ -218,7 +214,9 @@ class MCPClient:
                 if attempt < _MAX_RETRIES:
                     logger.warning(
                         "MCP request to '%s' failed (attempt %d), reconnecting: %s",
-                        self.config.name, attempt + 1, e,
+                        self.config.name,
+                        attempt + 1,
+                        e,
                     )
                     await self.disconnect()
                     await self.connect()

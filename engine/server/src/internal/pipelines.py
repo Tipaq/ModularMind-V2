@@ -64,20 +64,21 @@ async def get_pipelines(user: CurrentUser, db: DbSession) -> PipelinesResponse:
         raw_entries = await r.xrevrange("pipeline:dlq", count=20)
         for msg_id, data in raw_entries:
             mid = msg_id if isinstance(msg_id, str) else msg_id.decode()
-            dlq_messages.append(DLQMessage(
-                id=mid,
-                original_stream=_decode(data.get("original_stream", "")),
-                original_id=_decode(data.get("original_id", "")),
-                error=_decode(data.get("error", "")),
-                data=_decode(data.get("data", "")),
-            ))
+            dlq_messages.append(
+                DLQMessage(
+                    id=mid,
+                    original_stream=_decode(data.get("original_stream", "")),
+                    original_id=_decode(data.get("original_id", "")),
+                    error=_decode(data.get("error", "")),
+                    data=_decode(data.get("data", "")),
+                )
+            )
     except Exception as e:
         logger.warning("Failed to read DLQ messages: %s", e)
 
     # --- Document status counts ---
     status_result = await db.execute(
-        select(RAGDocument.status, func.count(RAGDocument.id))
-        .group_by(RAGDocument.status)
+        select(RAGDocument.status, func.count(RAGDocument.id)).group_by(RAGDocument.status)
     )
     counts = DocumentStatusCounts()
     for row in status_result.all():
@@ -161,9 +162,7 @@ async def retry_document(
     from src.infra.publish import get_event_bus
     from src.rag.models import DocumentStatus, RAGChunk, RAGCollection, RAGDocument
 
-    result = await db.execute(
-        select(RAGDocument).where(RAGDocument.id == document_id)
-    )
+    result = await db.execute(select(RAGDocument).where(RAGDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -191,9 +190,7 @@ async def retry_document(
     chunk_overlap = getattr(collection, "chunk_overlap", 50) or 50
 
     # Delete partial chunks if any
-    await db.execute(
-        delete(RAGChunk).where(RAGChunk.document_id == document_id)
-    )
+    await db.execute(delete(RAGChunk).where(RAGChunk.document_id == document_id))
 
     # Reset status
     await db.execute(
@@ -218,14 +215,17 @@ async def retry_document(
 
     # Re-queue
     bus = await get_event_bus()
-    await bus.publish("tasks:documents", {
-        "collection_id": document.collection_id,
-        "document_id": document_id,
-        "file_path": file_path,
-        "filename": document.filename,
-        "chunk_size": str(chunk_size),
-        "chunk_overlap": str(chunk_overlap),
-    })
+    await bus.publish(
+        "tasks:documents",
+        {
+            "collection_id": document.collection_id,
+            "document_id": document_id,
+            "file_path": file_path,
+            "filename": document.filename,
+            "chunk_size": str(chunk_size),
+            "chunk_overlap": str(chunk_overlap),
+        },
+    )
 
     logger.info("Document %s re-queued for processing by admin %s", document_id, user.id)
     return {"status": "retrying", "document_id": document_id}

@@ -141,9 +141,15 @@ mcp_sidecars_active = Gauge(
 # ---------------------------------------------------------------------------
 
 METRIC_KEYS = [
-    "metrics:cpu", "metrics:memory", "metrics:tasks",
-    "metrics:queue", "metrics:latency",
-    "metrics:vram", "metrics:llm_latency", "metrics:llm_tps", "metrics:llm_ttft",
+    "metrics:cpu",
+    "metrics:memory",
+    "metrics:tasks",
+    "metrics:queue",
+    "metrics:latency",
+    "metrics:vram",
+    "metrics:llm_latency",
+    "metrics:llm_tps",
+    "metrics:llm_ttft",
 ]
 METRICS_TTL_SECONDS = 21600  # 6 hours
 
@@ -176,10 +182,12 @@ _previous_model_names: set[str] = set()
 # Cross-process LLM metrics recording (called from worker processes)
 # ---------------------------------------------------------------------------
 
+
 def record_llm_latency(duration_s: float) -> None:
     """Record LLM latency from callback (worker process)."""
     try:
         from src.infra.redis_utils import get_sync_redis_client
+
         r = get_sync_redis_client()
         r.rpush("metrics:llm_raw_latencies", str(duration_s))
         r.expire("metrics:llm_raw_latencies", METRICS_TTL_SECONDS)
@@ -191,6 +199,7 @@ def record_llm_tps(tps: float) -> None:
     """Record tokens/sec from callback (worker process)."""
     try:
         from src.infra.redis_utils import get_sync_redis_client
+
         r = get_sync_redis_client()
         r.rpush("metrics:llm_raw_tps", str(tps))
         r.expire("metrics:llm_raw_tps", METRICS_TTL_SECONDS)
@@ -202,6 +211,7 @@ def record_llm_ttft(ttft_s: float) -> None:
     """Record TTFT from callback (worker process)."""
     try:
         from src.infra.redis_utils import get_sync_redis_client
+
         r = get_sync_redis_client()
         r.rpush("metrics:llm_raw_ttft", str(ttft_s))
         r.expire("metrics:llm_raw_ttft", METRICS_TTL_SECONDS)
@@ -228,6 +238,7 @@ async def _drain_llm_metrics(redis) -> tuple[list[float], list[float], list[floa
 # ---------------------------------------------------------------------------
 # Periodic sampler — updates gauges that require polling
 # ---------------------------------------------------------------------------
+
 
 async def sample_dlq_depth(r) -> None:
     """Read LLEN of dead_letter from Redis and update gauge."""
@@ -264,14 +275,28 @@ async def snapshot_metrics(r) -> None:
         pipe = r.pipeline(transaction=False)
         pipe.zadd("metrics:cpu", {json.dumps({"v": cpu}): now})
         pipe.zadd("metrics:memory", {json.dumps({"v": mem.percent}): now})
-        pipe.zadd("metrics:tasks", {json.dumps({
-            "active": active_slots,
-            "queued": queued_exec + queued_models,
-        }): now})
-        pipe.zadd("metrics:queue", {json.dumps({
-            "executions": queued_exec,
-            "models": queued_models,
-        }): now})
+        pipe.zadd(
+            "metrics:tasks",
+            {
+                json.dumps(
+                    {
+                        "active": active_slots,
+                        "queued": queued_exec + queued_models,
+                    }
+                ): now
+            },
+        )
+        pipe.zadd(
+            "metrics:queue",
+            {
+                json.dumps(
+                    {
+                        "executions": queued_exec,
+                        "models": queued_models,
+                    }
+                ): now
+            },
+        )
         if latency is not None:
             pipe.zadd("metrics:latency", {json.dumps({"v": round(latency, 2)}): now})
 
@@ -293,8 +318,9 @@ async def snapshot_metrics(r) -> None:
             total_vram_gb = settings.GPU_TOTAL_VRAM_GB
             if total_vram_gb == 0:
                 from src.infra.gpu import detect_gpu
+
                 total_vram_gb = detect_gpu().memory_gb
-            total_vram_bytes = int(total_vram_gb * (1024 ** 3))
+            total_vram_bytes = int(total_vram_gb * (1024**3))
             vram_pct = (vram_used / total_vram_bytes * 100) if total_vram_bytes > 0 else 0.0
 
             # Update Prometheus gauges
@@ -303,11 +329,18 @@ async def snapshot_metrics(r) -> None:
             ollama_loaded_models.set(len(ollama_models))
 
             # Store in Redis sorted set
-            await r.zadd("metrics:vram", {json.dumps({
-                "v": round(vram_pct, 2),
-                "used_bytes": vram_used,
-                "model_count": len(ollama_models),
-            }): now})
+            await r.zadd(
+                "metrics:vram",
+                {
+                    json.dumps(
+                        {
+                            "v": round(vram_pct, 2),
+                            "used_bytes": vram_used,
+                            "model_count": len(ollama_models),
+                        }
+                    ): now
+                },
+            )
 
             # Model load/unload tracking
             current_names = {m.get("name", "") for m in ollama_models}
@@ -318,13 +351,27 @@ async def snapshot_metrics(r) -> None:
             if loaded or unloaded:
                 event_pipe = r.pipeline(transaction=False)
                 for name in loaded:
-                    event_pipe.rpush("metrics:model_events", json.dumps({
-                        "type": "load", "model": name, "ts": now_iso,
-                    }))
+                    event_pipe.rpush(
+                        "metrics:model_events",
+                        json.dumps(
+                            {
+                                "type": "load",
+                                "model": name,
+                                "ts": now_iso,
+                            }
+                        ),
+                    )
                 for name in unloaded:
-                    event_pipe.rpush("metrics:model_events", json.dumps({
-                        "type": "unload", "model": name, "ts": now_iso,
-                    }))
+                    event_pipe.rpush(
+                        "metrics:model_events",
+                        json.dumps(
+                            {
+                                "type": "unload",
+                                "model": name,
+                                "ts": now_iso,
+                            }
+                        ),
+                    )
                 event_pipe.ltrim("metrics:model_events", -50, -1)
                 event_pipe.expire("metrics:model_events", METRICS_TTL_SECONDS)
                 await event_pipe.execute()
@@ -338,19 +385,41 @@ async def snapshot_metrics(r) -> None:
             latencies, tps_vals, ttft_vals = await _drain_llm_metrics(r)
             if latencies:
                 avg_latency_ms = (sum(latencies) / len(latencies)) * 1000
-                await r.zadd("metrics:llm_latency", {json.dumps({
-                    "v": round(avg_latency_ms, 2), "count": len(latencies),
-                }): now})
+                await r.zadd(
+                    "metrics:llm_latency",
+                    {
+                        json.dumps(
+                            {
+                                "v": round(avg_latency_ms, 2),
+                                "count": len(latencies),
+                            }
+                        ): now
+                    },
+                )
             if tps_vals:
                 avg_tps = sum(tps_vals) / len(tps_vals)
-                await r.zadd("metrics:llm_tps", {json.dumps({
-                    "v": round(avg_tps, 2),
-                }): now})
+                await r.zadd(
+                    "metrics:llm_tps",
+                    {
+                        json.dumps(
+                            {
+                                "v": round(avg_tps, 2),
+                            }
+                        ): now
+                    },
+                )
             if ttft_vals:
                 avg_ttft_ms = (sum(ttft_vals) / len(ttft_vals)) * 1000
-                await r.zadd("metrics:llm_ttft", {json.dumps({
-                    "v": round(avg_ttft_ms, 2),
-                }): now})
+                await r.zadd(
+                    "metrics:llm_ttft",
+                    {
+                        json.dumps(
+                            {
+                                "v": round(avg_ttft_ms, 2),
+                            }
+                        ): now
+                    },
+                )
         except Exception as e:
             logger.debug("LLM metrics drain failed: %s", e)
     except Exception as e:
@@ -366,6 +435,7 @@ async def get_thresholds(r=None) -> dict:
     try:
         if owns_client:
             from src.infra.redis import get_redis_client
+
             r = await get_redis_client()
             if not r:
                 return DEFAULT_THRESHOLDS.copy()
@@ -397,12 +467,17 @@ async def evaluate_alerts(r) -> None:
         if cpu > thresholds.get("cpu_percent", 90.0):
             akey = "monitoring:alert_active:cpu_percent"
             if not await r.exists(akey):
-                alerts.append({
-                    "id": str(uuid.uuid4()), "metric": "cpu_percent",
-                    "threshold": thresholds["cpu_percent"], "actual": cpu,
-                    "message": f"CPU usage at {cpu:.1f}% exceeds threshold of {thresholds['cpu_percent']}%",
-                    "severity": "critical", "triggered_at": now,
-                })
+                alerts.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "metric": "cpu_percent",
+                        "threshold": thresholds["cpu_percent"],
+                        "actual": cpu,
+                        "message": f"CPU usage at {cpu:.1f}% exceeds threshold of {thresholds['cpu_percent']}%",  # noqa: E501
+                        "severity": "critical",
+                        "triggered_at": now,
+                    }
+                )
                 await r.setex(akey, ALERT_COOLDOWN_SECONDS, "1")
 
         # Memory
@@ -410,12 +485,17 @@ async def evaluate_alerts(r) -> None:
         if mem.percent > thresholds.get("memory_percent", 85.0):
             akey = "monitoring:alert_active:memory_percent"
             if not await r.exists(akey):
-                alerts.append({
-                    "id": str(uuid.uuid4()), "metric": "memory_percent",
-                    "threshold": thresholds["memory_percent"], "actual": mem.percent,
-                    "message": f"Memory usage at {mem.percent:.1f}% exceeds threshold of {thresholds['memory_percent']}%",
-                    "severity": "critical", "triggered_at": now,
-                })
+                alerts.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "metric": "memory_percent",
+                        "threshold": thresholds["memory_percent"],
+                        "actual": mem.percent,
+                        "message": f"Memory usage at {mem.percent:.1f}% exceeds threshold of {thresholds['memory_percent']}%",  # noqa: E501
+                        "severity": "critical",
+                        "triggered_at": now,
+                    }
+                )
                 await r.setex(akey, ALERT_COOLDOWN_SECONDS, "1")
 
         # Workers — check Redis Streams consumer groups
@@ -430,12 +510,17 @@ async def evaluate_alerts(r) -> None:
         if workers_count < min_workers:
             akey = "monitoring:alert_active:workers_min"
             if not await r.exists(akey):
-                alerts.append({
-                    "id": str(uuid.uuid4()), "metric": "workers_min",
-                    "threshold": min_workers, "actual": workers_count,
-                    "message": f"Only {workers_count} stream consumer(s) online (minimum: {min_workers})",
-                    "severity": "critical", "triggered_at": now,
-                })
+                alerts.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "metric": "workers_min",
+                        "threshold": min_workers,
+                        "actual": workers_count,
+                        "message": f"Only {workers_count} stream consumer(s) online (minimum: {min_workers})",  # noqa: E501
+                        "severity": "critical",
+                        "triggered_at": now,
+                    }
+                )
                 await r.setex(akey, ALERT_COOLDOWN_SECONDS, "1")
 
         # DLQ
@@ -444,12 +529,17 @@ async def evaluate_alerts(r) -> None:
         if dlq_depth > dlq_max:
             akey = "monitoring:alert_active:dlq_max"
             if not await r.exists(akey):
-                alerts.append({
-                    "id": str(uuid.uuid4()), "metric": "dlq_max",
-                    "threshold": dlq_max, "actual": dlq_depth,
-                    "message": f"Dead letter queue has {dlq_depth} entries (max: {dlq_max})",
-                    "severity": "warning", "triggered_at": now,
-                })
+                alerts.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "metric": "dlq_max",
+                        "threshold": dlq_max,
+                        "actual": dlq_depth,
+                        "message": f"Dead letter queue has {dlq_depth} entries (max: {dlq_max})",
+                        "severity": "warning",
+                        "triggered_at": now,
+                    }
+                )
                 await r.setex(akey, ALERT_COOLDOWN_SECONDS, "1")
 
         # Queue depth from Redis Streams
@@ -463,12 +553,17 @@ async def evaluate_alerts(r) -> None:
         if total_queued > q_max:
             akey = "monitoring:alert_active:queue_depth_max"
             if not await r.exists(akey):
-                alerts.append({
-                    "id": str(uuid.uuid4()), "metric": "queue_depth_max",
-                    "threshold": q_max, "actual": total_queued,
-                    "message": f"Queue depth at {total_queued} exceeds threshold of {q_max}",
-                    "severity": "warning", "triggered_at": now,
-                })
+                alerts.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "metric": "queue_depth_max",
+                        "threshold": q_max,
+                        "actual": total_queued,
+                        "message": f"Queue depth at {total_queued} exceeds threshold of {q_max}",
+                        "severity": "warning",
+                        "triggered_at": now,
+                    }
+                )
                 await r.setex(akey, ALERT_COOLDOWN_SECONDS, "1")
 
         if alerts:
@@ -516,9 +611,7 @@ async def start_metrics_sampler(interval: float = 10.0) -> None:
                 try:
                     await r.aclose()
                 except Exception:
-                    logger.debug(
-                        "Redis close failed during reconnect", exc_info=True
-                    )
+                    logger.debug("Redis close failed during reconnect", exc_info=True)
                 r = None
         except asyncio.CancelledError:
             break

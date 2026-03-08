@@ -41,9 +41,7 @@ from .service import compute_user_cost, get_range_start, get_user_or_404
 
 logger = logging.getLogger(__name__)
 
-admin_user_router = APIRouter(
-    prefix="/users", tags=["Admin — Users"], dependencies=[RequireAdmin]
-)
+admin_user_router = APIRouter(prefix="/users", tags=["Admin — Users"], dependencies=[RequireAdmin])
 
 
 # ─── Endpoints ──────────────────────────────────────────────────────────
@@ -53,7 +51,6 @@ admin_user_router = APIRouter(
 async def list_users_with_stats(
     user: CurrentUser,
     db: DbSession,
-
     search: str | None = None,
     role: UserRole | None = None,
     is_active: bool | None = None,
@@ -121,6 +118,7 @@ async def list_users_with_stats(
     escaped = None
     if search:
         from src.infra.query_utils import escape_like
+
         escaped = escape_like(search)
         query = query.where(User.email.ilike(f"%{escaped}%", escape="\\"))
     if role is not None:
@@ -140,9 +138,11 @@ async def list_users_with_stats(
 
     # Pagination
     offset = (page - 1) * page_size
-    query = query.order_by(
-        func.coalesce(last_exec, last_conv).desc().nullslast()
-    ).offset(offset).limit(page_size)
+    query = (
+        query.order_by(func.coalesce(last_exec, last_conv).desc().nullslast())
+        .offset(offset)
+        .limit(page_size)
+    )
 
     result = await db.execute(query)
     rows = result.all()
@@ -173,23 +173,23 @@ async def list_users_with_stats(
     items = []
     for row in rows:
         u = row[0]
-        items.append(UserStatsResponse(
-            id=u.id,
-            email=u.email,
-            role=u.role,
-            is_active=u.is_active,
-            conversation_count=row[1],
-            total_tokens_prompt=row[2],
-            total_tokens_completion=row[3],
-            execution_count=row[4],
-            estimated_cost_usd=cost_map.get(u.id),
-            last_active_at=row[5],
-            created_at=u.created_at,
-        ))
+        items.append(
+            UserStatsResponse(
+                id=u.id,
+                email=u.email,
+                role=u.role,
+                is_active=u.is_active,
+                conversation_count=row[1],
+                total_tokens_prompt=row[2],
+                total_tokens_completion=row[3],
+                execution_count=row[4],
+                estimated_cost_usd=cost_map.get(u.id),
+                last_active_at=row[5],
+                created_at=u.created_at,
+            )
+        )
 
-    return UserStatsListResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    return UserStatsListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @admin_user_router.get("/{user_id}", response_model=UserStatsResponse)
@@ -197,7 +197,6 @@ async def get_user_detail(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-
 ) -> UserStatsResponse:
     """Get single user with aggregated stats (admin+).
 
@@ -227,9 +226,11 @@ async def get_user_detail(
     conv_count, tokens_prompt, tokens_completion, exec_count, last_exec = stats_result.one()
 
     # Last conversation update (lightweight scalar)
-    last_conv = (await db.execute(
-        select(func.max(Conversation.updated_at)).where(Conversation.user_id == user_id)
-    )).scalar()
+    last_conv = (
+        await db.execute(
+            select(func.max(Conversation.updated_at)).where(Conversation.user_id == user_id)
+        )
+    ).scalar()
     last_active = last_exec or last_conv
 
     cost = await compute_user_cost(db, user_id)
@@ -249,14 +250,11 @@ async def get_user_detail(
     )
 
 
-@admin_user_router.get(
-    "/{user_id}/conversations", response_model=AdminConversationListResponse
-)
+@admin_user_router.get("/{user_id}/conversations", response_model=AdminConversationListResponse)
 async def list_user_conversations(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-
     agent_id: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -268,14 +266,11 @@ async def list_user_conversations(
     if agent_id:
         base = base.where(Conversation.agent_id == agent_id)
 
-    total = (await db.execute(
-        select(func.count()).select_from(base.subquery())
-    )).scalar() or 0
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar() or 0
 
     offset = (page - 1) * page_size
     convs_result = await db.execute(
-        base.order_by(Conversation.updated_at.desc())
-        .offset(offset).limit(page_size)
+        base.order_by(Conversation.updated_at.desc()).offset(offset).limit(page_size)
     )
     convs = convs_result.scalars().all()
 
@@ -336,21 +331,21 @@ async def list_user_conversations(
     items = []
     for c in convs:
         tp, tc = token_map.get(c.id, (0, 0))
-        items.append(AdminConversationItem(
-            id=c.id,
-            agent_id=c.agent_id,
-            title=c.title,
-            message_count=msg_count_map.get(c.id, 0),
-            tokens_prompt=tp,
-            tokens_completion=tc,
-            estimated_cost=conv_cost_map.get(c.id),
-            created_at=c.created_at,
-            updated_at=c.updated_at,
-        ))
+        items.append(
+            AdminConversationItem(
+                id=c.id,
+                agent_id=c.agent_id,
+                title=c.title,
+                message_count=msg_count_map.get(c.id, 0),
+                tokens_prompt=tp,
+                tokens_completion=tc,
+                estimated_cost=conv_cost_map.get(c.id),
+                created_at=c.created_at,
+                updated_at=c.updated_at,
+            )
+        )
 
-    return AdminConversationListResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    return AdminConversationListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @admin_user_router.get(
@@ -362,38 +357,45 @@ async def get_conversation_messages(
     conversation_id: str,
     user: CurrentUser,
     db: DbSession,
-
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ) -> AdminConversationMessagesResponse:
     """Get paginated messages for a specific conversation (admin+)."""
     target = await get_user_or_404(db, user_id)
 
-    conv = (await db.execute(
-        select(Conversation).where(
-            Conversation.id == conversation_id,
-            Conversation.user_id == user_id,
+    conv = (
+        await db.execute(
+            select(Conversation).where(
+                Conversation.id == conversation_id,
+                Conversation.user_id == user_id,
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     # Count total messages
-    total = (await db.execute(
-        select(func.count()).where(
-            ConversationMessage.conversation_id == conversation_id
+    total = (
+        await db.execute(
+            select(func.count()).where(ConversationMessage.conversation_id == conversation_id)
         )
-    )).scalar() or 0
+    ).scalar() or 0
 
     # Paginate
     offset = (page - 1) * page_size
-    messages = (await db.execute(
-        select(ConversationMessage)
-        .where(ConversationMessage.conversation_id == conversation_id)
-        .order_by(ConversationMessage.created_at)
-        .offset(offset)
-        .limit(page_size)
-    )).scalars().all()
+    messages = (
+        (
+            await db.execute(
+                select(ConversationMessage)
+                .where(ConversationMessage.conversation_id == conversation_id)
+                .order_by(ConversationMessage.created_at)
+                .offset(offset)
+                .limit(page_size)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     return AdminConversationMessagesResponse(
         conversation_id=conversation_id,
@@ -421,7 +423,6 @@ async def get_user_token_usage(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-
     range: str = Query(default="30d", pattern="^(24h|7d|30d|all)$"),
     agent_id: str | None = None,
     model: str | None = None,
@@ -536,13 +537,15 @@ async def get_user_token_usage(
     by_model = []
     for model_id, model_prompt, model_completion in model_rows:
         cost = estimate_cost(model_id, model_prompt, model_completion)
-        by_model.append(ModelTokenUsage(
-            model=parse_model_name(model_id),
-            provider=get_provider(model_id),
-            tokens_prompt=model_prompt,
-            tokens_completion=model_completion,
-            estimated_cost_usd=cost,
-        ))
+        by_model.append(
+            ModelTokenUsage(
+                model=parse_model_name(model_id),
+                provider=get_provider(model_id),
+                tokens_prompt=model_prompt,
+                tokens_completion=model_completion,
+                estimated_cost_usd=cost,
+            )
+        )
 
     return TokenUsageResponse(summary=summary, daily=daily, by_model=by_model)
 
@@ -552,7 +555,6 @@ async def list_user_collections(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-
 ) -> list[CollectionResponse]:
     """List RAG collections accessible to a specific user (admin+)."""
     await get_user_or_404(db, user_id)
@@ -602,7 +604,6 @@ async def update_user(
     data: AdminUserUpdate,
     user: CurrentUser,
     db: DbSession,
-
 ) -> AdminUserUpdateResponse:
     """Update user role and/or active status (admin+)."""
     if user_id == user.id:
@@ -631,20 +632,20 @@ async def update_user(
 
     logger.info(
         "Admin %s updated user %s: role=%s active=%s",
-        user.email, target.email, target.role.value, target.is_active,
+        user.email,
+        target.email,
+        target.role.value,
+        target.is_active,
     )
 
     return AdminUserUpdateResponse.model_validate(target)
 
 
-@admin_user_router.delete(
-    "/{user_id}/conversations", response_model=DeleteCountResponse
-)
+@admin_user_router.delete("/{user_id}/conversations", response_model=DeleteCountResponse)
 async def delete_user_conversations(
     user_id: str,
     user: CurrentUser,
     db: DbSession,
-
 ) -> DeleteCountResponse:
     """Delete ALL conversations for a user (cascades to messages). Admin+."""
     from sqlalchemy import update
@@ -652,17 +653,19 @@ async def delete_user_conversations(
     await get_user_or_404(db, user_id)
 
     # Count before delete
-    count = (await db.execute(
-        select(func.count()).where(Conversation.user_id == user_id)
-    )).scalar() or 0
+    count = (
+        await db.execute(select(func.count()).where(Conversation.user_id == user_id))
+    ).scalar() or 0
 
     if count > 0:
         # Detach execution_runs from conversations being deleted.
         # execution_runs.session_id has a FK to conversations.id — deleting
         # conversations without NULLing it out causes an integrity error.
-        conv_ids = (await db.execute(
-            select(Conversation.id).where(Conversation.user_id == user_id)
-        )).scalars().all()
+        conv_ids = (
+            (await db.execute(select(Conversation.id).where(Conversation.user_id == user_id)))
+            .scalars()
+            .all()
+        )
 
         if conv_ids:
             await db.execute(
@@ -672,12 +675,8 @@ async def delete_user_conversations(
             )
 
         # Now safe to cascade delete (messages deleted via FK cascade)
-        await db.execute(
-            delete(Conversation).where(Conversation.user_id == user_id)
-        )
+        await db.execute(delete(Conversation).where(Conversation.user_id == user_id))
         await db.commit()
 
     logger.info("Admin %s deleted %d conversations for user %s", user.email, count, user_id)
     return DeleteCountResponse(deleted_count=count)
-
-

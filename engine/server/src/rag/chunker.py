@@ -360,7 +360,7 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two vectors."""
     import math
 
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     norm_a = math.sqrt(sum(x * x for x in a))
     norm_b = math.sqrt(sum(x * x for x in b))
     if norm_a == 0 or norm_b == 0:
@@ -404,9 +404,7 @@ class ChunkerFactory:
             )
         elif strategy == "semantic":
             if embedding_provider is None:
-                raise ValueError(
-                    "embedding_provider is required for semantic chunking strategy"
-                )
+                raise ValueError("embedding_provider is required for semantic chunking strategy")
             return SemanticChunker(
                 embedding_provider=embedding_provider,
                 similarity_threshold=kwargs.get("similarity_threshold", 0.5),

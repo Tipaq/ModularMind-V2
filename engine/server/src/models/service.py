@@ -156,16 +156,21 @@ class RuntimeModelService:
         if provider == "ollama" and model_name:
             try:
                 async with httpx.AsyncClient(
-                    base_url=settings.OLLAMA_BASE_URL, timeout=30.0,
+                    base_url=settings.OLLAMA_BASE_URL,
+                    timeout=30.0,
                 ) as client:
                     resp = await client.request(
-                        "DELETE", "/api/delete", json={"model": model_name},
+                        "DELETE",
+                        "/api/delete",
+                        json={"model": model_name},
                     )
                     if resp.status_code == 200:
                         logger.info("Deleted model from Ollama: %s", model_name)
                     else:
                         logger.warning(
-                            "Ollama delete returned %d for %s", resp.status_code, model_name,
+                            "Ollama delete returned %d for %s",
+                            resp.status_code,
+                            model_name,
                         )
             except httpx.HTTPError as e:
                 logger.warning("Failed to delete model from Ollama: %s", e)
@@ -203,9 +208,7 @@ class RuntimeModelService:
                           "quantization": "Q4_K_M", "family": "qwen3"}, ...}
         """
         try:
-            async with httpx.AsyncClient(
-                base_url=settings.OLLAMA_BASE_URL, timeout=10.0
-            ) as client:
+            async with httpx.AsyncClient(base_url=settings.OLLAMA_BASE_URL, timeout=10.0) as client:
                 resp = await client.get("/api/tags")
                 resp.raise_for_status()
                 data = resp.json()
@@ -271,6 +274,7 @@ class RuntimeModelService:
 
         # Set initial progress so the frontend sees "downloading" immediately
         from src.infra.redis import get_redis_client
+
         r = await get_redis_client()
         try:
             await r.hset(
@@ -338,10 +342,7 @@ class RuntimeModelService:
 
     def is_model_in_catalog(self, model_id: str) -> bool:
         """Check whether a model_id is present in the local catalog."""
-        for model_data in self.list_models():
-            if model_data.get("model_id") == model_id:
-                return True
-        return False
+        return any(model_data.get("model_id") == model_id for model_data in self.list_models())
 
 
 # Singleton

@@ -5,14 +5,13 @@ API endpoints for agent and graph execution.
 Supports distributed execution via Redis Streams and inline (legacy) mode.
 """
 
-import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
 
+import sqlalchemy.exc
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-import sqlalchemy.exc
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -43,6 +42,7 @@ settings = get_settings()
 # Rate limit helpers
 # ---------------------------------------------------------------------------
 
+
 def parse_rate_limit(rate_str: str) -> int:
     """Parse rate limit string like '10/minute' into requests_per_minute int."""
     try:
@@ -61,6 +61,7 @@ _read_rate = RateLimitDependency(parse_rate_limit(settings.RATE_LIMIT_READS))
 # ---------------------------------------------------------------------------
 # Input validation
 # ---------------------------------------------------------------------------
+
 
 def validate_input(data: ExecutionCreate) -> None:
     """Validate input sizes against config limits."""
@@ -109,10 +110,10 @@ async def _safe_create_execution(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except (RuntimeError, OSError, KeyError, TypeError) as e:
         logger.exception("Failed to create execution: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to create execution")
+        raise HTTPException(status_code=500, detail="Failed to create execution") from e
 
 
 async def dispatch_execution(
@@ -132,7 +133,8 @@ async def dispatch_execution(
             headers={"Retry-After": "10"},
         )
     await service.dispatch_execution(
-        execution, ab_model_override=ab_model_override,
+        execution,
+        ab_model_override=ab_model_override,
     )
     await db.commit()
 
@@ -163,9 +165,7 @@ async def stream_execution(
     from src.infra.sse import sse_response
 
     # Verify the execution exists and belongs to the user
-    result = await db.execute(
-        select(ExecutionRun).where(ExecutionRun.id == execution_id)
-    )
+    result = await db.execute(select(ExecutionRun).where(ExecutionRun.id == execution_id))
     execution = result.scalar_one_or_none()
     if not execution:
         raise_not_found("Execution")
@@ -186,7 +186,9 @@ async def stream_execution(
                     break
                 # Block up to 2s waiting for new entries
                 result = await r.xread(
-                    {stream_key: last_id}, block=2000, count=20,
+                    {stream_key: last_id},
+                    block=2000,
+                    count=20,
                 )
                 if not result:
                     continue
@@ -274,7 +276,10 @@ async def create_agent_execution(
                     ab_model_override = model_id
                     logger.info(
                         "A/B routing execution %s: experiment=%s variant=%s model=%s",
-                        execution.id, experiment_id, variant, model_id,
+                        execution.id,
+                        experiment_id,
+                        variant,
+                        model_id,
                     )
             except (ValueError, KeyError, RuntimeError, sqlalchemy.exc.SQLAlchemyError) as ab_err:
                 # DB errors poison the PostgreSQL transaction — rollback to
@@ -287,16 +292,19 @@ async def create_agent_execution(
 
         await db.commit()
         return await dispatch_execution(
-            execution, user.id, service, db,
+            execution,
+            user.id,
+            service,
+            db,
             ab_model_override=ab_model_override,
         )
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except (RuntimeError, OSError, KeyError, TypeError) as e:
         logger.exception("Failed to create execution: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to create execution")
+        raise HTTPException(status_code=500, detail="Failed to create execution") from e
 
 
 @router.post(
@@ -316,7 +324,12 @@ async def create_graph_execution(
     service = ExecutionService(db)
 
     execution = await _safe_create_execution(
-        service.start_graph_execution, graph_id, data, user.id, db, service,
+        service.start_graph_execution,
+        graph_id,
+        data,
+        user.id,
+        db,
+        service,
     )
     return execution
 
@@ -434,7 +447,10 @@ async def stop_execution(
 ) -> dict[str, str]:
     """Stop a running execution."""
     return await _update_execution_status(
-        execution_id, user, db, "stop",
+        execution_id,
+        user,
+        db,
+        "stop",
     )
 
 
@@ -446,7 +462,10 @@ async def pause_execution(
 ) -> dict[str, str]:
     """Pause a running execution."""
     return await _update_execution_status(
-        execution_id, user, db, "pause",
+        execution_id,
+        user,
+        db,
+        "pause",
     )
 
 
@@ -458,7 +477,10 @@ async def resume_execution(
 ) -> dict[str, str]:
     """Resume a paused execution."""
     return await _update_execution_status(
-        execution_id, user, db, "resume",
+        execution_id,
+        user,
+        db,
+        "resume",
     )
 
 
@@ -483,7 +505,8 @@ async def approve_execution(
     try:
         approval_svc = ApprovalService(db, redis_client)
         success = await approval_svc.approve(
-            execution_id, str(user.id),
+            execution_id,
+            str(user.id),
             notes=request.notes if request else None,
         )
 
@@ -530,7 +553,8 @@ async def reject_execution(
     try:
         approval_svc = ApprovalService(db, redis_client)
         success = await approval_svc.reject(
-            execution_id, str(user.id),
+            execution_id,
+            str(user.id),
             notes=request.notes if request else None,
         )
 
@@ -568,7 +592,9 @@ async def submit_feedback(
 
     svc = FeedbackService(db)
     feedback = await svc.create_feedback(
-        execution_id, str(user.id), data,
+        execution_id,
+        str(user.id),
+        data,
     )
     return FeedbackResponse.model_validate(feedback)
 

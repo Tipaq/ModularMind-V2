@@ -113,7 +113,9 @@ class ConfigProvider:
         self._loaded = True
         logger.info(
             "Loaded %d agents, %d graphs, %d models",
-            len(self._agents), len(self._graphs), len(self._models),
+            len(self._agents),
+            len(self._graphs),
+            len(self._models),
         )
 
     async def _load_agents_graphs_from_db(
@@ -138,12 +140,15 @@ class ConfigProvider:
                         config_id = str(agent.id)
                         new_agents[config_id] = agent
                         versions[f"agent:{config_id}"] = ConfigVersion(
-                            config_hash=row.config_hash, loaded_at=now,
+                            config_hash=row.config_hash,
+                            loaded_at=now,
                         )
                     except (ValueError, KeyError, TypeError) as e:
                         logger.error(
                             "Failed to validate agent config %s v%d: %s",
-                            row.id, row.version, e,
+                            row.id,
+                            row.version,
+                            e,
                         )
 
                 for row in await repo.list_active_graphs():
@@ -153,12 +158,15 @@ class ConfigProvider:
                         config_id = str(graph.id)
                         new_graphs[config_id] = graph
                         versions[f"graph:{config_id}"] = ConfigVersion(
-                            config_hash=row.config_hash, loaded_at=now,
+                            config_hash=row.config_hash,
+                            loaded_at=now,
                         )
                     except (ValueError, KeyError, TypeError) as e:
                         logger.error(
                             "Failed to validate graph config %s v%d: %s",
-                            row.id, row.version, e,
+                            row.id,
+                            row.version,
+                            e,
                         )
         except (sqlalchemy.exc.SQLAlchemyError, OSError) as e:
             logger.error("Failed to load configs from DB, retaining cache: %s", e)
@@ -178,11 +186,14 @@ class ConfigProvider:
         new_models: dict[str, dict[str, Any]] = {}
         for file in self._scan_config_files(self.config_dir / "models"):
             try:
-                data = await asyncio.to_thread(read_json_file if file.suffix == ".json" else read_yaml_file, file)
+                data = await asyncio.to_thread(
+                    read_json_file if file.suffix == ".json" else read_yaml_file, file
+                )
                 model_id = data.get("model_id") or data.get("id", file.stem)
                 new_models[str(model_id)] = data
                 versions[f"model:{model_id}"] = ConfigVersion(
-                    config_hash=compute_config_hash(data), loaded_at=now,
+                    config_hash=compute_config_hash(data),
+                    loaded_at=now,
                 )
             except (OSError, ValueError, KeyError) as e:
                 logger.error("Failed to load model config %s: %s", file, e)
@@ -252,7 +263,7 @@ class ConfigProvider:
         results = await pipe.execute()
         agents = []
         expired_ids = []
-        for aid, raw in zip(agent_ids, results):
+        for aid, raw in zip(agent_ids, results, strict=False):
             if raw:
                 agents.append(AgentConfig.model_validate_json(raw))
             else:
@@ -327,7 +338,9 @@ class ConfigProvider:
         return list(self._graphs.values())
 
     async def search_agents_by_capabilities(
-        self, capabilities: list[str], match_all: bool = False,
+        self,
+        capabilities: list[str],
+        match_all: bool = False,
         exclude_ids: list[str] | None = None,
     ) -> list[AgentConfig]:
         """Find agents matching one or more capabilities (DB + ephemeral)."""
@@ -342,7 +355,12 @@ class ConfigProvider:
                 continue
             agent_caps = set(agent.capabilities)
             required = set(capabilities)
-            if match_all and required.issubset(agent_caps) or not match_all and required & agent_caps:
+            if (
+                match_all
+                and required.issubset(agent_caps)
+                or not match_all
+                and required & agent_caps
+            ):
                 results.append(agent)
         return results
 

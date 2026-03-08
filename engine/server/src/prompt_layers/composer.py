@@ -69,7 +69,7 @@ class PromptComposer:
         Layers are sorted by :class:`LayerType` ordinal (IDENTITY first,
         CONTEXT last).  Empty layers are silently dropped.
         """
-        sorted_layers = sorted(self._layers, key=lambda l: l.layer_type.value)
+        sorted_layers = sorted(self._layers, key=lambda layer: layer.layer_type.value)
         return [
             SystemMessage(content=layer.content)
             for layer in sorted_layers

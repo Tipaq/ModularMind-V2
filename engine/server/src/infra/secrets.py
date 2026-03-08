@@ -22,6 +22,7 @@ Usage:
 """
 
 import base64
+import contextlib
 import hashlib
 import json
 import logging
@@ -110,7 +111,7 @@ class SecretsStore:
 
     def load_from_env(self) -> None:
         """Load API keys from environment variables as fallback."""
-        for provider, env_key in PROVIDER_KEY_MAP.items():
+        for _provider, env_key in PROVIDER_KEY_MAP.items():
             env_value = os.environ.get(env_key)
             if env_value and not self.has(env_key):
                 with self._lock:
@@ -160,10 +161,8 @@ class SecretsStore:
                 # Clean up temp file on any failure
                 if fd >= 0:
                     os.close(fd)
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(tmp_path)
-                except OSError:
-                    pass
                 raise
 
             logger.debug("Secrets persisted to encrypted storage")
@@ -186,19 +185,30 @@ class SecretsStore:
             return
         # Reject usernames with characters that could be used for injection
         import re
-        if not re.fullmatch(r'[A-Za-z0-9._\- ]+', username):
+
+        if not re.fullmatch(r"[A-Za-z0-9._\- ]+", username):
             logger.warning("Refusing to use suspicious USERNAME value for icacls")
             return
         try:
             result = subprocess.run(
-                ["icacls", str(path), "/inheritance:r",
-                 "/grant:r", f"{username}:(R,W)", "/remove", "Everyone"],
-                capture_output=True, check=False, timeout=10,
+                [
+                    "icacls",
+                    str(path),
+                    "/inheritance:r",
+                    "/grant:r",
+                    f"{username}:(R,W)",
+                    "/remove",
+                    "Everyone",
+                ],
+                capture_output=True,
+                check=False,
+                timeout=10,
             )
             if result.returncode != 0:
                 logger.warning(
                     "Failed to restrict Windows file permissions on %s (icacls rc=%d)",
-                    path, result.returncode,
+                    path,
+                    result.returncode,
                 )
         except subprocess.TimeoutExpired:
             logger.warning("icacls timed out for %s", path)
@@ -253,8 +263,7 @@ class SecretsStore:
         """Return a dict of provider -> has_key for all known providers."""
         with self._lock:
             return {
-                provider: env_key in self._secrets
-                for provider, env_key in PROVIDER_KEY_MAP.items()
+                provider: env_key in self._secrets for provider, env_key in PROVIDER_KEY_MAP.items()
             }
 
     def clear(self) -> None:

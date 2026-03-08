@@ -52,7 +52,7 @@ def _is_internal_service_token(token: str) -> bool:
     return hmac.compare_digest(token, expected)
 
 
-async def _get_or_create_platform_service_user(db: "AsyncSession") -> User:
+async def _get_or_create_platform_service_user(db: AsyncSession) -> User:
     """Get (or create on first use) the Platform service user in the database.
 
     Ensures the user exists in the ``users`` table so that foreign-key
@@ -60,9 +60,7 @@ async def _get_or_create_platform_service_user(db: "AsyncSession") -> User:
     """
     from sqlalchemy import select
 
-    result = await db.execute(
-        select(User).where(User.id == _PLATFORM_SERVICE_USER_ID)
-    )
+    result = await db.execute(select(User).where(User.id == _PLATFORM_SERVICE_USER_ID))
     user = result.scalar_one_or_none()
     if user:
         return user

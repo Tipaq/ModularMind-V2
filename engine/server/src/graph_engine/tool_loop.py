@@ -66,9 +66,12 @@ async def run_tool_loop(
         # Check for cancellation before each LLM call
         if cancel_check_fn and await cancel_check_fn():
             from src.executions.cancel import ExecutionCancelled
+
             raise ExecutionCancelled()
 
-        logger.info("Tool loop iteration %d/%d (messages=%d)", iteration + 1, max_iterations, len(msgs))
+        logger.info(
+            "Tool loop iteration %d/%d (messages=%d)", iteration + 1, max_iterations, len(msgs)
+        )
         response: AIMessage = await llm.ainvoke(msgs)
         msgs.append(response)
 
@@ -76,7 +79,11 @@ async def run_tool_loop(
         if not tool_calls:
             # No tool calls — final text response
             text = response.content if isinstance(response.content, str) else str(response.content)
-            logger.info("Tool loop completed after %d iteration(s), response length=%d", iteration + 1, len(text))
+            logger.info(
+                "Tool loop completed after %d iteration(s), response length=%d",
+                iteration + 1,
+                len(text),
+            )
             return text, msgs
 
         # Execute each tool call sequentially
@@ -84,6 +91,7 @@ async def run_tool_loop(
             # Check for cancellation before each tool call
             if cancel_check_fn and await cancel_check_fn():
                 from src.executions.cancel import ExecutionCancelled
+
                 raise ExecutionCancelled()
 
             tool_name: str = call.get("name", call.get("function", {}).get("name", "unknown"))
@@ -92,16 +100,25 @@ async def run_tool_loop(
 
             # Publish tool start
             if publish_fn:
-                await _publish_safe(publish_fn, {
-                    "type": "trace:tool_start",
-                    "tool_name": tool_name,
-                    "input_preview": _truncate(
-                        json.dumps(tool_args, default=str, ensure_ascii=False), 200,
-                    ),
-                    "timestamp": datetime.now(UTC).isoformat(),
-                })
+                await _publish_safe(
+                    publish_fn,
+                    {
+                        "type": "trace:tool_start",
+                        "tool_name": tool_name,
+                        "input_preview": _truncate(
+                            json.dumps(tool_args, default=str, ensure_ascii=False),
+                            200,
+                        ),
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    },
+                )
 
-            logger.info("Tool call [%d]: %s(%s)", iteration + 1, tool_name, _truncate(json.dumps(tool_args, default=str), 100))
+            logger.info(
+                "Tool call [%d]: %s(%s)",
+                iteration + 1,
+                tool_name,
+                _truncate(json.dumps(tool_args, default=str), 100),
+            )
             start = time.perf_counter()
             try:
                 result_text = await asyncio.wait_for(
@@ -116,17 +133,26 @@ async def run_tool_loop(
                 result_text = f"Tool error: {e}"
 
             duration_ms = int((time.perf_counter() - start) * 1000)
-            logger.info("Tool result [%d]: %s -> %dms, %d chars", iteration + 1, tool_name, duration_ms, len(result_text))
+            logger.info(
+                "Tool result [%d]: %s -> %dms, %d chars",
+                iteration + 1,
+                tool_name,
+                duration_ms,
+                len(result_text),
+            )
 
             # Publish tool end
             if publish_fn:
-                await _publish_safe(publish_fn, {
-                    "type": "trace:tool_end",
-                    "tool_name": tool_name,
-                    "output_preview": _truncate(result_text, 300),
-                    "duration_ms": duration_ms,
-                    "timestamp": datetime.now(UTC).isoformat(),
-                })
+                await _publish_safe(
+                    publish_fn,
+                    {
+                        "type": "trace:tool_end",
+                        "tool_name": tool_name,
+                        "output_preview": _truncate(result_text, 300),
+                        "duration_ms": duration_ms,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    },
+                )
 
             msgs.append(ToolMessage(content=result_text, tool_call_id=call_id))
 
@@ -157,7 +183,8 @@ def try_bind_tools(
     except (NotImplementedError, TypeError, ValueError, AttributeError) as e:
         logger.warning(
             "Model does not support tool calling (%s: %s), proceeding without tools",
-            type(e).__name__, e,
+            type(e).__name__,
+            e,
         )
         return llm, False
 
@@ -165,6 +192,7 @@ def try_bind_tools(
 def _truncate(text: str, max_length: int) -> str:
     """Truncate text with ellipsis."""
     from src.infra.text_utils import truncate
+
     return truncate(text, max_length)
 
 

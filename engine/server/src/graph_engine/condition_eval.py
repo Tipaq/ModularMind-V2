@@ -68,7 +68,7 @@ def eval_node(node: ast.AST, ctx: dict[str, Any]) -> Any:
         return ctx[node.id]
     elif isinstance(node, ast.Compare):
         left = eval_node(node.left, ctx)
-        for op, comparator in zip(node.ops, node.comparators):
+        for op, comparator in zip(node.ops, node.comparators, strict=False):
             op_func = _SAFE_OPS.get(type(op))
             if op_func is None:
                 raise ValueError(f"Unsupported operator: {type(op).__name__}")
@@ -112,7 +112,7 @@ def build_condition_context(state: dict) -> dict[str, Any]:
                 key_count[key] = key_count.get(key, 0) + 1
 
     # Second pass: add unambiguous flat keys
-    for node_id, output in node_outputs.items():
+    for _node_id, output in node_outputs.items():
         if isinstance(output, dict):
             for key, value in output.items():
                 if key_count.get(key, 0) == 1:

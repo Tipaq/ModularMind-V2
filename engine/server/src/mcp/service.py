@@ -6,6 +6,7 @@ The sidecar manager is only active in the API process (not worker processes).
 """
 
 import asyncio
+import contextlib
 import logging
 import sys
 import uuid
@@ -37,6 +38,7 @@ def get_sidecar_manager():
     global _sidecar_manager
     if _sidecar_manager is None:
         from src.mcp.sidecar import SidecarManager
+
         _sidecar_manager = SidecarManager()
     return _sidecar_manager
 
@@ -112,13 +114,15 @@ async def _auto_deploy_free_catalog_entries() -> None:
     lock_path = Path(settings.CONFIG_DIR) / "mcp" / ".auto-deploy.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
-    lock_fd = open(lock_path, "w")
+    lock_fd = open(lock_path, "w")  # noqa: SIM115
     try:
         if sys.platform == "win32":
             import msvcrt
+
             msvcrt.locking(lock_fd.fileno(), msvcrt.LK_NBLCK, 1)
         else:
             import fcntl
+
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         logger.debug("MCP auto-deploy: another worker holds the lock, skipping")
@@ -131,16 +135,16 @@ async def _auto_deploy_free_catalog_entries() -> None:
         registry = get_mcp_registry()
         registry.load_from_disk()
 
-        existing_catalog_ids = {
-            s.catalog_id for s in registry.list_servers() if s.catalog_id
-        }
+        existing_catalog_ids = {s.catalog_id for s in registry.list_servers() if s.catalog_id}
 
         free_entries = get_free_catalog_entries()
         deployed = 0
 
         logger.info(
             "MCP auto-deploy: docker=%s, npx=%s, %d free entries",
-            has_docker, has_npx, len(free_entries),
+            has_docker,
+            has_npx,
+            len(free_entries),
         )
 
         for entry in free_entries:
@@ -182,10 +186,12 @@ async def _auto_deploy_free_catalog_entries() -> None:
                     )
                 else:
                     logger.info(
-                        "MCP auto-deploy: skipping '%s' "
-                        "(docker_image=%s docker=%s, npm=%s npx=%s)",
-                        entry.name, bool(entry.docker_image), has_docker,
-                        bool(entry.npm_package), has_npx,
+                        "MCP auto-deploy: skipping '%s' (docker_image=%s docker=%s, npm=%s npx=%s)",
+                        entry.name,
+                        bool(entry.docker_image),
+                        has_docker,
+                        bool(entry.npm_package),
+                        has_npx,
                     )
                     continue
 
@@ -194,7 +200,8 @@ async def _auto_deploy_free_catalog_entries() -> None:
                 deployed += 1
                 logger.info(
                     "MCP auto-deploy: deployed '%s' (%s)",
-                    entry.name, config.transport.value,
+                    entry.name,
+                    config.transport.value,
                 )
             except Exception as e:  # Resilience: individual deploy failures must not abort the loop
                 logger.warning("MCP auto-deploy: failed to deploy %s: %s", entry.name, e)
@@ -205,12 +212,12 @@ async def _auto_deploy_free_catalog_entries() -> None:
     finally:
         if sys.platform == "win32":
             import msvcrt
-            try:
+
+            with contextlib.suppress(OSError):
                 msvcrt.locking(lock_fd.fileno(), msvcrt.LK_UNLCK, 1)
-            except OSError:
-                pass
         else:
             import fcntl
+
             fcntl.flock(lock_fd, fcntl.LOCK_UN)
         lock_fd.close()
 
@@ -330,10 +337,8 @@ async def shutdown_mcp() -> None:
     global _registry, _sidecar_manager, _health_task
     if _health_task:
         _health_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await _health_task
-        except asyncio.CancelledError:
-            pass
         _health_task = None
     if _registry:
         await _registry.shutdown()

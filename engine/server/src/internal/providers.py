@@ -49,7 +49,8 @@ async def test_provider_connection(
         hostname = (parsed.hostname or "").lower()
         if not parsed.scheme or parsed.scheme not in ("http", "https"):
             return ProviderTestResponse(
-                provider=body.provider, available=False,
+                provider=body.provider,
+                available=False,
                 error="Only http/https URLs are allowed",
             )
         # Block internal/private hostnames
@@ -57,15 +58,19 @@ async def test_provider_connection(
         if (
             hostname in _blocked
             or hostname.startswith("10.")
-            or hostname.startswith("172.16.") or hostname.startswith("172.17.")
-            or hostname.startswith("172.18.") or hostname.startswith("172.19.")
-            or hostname.startswith("172.2") or hostname.startswith("172.3")
+            or hostname.startswith("172.16.")
+            or hostname.startswith("172.17.")
+            or hostname.startswith("172.18.")
+            or hostname.startswith("172.19.")
+            or hostname.startswith("172.2")
+            or hostname.startswith("172.3")
             or hostname.startswith("192.168.")
             or hostname.endswith(".internal")
             or hostname.endswith(".local")
         ):
             return ProviderTestResponse(
-                provider=body.provider, available=False,
+                provider=body.provider,
+                available=False,
                 error="Internal URLs are not allowed for provider testing",
             )
 
@@ -139,6 +144,7 @@ async def internal_pull_model(body: InternalPullRequest, request: Request) -> di
     verify_internal_token(request)
 
     from src.models.service import get_model_service
+
     svc = get_model_service()
     task_id = svc.trigger_pull(body.model_name)
 

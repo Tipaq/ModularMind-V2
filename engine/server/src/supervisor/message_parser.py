@@ -56,7 +56,7 @@ class MessageParser:
         if create_match:
             create_directive = True
             create_instructions = create_match.group(1).strip()
-            clean = clean[:create_match.start()] + clean[create_match.end():]
+            clean = clean[: create_match.start()] + clean[create_match.end() :]
             clean = clean.strip()
             return ParsedMessage(
                 raw_content=raw_content,
@@ -72,15 +72,13 @@ class MessageParser:
             graph_id = await self._resolve_graph(graph_name)
             if graph_id:
                 explicit_graph = graph_id
-                clean = clean[:graph_match.start()] + clean[graph_match.end():]
+                clean = clean[: graph_match.start()] + clean[graph_match.end() :]
                 clean = clean.strip()
 
         # 3. Check @mentions (quoted first, then simple)
         # Build agent name lookup once
         agents = await self.config_provider.list_agents()
-        name_to_id: dict[str, str] = {
-            a.name.lower(): str(a.id) for a in agents
-        }
+        name_to_id: dict[str, str] = {a.name.lower(): str(a.id) for a in agents}
 
         # Quoted mentions: @"Agent With Spaces"
         for match in _QUOTED_MENTION_RE.finditer(clean):
@@ -88,7 +86,7 @@ class MessageParser:
             agent_id = name_to_id.get(candidate)
             if agent_id:
                 matched_agent_ids.append(agent_id)
-                clean = clean[:match.start()] + clean[match.end():]
+                clean = clean[: match.start()] + clean[match.end() :]
 
         # Simple mentions: @AgentName (skip if already matched via quotes)
         remaining = clean
@@ -139,7 +137,7 @@ class MessageParser:
         create_match = _CREATE_RE.search(clean)
         if create_match:
             instructions = create_match.group(1).strip()
-            clean = clean[:create_match.start()] + clean[create_match.end():]
+            clean = clean[: create_match.start()] + clean[create_match.end() :]
             return ParsedMessage(
                 raw_content=raw_content,
                 clean_content=clean.strip(),
@@ -155,7 +153,7 @@ class MessageParser:
             graph_id = await self._resolve_graph(graph_name)
             if graph_id:
                 explicit_graph = graph_id
-                clean = clean[:graph_match.start()] + clean[graph_match.end():]
+                clean = clean[: graph_match.start()] + clean[graph_match.end() :]
 
         # 3. @mentions
         agents = await self.config_provider.list_agents()
@@ -166,7 +164,7 @@ class MessageParser:
             agent_id = name_to_id.get(candidate)
             if agent_id:
                 matched_ids.append(agent_id)
-                clean = clean[:match.start()] + clean[match.end():]
+                clean = clean[: match.start()] + clean[match.end() :]
 
         remaining = clean
         for match in _SIMPLE_MENTION_RE.finditer(remaining):

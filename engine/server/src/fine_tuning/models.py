@@ -6,7 +6,7 @@ and per-agent fine-tuning configuration.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import uuid4
 
 from sqlalchemy import Enum as _SQLEnum
@@ -17,19 +17,20 @@ def SQLEnum(enum_class, **kwargs):
     """SQLEnum wrapper that uses enum .value (lowercase) for DB storage."""
     kwargs.setdefault("values_callable", lambda x: [e.value for e in x])
     return _SQLEnum(enum_class, **kwargs)
+
+
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infra.database import Base
 from src.infra.utils import utcnow
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
 
-class DatasetStatus(str, Enum):
+class DatasetStatus(StrEnum):
     """Dataset build lifecycle."""
 
     BUILDING = "building"
@@ -38,7 +39,7 @@ class DatasetStatus(str, Enum):
     ERROR = "error"
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     """Fine-tuning job lifecycle."""
 
     PENDING = "pending"
@@ -49,14 +50,14 @@ class JobStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class JobProvider(str, Enum):
+class JobProvider(StrEnum):
     """Supported fine-tuning providers."""
 
     OPENAI = "openai"
     LOCAL_EXPORT = "local_export"
 
 
-class CurationStatus(str, Enum):
+class CurationStatus(StrEnum):
     """Manual curation status for individual examples."""
 
     PENDING = "pending"
@@ -64,7 +65,7 @@ class CurationStatus(str, Enum):
     REJECTED = "rejected"
 
 
-class ExperimentStatus(str, Enum):
+class ExperimentStatus(StrEnum):
     """A/B test experiment lifecycle."""
 
     DRAFT = "draft"
@@ -83,13 +84,9 @@ class FineTuningDataset(Base):
 
     __tablename__ = "fine_tuning_datasets"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     agent_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    user_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[DatasetStatus] = mapped_column(
@@ -134,32 +131,18 @@ class FineTuningJob(Base):
 
     __tablename__ = "fine_tuning_jobs"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     dataset_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("fine_tuning_datasets.id"), nullable=False, index=True
     )
     agent_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    user_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
-    provider: Mapped[JobProvider] = mapped_column(
-        SQLEnum(JobProvider), nullable=False
-    )
-    base_model: Mapped[str] = mapped_column(
-        String(100), nullable=False
-    )  # e.g., "gpt-4o-mini"
-    status: Mapped[JobStatus] = mapped_column(
-        SQLEnum(JobStatus), default=JobStatus.PENDING
-    )
-    stream_task_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    provider: Mapped[JobProvider] = mapped_column(SQLEnum(JobProvider), nullable=False)
+    base_model: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g., "gpt-4o-mini"
+    status: Mapped[JobStatus] = mapped_column(SQLEnum(JobStatus), default=JobStatus.PENDING)
+    stream_task_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     # OpenAI-specific
-    openai_job_id: Mapped[str | None] = mapped_column(
-        String(100), nullable=True
-    )
+    openai_job_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     openai_model_id: Mapped[str | None] = mapped_column(
         String(200), nullable=True
     )  # ft:gpt-4o-mini:org::abc
@@ -176,9 +159,7 @@ class FineTuningJob(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
-    dataset: Mapped["FineTuningDataset"] = relationship(
-        back_populates="jobs", lazy="selectin"
-    )
+    dataset: Mapped["FineTuningDataset"] = relationship(back_populates="jobs", lazy="selectin")
 
 
 class DatasetExample(Base):
@@ -186,18 +167,14 @@ class DatasetExample(Base):
 
     __tablename__ = "dataset_examples"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     dataset_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("fine_tuning_datasets.id"), nullable=False, index=True
     )
     source_type: Mapped[str] = mapped_column(
         String(20), nullable=False
     )  # "feedback" | "execution" | "conversation"
-    source_id: Mapped[str] = mapped_column(
-        String(36), nullable=False
-    )  # Reference to source record
+    source_id: Mapped[str] = mapped_column(String(36), nullable=False)  # Reference to source record
     # {"messages": [{"role": "system", "content": "..."}, ...]}
     messages: Mapped[dict] = mapped_column(JSONB, nullable=False)
     curation_status: Mapped[CurationStatus] = mapped_column(
@@ -210,13 +187,9 @@ class DatasetExample(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
-    dataset: Mapped["FineTuningDataset"] = relationship(
-        back_populates="examples"
-    )
+    dataset: Mapped["FineTuningDataset"] = relationship(back_populates="examples")
 
-    __table_args__ = (
-        Index("ix_dataset_examples_curation", "dataset_id", "curation_status"),
-    )
+    __table_args__ = (Index("ix_dataset_examples_curation", "dataset_id", "curation_status"),)
 
 
 class ABTestExperiment(Base):
@@ -224,27 +197,17 @@ class ABTestExperiment(Base):
 
     __tablename__ = "ab_test_experiments"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     agent_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    user_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[ExperimentStatus] = mapped_column(
         SQLEnum(ExperimentStatus), default=ExperimentStatus.DRAFT
     )
     # Variant configuration
-    control_model_id: Mapped[str] = mapped_column(
-        String(200), nullable=False
-    )  # Base model
-    treatment_model_id: Mapped[str] = mapped_column(
-        String(200), nullable=False
-    )  # Fine-tuned model
-    traffic_split: Mapped[float] = mapped_column(
-        default=0.5
-    )  # 0.0-1.0, fraction sent to treatment
+    control_model_id: Mapped[str] = mapped_column(String(200), nullable=False)  # Base model
+    treatment_model_id: Mapped[str] = mapped_column(String(200), nullable=False)  # Fine-tuned model
+    traffic_split: Mapped[float] = mapped_column(default=0.5)  # 0.0-1.0, fraction sent to treatment
     # Results
     control_executions: Mapped[int] = mapped_column(default=0)
     treatment_executions: Mapped[int] = mapped_column(default=0)

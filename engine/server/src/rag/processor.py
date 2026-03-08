@@ -154,7 +154,7 @@ def extract_pdf(content: bytes) -> str:
             raise ImportError(
                 "PDF extraction requires either 'pypdf' or 'pdfplumber'. "
                 "Install one with: pip install pypdf"
-            )
+            ) from None
 
         pdf = open_pdf(io.BytesIO(content))
         parts = []
@@ -226,7 +226,7 @@ async def process_document(
 
     from .models import RAGChunk, RAGCollection, RAGDocument
 
-    settings = get_settings()
+    get_settings()
 
     # 1. Extract text
     text = await extract_text(file_content, filename)
@@ -280,7 +280,7 @@ async def process_document(
 
     # 4. Store chunk metadata in PG (no embedding column)
     chunk_ids: list[str] = []
-    for i, chunk in enumerate(chunks):
+    for _i, chunk in enumerate(chunks):
         chunk_id = str(uuid4())
         chunk_ids.append(chunk_id)
         db_chunk = RAGChunk(
@@ -331,9 +331,7 @@ async def process_document(
     from sqlalchemy import select, update
 
     await db_session.execute(
-        update(RAGDocument)
-        .where(RAGDocument.id == document_id)
-        .values(chunk_count=len(chunks))
+        update(RAGDocument).where(RAGDocument.id == document_id).values(chunk_count=len(chunks))
     )
 
     # 6. Update collection chunk/document counts
@@ -349,9 +347,7 @@ async def process_document(
     ).scalar() or 0
     total_docs = (
         await db_session.execute(
-            select(func.count(RAGDocument.id)).where(
-                RAGDocument.collection_id == collection_id
-            )
+            select(func.count(RAGDocument.id)).where(RAGDocument.collection_id == collection_id)
         )
     ).scalar() or 0
 

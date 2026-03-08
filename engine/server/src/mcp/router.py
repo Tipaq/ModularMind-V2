@@ -33,11 +33,13 @@ MAX_LOG_TAIL = 500
 
 def _get_registry():
     from src.mcp.service import get_mcp_registry
+
     return get_mcp_registry()
 
 
 def _get_sidecar_manager():
     from src.mcp.service import get_sidecar_manager
+
     return get_sidecar_manager()
 
 
@@ -93,7 +95,9 @@ async def list_catalog(user: CurrentUser) -> list[MCPCatalogEntryResponse]:
 
 
 @router.post("/deploy", dependencies=[RequireOwner], status_code=status.HTTP_201_CREATED)
-async def deploy_from_catalog(body: MCPDeployFromCatalogRequest, user: CurrentUser) -> MCPServerResponse:
+async def deploy_from_catalog(
+    body: MCPDeployFromCatalogRequest, user: CurrentUser
+) -> MCPServerResponse:
     """Deploy an MCP server from the catalog.
 
     Auto-detects transport: Docker sidecar if docker_image is set,
@@ -140,7 +144,7 @@ async def deploy_from_catalog(body: MCPDeployFromCatalogRequest, user: CurrentUs
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Failed to deploy sidecar: {e}",
-            )
+            ) from e
         config = MCPServerConfig(
             id=server_id,
             name=entry.name,
@@ -234,9 +238,7 @@ async def get_server_logs(
 
     try:
         docker_client = await manager._get_docker()
-        container = await asyncio.to_thread(
-            docker_client.containers.get, info.container_id
-        )
+        container = await asyncio.to_thread(docker_client.containers.get, info.container_id)
         logs_bytes = await asyncio.to_thread(
             container.logs, tail=min(tail, MAX_LOG_TAIL), timestamps=False
         )
@@ -265,14 +267,16 @@ async def get_server_logs(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to read container logs: {e}",
-        )
+        ) from e
 
 
 # --- Server CRUD Endpoints ---
 
 
 @router.get("/servers", dependencies=[RequireOwner])
-async def list_mcp_servers(user: CurrentUser, project_id: str | None = None) -> list[MCPServerResponse]:
+async def list_mcp_servers(
+    user: CurrentUser, project_id: str | None = None
+) -> list[MCPServerResponse]:
     """List all configured MCP servers with status."""
     registry = _get_registry()
     servers = registry.list_servers(project_id)
@@ -281,12 +285,15 @@ async def list_mcp_servers(user: CurrentUser, project_id: str | None = None) -> 
 
     from src.mcp import MCPServerStatus
 
-    default_status = lambda cfg: MCPServerStatus(
-        server_id=cfg.id, name=cfg.name, connected=False, tools_count=0,
-    )
+    def default_status(cfg):
+        return MCPServerStatus(
+            server_id=cfg.id,
+            name=cfg.name,
+            connected=False,
+            tools_count=0,
+        )
     return [
-        _server_to_response(cfg, status_map.get(cfg.id, default_status(cfg)))
-        for cfg in servers
+        _server_to_response(cfg, status_map.get(cfg.id, default_status(cfg))) for cfg in servers
     ]
 
 
@@ -436,6 +443,4 @@ async def list_server_tools(server_id: str, user: CurrentUser) -> list[dict[str,
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to discover tools: {e}",
-        )
-
-
+        ) from e

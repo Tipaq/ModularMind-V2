@@ -70,6 +70,7 @@ class CohereReranker(BaseReranker):
     def _get_client(self):
         if self._client is None:
             import cohere
+
             self._client = cohere.AsyncClientV2(api_key=self._api_key)
         return self._client
 
@@ -118,7 +119,7 @@ class CrossEncoderReranker(BaseReranker):
                 raise RuntimeError(
                     "Install sentence-transformers for cross-encoder reranking: "
                     "pip install sentence-transformers"
-                )
+                ) from None
             self._model = CrossEncoder(self._model_name)
         return self._model
 
@@ -140,9 +141,7 @@ class CrossEncoderReranker(BaseReranker):
         scores = await asyncio.to_thread(model.predict, pairs)
 
         # Sort by score descending
-        indexed_scores = sorted(
-            enumerate(scores), key=lambda x: x[1], reverse=True
-        )
+        indexed_scores = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
 
         return [
             RerankResult(

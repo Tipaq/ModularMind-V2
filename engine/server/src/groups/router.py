@@ -55,9 +55,7 @@ async def create_group(
 ) -> GroupResponse:
     """Create a new group (admin only)."""
     service = GroupService(db)
-    group = await service.create_group(
-        name=data.name, slug=data.slug, description=data.description
-    )
+    group = await service.create_group(name=data.name, slug=data.slug, description=data.description)
     return _group_response(group)
 
 
@@ -148,6 +146,7 @@ async def add_member(
     member = await service.add_member(group_id, data.user_id, data.role)
     # Fetch user email for response
     from src.auth.models import User
+
     user_obj = await db.get(User, data.user_id)
     return MemberResponse(
         user_id=member.user_id,

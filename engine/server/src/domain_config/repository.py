@@ -119,9 +119,7 @@ class ConfigRepository:
                 )
                 # Re-lock and recompute
                 existing = await session.execute(
-                    select(model)
-                    .where(model.id == entity_id)
-                    .with_for_update()
+                    select(model).where(model.id == entity_id).with_for_update()
                 )
                 existing_rows = existing.scalars().all()
                 max_version = max(r.version for r in existing_rows)
@@ -136,9 +134,7 @@ class ConfigRepository:
                     .values(is_active=False)
                 )
 
-                config_hash = compute_config_hash(
-                    config | {"version": next_version}
-                )
+                config_hash = compute_config_hash(config | {"version": next_version})
                 row = model(
                     id=entity_id,
                     version=next_version,
@@ -158,9 +154,7 @@ class ConfigRepository:
             orig=None,
         )
 
-    async def _get_active(
-        self, model: ConfigModel, entity_id: str
-    ) -> ConfigRow | None:
+    async def _get_active(self, model: ConfigModel, entity_id: str) -> ConfigRow | None:
         """Get the active version of an entity."""
         result = await self._session.execute(
             select(model).where(
@@ -191,9 +185,7 @@ class ConfigRepository:
         Returns (versions, total_count).
         """
         count_result = await self._session.execute(
-            select(func.count())
-            .select_from(model)
-            .where(model.id == entity_id)
+            select(func.count()).select_from(model).where(model.id == entity_id)
         )
         total = count_result.scalar_one()
 
@@ -222,19 +214,13 @@ class ConfigRepository:
         session = self._session
 
         # Lock all rows for this entity
-        result = await session.execute(
-            select(model)
-            .where(model.id == entity_id)
-            .with_for_update()
-        )
+        result = await session.execute(select(model).where(model.id == entity_id).with_for_update())
         rows = {r.version: r for r in result.scalars().all()}
 
         if not rows:
             raise ValueError(f"{label.capitalize()} {entity_id} not found")
         if version not in rows:
-            raise ValueError(
-                f"Version {version} not found for {label} {entity_id}"
-            )
+            raise ValueError(f"Version {version} not found for {label} {entity_id}")
 
         # Deactivate current active
         await session.execute(
@@ -267,13 +253,9 @@ class ConfigRepository:
         )
         return result.scalar_one()
 
-    async def _delete_all_versions(
-        self, model: ConfigModel, entity_id: str
-    ) -> None:
+    async def _delete_all_versions(self, model: ConfigModel, entity_id: str) -> None:
         """Delete ALL versions of an entity."""
-        await self._session.execute(
-            delete(model).where(model.id == entity_id)
-        )
+        await self._session.execute(delete(model).where(model.id == entity_id))
         await self._session.flush()
 
     async def _bulk_import(
@@ -294,9 +276,7 @@ class ConfigRepository:
                 continue
 
             existing = await self._session.execute(
-                select(func.count())
-                .select_from(model)
-                .where(model.id == entity_id)
+                select(func.count()).select_from(model).where(model.id == entity_id)
             )
             if existing.scalar_one() > 0:
                 logger.debug(
@@ -329,9 +309,7 @@ class ConfigRepository:
 
     async def _has_any(self, model: ConfigModel) -> bool:
         """Check if any configs exist in DB for the given model."""
-        result = await self._session.execute(
-            select(func.count()).select_from(model)
-        )
+        result = await self._session.execute(select(func.count()).select_from(model))
         return result.scalar_one() > 0
 
     # -------------------------------------------------------------------
@@ -356,13 +334,15 @@ class ConfigRepository:
         For existing agents, retries with next version on PK collision.
         """
         return await self._create_version(
-            AgentConfigVersion, agent_id, config, "agent",
-            created_by=created_by, change_note=change_note,
+            AgentConfigVersion,
+            agent_id,
+            config,
+            "agent",
+            created_by=created_by,
+            change_note=change_note,
         )
 
-    async def get_active_agent(
-        self, agent_id: str
-    ) -> AgentConfigVersion | None:
+    async def get_active_agent(self, agent_id: str) -> AgentConfigVersion | None:
         """Get the active version of an agent."""
         return await self._get_active(AgentConfigVersion, agent_id)
 
@@ -381,12 +361,13 @@ class ConfigRepository:
         Returns (versions, total_count).
         """
         return await self._get_versions(
-            AgentConfigVersion, agent_id, limit=limit, offset=offset,
+            AgentConfigVersion,
+            agent_id,
+            limit=limit,
+            offset=offset,
         )
 
-    async def set_active_version(
-        self, agent_id: str, version: int
-    ) -> AgentConfigVersion:
+    async def set_active_version(self, agent_id: str, version: int) -> AgentConfigVersion:
         """Set a specific version as active, deactivating the current one.
 
         Uses SELECT FOR UPDATE to serialize concurrent activations.
@@ -394,7 +375,10 @@ class ConfigRepository:
         Raises ValueError if version not found.
         """
         return await self._set_active_version(
-            AgentConfigVersion, agent_id, version, "agent",
+            AgentConfigVersion,
+            agent_id,
+            version,
+            "agent",
         )
 
     async def delete_agent(self, agent_id: str) -> None:
@@ -417,13 +401,15 @@ class ConfigRepository:
         Same locking and retry semantics as create_agent_version.
         """
         return await self._create_version(
-            GraphConfigVersion, graph_id, config, "graph",
-            created_by=created_by, change_note=change_note,
+            GraphConfigVersion,
+            graph_id,
+            config,
+            "graph",
+            created_by=created_by,
+            change_note=change_note,
         )
 
-    async def get_active_graph(
-        self, graph_id: str
-    ) -> GraphConfigVersion | None:
+    async def get_active_graph(self, graph_id: str) -> GraphConfigVersion | None:
         """Get the active version of a graph."""
         return await self._get_active(GraphConfigVersion, graph_id)
 
@@ -442,15 +428,19 @@ class ConfigRepository:
         Returns (versions, total_count).
         """
         return await self._get_versions(
-            GraphConfigVersion, graph_id, limit=limit, offset=offset,
+            GraphConfigVersion,
+            graph_id,
+            limit=limit,
+            offset=offset,
         )
 
-    async def set_active_graph_version(
-        self, graph_id: str, version: int
-    ) -> GraphConfigVersion:
+    async def set_active_graph_version(self, graph_id: str, version: int) -> GraphConfigVersion:
         """Set a specific graph version as active."""
         return await self._set_active_version(
-            GraphConfigVersion, graph_id, version, "graph",
+            GraphConfigVersion,
+            graph_id,
+            version,
+            "graph",
         )
 
     async def delete_graph(self, graph_id: str) -> None:

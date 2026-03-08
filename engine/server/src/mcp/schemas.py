@@ -1,12 +1,12 @@
 """MCP protocol schemas and configuration models."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class MCPTransport(str, Enum):
+class MCPTransport(StrEnum):
     HTTP = "http"
     STDIO = "stdio"
 
@@ -22,12 +22,16 @@ class MCPServerConfig(BaseModel):
     command: str | None = Field(None, description="Command for stdio transport")
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
-    headers: dict[str, str] = Field(default_factory=dict, description="HTTP headers (e.g., Authorization)")
+    headers: dict[str, str] = Field(
+        default_factory=dict, description="HTTP headers (e.g., Authorization)"
+    )
     secret_ref: str | None = Field(None, description="SecretsStore key for API key/token")
     enabled: bool = True
     timeout_seconds: int = Field(default=30, ge=5, le=120)
     project_id: str | None = Field(None, description="Scope to project (None = all projects)")
-    managed: bool = Field(False, description="True if provisioned via sidecar manager (trusted URL)")
+    managed: bool = Field(
+        False, description="True if provisioned via sidecar manager (trusted URL)"
+    )
     catalog_id: str | None = Field(None, description="Catalog entry ID if deployed from catalog")
 
 

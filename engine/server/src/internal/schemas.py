@@ -4,7 +4,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Monitoring Schemas
 # ---------------------------------------------------------------------------
@@ -32,6 +31,7 @@ class SystemMonitoring(BaseModel):
 
 class StreamingMonitoring(BaseModel):
     """SSE streaming status."""
+
     active_streams: int = 0
 
 

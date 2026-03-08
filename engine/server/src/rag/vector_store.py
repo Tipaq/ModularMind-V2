@@ -104,9 +104,7 @@ class QdrantRAGVectorStore(BaseHybridVectorStore):
             collection_name=self._collection,
             points=points,
         )
-        qdrant_upsert_duration.labels(collection=self._collection).observe(
-            time.monotonic() - t0
-        )
+        qdrant_upsert_duration.labels(collection=self._collection).observe(time.monotonic() - t0)
         logger.debug("Upserted %d chunks to %s", len(points), self._collection)
         return len(points)
 
@@ -142,9 +140,9 @@ class QdrantRAGVectorStore(BaseHybridVectorStore):
             qdrant_errors_total.labels(error_type="search").inc()
             return []
 
-        qdrant_search_duration.labels(
-            collection=self._collection, search_type="hybrid"
-        ).observe(time.monotonic() - t0)
+        qdrant_search_duration.labels(collection=self._collection, search_type="hybrid").observe(
+            time.monotonic() - t0
+        )
 
         candidates = [
             RAGSearchResult(
@@ -193,21 +191,25 @@ class QdrantRAGVectorStore(BaseHybridVectorStore):
 
     async def delete_by_document(self, document_id: str) -> bool:
         """Delete all points matching a document_id."""
-        return await self._delete_by_filter([
-            models.FieldCondition(
-                key="document_id",
-                match=models.MatchValue(value=document_id),
-            )
-        ])
+        return await self._delete_by_filter(
+            [
+                models.FieldCondition(
+                    key="document_id",
+                    match=models.MatchValue(value=document_id),
+                )
+            ]
+        )
 
     async def delete_by_collection(self, collection_id: str) -> bool:
         """Delete all points matching a collection_id."""
-        return await self._delete_by_filter([
-            models.FieldCondition(
-                key="collection_id",
-                match=models.MatchValue(value=collection_id),
-            )
-        ])
+        return await self._delete_by_filter(
+            [
+                models.FieldCondition(
+                    key="collection_id",
+                    match=models.MatchValue(value=collection_id),
+                )
+            ]
+        )
 
     async def get_collection_stats(self) -> dict:
         """Return point count and index status."""

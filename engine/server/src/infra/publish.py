@@ -18,6 +18,7 @@ async def get_event_bus() -> RedisStreamBus:
         import redis.asyncio as aioredis
 
         from src.infra.redis import get_redis_pool
+
         client = aioredis.Redis(connection_pool=get_redis_pool())
         _bus = RedisStreamBus(client)
     return _bus
@@ -64,12 +65,15 @@ async def enqueue_model_pull(model_name: str) -> str:
 async def enqueue_dataset_build(dataset_id: str, agent_id: str, filters: str) -> str:
     """Publish a dataset build task to tasks:fine_tuning stream."""
     bus = await get_event_bus()
-    msg_id = await bus.publish("tasks:fine_tuning", {
-        "task_type": "build_dataset",
-        "dataset_id": dataset_id,
-        "agent_id": agent_id,
-        "filters": filters,
-    })
+    msg_id = await bus.publish(
+        "tasks:fine_tuning",
+        {
+            "task_type": "build_dataset",
+            "dataset_id": dataset_id,
+            "agent_id": agent_id,
+            "filters": filters,
+        },
+    )
     logger.info("Enqueued dataset build %s (msg=%s)", dataset_id, msg_id)
     return msg_id
 
@@ -77,9 +81,12 @@ async def enqueue_dataset_build(dataset_id: str, agent_id: str, filters: str) ->
 async def enqueue_fine_tuning_job(job_id: str) -> str:
     """Publish a fine-tuning job to tasks:fine_tuning stream."""
     bus = await get_event_bus()
-    msg_id = await bus.publish("tasks:fine_tuning", {
-        "task_type": "run_fine_tuning_job",
-        "job_id": job_id,
-    })
+    msg_id = await bus.publish(
+        "tasks:fine_tuning",
+        {
+            "task_type": "run_fine_tuning_job",
+            "job_id": job_id,
+        },
+    )
     logger.info("Enqueued fine-tuning job %s (msg=%s)", job_id, msg_id)
     return msg_id

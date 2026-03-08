@@ -9,6 +9,7 @@ Configures interval and cron jobs for:
 """
 
 import logging
+from datetime import UTC
 
 import httpx
 import redis.exceptions
@@ -144,7 +145,7 @@ async def cleanup_orphaned_attachments() -> None:
     key.  If the pending key is gone (TTL expired) and no DB message references the
     attachment id, the object is orphaned and safe to delete.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from src.infra.config import get_settings
     from src.infra.object_store import get_object_store
@@ -153,7 +154,7 @@ async def cleanup_orphaned_attachments() -> None:
     s = get_settings()
     store = get_object_store()
     # Only consider objects older than 2 hours (pending TTL is 1h)
-    age_threshold = datetime.now(timezone.utc) - timedelta(hours=2)
+    age_threshold = datetime.now(UTC) - timedelta(hours=2)
 
     try:
         objects = await store.list_objects(s.S3_BUCKET_ATTACHMENTS, prefix="chat/")
@@ -203,7 +204,7 @@ async def cleanup_orphaned_attachments() -> None:
 
 async def cleanup_stale_executions() -> None:
     """Clean up executions stuck in RUNNING/PENDING state."""
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
     from sqlalchemy import update
 
@@ -223,7 +224,7 @@ async def cleanup_stale_executions() -> None:
                 )
                 .values(
                     status=ExecutionStatus.FAILED,
-                    error_message=f"Execution timed out after {settings.MAX_EXECUTION_TIMEOUT}s (cleanup)",
+                    error_message=f"Execution timed out after {settings.MAX_EXECUTION_TIMEOUT}s (cleanup)",  # noqa: E501
                     completed_at=utcnow(),
                 )
             )
@@ -260,8 +261,10 @@ async def profile_synthesis_scan() -> None:
                 .join(Conversation, Conversation.user_id == User.id)
                 .where(
                     User.is_active.is_(True),
-                    Conversation.updated_at > func.coalesce(
-                        User.last_profile_synthesis_at, epoch,
+                    Conversation.updated_at
+                    > func.coalesce(
+                        User.last_profile_synthesis_at,
+                        epoch,
                     ),
                 )
                 .group_by(User.id)
@@ -287,7 +290,10 @@ async def profile_synthesis_scan() -> None:
             failures = sum(1 for r in results if isinstance(r, Exception))
             logger.info(
                 "Profile synthesis batch %d-%d: %d successes, %d failures",
-                i, i + len(batch), successes, failures,
+                i,
+                i + len(batch),
+                successes,
+                failures,
             )
 
     except (sqlalchemy.exc.SQLAlchemyError, OSError):

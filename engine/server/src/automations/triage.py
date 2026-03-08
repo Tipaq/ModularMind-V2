@@ -31,9 +31,7 @@ def classify_item(
     files = item.get("files", [])
 
     # Count total changed lines
-    total_lines = sum(
-        f.get("additions", 0) + f.get("deletions", 0) for f in files
-    )
+    total_lines = sum(f.get("additions", 0) + f.get("deletions", 0) for f in files)
 
     # Heuristic rules
     if file_count > max_files:
@@ -44,18 +42,12 @@ def classify_item(
 
     # Config-only changes are simple
     config_extensions = {".json", ".yaml", ".yml", ".toml", ".ini", ".env", ".cfg"}
-    if all(
-        any(f.get("filename", "").endswith(ext) for ext in config_extensions)
-        for f in files
-    ):
+    if all(any(f.get("filename", "").endswith(ext) for ext in config_extensions) for f in files):
         return "simple"
 
     # Docs-only changes are simple
     doc_extensions = {".md", ".txt", ".rst", ".adoc"}
-    if all(
-        any(f.get("filename", "").endswith(ext) for ext in doc_extensions)
-        for f in files
-    ):
+    if all(any(f.get("filename", "").endswith(ext) for ext in doc_extensions) for f in files):
         return "simple"
 
     # Default: simple if within thresholds

@@ -120,10 +120,7 @@ class RecallTestRunner:
                 if snippet.lower() in content_lower:
                     return True
 
-        if tc.expected_chunk_ids and result.chunk_id in tc.expected_chunk_ids:
-            return True
-
-        return False
+        return bool(tc.expected_chunk_ids and result.chunk_id in tc.expected_chunk_ids)
 
     def compute_recall_at_k(
         self,
@@ -140,9 +137,7 @@ class RecallTestRunner:
         if denominator == 0:
             return 0.0
 
-        relevant_count = sum(
-            1 for r in results[:k] if self.is_result_relevant(r, tc)
-        )
+        relevant_count = sum(1 for r in results[:k] if self.is_result_relevant(r, tc))
         return relevant_count / denominator
 
     def compute_mrr(

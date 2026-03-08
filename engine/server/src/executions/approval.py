@@ -69,13 +69,16 @@ class ApprovalService:
         await self.db.commit()
 
         # Publish event to Redis
-        await self._publish_event(execution_id, {
-            "type": "approval_required",
-            "execution_id": execution_id,
-            "node_id": node_id,
-            "timeout_at": run.approval_timeout_at.isoformat(),
-            "timeout_seconds": timeout_seconds,
-        })
+        await self._publish_event(
+            execution_id,
+            {
+                "type": "approval_required",
+                "execution_id": execution_id,
+                "node_id": node_id,
+                "timeout_at": run.approval_timeout_at.isoformat(),
+                "timeout_seconds": timeout_seconds,
+            },
+        )
 
         # Send outbound webhook notification
         if webhook_url:
@@ -83,7 +86,10 @@ class ApprovalService:
 
             webhook_secret = node_config.get("approvalWebhookSecret")
             await send_approval_webhook(
-                webhook_url, execution_id, node_id, timeout_seconds,
+                webhook_url,
+                execution_id,
+                node_id,
+                timeout_seconds,
                 secret=webhook_secret,
             )
 
@@ -131,16 +137,21 @@ class ApprovalService:
 
         _, node_id = row
 
-        await self._publish_event(execution_id, {
-            "type": "approval_granted",
-            "execution_id": execution_id,
-            "approved_by": user_id,
-            "node_id": node_id,
-        })
+        await self._publish_event(
+            execution_id,
+            {
+                "type": "approval_granted",
+                "execution_id": execution_id,
+                "approved_by": user_id,
+                "node_id": node_id,
+            },
+        )
 
         logger.info(
             "Execution %s approved by %s (node %s)",
-            execution_id, user_id, node_id,
+            execution_id,
+            user_id,
+            node_id,
         )
         return True
 
@@ -188,17 +199,22 @@ class ApprovalService:
 
         _, node_id = row
 
-        await self._publish_event(execution_id, {
-            "type": "approval_rejected",
-            "execution_id": execution_id,
-            "rejected_by": user_id,
-            "node_id": node_id,
-            "notes": notes,
-        })
+        await self._publish_event(
+            execution_id,
+            {
+                "type": "approval_rejected",
+                "execution_id": execution_id,
+                "rejected_by": user_id,
+                "node_id": node_id,
+                "notes": notes,
+            },
+        )
 
         logger.info(
             "Execution %s rejected by %s (node %s)",
-            execution_id, user_id, node_id,
+            execution_id,
+            user_id,
+            node_id,
         )
         return True
 
@@ -254,12 +270,15 @@ class ApprovalService:
             if claimed is None:
                 continue  # Already approved/rejected by user
 
-            await self._publish_event(str(run.id), {
-                "type": "approval_timeout",
-                "execution_id": str(run.id),
-                "node_id": run.approval_node_id,
-                "action": timeout_action,
-            })
+            await self._publish_event(
+                str(run.id),
+                {
+                    "type": "approval_timeout",
+                    "execution_id": str(run.id),
+                    "node_id": run.approval_node_id,
+                    "action": timeout_action,
+                },
+            )
             count += 1
 
         if count:
@@ -309,7 +328,10 @@ class ApprovalService:
             await self.redis.expire(buf_key, 60)
             logger.info(
                 "Published approval event type=%s seq=%d for execution %s (listeners=%d)",
-                event.get("type"), seq, execution_id, listeners,
+                event.get("type"),
+                seq,
+                execution_id,
+                listeners,
             )
         except Exception as e:
             logger.warning("Failed to publish approval event: %s", e)

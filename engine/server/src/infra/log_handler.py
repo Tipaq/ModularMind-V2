@@ -48,13 +48,15 @@ class RedisLogHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            entry = json.dumps({
-                "ts": datetime.now(UTC).isoformat(),
-                "level": record.levelname,
-                "logger": record.name,
-                "message": self.format(record),
-                "source": self.source,
-            })
+            entry = json.dumps(
+                {
+                    "ts": datetime.now(UTC).isoformat(),
+                    "level": record.levelname,
+                    "logger": record.name,
+                    "message": self.format(record),
+                    "source": self.source,
+                }
+            )
 
             with self._lock:
                 self._buffer.append(entry)
@@ -87,7 +89,7 @@ class RedisLogHandler(logging.Handler):
             # Keep entries for retry; cap at MAX_BUFFER to prevent memory leak
             with self._lock:
                 if len(self._buffer) > self.MAX_BUFFER:
-                    self._buffer = self._buffer[-self.MAX_BUFFER:]
+                    self._buffer = self._buffer[-self.MAX_BUFFER :]
             return
 
         try:
@@ -98,18 +100,18 @@ class RedisLogHandler(logging.Handler):
             pipe.execute()
             # Success — remove flushed entries from buffer
             with self._lock:
-                self._buffer = self._buffer[len(entries):]
+                self._buffer = self._buffer[len(entries) :]
         except (ConnectionError, OSError, sync_redis.RedisError) as exc:
             # Keep entries for retry; cap buffer size
             with self._lock:
                 if len(self._buffer) > self.MAX_BUFFER:
                     dropped = len(self._buffer) - self.MAX_BUFFER
-                    self._buffer = self._buffer[-self.MAX_BUFFER:]
+                    self._buffer = self._buffer[-self.MAX_BUFFER :]
                     # Use stderr logging to avoid recursion
                     import sys
+
                     print(
-                        f"[RedisLogHandler] flush failed ({exc}), "
-                        f"dropped {dropped} log entries",
+                        f"[RedisLogHandler] flush failed ({exc}), dropped {dropped} log entries",
                         file=sys.stderr,
                     )
 

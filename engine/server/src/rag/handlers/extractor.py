@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 
 from src.infra.config import get_settings
 from src.infra.database import async_session_maker
-from src.rag.models import RAGChunk, RAGCollection, RAGDocument, DocumentStatus
+from src.rag.models import DocumentStatus, RAGChunk, RAGCollection, RAGDocument
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,11 @@ async def document_extract_handler(data: dict) -> None:
         chunk_size = collection.chunk_size if collection else 500
         chunk_overlap = collection.chunk_overlap if collection else 50
         coll_meta = collection.meta if collection else {}
-        chunk_strategy = coll_meta.get("chunk_strategy", "token_aware") if isinstance(coll_meta, dict) else "token_aware"
+        chunk_strategy = (
+            coll_meta.get("chunk_strategy", "token_aware")
+            if isinstance(coll_meta, dict)
+            else "token_aware"
+        )
 
         # Chunk text
         from src.rag.chunker import ChunkerFactory
@@ -119,21 +123,25 @@ async def document_extract_handler(data: dict) -> None:
 
         logger.info(
             "Extractor: created %d chunks for document %s",
-            len(chunk_ids), document_id,
+            len(chunk_ids),
+            document_id,
         )
 
     # Publish to next stage
+    import redis.asyncio as aioredis
+
+    from src.infra.redis import get_redis_pool
     from src.infra.redis_streams import RedisStreamBus
 
-    import redis.asyncio as aioredis
-    from src.infra.redis import get_redis_pool
-
     bus = RedisStreamBus(aioredis.Redis(connection_pool=get_redis_pool()))
-    await bus.publish("rag:extracted", {
-        "document_id": document_id,
-        "collection_id": collection_id,
-        "chunk_ids": ",".join(chunk_ids),  # CSV for Redis string encoding
-    })
+    await bus.publish(
+        "rag:extracted",
+        {
+            "document_id": document_id,
+            "collection_id": collection_id,
+            "chunk_ids": ",".join(chunk_ids),  # CSV for Redis string encoding
+        },
+    )
 
 
 async def _mark_failed(session, document_id: str, error: str) -> None:

@@ -83,9 +83,7 @@ class DatasetExporter:
         total += 2  # assistant reply priming
         return total
 
-    async def export_dataset(
-        self, filters: dict[str, Any], output_path: str
-    ) -> DatasetStats:
+    async def export_dataset(self, filters: dict[str, Any], output_path: str) -> DatasetStats:
         """Main export method. Queries data, formats, validates, writes JSONL."""
         system_prompt = await self._get_system_prompt()
         stats = DatasetStats()
@@ -168,9 +166,7 @@ class DatasetExporter:
         )
         return stats
 
-    async def _get_feedback_examples(
-        self, filters: dict[str, Any]
-    ) -> list[dict[str, Any]]:
+    async def _get_feedback_examples(self, filters: dict[str, Any]) -> list[dict[str, Any]]:
         """Query ExecutionFeedback with corrections for this agent."""
         min_rating = filters.get("min_rating", 4)
 
@@ -203,9 +199,7 @@ class DatasetExporter:
 
         return examples
 
-    async def _get_execution_examples(
-        self, filters: dict[str, Any]
-    ) -> list[dict[str, Any]]:
+    async def _get_execution_examples(self, filters: dict[str, Any]) -> list[dict[str, Any]]:
         """Query completed ExecutionRun for this agent."""
         query = select(ExecutionRun).where(
             and_(
@@ -228,7 +222,11 @@ class DatasetExporter:
             if not run.input_prompt or not run.output_data:
                 continue
             # Extract assistant content from output_data
-            output_content = run.output_data.get("content", "") if isinstance(run.output_data, dict) else str(run.output_data)
+            output_content = (
+                run.output_data.get("content", "")
+                if isinstance(run.output_data, dict)
+                else str(run.output_data)
+            )
             if not output_content:
                 continue
 
@@ -240,9 +238,7 @@ class DatasetExporter:
 
         return examples
 
-    async def _get_conversation_examples(
-        self, filters: dict[str, Any]
-    ) -> list[dict[str, Any]]:
+    async def _get_conversation_examples(self, filters: dict[str, Any]) -> list[dict[str, Any]]:
         """Query ConversationMessage grouped by conversation for this agent."""
         # Join through Conversation to filter by agent_id
         query = (
@@ -280,9 +276,7 @@ class DatasetExporter:
             # Skip system and tool messages (system prompt injected separately)
             if msg.role in (MessageRole.SYSTEM, MessageRole.TOOL):
                 continue
-            conversations[conv_id].append(
-                {"role": msg.role.value, "content": msg.content or ""}
-            )
+            conversations[conv_id].append({"role": msg.role.value, "content": msg.content or ""})
 
         examples = []
         for conv_id, msgs in conversations.items():
@@ -290,13 +284,13 @@ class DatasetExporter:
             has_user = any(m["role"] == "user" for m in msgs)
             has_assistant = any(m["role"] == "assistant" for m in msgs)
             if has_user and has_assistant:
-                examples.append({"messages": msgs, "source_type": "conversation", "source_id": conv_id})
+                examples.append(
+                    {"messages": msgs, "source_type": "conversation", "source_id": conv_id}
+                )
 
         return examples
 
-    def _format_openai_chat(
-        self, system_prompt: str, messages: list[dict[str, str]]
-    ) -> dict:
+    def _format_openai_chat(self, system_prompt: str, messages: list[dict[str, str]]) -> dict:
         """Format as OpenAI chat fine-tuning example."""
         formatted_messages = []
         if system_prompt:
@@ -304,9 +298,7 @@ class DatasetExporter:
         formatted_messages.extend(messages)
         return {"messages": formatted_messages}
 
-    def _validate_example(
-        self, example: dict, max_tokens: int
-    ) -> tuple[bool, list[str]]:
+    def _validate_example(self, example: dict, max_tokens: int) -> tuple[bool, list[str]]:
         """Validate a training example."""
         reasons: list[str] = []
         messages = example.get("messages", [])
@@ -333,9 +325,7 @@ class DatasetExporter:
         # Token count check
         token_count = self._count_example_tokens(example)
         if token_count > max_tokens:
-            reasons.append(
-                f"Token count {token_count} exceeds limit {max_tokens}"
-            )
+            reasons.append(f"Token count {token_count} exceeds limit {max_tokens}")
             return False, reasons
 
         return True, []

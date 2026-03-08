@@ -19,7 +19,6 @@ from src.domain_config import get_config_provider
 from src.infra.constants import RATE_LIMIT_INTERNAL
 from src.infra.database import DbSession
 from src.infra.rate_limit import RateLimitDependency
-from src.internal.schemas import UserSyncItem, UserSyncRequest
 
 # Sub-routers
 from src.internal import (
@@ -34,6 +33,7 @@ from src.internal import (
     supervisor_layers,
 )
 from src.internal.auth import verify_internal_token
+from src.internal.schemas import UserSyncRequest
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,9 @@ async def import_configs(request: Request, db: DbSession) -> dict:
 
     logger.info(
         "Config import: %d agents, %d graphs imported, %d skipped",
-        agents_imported, graphs_imported, skipped,
+        agents_imported,
+        graphs_imported,
+        skipped,
     )
 
     return {
@@ -193,16 +195,12 @@ async def sync_users(request: Request, body: UserSyncRequest, db: DbSession) -> 
         synced_platform_ids.add(item.id)
 
         # Try to find existing user by platform_user_id
-        result = await db.execute(
-            select(User).where(User.platform_user_id == item.id)
-        )
+        result = await db.execute(select(User).where(User.platform_user_id == item.id))
         existing = result.scalar_one_or_none()
 
         # Fallback: match by email (handles initial migration of CLI users)
         if not existing:
-            result = await db.execute(
-                select(User).where(User.email == item.email)
-            )
+            result = await db.execute(select(User).where(User.email == item.email))
             existing = result.scalar_one_or_none()
 
         role = UserRole(item.role)
@@ -246,7 +244,7 @@ async def sync_users(request: Request, body: UserSyncRequest, db: DbSession) -> 
         result = await db.execute(
             select(User).where(
                 User.platform_user_id.isnot(None),
-                User.is_active == True,
+                User.is_active,
                 User.platform_user_id.notin_(synced_platform_ids),
             )
         )
@@ -255,7 +253,7 @@ async def sync_users(request: Request, body: UserSyncRequest, db: DbSession) -> 
         result = await db.execute(
             select(User).where(
                 User.platform_user_id.isnot(None),
-                User.is_active == True,
+                User.is_active,
             )
         )
     for orphan in result.scalars().all():
@@ -266,7 +264,9 @@ async def sync_users(request: Request, body: UserSyncRequest, db: DbSession) -> 
 
     logger.info(
         "User sync: %d created, %d updated, %d deactivated",
-        created, updated, deactivated,
+        created,
+        updated,
+        deactivated,
     )
 
     return {

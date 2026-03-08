@@ -7,7 +7,7 @@ SQLAlchemy models for authentication and authorization.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -22,7 +22,7 @@ from src.infra.database import Base
 from src.infra.utils import utcnow
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     """User role enumeration.
 
     Strict hierarchy: owner (2) > admin (1) > user (0).
@@ -38,15 +38,12 @@ class UserRole(str, Enum):
         return {"owner": 2, "admin": 1, "user": 0}[self.value]
 
 
-
 class User(Base):
     """User model for authentication."""
 
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(
@@ -63,9 +60,7 @@ class User(Base):
         onupdate=utcnow,
     )
     preferences: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    last_profile_synthesis_at: Mapped[datetime | None] = mapped_column(
-        nullable=True, default=None
-    )
+    last_profile_synthesis_at: Mapped[datetime | None] = mapped_column(nullable=True, default=None)
 
     group_memberships: Mapped[list[UserGroupMember]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

@@ -19,6 +19,7 @@ router = APIRouter(prefix="/models", tags=["Models Management"])
 
 # ---- Management Endpoints (owner only) ----
 
+
 @router.get("/{model_id}", dependencies=[RequireOwner])
 async def get_model(model_id: str, user: CurrentUser) -> ModelResponse:
     """Get a single model from the runtime catalog (detailed info)."""
@@ -63,22 +64,25 @@ async def pull_model(body: PullRequest, user: CurrentUser) -> PullResponse:
     # Auto-create catalog entry if the model isn't registered yet
     if not svc.is_model_in_catalog(body.model_name):
         model_id = body.model_name.replace(":", "-")
-        svc.save_model(model_id, {
-            "id": model_id,
-            "name": body.display_name or body.model_name,
-            "provider": "ollama",
-            "model_id": body.model_name,
-            "display_name": body.display_name or body.model_name,
-            "model_type": "local",
-            "parameter_size": body.parameter_size,
-            "disk_size": body.disk_size,
-            "context_window": body.context_window,
-            "max_output_tokens": body.max_output_tokens,
-            "is_active": True,
-            "is_required": False,
-            "is_embedding": False,
-            "model_metadata": {},
-        })
+        svc.save_model(
+            model_id,
+            {
+                "id": model_id,
+                "name": body.display_name or body.model_name,
+                "provider": "ollama",
+                "model_id": body.model_name,
+                "display_name": body.display_name or body.model_name,
+                "model_type": "local",
+                "parameter_size": body.parameter_size,
+                "disk_size": body.disk_size,
+                "context_window": body.context_window,
+                "max_output_tokens": body.max_output_tokens,
+                "is_active": True,
+                "is_required": False,
+                "is_embedding": False,
+                "model_metadata": {},
+            },
+        )
         logger.info("Auto-created catalog entry for pull: %s", body.model_name)
 
     task_id = await svc.trigger_pull(body.model_name)

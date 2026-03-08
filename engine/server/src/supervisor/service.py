@@ -64,7 +64,8 @@ class SuperSupervisorService:
         self.parser = MessageParser(config_provider)
         self.context_manager = get_context_manager()  # singleton
         self.ephemeral_factory = EphemeralAgentFactory(
-            config_provider, redis_client,
+            config_provider,
+            redis_client,
         )
         self.exec_service = ExecutionService(db)
 
@@ -75,6 +76,7 @@ class SuperSupervisorService:
         The router validates that model_id is set before reaching here.
         """
         from src.infra.constants import parse_model_id
+
         model_id = conv_config["model_id"]
         _, model_name = parse_model_id(model_id)
         return model_id, model_name
@@ -117,7 +119,11 @@ class SuperSupervisorService:
 
         routing_start = time.perf_counter()
         decision = await self._resolve_routing(
-            conversation_id, content, messages, conv_config, user_id=user_id,
+            conversation_id,
+            content,
+            messages,
+            conv_config,
+            user_id=user_id,
         )
         routing_duration_ms = int((time.perf_counter() - routing_start) * 1000)
 
@@ -125,7 +131,9 @@ class SuperSupervisorService:
         routing_metadata["duration_ms"] = routing_duration_ms
         logger.info(
             "Routing decision: strategy=%s confidence=%.2f reasoning='%s'",
-            decision.strategy.value, decision.confidence or 0, decision.reasoning or "",
+            decision.strategy.value,
+            decision.confidence or 0,
+            decision.reasoning or "",
         )
 
         # Parse for effective content (strip @mentions, /commands)
@@ -133,18 +141,26 @@ class SuperSupervisorService:
         effective_content = parsed.clean_content or parsed.create_instructions or content
 
         result = await self._execute_strategy(
-            decision, conversation_id, effective_content, user_id, conv_config,
+            decision,
+            conversation_id,
+            effective_content,
+            user_id,
+            conv_config,
         )
         result["routing_metadata"] = routing_metadata
         result["user_profile"] = getattr(self, "_last_user_profile", None)
         result["knowledge_data"] = getattr(self, "_last_knowledge_data", None)
         from src.infra.config import get_settings as _get_settings
+
         _settings = _get_settings()
         _model_id = (conv_config or {}).get("model_id", "")
         try:
             from src.prompt_layers.context import AgentContextBuilder
-            _cw = AgentContextBuilder._resolve_context_window(_model_id) if _model_id else (
-                _settings.CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW
+
+            _cw = (
+                AgentContextBuilder._resolve_context_window(_model_id)
+                if _model_id
+                else (_settings.CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW)
             )
         except (KeyError, ValueError, AttributeError):
             _cw = _settings.CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW
@@ -157,7 +173,12 @@ class SuperSupervisorService:
         _rag_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_RAG_PCT / 100)
         _sys_budget = int(_effective_cw * _settings.CONTEXT_BUDGET_SYSTEM_PCT / 100)
         # Count supervisor prompt layer token usage
-        from src.prompt_layers.loader import get_supervisor_identity, get_supervisor_personality, get_tool_task
+        from src.prompt_layers.loader import (
+            get_supervisor_identity,
+            get_supervisor_personality,
+            get_tool_task,
+        )
+
         _sys_chars = (
             len(get_supervisor_identity())
             + len((conv_config or {}).get("supervisor_prompt") or get_supervisor_personality())
@@ -233,8 +254,10 @@ class SuperSupervisorService:
             return conv_config
         try:
             from src.infra.config import get_settings
+
             if get_settings().MCP_AUTO_ENABLE:
                 from src.mcp.service import get_mcp_registry
+
                 all_servers = get_mcp_registry().list_servers()
                 auto_ids = [s.id for s in all_servers if s.enabled]
                 if auto_ids:
@@ -283,7 +306,7 @@ class SuperSupervisorService:
                 RoutingDecision(
                     strategy=RoutingStrategy.DELEGATE_AGENT,
                     agent_id=aid,
-                    reasoning=f"Explicit @mention (multi-action #{i+1})",
+                    reasoning=f"Explicit @mention (multi-action #{i + 1})",
                     confidence=1.0,
                 )
                 for i, aid in enumerate(matched_agent_ids)
@@ -317,20 +340,26 @@ class SuperSupervisorService:
         knowledge_context = ""
         self._last_knowledge_data: dict[str, Any] | None = None
         knowledge_context, self._last_knowledge_data = await self._get_knowledge_context(
-            content, conv_config,
+            content,
+            conv_config,
         )
 
         decision = await self._route_with_llm(
-            conversation_id, parsed.clean_content,
-            messages=messages, affinity_agent_id=last_agent,
-            conv_config=conv_config, memory_context=memory_context,
+            conversation_id,
+            parsed.clean_content,
+            messages=messages,
+            affinity_agent_id=last_agent,
+            conv_config=conv_config,
+            memory_context=memory_context,
             knowledge_context=knowledge_context,
         )
         decision = self._apply_single_selection_override(decision, conv_config)
         return decision
 
     def _apply_single_selection_override(
-        self, decision: RoutingDecision, conv_config: dict[str, Any],
+        self,
+        decision: RoutingDecision,
+        conv_config: dict[str, Any],
     ) -> RoutingDecision:
         """Override LLM routing when user pinned a single agent/graph."""
         enabled_agents = conv_config.get("enabled_agents") or []
@@ -339,9 +368,8 @@ class SuperSupervisorService:
         if decision.strategy == RoutingStrategy.DELEGATE_AGENT:
             if len(enabled_agents) == 1:
                 decision.agent_id = enabled_agents[0]
-        elif decision.strategy == RoutingStrategy.EXECUTE_GRAPH:
-            if len(enabled_graphs) == 1:
-                decision.graph_id = enabled_graphs[0]
+        elif decision.strategy == RoutingStrategy.EXECUTE_GRAPH and len(enabled_graphs) == 1:
+            decision.graph_id = enabled_graphs[0]
 
         return decision
 
@@ -375,7 +403,9 @@ class SuperSupervisorService:
         conv_config = conv_config or {}
         try:
             task_prompt = await self._build_routing_prompt(
-                messages, affinity_agent_id, conv_config,
+                messages,
+                affinity_agent_id,
+                conv_config,
                 memory_context=memory_context,
                 knowledge_context=knowledge_context,
             )
@@ -383,11 +413,11 @@ class SuperSupervisorService:
 
             _, model_name = self._resolve_model_name(conv_config)
             llm = await self.llm_provider.get_model(
-                model_name, temperature=ROUTING_TEMPERATURE, format="json",
+                model_name,
+                temperature=ROUTING_TEMPERATURE,
+                format="json",
             )
-            response = await llm.ainvoke(
-                llm_messages + [HumanMessage(content=content)]
-            )
+            response = await llm.ainvoke(llm_messages + [HumanMessage(content=content)])
 
             return self._parse_routing_response(response)
 
@@ -439,7 +469,8 @@ class SuperSupervisorService:
         )
 
     async def _discover_mcp_tools_for_routing(
-        self, conv_config: dict[str, Any],
+        self,
+        conv_config: dict[str, Any],
     ) -> dict[str, Any] | None:
         """Discover MCP tools to include in routing context."""
         enabled_servers = conv_config.get("enabled_mcp_servers", [])
@@ -447,6 +478,7 @@ class SuperSupervisorService:
             return None
         try:
             from src.mcp.service import get_mcp_registry
+
             registry = get_mcp_registry()
             tools_map: dict[str, Any] = {}
             for sid in enabled_servers:
@@ -468,7 +500,9 @@ class SuperSupervisorService:
             return None
 
     def _compose_routing_messages(
-        self, conv_config: dict[str, Any], task_prompt: str,
+        self,
+        conv_config: dict[str, Any],
+        task_prompt: str,
     ) -> list[Any]:
         """Compose layered LLM messages for routing (identity + task)."""
         from src.prompt_layers import (
@@ -477,22 +511,23 @@ class SuperSupervisorService:
             PromptLayer,
             get_supervisor_identity,
         )
+
         composer = PromptComposer()
-        composer.add(PromptLayer(LayerType.IDENTITY, get_supervisor_identity(), "supervisor_identity"))
+        composer.add(
+            PromptLayer(LayerType.IDENTITY, get_supervisor_identity(), "supervisor_identity")
+        )
         composer.add(PromptLayer(LayerType.TASK, task_prompt, "routing_task"))
         return composer.build()
 
     def _parse_routing_response(self, response) -> RoutingDecision:
         """Parse LLM response into a RoutingDecision."""
         response_text = (
-            response.content
-            if isinstance(response.content, str)
-            else str(response.content)
+            response.content if isinstance(response.content, str) else str(response.content)
         )
         cleaned = response_text.strip()
         if cleaned.startswith("```"):
             lines = cleaned.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
+            lines = [line for line in lines if not line.strip().startswith("```")]
             cleaned = "\n".join(lines)
         return RoutingDecision.model_validate_json(cleaned)
 
@@ -514,23 +549,42 @@ class SuperSupervisorService:
                 return await self._handle_direct_response(decision, conv_id)
             case RoutingStrategy.TOOL_RESPONSE:
                 return await self._handle_tool_response(
-                    decision, conv_id, content, user_id, conv_config,
+                    decision,
+                    conv_id,
+                    content,
+                    user_id,
+                    conv_config,
                 )
             case RoutingStrategy.DELEGATE_AGENT:
                 return await self._handle_agent_delegation(
-                    decision, conv_id, content, user_id, conv_config,
+                    decision,
+                    conv_id,
+                    content,
+                    user_id,
+                    conv_config,
                 )
             case RoutingStrategy.EXECUTE_GRAPH:
                 return await self._handle_graph_execution(
-                    decision, conv_id, content, user_id,
+                    decision,
+                    conv_id,
+                    content,
+                    user_id,
                 )
             case RoutingStrategy.CREATE_AGENT:
                 return await self._handle_create_agent(
-                    decision, conv_id, content, user_id, conv_config,
+                    decision,
+                    conv_id,
+                    content,
+                    user_id,
+                    conv_config,
                 )
             case RoutingStrategy.MULTI_ACTION:
                 return await self._handle_multi_action(
-                    decision, conv_id, content, user_id, conv_config,
+                    decision,
+                    conv_id,
+                    content,
+                    user_id,
+                    conv_config,
                 )
             case _:
                 return {
@@ -581,7 +635,9 @@ class SuperSupervisorService:
             return await self._handle_direct_response(decision, conv_id)
 
         execution, publish_fn = await self._setup_tool_execution(
-            conv_id, content, user_id,
+            conv_id,
+            content,
+            user_id,
         )
 
         _, model_name = self._resolve_model_name(conv_config)
@@ -596,16 +652,22 @@ class SuperSupervisorService:
 
             memory_context, _ = await self._get_memory_context(user_id, content)
             llm_messages = self._compose_tool_messages(
-                conv_config, content, memory_context=memory_context,
+                conv_config,
+                content,
+                memory_context=memory_context,
             )
 
             step_start = time.perf_counter()
 
             await self._publish_tool_step_started(
-                publish_fn, execution.id, model_name, lc_tools,
+                publish_fn,
+                execution.id,
+                model_name,
+                lc_tools,
             )
 
             from src.infra.config import get_settings
+
             response_text, _ = await run_tool_loop(
                 llm_with_tools,
                 llm_messages,
@@ -618,7 +680,10 @@ class SuperSupervisorService:
             step_duration_ms = int((time.perf_counter() - step_start) * 1000)
 
             await self._finalize_tool_response(
-                conv_id, execution, response_text, publish_fn,
+                conv_id,
+                execution,
+                response_text,
+                publish_fn,
                 step_duration_ms=step_duration_ms,
             )
 
@@ -629,11 +694,14 @@ class SuperSupervisorService:
 
         except Exception as e:  # LLM providers raise heterogeneous errors
             logger.error("TOOL_RESPONSE execution failed: %s", e, exc_info=True)
-            await publish_fn({
-                "type": "error", "event": "run_failed",
-                "execution_id": execution.id,
-                "message": str(e),
-            })
+            await publish_fn(
+                {
+                    "type": "error",
+                    "event": "run_failed",
+                    "execution_id": execution.id,
+                    "message": str(e),
+                }
+            )
             return await self._handle_direct_response(decision, conv_id)
 
     async def _discover_mcp_tools(self, conv_config: dict[str, Any]) -> tuple[list | None, Any]:
@@ -648,7 +716,8 @@ class SuperSupervisorService:
 
         registry = get_mcp_registry()
         lc_tools, tool_executor = await discover_and_convert(
-            registry, enabled_servers,
+            registry,
+            enabled_servers,
         )
 
         if not lc_tools or not tool_executor:
@@ -658,7 +727,10 @@ class SuperSupervisorService:
         return lc_tools, tool_executor
 
     async def _setup_tool_execution(
-        self, conv_id: str, content: str, user_id: str,
+        self,
+        conv_id: str,
+        content: str,
+        user_id: str,
     ) -> tuple[Any, Any]:
         """Create execution record and build a publish_fn for streaming."""
         execution = await self.exec_service.start_supervisor_execution(
@@ -733,7 +805,11 @@ class SuperSupervisorService:
 
             all_collection_ids = []
             for agent in agents:
-                if agent.rag_config and agent.rag_config.enabled and agent.rag_config.collection_ids:
+                if (
+                    agent.rag_config
+                    and agent.rag_config.enabled
+                    and agent.rag_config.collection_ids
+                ):
                     all_collection_ids.extend(agent.rag_config.collection_ids)
 
             if not all_collection_ids:
@@ -782,16 +858,18 @@ class SuperSupervisorService:
                             "chunk_count": 0,
                         }
                     collections_seen[cid]["chunk_count"] += 1
-                    chunks.append({
-                        "chunk_id": r.chunk_id,
-                        "document_id": r.document_id,
-                        "collection_id": cid,
-                        "collection_name": cname,
-                        "document_filename": r.document.filename if r.document else None,
-                        "content_preview": (r.content or "")[:300],
-                        "score": round(r.score, 4),
-                        "chunk_index": r.chunk_index,
-                    })
+                    chunks.append(
+                        {
+                            "chunk_id": r.chunk_id,
+                            "document_id": r.document_id,
+                            "collection_id": cid,
+                            "collection_name": cname,
+                            "document_filename": r.document.filename if r.document else None,
+                            "content_preview": (r.content or "")[:300],
+                            "score": round(r.score, 4),
+                            "chunk_index": r.chunk_index,
+                        }
+                    )
 
                 knowledge_data = {
                     "collections": list(collections_seen.values()),
@@ -802,7 +880,8 @@ class SuperSupervisorService:
                 formatted = retriever.format_context(raw_results)
                 logger.info(
                     "Knowledge context: %d results from %d collections",
-                    len(raw_results), len(collections_seen),
+                    len(raw_results),
+                    len(collections_seen),
                 )
                 return formatted, knowledge_data
 
@@ -811,7 +890,10 @@ class SuperSupervisorService:
             return "", None
 
     def _compose_tool_messages(
-        self, conv_config: dict[str, Any], content: str, memory_context: str = "",
+        self,
+        conv_config: dict[str, Any],
+        content: str,
+        memory_context: str = "",
     ) -> list[Any]:
         """Compose layered LLM messages for tool-calling (identity + personality + task)."""
         from langchain_core.messages import SystemMessage
@@ -824,8 +906,11 @@ class SuperSupervisorService:
             get_supervisor_personality,
             get_tool_task,
         )
+
         composer = PromptComposer()
-        composer.add(PromptLayer(LayerType.IDENTITY, get_supervisor_identity(), "supervisor_identity"))
+        composer.add(
+            PromptLayer(LayerType.IDENTITY, get_supervisor_identity(), "supervisor_identity")
+        )
         personality = conv_config.get("supervisor_prompt") or get_supervisor_personality()
         composer.add(PromptLayer(LayerType.PERSONALITY, personality, "supervisor_personality"))
         composer.add(PromptLayer(LayerType.TASK, get_tool_task(), "tool_task"))
@@ -836,25 +921,37 @@ class SuperSupervisorService:
         return messages
 
     async def _publish_tool_step_started(
-        self, publish_fn, execution_id: str, model_name: str, lc_tools: list,
+        self,
+        publish_fn,
+        execution_id: str,
+        model_name: str,
+        lc_tools: list,
     ) -> None:
         """Publish step_started event with tool info for UI display."""
         tool_names = [getattr(t, "name", str(t)) for t in lc_tools]
-        await publish_fn({
-            "type": "step", "event": "step_started",
-            "run_id": execution_id,
-            "node_id": "supervisor_tools",
-            "node_type": "supervisor_tools",
-            "status": "running",
-            "agent_name": "Supervisor (MCP Tools)",
-            "model": model_name,
-            "tools": tool_names[:MAX_TOOLS_IN_EVENT],
-            "is_ephemeral": False,
-        })
+        await publish_fn(
+            {
+                "type": "step",
+                "event": "step_started",
+                "run_id": execution_id,
+                "node_id": "supervisor_tools",
+                "node_type": "supervisor_tools",
+                "status": "running",
+                "agent_name": "Supervisor (MCP Tools)",
+                "model": model_name,
+                "tools": tool_names[:MAX_TOOLS_IN_EVENT],
+                "is_ephemeral": False,
+            }
+        )
 
     async def _finalize_tool_response(
-        self, conv_id: str, execution, response_text: str, publish_fn,
-        *, step_duration_ms: int | None = None,
+        self,
+        conv_id: str,
+        execution,
+        response_text: str,
+        publish_fn,
+        *,
+        step_duration_ms: int | None = None,
     ) -> None:
         """Save response, update execution status, and publish completion events."""
         from src.conversations.models import MessageRole
@@ -877,23 +974,30 @@ class SuperSupervisorService:
         execution.output_data = {"response": response_text}
         await self.db.commit()
 
-        await publish_fn({
-            "type": "step", "event": "step_completed",
-            "run_id": execution.id,
-            "node_id": "supervisor_tools", "node_type": "agent",
-            "status": "completed",
-            "duration_ms": step_duration_ms,
-            "output_data": {"response": response_text[:OUTPUT_TRUNCATION_LENGTH]},
-        })
-        await publish_fn({
-            "type": "complete", "event": "run_completed",
-            "execution_id": execution.id,
-            "run_id": execution.id,
-            "status": "completed",
-            "duration_ms": step_duration_ms,
-            "output": {"response": response_text},
-            "output_data": {"response": response_text},
-        })
+        await publish_fn(
+            {
+                "type": "step",
+                "event": "step_completed",
+                "run_id": execution.id,
+                "node_id": "supervisor_tools",
+                "node_type": "agent",
+                "status": "completed",
+                "duration_ms": step_duration_ms,
+                "output_data": {"response": response_text[:OUTPUT_TRUNCATION_LENGTH]},
+            }
+        )
+        await publish_fn(
+            {
+                "type": "complete",
+                "event": "run_completed",
+                "execution_id": execution.id,
+                "run_id": execution.id,
+                "status": "completed",
+                "duration_ms": step_duration_ms,
+                "output": {"response": response_text},
+                "output_data": {"response": response_text},
+            }
+        )
 
     # =========================================================================
     # Agent delegation
@@ -926,6 +1030,7 @@ class SuperSupervisorService:
         sub_ctx = await self.context_manager.get_sub_context(conv_id, agent_id)
         if not sub_ctx:
             from src.conversations.service import ConversationService
+
             conv_service = ConversationService(self.db)
             conv = await conv_service.get_conversation(conv_id)
             if conv and conv.messages:
@@ -934,7 +1039,8 @@ class SuperSupervisorService:
                     for m in conv.messages
                 ]
                 await self.context_manager.rebuild_from_messages(
-                    conv_id, msg_dicts,
+                    conv_id,
+                    msg_dicts,
                 )
 
         mcp_server_ids = conv_config.get("enabled_mcp_servers", [])
@@ -972,12 +1078,16 @@ class SuperSupervisorService:
             # LLM may have put the id in agent_id instead — fall back to delegation
             if decision.agent_id:
                 logger.info(
-                    "EXECUTE_GRAPH has no graph_id but agent_id=%s — falling back to DELEGATE_AGENT",
+                    "EXECUTE_GRAPH has no graph_id but agent_id=%s — falling back to DELEGATE_AGENT",  # noqa: E501
                     decision.agent_id,
                 )
                 decision.strategy = RoutingStrategy.DELEGATE_AGENT
                 return await self._handle_agent_delegation(
-                    decision, conv_id, content, user_id, {},
+                    decision,
+                    conv_id,
+                    content,
+                    user_id,
+                    {},
                 )
             return {
                 "direct_response": "No graph specified for execution",
@@ -997,12 +1107,17 @@ class SuperSupervisorService:
             if fallback_agent_id:
                 logger.info(
                     "Graph %s not found, falling back to DELEGATE_AGENT with agent_id=%s",
-                    graph_id, fallback_agent_id,
+                    graph_id,
+                    fallback_agent_id,
                 )
                 decision.agent_id = fallback_agent_id
                 decision.strategy = RoutingStrategy.DELEGATE_AGENT
                 return await self._handle_agent_delegation(
-                    decision, conv_id, content, user_id, {},
+                    decision,
+                    conv_id,
+                    content,
+                    user_id,
+                    {},
                 )
         graph_name = graph_config.name if graph_config else graph_id
 
@@ -1058,7 +1173,11 @@ class SuperSupervisorService:
             confidence=1.0,
         )
         result = await self._handle_agent_delegation(
-            delegate_decision, conv_id, content, user_id, conv_config,
+            delegate_decision,
+            conv_id,
+            content,
+            user_id,
+            conv_config,
         )
 
         result["ephemeral_agent"] = {
@@ -1084,7 +1203,11 @@ class SuperSupervisorService:
         for i, sub in enumerate(sub_decisions):
             try:
                 result = await self._execute_strategy(
-                    sub, conv_id, content, user_id, conv_config,
+                    sub,
+                    conv_id,
+                    content,
+                    user_id,
+                    conv_config,
                 )
                 results.append(result)
                 if result.get("execution_id"):
@@ -1092,7 +1215,9 @@ class SuperSupervisorService:
             except Exception as e:  # Resilience: sub-decisions must not abort the batch
                 logger.error(
                     "MULTI_ACTION sub-decision %d/%d failed: %s",
-                    i + 1, len(sub_decisions), e,
+                    i + 1,
+                    len(sub_decisions),
+                    e,
                 )
                 results.append({"error": str(e)})
 

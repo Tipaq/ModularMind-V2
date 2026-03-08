@@ -57,9 +57,10 @@ def verify_slack_signature(
         return False
 
     sig_basestring = f"v0:{timestamp}:{body.decode('utf-8')}"
-    computed = "v0=" + hmac.new(
-        signing_secret.encode(), sig_basestring.encode(), hashlib.sha256
-    ).hexdigest()
+    computed = (
+        "v0="
+        + hmac.new(signing_secret.encode(), sig_basestring.encode(), hashlib.sha256).hexdigest()
+    )
     return hmac.compare_digest(computed, signature)
 
 
@@ -175,9 +176,7 @@ async def send_discord_followup(
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.patch(url, json={"content": content[:2000]})
             if resp.status_code >= 400:
-                logger.warning(
-                    "Discord followup failed (%s): %s", resp.status_code, resp.text
-                )
+                logger.warning("Discord followup failed (%s): %s", resp.status_code, resp.text)
     except httpx.HTTPError:
         logger.exception("Failed to send Discord followup")
 
@@ -194,49 +193,49 @@ async def _run_discord_agent(
     Runs under a semaphore to cap concurrent background tasks.
     """
     async with _discord_semaphore, async_session_maker() as db:
-      try:
-          exec_service = ExecutionService(db)
+        try:
+            exec_service = ExecutionService(db)
 
-          execution = await exec_service.start_agent_execution(
-              agent_id=connector_agent_id,
-              data=ExecutionCreate(prompt=message),
-              user_id=f"system:webhook:{connector_id}",
-          )
-          await db.commit()
+            execution = await exec_service.start_agent_execution(
+                agent_id=connector_agent_id,
+                data=ExecutionCreate(prompt=message),
+                user_id=f"system:webhook:{connector_id}",
+            )
+            await db.commit()
 
-          # Dispatch to Redis Streams worker
-          acquired = await fair_scheduler.acquire("webhook", execution.id)
-          if not acquired:
-              await send_discord_followup(
-                  application_id,
-                  interaction_token,
-                  "Too many requests — please try again later.",
-              )
-              return
-          await exec_service.dispatch_execution(execution)
-          await db.commit()
+            # Dispatch to Redis Streams worker
+            acquired = await fair_scheduler.acquire("webhook", execution.id)
+            if not acquired:
+                await send_discord_followup(
+                    application_id,
+                    interaction_token,
+                    "Too many requests — please try again later.",
+                )
+                return
+            await exec_service.dispatch_execution(execution)
+            await db.commit()
 
-          # Wait for result via inline execution streaming
-          response_text = ""
-          async for event in exec_service.execute(execution.id):
-              if event.get("type") == "complete":
-                  output = event.get("output", {})
-                  response_text = output.get("response", str(output))
-                  break
+            # Wait for result via inline execution streaming
+            response_text = ""
+            async for event in exec_service.execute(execution.id):
+                if event.get("type") == "complete":
+                    output = event.get("output", {})
+                    response_text = output.get("response", str(output))
+                    break
 
-          await db.commit()
-          await send_discord_followup(
-              application_id,
-              interaction_token,
-              response_text or "No response generated.",
-          )
-      except Exception:  # Background task catch-all; must not crash silently
-          logger.exception("Discord background agent execution failed")
-          await send_discord_followup(
-              application_id,
-              interaction_token,
-              "An error occurred while processing your request.",
-          )
+            await db.commit()
+            await send_discord_followup(
+                application_id,
+                interaction_token,
+                response_text or "No response generated.",
+            )
+        except Exception:  # Background task catch-all; must not crash silently
+            logger.exception("Discord background agent execution failed")
+            await send_discord_followup(
+                application_id,
+                interaction_token,
+                "An error occurred while processing your request.",
+            )
 
 
 # ─── Webhook endpoint ────────────────────────────────────────────────────────
@@ -262,12 +261,10 @@ async def receive_webhook(
     try:
         UUID(connector_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Not found") from None
 
     # Find connector first (needed for all auth methods)
-    result = await db.execute(
-        select(Connector).where(Connector.id == connector_id)
-    )
+    result = await db.execute(select(Connector).where(Connector.id == connector_id))
     connector = result.scalar_one_or_none()
 
     if not connector:
@@ -282,7 +279,10 @@ async def receive_webhook(
         slack_timestamp = request.headers.get("X-Slack-Request-Timestamp")
         if slack_signature and slack_timestamp:
             if not verify_slack_signature(
-                body, slack_timestamp, slack_signature, connector.webhook_secret,
+                body,
+                slack_timestamp,
+                slack_signature,
+                connector.webhook_secret,
             ):
                 raise HTTPException(status_code=403, detail="Invalid Slack signature")
         else:
@@ -317,7 +317,7 @@ async def receive_webhook(
     try:
         payload = await request.json()
     except (ValueError, UnicodeDecodeError):
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from None
 
     # ── Handle Slack URL verification ────────────────────────────────────
     if connector.connector_type == "slack" and payload.get("type") == "url_verification":
@@ -404,4 +404,4 @@ async def receive_webhook(
 
     except Exception:  # Execution involves DB + Redis + LLM; logs and returns 500
         logger.exception("Webhook execution failed")
-        raise HTTPException(status_code=500, detail="Execution failed")
+        raise HTTPException(status_code=500, detail="Execution failed") from None

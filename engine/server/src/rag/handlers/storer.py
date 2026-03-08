@@ -12,7 +12,7 @@ import logging
 from sqlalchemy import func, select, update
 
 from src.infra.database import async_session_maker
-from src.rag.models import RAGChunk, RAGCollection, RAGDocument, DocumentStatus
+from src.rag.models import DocumentStatus, RAGChunk, RAGCollection, RAGDocument
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +35,7 @@ async def document_store_handler(data: dict) -> None:
 
     async with async_session_maker() as session:
         # Load chunks with embeddings from PG
-        result = await session.execute(
-            select(RAGChunk).where(RAGChunk.id.in_(chunk_ids))
-        )
+        result = await session.execute(select(RAGChunk).where(RAGChunk.id.in_(chunk_ids)))
         chunks = list(result.scalars().all())
 
         if not chunks:
@@ -92,7 +90,8 @@ async def document_store_handler(data: dict) -> None:
                     dedup_count += 1
                     logger.debug(
                         "Storer: chunk %s dedup'd (score=%.3f)",
-                        chunk.id, search_results[0].score,
+                        chunk.id,
+                        search_results[0].score,
                     )
                     continue
             except Exception as e:
@@ -122,9 +121,7 @@ async def document_store_handler(data: dict) -> None:
 
         # Clean up embedding_cache on all processed chunks
         await session.execute(
-            update(RAGChunk)
-            .where(RAGChunk.id.in_(chunk_ids))
-            .values(embedding_cache=None)
+            update(RAGChunk).where(RAGChunk.id.in_(chunk_ids)).values(embedding_cache=None)
         )
 
         # Update document status
@@ -136,16 +133,12 @@ async def document_store_handler(data: dict) -> None:
         # Update collection aggregate counts
         total_chunks = (
             await session.execute(
-                select(func.count(RAGChunk.id)).where(
-                    RAGChunk.collection_id == collection_id
-                )
+                select(func.count(RAGChunk.id)).where(RAGChunk.collection_id == collection_id)
             )
         ).scalar() or 0
         total_docs = (
             await session.execute(
-                select(func.count(RAGDocument.id)).where(
-                    RAGDocument.collection_id == collection_id
-                )
+                select(func.count(RAGDocument.id)).where(RAGDocument.collection_id == collection_id)
             )
         ).scalar() or 0
 
@@ -159,5 +152,8 @@ async def document_store_handler(data: dict) -> None:
 
         logger.info(
             "Storer: document %s complete — %d stored, %d dedup'd, %d total chunks",
-            document_id, stored, dedup_count, len(chunks),
+            document_id,
+            stored,
+            dedup_count,
+            len(chunks),
         )

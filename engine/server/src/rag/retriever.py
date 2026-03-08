@@ -51,9 +51,7 @@ class RAGRetriever:
         Returns formatted context string for inclusion in prompt.
         """
         limit = limit or self.default_limit
-        threshold = (
-            threshold if threshold is not None else self.default_threshold
-        )
+        threshold = threshold if threshold is not None else self.default_threshold
 
         try:
             query_embedding = await self.embedding_provider.embed_text(
@@ -61,11 +59,7 @@ class RAGRetriever:
             )
 
             # Ensure collection IDs are strings (callers may pass UUIDs)
-            str_ids = (
-                [str(c) for c in collection_ids]
-                if collection_ids
-                else None
-            )
+            str_ids = [str(c) for c in collection_ids] if collection_ids else None
 
             results = await self.repository.search_hybrid(
                 query_embedding=query_embedding,
@@ -99,20 +93,14 @@ class RAGRetriever:
     ) -> list[RAGSearchResult]:
         """Retrieve raw search results without formatting."""
         limit = limit or self.default_limit
-        threshold = (
-            threshold if threshold is not None else self.default_threshold
-        )
+        threshold = threshold if threshold is not None else self.default_threshold
 
         try:
             query_embedding = await self.embedding_provider.embed_text(
                 query,
             )
 
-            str_ids = (
-                [str(c) for c in collection_ids]
-                if collection_ids
-                else None
-            )
+            str_ids = [str(c) for c in collection_ids] if collection_ids else None
 
             return await self.repository.search_hybrid(
                 query_embedding=query_embedding,

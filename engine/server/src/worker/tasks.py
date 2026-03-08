@@ -61,9 +61,11 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
 
             from src.executions.models import ExecutionRun
 
-            row = (await session.execute(
-                select(ExecutionRun.input_data).where(ExecutionRun.id == execution_id)
-            )).first()
+            row = (
+                await session.execute(
+                    select(ExecutionRun.input_data).where(ExecutionRun.id == execution_id)
+                )
+            ).first()
             if row:
                 idata = dict(row[0] or {}) if row[0] else {}
                 idata["_model_override"] = ab_model_override
@@ -75,7 +77,8 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 await session.commit()
                 logger.info(
                     "Injected model override %s for execution %s",
-                    ab_model_override, execution_id,
+                    ab_model_override,
+                    execution_id,
                 )
 
         complete_event: dict[str, Any] | None = None
@@ -131,7 +134,10 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
             r2 = await get_redis_client()
             try:
                 await _handle_cancellation(
-                    session, r2, execution_id, f"exec_stream:{execution_id}",
+                    session,
+                    r2,
+                    execution_id,
+                    f"exec_stream:{execution_id}",
                 )
                 await r2.expire(f"exec_stream:{execution_id}", 300)
             finally:
@@ -166,7 +172,8 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 except (ConnectionError, OSError, redis.exceptions.RedisError) as exc:
                     logger.warning(
                         "Failed to release scheduler slot for execution %s: %s",
-                        execution_id, exc,
+                        execution_id,
+                        exc,
                     )
 
             # Release Gateway sandbox (if any was acquired for this execution)
@@ -267,21 +274,22 @@ async def _cleanup_orphaned_conversation(
     conversation_id = row[0]
 
     # Count total messages in this conversation
-    msg_count = (await session.execute(
-        select(func.count())
-        .select_from(ConversationMessage)
-        .where(ConversationMessage.conversation_id == conversation_id)
-    )).scalar() or 0
+    msg_count = (
+        await session.execute(
+            select(func.count())
+            .select_from(ConversationMessage)
+            .where(ConversationMessage.conversation_id == conversation_id)
+        )
+    ).scalar() or 0
 
     # Only delete if there's exactly 1 message (the initial user message)
     if msg_count <= 1:
-        await session.execute(
-            delete(Conversation).where(Conversation.id == conversation_id)
-        )
+        await session.execute(delete(Conversation).where(Conversation.id == conversation_id))
         await session.commit()
         logger.info(
             "Deleted orphaned conversation %s (execution %s cancelled before first response)",
-            conversation_id, execution_id,
+            conversation_id,
+            execution_id,
         )
 
 
@@ -350,9 +358,7 @@ async def _run_automation_post_hooks(
 
                 # Calculate duration
                 if run.created_at:
-                    run.duration_seconds = (
-                        run.completed_at - run.created_at
-                    ).total_seconds()
+                    run.duration_seconds = (run.completed_at - run.created_at).total_seconds()
 
                 await hook_session.commit()
 
@@ -389,9 +395,7 @@ async def _persist_assistant_message(
     from src.conversations.service import ConversationService
     from src.executions.models import ExecutionRun
 
-    result = await session.execute(
-        select(ExecutionRun).where(ExecutionRun.id == execution_id)
-    )
+    result = await session.execute(select(ExecutionRun).where(ExecutionRun.id == execution_id))
     execution = result.scalar_one_or_none()
     if not execution or not execution.session_id:
         return
@@ -444,7 +448,8 @@ async def _persist_assistant_message(
 
     logger.info(
         "Persisted assistant message for execution %s in conversation %s",
-        execution_id, execution.session_id,
+        execution_id,
+        execution.session_id,
     )
 
 
@@ -555,11 +560,10 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
         await r.hset(progress_key, mapping={"status": "downloading", "progress": "0"})
         max_pct = 0
 
-        async with httpx.AsyncClient(
-            base_url=settings.OLLAMA_BASE_URL, timeout=None
-        ) as client, client.stream(
-            "POST", "/api/pull", json={"name": model_name, "stream": True}
-        ) as resp:
+        async with (
+            httpx.AsyncClient(base_url=settings.OLLAMA_BASE_URL, timeout=None) as client,
+            client.stream("POST", "/api/pull", json={"name": model_name, "stream": True}) as resp,
+        ):
             resp.raise_for_status()
             async for line in resp.aiter_lines():
                 if not line:
@@ -576,10 +580,13 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
                 # Never let progress go backwards
                 max_pct = max(max_pct, pct)
 
-                await r.hset(progress_key, mapping={
-                    "status": "downloading",
-                    "progress": str(max_pct),
-                })
+                await r.hset(
+                    progress_key,
+                    mapping={
+                        "status": "downloading",
+                        "progress": str(max_pct),
+                    },
+                )
 
                 # Check for cancellation
                 cancel_key = f"runtime:model_pull_cancel:{model_name}"

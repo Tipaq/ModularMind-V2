@@ -37,6 +37,7 @@ class DlqRetryRequest(BaseModel):
 async def action_worker_restart(user: CurrentUser) -> ActionResponse:
     """Signal worker to restart (worker monitors this Redis key)."""
     from src.infra.redis import get_redis_client
+
     r = await get_redis_client()
     if r:
         try:
@@ -51,6 +52,7 @@ async def action_worker_restart(user: CurrentUser) -> ActionResponse:
 async def action_purge_streams(body: PurgeRequest, user: CurrentUser) -> ActionResponse:
     """Trim Redis Streams to remove old messages."""
     from src.infra.redis import get_redis_client
+
     stream_map = {
         "executions": ["tasks:executions"],
         "models": ["tasks:models"],
@@ -83,17 +85,14 @@ async def action_purge_streams(body: PurgeRequest, user: CurrentUser) -> ActionR
 async def action_dlq_retry(body: DlqRetryRequest, user: CurrentUser) -> ActionResponse:
     """Pop entries from DLQ stream and re-publish to original streams."""
     from src.infra.redis import get_redis_client
+
     r = await get_redis_client()
     if not r:
         return ActionResponse(status="error", message="Redis unavailable")
     try:
         # Read from DLQ stream and batch re-publish via pipeline
         entries = await r.xrange("pipeline:dlq", count=body.count)
-        to_retry = [
-            (msg_id, data)
-            for msg_id, data in entries
-            if data.get("original_stream")
-        ]
+        to_retry = [(msg_id, data) for msg_id, data in entries if data.get("original_stream")]
         if to_retry:
             pipe = r.pipeline()
             for msg_id, data in to_retry:
@@ -131,9 +130,7 @@ async def action_dlq_clear(user: CurrentUser) -> ActionResponse:
 
 
 @router.post("/actions/executions/{execution_id}/stop", dependencies=[RequireAdmin])
-async def action_stop_execution(
-    execution_id: str, user: CurrentUser
-) -> ActionResponse:
+async def action_stop_execution(execution_id: str, user: CurrentUser) -> ActionResponse:
     """Stop a running execution."""
     from src.executions.service import ExecutionService
     from src.infra.database import async_session_maker
@@ -184,12 +181,8 @@ async def action_sync_reload(user: CurrentUser) -> ActionResponse:
         try:
             updated = await svc.poll()
             if updated:
-                return ActionResponse(
-                    status="ok", message="Config updated from platform"
-                )
-            return ActionResponse(
-                status="ok", message="Already up to date"
-            )
+                return ActionResponse(status="ok", message="Config updated from platform")
+            return ActionResponse(status="ok", message="Already up to date")
         finally:
             await svc.close()
     except Exception:

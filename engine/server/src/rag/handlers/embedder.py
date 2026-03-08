@@ -36,8 +36,7 @@ async def document_embed_handler(data: dict) -> None:
     async with async_session_maker() as session:
         # Load chunk contents from PG
         result = await session.execute(
-            select(RAGChunk.id, RAGChunk.content)
-            .where(RAGChunk.id.in_(chunk_ids))
+            select(RAGChunk.id, RAGChunk.content).where(RAGChunk.id.in_(chunk_ids))
         )
         rows = list(result.all())
 
@@ -73,18 +72,22 @@ async def document_embed_handler(data: dict) -> None:
 
         logger.info(
             "Embedder: generated %d embeddings for document %s",
-            len(all_embeddings), document_id,
+            len(all_embeddings),
+            document_id,
         )
 
     # Publish to next stage
+    import redis.asyncio as aioredis
+
+    from src.infra.redis import get_redis_pool
     from src.infra.redis_streams import RedisStreamBus
 
-    import redis.asyncio as aioredis
-    from src.infra.redis import get_redis_pool
-
     bus = RedisStreamBus(aioredis.Redis(connection_pool=get_redis_pool()))
-    await bus.publish("rag:embedded", {
-        "document_id": document_id,
-        "collection_id": collection_id,
-        "chunk_ids": chunk_ids_csv,
-    })
+    await bus.publish(
+        "rag:embedded",
+        {
+            "document_id": document_id,
+            "collection_id": collection_id,
+            "chunk_ids": chunk_ids_csv,
+        },
+    )

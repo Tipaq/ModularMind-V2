@@ -61,14 +61,14 @@ async def initialize(data: SetupInitialize, db: DbSession) -> SetupResponse:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except IntegrityError:
         # Race condition: another request initialized while we were processing
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Runtime is already initialized",
-        )
+        ) from None
 
     logger.info("Setup complete: admin=%s, runtime=%s", data.email, data.runtime_name)
 

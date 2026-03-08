@@ -231,6 +231,7 @@ export interface ActiveDocument {
 
 export interface KnowledgePipelineData {
   documents_stream: StreamDetail;
+  dlq_stream?: StreamDetail;
   status_counts: DocumentStatusCounts;
   active_documents: ActiveDocument[];
 }

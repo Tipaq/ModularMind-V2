@@ -33,9 +33,7 @@ async def get_alert_thresholds(user: CurrentUser) -> ThresholdConfig:
 
 
 @router.put("/alerts/thresholds", dependencies=[RequireAdmin])
-async def update_alert_thresholds(
-    body: ThresholdUpdate, user: CurrentUser
-) -> ThresholdConfig:
+async def update_alert_thresholds(body: ThresholdUpdate, user: CurrentUser) -> ThresholdConfig:
     """Update alert threshold configuration (partial update)."""
     from src.infra.metrics import ALERT_THRESHOLDS_KEY, get_thresholds
     from src.infra.redis import get_redis_client

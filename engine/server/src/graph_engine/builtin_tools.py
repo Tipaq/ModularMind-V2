@@ -94,9 +94,7 @@ def get_builtin_tool_definitions() -> list[dict]:
     ]
 
 
-def create_builtin_executor(
-    user_id: str, session_maker: Callable
-) -> Callable[..., Any]:
+def create_builtin_executor(user_id: str, session_maker: Callable) -> Callable[..., Any]:
     """Create a built-in tool executor closure for a specific user.
 
     Each tool call creates a fresh DB session via ``session_maker`` for
@@ -154,9 +152,7 @@ class UnifiedToolExecutor:
 # ---------------------------------------------------------------------------
 
 
-async def _handle_conversation_search(
-    args: dict, user_id: str, session: AsyncSession
-) -> str:
+async def _handle_conversation_search(args: dict, user_id: str, session: AsyncSession) -> str:
     """Search past conversation messages via PG full-text search."""
     from src.conversations.models import Conversation, ConversationMessage
 
@@ -195,9 +191,7 @@ async def _handle_conversation_search(
     return "\n---\n".join(parts)
 
 
-async def _handle_recent_conversations(
-    args: dict, user_id: str, session: AsyncSession
-) -> str:
+async def _handle_recent_conversations(args: dict, user_id: str, session: AsyncSession) -> str:
     """List recent conversations with title and last message preview."""
     from src.conversations.models import Conversation, ConversationMessage
 
@@ -236,9 +230,7 @@ async def _handle_recent_conversations(
     return "\n".join(parts)
 
 
-async def _handle_update_user_profile(
-    args: dict, user_id: str, session: AsyncSession
-) -> str:
+async def _handle_update_user_profile(args: dict, user_id: str, session: AsyncSession) -> str:
     """Update user preferences (full replace)."""
     from src.auth.models import User
 

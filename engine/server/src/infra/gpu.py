@@ -50,9 +50,7 @@ def detect_nvidia() -> GPUInfo | None:
 
         device_count = int(parts[0].strip())
         # Sum memory across all GPUs
-        total_memory_mb = sum(
-            float(line.split(",")[1].strip()) for line in lines
-        )
+        total_memory_mb = sum(float(line.split(",")[1].strip()) for line in lines)
 
         return GPUInfo(
             available=True,

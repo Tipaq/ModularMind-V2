@@ -75,9 +75,7 @@ def build_settings_response() -> SettingsResponse:
         knowledge_embedding_provider=(
             settings.KNOWLEDGE_EMBEDDING_PROVIDER or settings.EMBEDDING_PROVIDER
         ),
-        knowledge_embedding_model=(
-            settings.KNOWLEDGE_EMBEDDING_MODEL or settings.EMBEDDING_MODEL
-        ),
+        knowledge_embedding_model=(settings.KNOWLEDGE_EMBEDDING_MODEL or settings.EMBEDDING_MODEL),
     )
 
 

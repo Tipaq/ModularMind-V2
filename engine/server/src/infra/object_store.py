@@ -88,7 +88,10 @@ class ObjectStore:
                 return await stream.read()
 
     async def download_stream(
-        self, bucket: str, key: str, chunk_size: int = 64 * 1024,
+        self,
+        bucket: str,
+        key: str,
+        chunk_size: int = 64 * 1024,
     ) -> AsyncIterator[bytes]:
         """Stream an object in chunks (for large file downloads)."""
         async with self._client() as client:
@@ -128,7 +131,10 @@ class ObjectStore:
             }
 
     async def presigned_url(
-        self, bucket: str, key: str, expires_in: int = 3600,
+        self,
+        bucket: str,
+        key: str,
+        expires_in: int = 3600,
     ) -> str:
         """Generate a presigned download URL."""
         async with self._client() as client:
@@ -140,12 +146,17 @@ class ObjectStore:
             return url
 
     async def list_objects(
-        self, bucket: str, prefix: str = "", max_keys: int = 1000,
+        self,
+        bucket: str,
+        prefix: str = "",
+        max_keys: int = 1000,
     ) -> list[dict[str, Any]]:
         """List objects in a bucket with optional prefix."""
         async with self._client() as client:
             response = await client.list_objects_v2(
-                Bucket=bucket, Prefix=prefix, MaxKeys=max_keys,
+                Bucket=bucket,
+                Prefix=prefix,
+                MaxKeys=max_keys,
             )
             return response.get("Contents", [])
 

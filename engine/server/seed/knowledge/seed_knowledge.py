@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import update, select, func
+from sqlalchemy import func, select, update
 
 # Add engine/server to path for imports
 ENGINE_ROOT = Path(__file__).resolve().parents[2]
@@ -25,9 +25,9 @@ sys.path.insert(0, str(ENGINE_ROOT))
 
 from src.infra.database import async_session_maker  # noqa: E402
 from src.rag.models import (  # noqa: E402
+    RAGChunk,
     RAGCollection,
     RAGDocument,
-    RAGChunk,
     RAGScope,
 )
 
@@ -263,9 +263,7 @@ async def seed_collections_and_documents():
 
             # Update collection document count
             doc_count = await session.execute(
-                select(func.count(RAGDocument.id)).where(
-                    RAGDocument.collection_id == collection.id
-                )
+                select(func.count(RAGDocument.id)).where(RAGDocument.collection_id == collection.id)
             )
             count = doc_count.scalar() or 0
             await session.execute(
@@ -276,12 +274,12 @@ async def seed_collections_and_documents():
 
         await session.commit()
 
-        print(f"\n{'='*60}")
-        print(f"Seed complete!")
+        print(f"\n{'=' * 60}")
+        print("Seed complete!")
         print(f"  Collections created: {created_collections}")
         print(f"  Collections skipped: {skipped_collections}")
         print(f"  Documents added: {created_documents}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print()
         print("NOTE: Documents are in 'pending' status.")
         print("To process them (chunk + embed + index in Qdrant),")
@@ -364,9 +362,7 @@ async def process_seed_documents():
 
                 # Update collection chunk count
                 total_chunks = await session.execute(
-                    select(func.count(RAGChunk.id)).where(
-                        RAGChunk.collection_id == collection.id
-                    )
+                    select(func.count(RAGChunk.id)).where(RAGChunk.collection_id == collection.id)
                 )
                 await session.execute(
                     update(RAGCollection)

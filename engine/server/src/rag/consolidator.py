@@ -48,7 +48,8 @@ class RAGConsolidator:
         # For now, just log. Future: reduce Qdrant importance or soft-delete.
         logger.info(
             "Decay: found %d unused chunks older than %d days",
-            len(chunk_ids), days_threshold,
+            len(chunk_ids),
+            days_threshold,
         )
 
         # Mark as decayed in metadata
@@ -91,7 +92,7 @@ class RAGConsolidator:
         rows = result.all()
 
         obsolete_ids: list[str] = []
-        for filename, doc_ids in rows:
+        for _filename, doc_ids in rows:
             if not doc_ids or len(doc_ids) < 2:
                 continue
 
@@ -109,7 +110,8 @@ class RAGConsolidator:
         if obsolete_ids:
             logger.info(
                 "Obsolescence: found %d obsolete documents in collection %s",
-                len(obsolete_ids), collection_id,
+                len(obsolete_ids),
+                collection_id,
             )
 
         return obsolete_ids

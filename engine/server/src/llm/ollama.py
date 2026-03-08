@@ -133,17 +133,19 @@ class OllamaProvider(LLMProvider):
                 models = []
                 for m in data.get("models", []):
                     details = m.get("details", {})
-                    models.append({
-                        "name": m.get("name", ""),
-                        "size_vram": m.get("size_vram", 0),
-                        "expires_at": m.get("expires_at"),
-                        "context_length": m.get("context_length", 0),
-                        "details": {
-                            "parameter_size": details.get("parameter_size", ""),
-                            "quantization_level": details.get("quantization_level", ""),
-                            "family": details.get("family", ""),
-                        },
-                    })
+                    models.append(
+                        {
+                            "name": m.get("name", ""),
+                            "size_vram": m.get("size_vram", 0),
+                            "expires_at": m.get("expires_at"),
+                            "context_length": m.get("context_length", 0),
+                            "details": {
+                                "parameter_size": details.get("parameter_size", ""),
+                                "quantization_level": details.get("quantization_level", ""),
+                                "family": details.get("family", ""),
+                            },
+                        }
+                    )
                 return models
         except (httpx.HTTPError, ConnectionError, OSError, TimeoutError) as e:
             logger.debug(f"Failed to list running models: {e}")

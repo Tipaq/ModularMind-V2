@@ -10,15 +10,16 @@ Phase 9 of memory-to-RAG migration:
 - Drop memorytype and edgetype PostgreSQL enums
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "a9b0c1d2e3f4"
-down_revision: Union[str, None] = "f8a9b0c1d2e3"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "f8a9b0c1d2e3"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -49,7 +50,10 @@ def downgrade() -> None:
     memorytype = sa.Enum("EPISODIC", "SEMANTIC", "PROCEDURAL", name="memorytype")
     memorytype.create(op.get_bind(), checkfirst=True)
     edgetype = sa.Enum(
-        "ENTITY_OVERLAP", "SAME_CATEGORY", "SEMANTIC_SIMILARITY", "SAME_TAG",
+        "ENTITY_OVERLAP",
+        "SAME_CATEGORY",
+        "SEMANTIC_SIMILARITY",
+        "SAME_TAG",
         name="edgetype",
     )
     edgetype.create(op.get_bind(), checkfirst=True)
@@ -118,8 +122,12 @@ def downgrade() -> None:
         sa.Column(
             "edge_type",
             sa.Enum(
-                "ENTITY_OVERLAP", "SAME_CATEGORY", "SEMANTIC_SIMILARITY", "SAME_TAG",
-                name="edgetype", create_type=False,
+                "ENTITY_OVERLAP",
+                "SAME_CATEGORY",
+                "SEMANTIC_SIMILARITY",
+                "SAME_TAG",
+                name="edgetype",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -132,4 +140,6 @@ def downgrade() -> None:
     )
     op.create_index("ix_memory_edges_source_id", "memory_edges", ["source_id"])
     op.create_index("ix_memory_edges_target_id", "memory_edges", ["target_id"])
-    op.create_index("uq_memory_edges_src_tgt", "memory_edges", ["source_id", "target_id"], unique=True)
+    op.create_index(
+        "uq_memory_edges_src_tgt", "memory_edges", ["source_id", "target_id"], unique=True
+    )

@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 def _truncate(text: str, max_length: int) -> str:
     """Truncate text with ellipsis if too long."""
     from src.infra.text_utils import truncate
+
     return truncate(text, max_length)
 
 
@@ -55,11 +56,7 @@ def _extract_model_name(
     and prefixes with provider when available.
     """
     kw = serialized.get("kwargs", {})
-    model = (
-        kw.get("model")
-        or kw.get("model_name")
-        or kw.get("model_id")
-    )
+    model = kw.get("model") or kw.get("model_name") or kw.get("model_id")
 
     # LangChain passes invocation_params in callback kwargs
     if not model and kwargs:
@@ -105,7 +102,8 @@ def _split_model_provider(model_str: str) -> tuple[str, str]:
 
 
 def _extract_response_preview(
-    response: LLMResult, max_length: int,
+    response: LLMResult,
+    max_length: int,
 ) -> str | None:
     """Extract a text preview from the first generation in an LLM response."""
     if not response.generations:
@@ -137,10 +135,9 @@ def _extract_token_usage(
     gen = response.generations[0][0] if response.generations and response.generations[0] else None
     if gen:
         # Path 2: generation_info["token_usage"]
-        if hasattr(gen, "generation_info") and gen.generation_info:
-            if "token_usage" in gen.generation_info:
-                usage = gen.generation_info["token_usage"]
-                return usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0), False
+        if hasattr(gen, "generation_info") and gen.generation_info and "token_usage" in gen.generation_info:  # noqa: E501
+            usage = gen.generation_info["token_usage"]
+            return usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0), False
 
         # Path 3: AIMessage.usage_metadata (LangChain v0.2+)
         msg = getattr(gen, "message", None)
@@ -245,7 +242,9 @@ class ExecutionTraceHandler(BaseCallbackHandler):
         except Exception:  # noqa: BLE001 — callback must never crash LLM execution
             logger.debug("Failed to publish trace event", exc_info=True)
 
-    def _start_run(self, run_id: UUID, provider: str = "unknown", model: str = "unknown") -> _RunContext:
+    def _start_run(
+        self, run_id: UUID, provider: str = "unknown", model: str = "unknown"
+    ) -> _RunContext:
         ctx = _RunContext(start_time=time.perf_counter(), provider=provider, model=model)
         self._runs[run_id] = ctx
         return ctx
@@ -287,9 +286,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
                 "prompt_count": len(prompts),
             }
             if self.log_prompts and prompts:
-                event["prompt_preview"] = _safe_str(
-                    prompts[0], self.max_content_length
-                )
+                event["prompt_preview"] = _safe_str(prompts[0], self.max_content_length)
             self._publish(event)
         except Exception:  # noqa: BLE001 — callback must never crash LLM execution
             logger.debug("on_llm_start trace error", exc_info=True)
@@ -313,9 +310,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
             ctx = self._start_run(run_id, provider, model_name)
             flat_messages = messages[0] if messages else []
 
-            prompt_text = " ".join(
-                str(m.content) for m in flat_messages if m.content
-            )
+            prompt_text = " ".join(str(m.content) for m in flat_messages if m.content)
             if prompt_text:
                 ctx.prompt_text = prompt_text
             message_count = len(flat_messages)
@@ -332,9 +327,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
                     (m for m in reversed(flat_messages) if m.type == "human"),
                     flat_messages[-1],
                 )
-                event["prompt_preview"] = _safe_str(
-                    last_human.content, self.max_content_length
-                )
+                event["prompt_preview"] = _safe_str(last_human.content, self.max_content_length)
 
             # Summarize message types
             type_counts: dict[str, int] = {}
@@ -380,7 +373,9 @@ class ExecutionTraceHandler(BaseCallbackHandler):
 
             duration_seconds = duration_ms / 1000.0 if duration_ms is not None else None
             if duration_seconds is not None:
-                llm_request_duration_seconds.labels(provider=provider, model=model).observe(duration_seconds)
+                llm_request_duration_seconds.labels(provider=provider, model=model).observe(
+                    duration_seconds
+                )
                 record_llm_latency(duration_seconds)
 
             event: dict[str, Any] = {
@@ -390,7 +385,8 @@ class ExecutionTraceHandler(BaseCallbackHandler):
 
             # Extract token usage (tries provider metadata, then tiktoken fallback)
             prompt_tok, completion_tok, estimated = _extract_token_usage(
-                response, ctx.prompt_text if ctx else "",
+                response,
+                ctx.prompt_text if ctx else "",
             )
             if prompt_tok or completion_tok:
                 event["tokens"] = {
@@ -427,13 +423,15 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             _, duration_ms = self._end_run(run_id)
-            self._publish({
-                "type": "trace:error",
-                "error": _safe_str(error, self.max_content_length),
-                "error_type": type(error).__name__,
-                "step": "llm",
-                "duration_ms": duration_ms,
-            })
+            self._publish(
+                {
+                    "type": "trace:error",
+                    "error": _safe_str(error, self.max_content_length),
+                    "error_type": type(error).__name__,
+                    "step": "llm",
+                    "duration_ms": duration_ms,
+                }
+            )
         except Exception:
             logger.debug("on_llm_error trace error", exc_info=True)
 
@@ -465,11 +463,13 @@ class ExecutionTraceHandler(BaseCallbackHandler):
                 return
 
             self._start_run(run_id)
-            self._publish({
-                "type": "trace:node_start",
-                "node_name": name,
-                "tags": tags or [],
-            })
+            self._publish(
+                {
+                    "type": "trace:node_start",
+                    "node_name": name,
+                    "tags": tags or [],
+                }
+            )
         except Exception:
             logger.debug("on_chain_start trace error", exc_info=True)
 
@@ -487,10 +487,12 @@ class ExecutionTraceHandler(BaseCallbackHandler):
                 # Was filtered out in on_chain_start
                 return
 
-            self._publish({
-                "type": "trace:node_end",
-                "duration_ms": duration_ms,
-            })
+            self._publish(
+                {
+                    "type": "trace:node_end",
+                    "duration_ms": duration_ms,
+                }
+            )
         except Exception:
             logger.debug("on_chain_end trace error", exc_info=True)
 
@@ -504,13 +506,15 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             _, duration_ms = self._end_run(run_id)
-            self._publish({
-                "type": "trace:error",
-                "error": _safe_str(error, self.max_content_length),
-                "error_type": type(error).__name__,
-                "step": "chain",
-                "duration_ms": duration_ms,
-            })
+            self._publish(
+                {
+                    "type": "trace:error",
+                    "error": _safe_str(error, self.max_content_length),
+                    "error_type": type(error).__name__,
+                    "step": "chain",
+                    "duration_ms": duration_ms,
+                }
+            )
         except Exception:
             logger.debug("on_chain_error trace error", exc_info=True)
 
@@ -533,11 +537,13 @@ class ExecutionTraceHandler(BaseCallbackHandler):
             self._start_run(run_id)
             tool_name = serialized.get("name", "unknown")
 
-            self._publish({
-                "type": "trace:tool_start",
-                "tool_name": tool_name,
-                "input_preview": _safe_str(input_str, self.max_content_length),
-            })
+            self._publish(
+                {
+                    "type": "trace:tool_start",
+                    "tool_name": tool_name,
+                    "input_preview": _safe_str(input_str, self.max_content_length),
+                }
+            )
         except Exception:
             logger.debug("on_tool_start trace error", exc_info=True)
 
@@ -551,11 +557,13 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             _, duration_ms = self._end_run(run_id)
-            self._publish({
-                "type": "trace:tool_end",
-                "output_preview": _safe_str(output, self.max_content_length),
-                "duration_ms": duration_ms,
-            })
+            self._publish(
+                {
+                    "type": "trace:tool_end",
+                    "output_preview": _safe_str(output, self.max_content_length),
+                    "duration_ms": duration_ms,
+                }
+            )
         except Exception:
             logger.debug("on_tool_end trace error", exc_info=True)
 
@@ -569,13 +577,15 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             _, duration_ms = self._end_run(run_id)
-            self._publish({
-                "type": "trace:error",
-                "error": _safe_str(error, self.max_content_length),
-                "error_type": type(error).__name__,
-                "step": "tool",
-                "duration_ms": duration_ms,
-            })
+            self._publish(
+                {
+                    "type": "trace:error",
+                    "error": _safe_str(error, self.max_content_length),
+                    "error_type": type(error).__name__,
+                    "step": "tool",
+                    "duration_ms": duration_ms,
+                }
+            )
         except Exception:
             logger.debug("on_tool_error trace error", exc_info=True)
 
@@ -594,11 +604,13 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             self._start_run(run_id)
-            self._publish({
-                "type": "trace:retrieval",
-                "query": _truncate(query, self.max_content_length),
-                "status": "started",
-            })
+            self._publish(
+                {
+                    "type": "trace:retrieval",
+                    "query": _truncate(query, self.max_content_length),
+                    "status": "started",
+                }
+            )
         except Exception:
             logger.debug("on_retriever_start trace error", exc_info=True)
 
@@ -612,12 +624,13 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             _, duration_ms = self._end_run(run_id)
-            self._publish({
-                "type": "trace:retrieval",
-                "status": "completed",
-                "num_results": len(documents),
-                "duration_ms": duration_ms,
-            })
+            self._publish(
+                {
+                    "type": "trace:retrieval",
+                    "status": "completed",
+                    "num_results": len(documents),
+                    "duration_ms": duration_ms,
+                }
+            )
         except Exception:
             logger.debug("on_retriever_end trace error", exc_info=True)
-

@@ -114,6 +114,7 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
 
         from src.infra.redis import get_redis_pool
         from src.infra.redis_streams import RedisStreamBus
+
         bus = RedisStreamBus(aioredis.Redis(connection_pool=get_redis_pool()))
         exec_info = await bus.stream_info("tasks:executions")
         model_info = await bus.stream_info("tasks:models")
@@ -130,6 +131,7 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
     # Queue depth from streams
     try:
         from src.infra.redis import get_redis_client as _get_rc
+
         r = await _get_rc()
         if r:
             try:
@@ -141,6 +143,7 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
         logger.debug("Redis stream depth check failed", exc_info=True)
 
     from src.infra.sse import get_active_streams
+
     streaming_data = StreamingMonitoring(active_streams=get_active_streams())
 
     redis_ok, redis_latency = await check_redis_health()
@@ -212,15 +215,14 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
         if r:
             try:
                 from src.infra.metrics import ALERT_HISTORY_KEY
+
                 keys = [k async for k in r.scan_iter(match="monitoring:alert_active:*", count=100)]
                 if keys:
                     alert_summary.active_count = len(keys)
                     raw_alerts = await r.lrange(ALERT_HISTORY_KEY, -len(keys), -1)
                     for raw in raw_alerts:
                         try:
-                            alert_summary.active_alerts.append(
-                                AlertItem(**json.loads(raw))
-                            )
+                            alert_summary.active_alerts.append(AlertItem(**json.loads(raw)))
                         except Exception:
                             logger.debug("Malformed alert entry skipped")
             finally:
@@ -257,14 +259,22 @@ async def get_metrics_history(
     start = now - range_seconds
 
     requested = [m.strip() for m in metrics.split(",")]
-    valid_metrics = {"cpu", "memory", "tasks", "queue", "latency", "vram", "llm_latency", "llm_tps", "llm_ttft"}
+    valid_metrics = {
+        "cpu",
+        "memory",
+        "tasks",
+        "queue",
+        "latency",
+        "vram",
+        "llm_latency",
+        "llm_tps",
+        "llm_ttft",
+    }
     requested = [m for m in requested if m in valid_metrics]
 
     r = await get_redis_client()
     if not r:
-        return MetricsHistoryResponse(
-            series=[], range_seconds=range_seconds, interval_seconds=10
-        )
+        return MetricsHistoryResponse(series=[], range_seconds=range_seconds, interval_seconds=10)
 
     try:
         series: list[MetricSeries] = []
@@ -314,16 +324,18 @@ async def get_llm_gpu_monitoring(user: CurrentUser) -> LlmGpuMonitoring:
                     size_vram = m.get("size_vram", 0)
                     vram_used += size_vram
                     details = m.get("details", {})
-                    loaded_models.append(OllamaRunningModel(
-                        name=m.get("name", ""),
-                        size_vram_bytes=size_vram,
-                        size_vram_gb=round(size_vram / (1024 ** 3), 2),
-                        expires_at=m.get("expires_at"),
-                        context_length=m.get("context_length", 0),
-                        parameter_size=details.get("parameter_size", ""),
-                        quantization=details.get("quantization_level", ""),
-                        family=details.get("family", ""),
-                    ))
+                    loaded_models.append(
+                        OllamaRunningModel(
+                            name=m.get("name", ""),
+                            size_vram_bytes=size_vram,
+                            size_vram_gb=round(size_vram / (1024**3), 2),
+                            expires_at=m.get("expires_at"),
+                            context_length=m.get("context_length", 0),
+                            parameter_size=details.get("parameter_size", ""),
+                            quantization=details.get("quantization_level", ""),
+                            family=details.get("family", ""),
+                        )
+                    )
     except Exception:
         logger.debug("Ollama model list failed", exc_info=True)
 
@@ -331,8 +343,8 @@ async def get_llm_gpu_monitoring(user: CurrentUser) -> LlmGpuMonitoring:
     total_vram_gb = settings.GPU_TOTAL_VRAM_GB
     if total_vram_gb == 0:
         total_vram_gb = detect_gpu().memory_gb
-    total_vram_bytes = int(total_vram_gb * (1024 ** 3))
-    used_vram_gb = round(vram_used / (1024 ** 3), 2)
+    total_vram_bytes = int(total_vram_gb * (1024**3))
+    used_vram_gb = round(vram_used / (1024**3), 2)
     vram_pct = (vram_used / total_vram_bytes * 100) if total_vram_bytes > 0 else 0.0
 
     gpu_vram = GpuVramMonitoring(
@@ -426,7 +438,7 @@ async def get_agent_metrics(user: CurrentUser) -> list[AgentMetricsItem]:
                     func.sum(ExecutionRun.tokens_prompt + ExecutionRun.tokens_completion), 0
                 ).label("total_tokens"),
                 func.avg(
-                    extract('epoch', ExecutionRun.completed_at - ExecutionRun.started_at) * 1000
+                    extract("epoch", ExecutionRun.completed_at - ExecutionRun.started_at) * 1000
                 ).label("avg_duration_ms"),
                 func.sum(
                     case(
@@ -448,6 +460,7 @@ async def get_agent_metrics(user: CurrentUser) -> list[AgentMetricsItem]:
         agent_name_map: dict[str, str] = {}
         try:
             from src.domain_config import get_config_provider
+
             provider = get_config_provider()
             for row in rows:
                 aid = str(row.agent_id)
@@ -463,15 +476,17 @@ async def get_agent_metrics(user: CurrentUser) -> list[AgentMetricsItem]:
             error_rate = (err_count / total_exec * 100) if total_exec > 0 else 0.0
             aid = str(row.agent_id)
 
-            results.append(AgentMetricsItem(
-                agent_id=aid,
-                agent_name=agent_name_map.get(aid, aid),
-                total_executions=total_exec,
-                total_tokens=row.total_tokens or 0,
-                avg_duration_ms=round(row.avg_duration_ms or 0, 2),
-                error_count=err_count,
-                error_rate=round(error_rate, 2),
-            ))
+            results.append(
+                AgentMetricsItem(
+                    agent_id=aid,
+                    agent_name=agent_name_map.get(aid, aid),
+                    total_executions=total_exec,
+                    total_tokens=row.total_tokens or 0,
+                    avg_duration_ms=round(row.avg_duration_ms or 0, 2),
+                    error_count=err_count,
+                    error_rate=round(error_rate, 2),
+                )
+            )
 
     return results
 
@@ -540,29 +555,41 @@ async def get_live_executions(user: CurrentUser) -> LiveExecutionsResponse:
 
         # Query execution runs directly (no JOIN) to avoid silent row elimination
         # when a user_id has no matching row in users (e.g. stale FK or deleted user).
-        active_runs = (await db.execute(
-            select(ExecutionRun)
-            .where(ExecutionRun.status.in_(_ACTIVE_STATUSES))
-            .order_by(ExecutionRun.created_at.desc())
-        )).scalars().all()
-
-        recent_runs = (await db.execute(
-            select(ExecutionRun)
-            .where(
-                ExecutionRun.status.in_(_TERMINAL_STATUSES),
-                ExecutionRun.created_at >= one_hour_ago,
+        active_runs = (
+            (
+                await db.execute(
+                    select(ExecutionRun)
+                    .where(ExecutionRun.status.in_(_ACTIVE_STATUSES))
+                    .order_by(ExecutionRun.created_at.desc())
+                )
             )
-            .order_by(ExecutionRun.created_at.desc())
-            .limit(20)
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
+
+        recent_runs = (
+            (
+                await db.execute(
+                    select(ExecutionRun)
+                    .where(
+                        ExecutionRun.status.in_(_TERMINAL_STATUSES),
+                        ExecutionRun.created_at >= one_hour_ago,
+                    )
+                    .order_by(ExecutionRun.created_at.desc())
+                    .limit(20)
+                )
+            )
+            .scalars()
+            .all()
+        )
 
         # Batch-fetch emails for all referenced user IDs in one query
         all_user_ids = list({r.user_id for r in [*active_runs, *recent_runs]})
         email_map: dict[str, str] = {}
         if all_user_ids:
-            user_rows = (await db.execute(
-                select(User.id, User.email).where(User.id.in_(all_user_ids))
-            )).all()
+            user_rows = (
+                await db.execute(select(User.id, User.email).where(User.id.in_(all_user_ids)))
+            ).all()
             email_map = {uid: email for uid, email in user_rows}
 
         active_summaries = [_to_summary(r, email_map.get(r.user_id), now) for r in active_runs]

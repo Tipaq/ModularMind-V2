@@ -12,7 +12,6 @@ import time
 from threading import Lock
 from typing import Any
 
-import redis.exceptions
 from fastapi import HTTPException, Request
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import JSONResponse
@@ -48,11 +47,11 @@ class _TokenBucket:
     """
 
     _CLEANUP_INTERVAL = 500  # cleanup every N allow() calls
-    _MAX_ENTRIES = 10_000    # hard cap on bucket count
-    _MAX_AGE = 300.0         # seconds before an entry is stale
+    _MAX_ENTRIES = 10_000  # hard cap on bucket count
+    _MAX_AGE = 300.0  # seconds before an entry is stale
 
     def __init__(self, rate: float, capacity: int):
-        self._rate = rate          # tokens per second
+        self._rate = rate  # tokens per second
         self._capacity = capacity
         self._buckets: dict[str, tuple[float, float]] = {}  # key -> (tokens, last_refill)
         self._lock = Lock()
@@ -64,10 +63,7 @@ class _TokenBucket:
         with self._lock:
             # Periodic cleanup to prevent memory leak
             self._call_count += 1
-            if (
-                self._call_count >= self._CLEANUP_INTERVAL
-                or len(self._buckets) > self._MAX_ENTRIES
-            ):
+            if self._call_count >= self._CLEANUP_INTERVAL or len(self._buckets) > self._MAX_ENTRIES:
                 self._call_count = 0
                 self._cleanup_locked(now)
 
@@ -182,9 +178,7 @@ class RateLimitMiddleware:
 
         await self.app(scope, receive, send_with_headers)
 
-    async def check_rate_limit(
-        self, client_id: str
-    ) -> tuple[bool, int, int]:
+    async def check_rate_limit(self, client_id: str) -> tuple[bool, int, int]:
         """Check rate limit using Redis, with in-memory fallback."""
         redis = await get_redis_client()
 
@@ -200,9 +194,7 @@ class RateLimitMiddleware:
         # Fallback to in-memory token bucket
         return self.check_fallback(client_id)
 
-    async def check_redis(
-        self, redis: Any, client_id: str
-    ) -> tuple[bool, int, int]:
+    async def check_redis(self, redis: Any, client_id: str) -> tuple[bool, int, int]:
         """Redis-based sliding window check."""
         key = f"ratelimit:{client_id}"
         now = time.time()

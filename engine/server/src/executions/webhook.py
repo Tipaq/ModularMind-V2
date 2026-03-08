@@ -95,7 +95,9 @@ async def _send_with_retry(
 
     if secret:
         signature = hmac.new(
-            secret.encode(), body.encode(), hashlib.sha256,
+            secret.encode(),
+            body.encode(),
+            hashlib.sha256,
         ).hexdigest()
         headers["X-Webhook-Signature"] = f"sha256={signature}"
 
@@ -107,7 +109,8 @@ async def _send_with_retry(
                 if response.status_code < 300:
                     logger.info(
                         "Webhook delivered: %s (status %d)",
-                        url, response.status_code,
+                        url,
+                        response.status_code,
                     )
                     return True
 
@@ -115,27 +118,35 @@ async def _send_with_retry(
                     # Server error — retry with backoff
                     logger.warning(
                         "Webhook server error (attempt %d/%d): status %d from %s",
-                        attempt + 1, WEBHOOK_MAX_RETRIES, response.status_code, url,
+                        attempt + 1,
+                        WEBHOOK_MAX_RETRIES,
+                        response.status_code,
+                        url,
                     )
                 else:
                     # Client error (4xx) — don't retry
                     logger.error(
                         "Webhook client error: status %d from %s",
-                        response.status_code, url,
+                        response.status_code,
+                        url,
                     )
                     return False
 
             except httpx.RequestError as e:
                 logger.warning(
                     "Webhook request error (attempt %d/%d): %s",
-                    attempt + 1, WEBHOOK_MAX_RETRIES, e,
+                    attempt + 1,
+                    WEBHOOK_MAX_RETRIES,
+                    e,
                 )
 
             # Exponential backoff: 1s, 2s, 4s
             if attempt < WEBHOOK_MAX_RETRIES - 1:
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
 
     logger.error(
-        "Webhook failed after %d attempts: %s", WEBHOOK_MAX_RETRIES, url,
+        "Webhook failed after %d attempts: %s",
+        WEBHOOK_MAX_RETRIES,
+        url,
     )
     return False

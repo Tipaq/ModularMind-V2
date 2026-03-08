@@ -7,6 +7,7 @@ cost estimation, and experiments.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -68,9 +69,7 @@ class FineTuningService:
     # Dataset management
     # -----------------------------------------------------------------------
 
-    async def create_dataset(
-        self, data: DatasetCreate, user_id: str
-    ) -> FineTuningDataset:
+    async def create_dataset(self, data: DatasetCreate, user_id: str) -> FineTuningDataset:
         """Create a dataset record and dispatch the build task."""
         # Validate agent exists
         config = get_config_provider()
@@ -93,7 +92,10 @@ class FineTuningService:
 
         # Dispatch build task via Redis Streams
         from src.infra.publish import enqueue_dataset_build
-        await enqueue_dataset_build(dataset.id, data.agent_id, json.dumps(data.filters.model_dump()))
+
+        await enqueue_dataset_build(
+            dataset.id, data.agent_id, json.dumps(data.filters.model_dump())
+        )
 
         logger.info("Created dataset %s for agent %s", dataset.id, data.agent_id)
         return dataset
@@ -202,11 +204,14 @@ class FineTuningService:
         # Dispatch only if not rate-limited
         if job.status != JobStatus.PENDING:
             from src.infra.publish import enqueue_fine_tuning_job
+
             msg_id = await enqueue_fine_tuning_job(job.id)
             job.stream_task_id = msg_id
             await self.db.commit()
 
-        logger.info("Created job %s (provider=%s, status=%s)", job.id, data.provider.value, job.status.value)
+        logger.info(
+            "Created job %s (provider=%s, status=%s)", job.id, data.provider.value, job.status.value
+        )
         return job
 
     async def get_job(self, job_id: str) -> FineTuningJob:
@@ -229,9 +234,7 @@ class FineTuningService:
             data = redis.hgetall(f"runtime:ft_job_progress:{job_id}")
             if data:
                 progress.progress_pct = int(data.get(b"progress", 0))
-                progress.current_step = (
-                    data.get(b"current_step", b"").decode("utf-8")
-                )
+                progress.current_step = data.get(b"current_step", b"").decode("utf-8")
                 loss = data.get(b"loss")
                 if loss:
                     progress.loss = float(loss)
@@ -285,6 +288,7 @@ class FineTuningService:
         # Cancel task via Redis intent key
         if job.stream_task_id:
             from src.infra.redis import get_redis_client
+
             r = await get_redis_client()
             if r:
                 try:
@@ -362,8 +366,7 @@ class FineTuningService:
         previous_model_id = job.metrics.get("previous_model_id")
         if not previous_model_id:
             raise ValueError(
-                "No previous model_id found in job metrics. "
-                "This job may not have been deployed."
+                "No previous model_id found in job metrics. This job may not have been deployed."
             )
 
         from src.infra.redis_utils import get_sync_redis_client
@@ -380,9 +383,7 @@ class FineTuningService:
         finally:
             lock.release()
 
-    async def _update_agent_config(
-        self, agent_id: str, key: str, value: str
-    ) -> None:
+    async def _update_agent_config(self, agent_id: str, key: str, value: str) -> None:
         """Atomically update a field in the agent config JSON file."""
         config_dir = Path(settings.CONFIG_DIR) / "agents"
         config_path = config_dir / f"{agent_id}.json"
@@ -397,19 +398,15 @@ class FineTuningService:
         config_data[key] = value
 
         # Write to temp file, then atomic replace
-        fd, tmp_path = tempfile.mkstemp(
-            dir=str(config_dir), suffix=".tmp", prefix=f"{agent_id}_"
-        )
+        fd, tmp_path = tempfile.mkstemp(dir=str(config_dir), suffix=".tmp", prefix=f"{agent_id}_")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(config_data, f, indent=2, default=str)
             os.replace(tmp_path, str(config_path))
         except Exception:
             # Cleanup temp file on error
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
-            except OSError:
-                pass
             raise
 
     async def _reload_config(self) -> None:
@@ -438,9 +435,7 @@ class FineTuningService:
         page_size: int = 50,
     ) -> list[DatasetExample]:
         """Get examples for a dataset with optional status filter."""
-        query = select(DatasetExample).where(
-            DatasetExample.dataset_id == dataset_id
-        )
+        query = select(DatasetExample).where(DatasetExample.dataset_id == dataset_id)
         if status_filter:
             query = query.where(DatasetExample.curation_status == status_filter)
 
@@ -511,9 +506,7 @@ class FineTuningService:
     # Experiment management
     # -----------------------------------------------------------------------
 
-    async def create_experiment(
-        self, data: ExperimentCreate, user_id: str
-    ) -> ABTestExperiment:
+    async def create_experiment(self, data: ExperimentCreate, user_id: str) -> ABTestExperiment:
         """Create an A/B test experiment."""
         experiment = ABTestExperiment(
             agent_id=data.agent_id,
@@ -601,9 +594,7 @@ class FineTuningService:
     # Agent fine-tuning config
     # -----------------------------------------------------------------------
 
-    async def get_agent_ft_config(
-        self, agent_id: str
-    ) -> AgentFineTuningConfig | None:
+    async def get_agent_ft_config(self, agent_id: str) -> AgentFineTuningConfig | None:
         """Get per-agent fine-tuning config."""
         return await self.db.get(AgentFineTuningConfig, agent_id)
 
@@ -633,9 +624,7 @@ class FineTuningService:
         query = select(func.count(FineTuningJob.id)).where(
             and_(
                 FineTuningJob.provider == JobProvider.OPENAI,
-                FineTuningJob.status.in_(
-                    [JobStatus.VALIDATING, JobStatus.TRAINING]
-                ),
+                FineTuningJob.status.in_([JobStatus.VALIDATING, JobStatus.TRAINING]),
             )
         )
         result = await self.db.execute(query)

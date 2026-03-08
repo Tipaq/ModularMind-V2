@@ -3,14 +3,14 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, Integer, String, Text
+from sqlalchemy import DateTime, Enum, Float, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infra.database import Base
 from src.infra.utils import utcnow
 
 
-class AutomationRunStatus(str, enum.Enum):
+class AutomationRunStatus(enum.StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -24,7 +24,8 @@ class AutomationRun(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     automation_id: Mapped[str] = mapped_column(String(36), index=True)
     status: Mapped[AutomationRunStatus] = mapped_column(
-        Enum(AutomationRunStatus), default=AutomationRunStatus.PENDING,
+        Enum(AutomationRunStatus),
+        default=AutomationRunStatus.PENDING,
     )
     source_type: Mapped[str] = mapped_column(String(50), default="")
     source_ref: Mapped[str] = mapped_column(String(255), default="")  # e.g. "owner/repo#42"

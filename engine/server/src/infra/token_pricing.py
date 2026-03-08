@@ -51,9 +51,7 @@ def parse_model_name(model_id: str) -> str:
     return model_id.split(":", 1)[-1] if ":" in model_id else model_id
 
 
-def estimate_cost(
-    model_id: str, prompt_tokens: int, completion_tokens: int
-) -> float | None:
+def estimate_cost(model_id: str, prompt_tokens: int, completion_tokens: int) -> float | None:
     """Return estimated cost in USD, or None if model is local/unknown.
 
     Accepts both 'provider:model' and bare 'model' formats.

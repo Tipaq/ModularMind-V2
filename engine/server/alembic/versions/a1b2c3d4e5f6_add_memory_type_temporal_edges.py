@@ -12,17 +12,18 @@ Adds:
 - Backfill existing entries with memory_type classification
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a1b2c3d4e5f6"
-down_revision: Union[str, None] = "fc4125d7a33c"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "fc4125d7a33c"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -54,9 +55,7 @@ def upgrade() -> None:
         "memory_entries",
         sa.Column("last_scored_at", sa.DateTime(), nullable=True),
     )
-    op.create_index(
-        "ix_memory_entries_memory_type", "memory_entries", ["memory_type"]
-    )
+    op.create_index("ix_memory_entries_memory_type", "memory_entries", ["memory_type"])
 
     # Backfill memory_type for existing entries
     # Note: memoryscope PG enum stores uppercase names (AGENT, USER_PROFILE, etc.)
@@ -117,8 +116,11 @@ def upgrade() -> None:
         sa.Column(
             "edge_type",
             postgresql.ENUM(
-                "ENTITY_OVERLAP", "SAME_CATEGORY", "SEMANTIC_SIMILARITY",
-                name="edgetype", create_type=False,
+                "ENTITY_OVERLAP",
+                "SAME_CATEGORY",
+                "SEMANTIC_SIMILARITY",
+                name="edgetype",
+                create_type=False,
             ),
             nullable=False,
         ),

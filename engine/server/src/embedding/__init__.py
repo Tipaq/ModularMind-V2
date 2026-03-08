@@ -38,7 +38,6 @@ def get_embedding_provider(provider_name: str, **kwargs: Any) -> EmbeddingProvid
     return provider_class(**kwargs)
 
 
-
 __all__ = [
     "EmbeddingProvider",
     "OllamaEmbeddingProvider",

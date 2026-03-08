@@ -64,7 +64,8 @@ class RAGRepository:
         return result.scalar_one_or_none()
 
     async def get_collections_by_ids(
-        self, collection_ids: list[str],
+        self,
+        collection_ids: list[str],
     ) -> list[RAGCollection]:
         """Get multiple collections by IDs in a single query."""
         if not collection_ids:
@@ -76,14 +77,13 @@ class RAGRepository:
 
     async def list_collections(self) -> list[RAGCollection]:
         """List all available collections."""
-        result = await self.db.execute(
-            select(RAGCollection).order_by(RAGCollection.name)
-        )
+        result = await self.db.execute(select(RAGCollection).order_by(RAGCollection.name))
         return list(result.scalars().all())
 
     @staticmethod
     def _build_collection_acl(
-        user_id: str, user_groups: list[str],
+        user_id: str,
+        user_groups: list[str],
     ) -> list:
         """Build scope-based ACL conditions for collections.
 
@@ -112,17 +112,16 @@ class RAGRepository:
         return conditions
 
     async def list_collections_for_user(
-        self, user_id: str, user_groups: list[str],
+        self,
+        user_id: str,
+        user_groups: list[str],
     ) -> list[RAGCollection]:
         """Return collections accessible to this user."""
         conditions = self._build_collection_acl(
-            user_id, user_groups,
+            user_id,
+            user_groups,
         )
-        query = (
-            select(RAGCollection)
-            .where(or_(*conditions))
-            .order_by(RAGCollection.name)
-        )
+        query = select(RAGCollection).where(or_(*conditions)).order_by(RAGCollection.name)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -134,7 +133,8 @@ class RAGRepository:
     ) -> bool:
         """Check if user can access a collection (single query)."""
         conditions = self._build_collection_acl(
-            user_id, user_groups,
+            user_id,
+            user_groups,
         )
         result = await self.db.execute(
             select(func.count())
@@ -195,9 +195,7 @@ class RAGRepository:
 
         # Batch load all documents in a single query (fixes N+1)
         doc_ids = {qr.document_id for qr in qdrant_results}
-        result = await self.db.execute(
-            select(RAGDocument).where(RAGDocument.id.in_(doc_ids))
-        )
+        result = await self.db.execute(select(RAGDocument).where(RAGDocument.id.in_(doc_ids)))
         doc_map = {doc.id: doc for doc in result.scalars().all()}
 
         results = [
@@ -247,9 +245,7 @@ class RAGRepository:
 
     async def get_document(self, document_id: str) -> RAGDocument | None:
         """Get document by ID."""
-        result = await self.db.execute(
-            select(RAGDocument).where(RAGDocument.id == document_id)
-        )
+        result = await self.db.execute(select(RAGDocument).where(RAGDocument.id == document_id))
         return result.scalar_one_or_none()
 
     async def list_documents(self, collection_id: str) -> list[RAGDocument]:
@@ -263,9 +259,7 @@ class RAGRepository:
 
     async def get_chunk(self, chunk_id: str) -> RAGChunk | None:
         """Get chunk by ID."""
-        result = await self.db.execute(
-            select(RAGChunk).where(RAGChunk.id == chunk_id)
-        )
+        result = await self.db.execute(select(RAGChunk).where(RAGChunk.id == chunk_id))
         return result.scalar_one_or_none()
 
     async def get_document_chunks(

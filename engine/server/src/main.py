@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 # Always-on routers
 from src.admin.user_router import admin_user_router
 from src.agents.router import router as agents_router
-from src.automations.router import router as automations_router
 from src.auth.router import router as auth_router
+from src.automations.router import router as automations_router
 from src.connectors.router import router as connectors_router
 from src.connectors.webhook_router import webhook_router
 from src.conversations.router import admin_router as conversations_admin_router
@@ -35,7 +35,6 @@ from src.fine_tuning.router import router as fine_tuning_router
 from src.graphs.router import router as graphs_router
 from src.groups.router import router as groups_router
 from src.health.router import router as health_router
-
 from src.internal.router import router as internal_router
 from src.mcp.router import router as mcp_admin_router
 from src.mcp.usage_router import usage_router as mcp_usage_router
@@ -51,6 +50,7 @@ from src.sync.router import router as sync_router
 # ---------------------------------------------------------------------------
 # Lifespan
 # ---------------------------------------------------------------------------
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

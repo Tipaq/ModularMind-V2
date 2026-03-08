@@ -94,12 +94,18 @@ async def main() -> None:
         from src.rag.handlers.extractor import document_extract_handler
         from src.rag.handlers.storer import document_store_handler
 
-        tasks.extend([
-            bus.subscribe("tasks:documents", "rag-extractors", "ext-1", document_extract_handler),
-            bus.subscribe("rag:extracted", "rag-embedders", "emb-1", document_embed_handler),
-            bus.subscribe("rag:embedded", "rag-storers", "stor-1", document_store_handler),
-        ])
-        logger.info("RAG multi-stage pipeline enabled: documents -> extractor -> embedder -> storer")
+        tasks.extend(
+            [
+                bus.subscribe(
+                    "tasks:documents", "rag-extractors", "ext-1", document_extract_handler
+                ),
+                bus.subscribe("rag:extracted", "rag-embedders", "emb-1", document_embed_handler),
+                bus.subscribe("rag:embedded", "rag-storers", "stor-1", document_store_handler),
+            ]
+        )
+        logger.info(
+            "RAG multi-stage pipeline enabled: documents -> extractor -> embedder -> storer"
+        )
     else:
         from src.worker.tasks import document_process_handler
 
@@ -114,17 +120,21 @@ async def main() -> None:
         from src.pipeline.handlers.extractor import extractor_handler
         from src.pipeline.handlers.summarizer import summarizer_handler
 
-        tasks.extend([
-            bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
-            bus.subscribe("memory:raw", "summarizers", "sum-1", summarizer_handler),
-        ])
+        tasks.extend(
+            [
+                bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
+                bus.subscribe("memory:raw", "summarizers", "sum-1", summarizer_handler),
+            ]
+        )
         if settings.MEMORY_SCORER_ENABLED:
             from src.pipeline.handlers.scorer import scorer_handler
 
-            tasks.extend([
-                bus.subscribe("memory:extracted", "scorers", "scr-1", scorer_handler),
-                bus.subscribe("memory:scored", "embedders", "emb-1", embedder_handler),
-            ])
+            tasks.extend(
+                [
+                    bus.subscribe("memory:extracted", "scorers", "scr-1", scorer_handler),
+                    bus.subscribe("memory:scored", "embedders", "emb-1", embedder_handler),
+                ]
+            )
         else:
             tasks.append(
                 bus.subscribe("memory:extracted", "embedders", "emb-1", embedder_handler),
@@ -141,7 +151,9 @@ async def main() -> None:
 
     tasks.append(
         bus.subscribe(
-            "tasks:automation_trigger", "automation-triggers", "at-1",
+            "tasks:automation_trigger",
+            "automation-triggers",
+            "at-1",
             automation_trigger_handler,
         ),
     )

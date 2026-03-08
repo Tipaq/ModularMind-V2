@@ -6,6 +6,7 @@ Supports distributed execution via Redis Streams and inline (legacy) mode.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -163,14 +164,10 @@ class ExecutionService:
             agent_id: Optional agent ID if routing to a specific agent
         """
         version_number = (
-            self.config_provider.get_config_version_number("agent", agent_id)
-            if agent_id
-            else None
+            self.config_provider.get_config_version_number("agent", agent_id) if agent_id else None
         )
         hash_value = (
-            self.config_provider.get_config_version("agent", agent_id)
-            if agent_id
-            else None
+            self.config_provider.get_config_version("agent", agent_id) if agent_id else None
         )
 
         execution = ExecutionRun(
@@ -192,7 +189,8 @@ class ExecutionService:
 
         logger.info(
             "Created supervisor execution %s for conversation %s",
-            execution.id, conversation_id,
+            execution.id,
+            conversation_id,
         )
         return execution
 
@@ -218,9 +216,7 @@ class ExecutionService:
         from src.infra.publish import enqueue_execution
 
         if execution.execution_type == ExecutionType.SUPERVISOR:
-            raise ValueError(
-                "SUPERVISOR executions are tracking records only — not dispatchable"
-            )
+            raise ValueError("SUPERVISOR executions are tracking records only — not dispatchable")
 
         msg_id = await enqueue_execution(
             execution_id=execution.id,
@@ -243,7 +239,8 @@ class ExecutionService:
 
         logger.info(
             "Dispatched execution %s to Redis Streams (msg=%s)",
-            execution.id, msg_id,
+            execution.id,
+            msg_id,
         )
         return msg_id
 
@@ -256,6 +253,7 @@ class ExecutionService:
             return False
 
         from src.infra.redis import get_redis_client
+
         redis = await get_redis_client()
         if redis:
             try:
@@ -279,6 +277,7 @@ class ExecutionService:
             return False
 
         from src.infra.redis import get_redis_client
+
         redis = await get_redis_client()
         if redis:
             try:
@@ -311,7 +310,9 @@ class ExecutionService:
         return execution
 
     async def get_execution_events(
-        self, execution_id: str, last_seq: int = 0,
+        self,
+        execution_id: str,
+        last_seq: int = 0,
     ) -> list[dict[str, Any]]:
         """Get buffered events for polling clients.
 
@@ -325,6 +326,7 @@ class ExecutionService:
             List of events after last_seq
         """
         from src.infra.redis import get_redis_client
+
         redis = await get_redis_client()
         if not redis:
             return []
@@ -366,9 +368,7 @@ class ExecutionService:
             Execution events (steps, tokens, completion)
         """
         # Get execution
-        result = await self.db.execute(
-            select(ExecutionRun).where(ExecutionRun.id == execution_id)
-        )
+        result = await self.db.execute(select(ExecutionRun).where(ExecutionRun.id == execution_id))
         execution = result.scalar_one_or_none()
 
         if not execution:
@@ -405,7 +405,9 @@ class ExecutionService:
             }
 
         except TimeoutError:
-            logger.error("Execution %s timed out after %ds", execution_id, settings.MAX_EXECUTION_TIMEOUT)
+            logger.error(
+                "Execution %s timed out after %ds", execution_id, settings.MAX_EXECUTION_TIMEOUT
+            )
             execution.status = ExecutionStatus.FAILED
             execution.error_message = f"Execution timed out after {settings.MAX_EXECUTION_TIMEOUT}s"
             execution.completed_at = utcnow()
@@ -439,10 +441,9 @@ class ExecutionService:
             }
 
         finally:
-            try:
+            with contextlib.suppress(Exception):
+                # Session may already be flushing from caller's commit
                 await self.db.flush()
-            except Exception:
-                pass  # Session may already be flushing from caller's commit
 
     async def execute_agent(
         self,
@@ -457,15 +458,19 @@ class ExecutionService:
         models = await self.config_provider.list_models()
         if models and not self.config_provider.is_model_allowed(agent.model_id):
             logger.warning(
-                "Model '%s' is not in the catalog. "
-                "Agent %s may fail if the model is unavailable.",
-                agent.model_id, execution.agent_id,
+                "Model '%s' is not in the catalog. Agent %s may fail if the model is unavailable.",
+                agent.model_id,
+                execution.agent_id,
             )
 
         # Get LLM provider — parse model_id with known-provider check
         if ":" in agent.model_id:
             _prefix, _rest = agent.model_id.split(":", 1)
-            provider_name, model_name = (_prefix.lower(), _rest) if _prefix.lower() in _KNOWN_PROVIDERS else ("ollama", agent.model_id)
+            provider_name, model_name = (
+                (_prefix.lower(), _rest)
+                if _prefix.lower() in _KNOWN_PROVIDERS
+                else ("ollama", agent.model_id)
+            )
         else:
             provider_name, _ = "ollama", agent.model_id
         provider_kwargs: dict[str, Any] = {}
@@ -474,7 +479,9 @@ class ExecutionService:
         llm_provider = get_llm_provider(provider_name, **provider_kwargs)
 
         # Create compiler and compile agent graph
-        compiler = GraphCompiler(self.config_provider, llm_provider, mcp_registry=get_mcp_registry())
+        compiler = GraphCompiler(
+            self.config_provider, llm_provider, mcp_registry=get_mcp_registry()
+        )
         graph = await compiler.compile_agent_graph(agent)
 
         # Build memory/RAG context layers for the agent
@@ -526,9 +533,7 @@ class ExecutionService:
                         system_prompt_chars=system_prompt_chars,
                     )
                     if context_messages:
-                        input_data["_context_layers"] = [
-                            msg.content for msg in context_messages
-                        ]
+                        input_data["_context_layers"] = [msg.content for msg in context_messages]
             except Exception as e:  # Resilience: compaction failure must not block execution
                 logger.warning("Auto-compaction failed for %s: %s", execution.session_id, e)
                 yield {"type": "trace:compaction_end", "error": str(e)}
@@ -627,7 +632,8 @@ class ExecutionService:
         while not invoke_task.done():
             try:
                 event = await asyncio.wait_for(
-                    trace_queue.get(), timeout=0.5,
+                    trace_queue.get(),
+                    timeout=0.5,
                 )
                 yield event
             except TimeoutError:
@@ -695,7 +701,9 @@ class ExecutionService:
         llm_provider = get_llm_provider("ollama", base_url=settings.OLLAMA_BASE_URL)
 
         # Create compiler and compile graph
-        compiler = GraphCompiler(self.config_provider, llm_provider, mcp_registry=get_mcp_registry())
+        compiler = GraphCompiler(
+            self.config_provider, llm_provider, mcp_registry=get_mcp_registry()
+        )
         graph = await compiler.compile_graph(graph_config)
 
         # Create initial state
@@ -753,7 +761,9 @@ class ExecutionService:
                     "node_id": node_id,
                     "node_type": "node",
                     "status": "completed",
-                    "output": output if isinstance(output, dict) else {"value": str(output)[:OUTPUT_TRUNCATION_LENGTH]},
+                    "output": output
+                    if isinstance(output, dict)
+                    else {"value": str(output)[:OUTPUT_TRUNCATION_LENGTH]},
                     "timestamp": utcnow().isoformat(),
                 }
 
@@ -771,7 +781,5 @@ class ExecutionService:
 
     async def get_execution(self, execution_id: str) -> ExecutionRun | None:
         """Get execution by ID."""
-        result = await self.db.execute(
-            select(ExecutionRun).where(ExecutionRun.id == execution_id)
-        )
+        result = await self.db.execute(select(ExecutionRun).where(ExecutionRun.id == execution_id))
         return result.scalar_one_or_none()

@@ -86,12 +86,8 @@ class ABTestRouter:
             raise ValueError(f"Experiment not found: {experiment_id}")
 
         # Aggregate from tagged execution runs
-        control_stats = await self._aggregate_variant_metrics(
-            experiment_id, "control"
-        )
-        treatment_stats = await self._aggregate_variant_metrics(
-            experiment_id, "treatment"
-        )
+        control_stats = await self._aggregate_variant_metrics(experiment_id, "control")
+        treatment_stats = await self._aggregate_variant_metrics(experiment_id, "treatment")
 
         # Compute significance (z-test for proportions on error rate)
         p_value = None
@@ -99,10 +95,7 @@ class ABTestRouter:
         n_control = control_stats.get("n", 0)
         n_treatment = treatment_stats.get("n", 0)
 
-        if (
-            n_control >= experiment.min_sample_size
-            and n_treatment >= experiment.min_sample_size
-        ):
+        if n_control >= experiment.min_sample_size and n_treatment >= experiment.min_sample_size:
             p1 = control_stats.get("error_rate", 0)
             p2 = treatment_stats.get("error_rate", 0)
             p_value = _z_test_proportions(p1, p2, n_control, n_treatment)
@@ -115,9 +108,7 @@ class ABTestRouter:
             "significant": significant,
         }
 
-    async def _aggregate_variant_metrics(
-        self, experiment_id: str, variant: str
-    ) -> dict:
+    async def _aggregate_variant_metrics(self, experiment_id: str, variant: str) -> dict:
         """Aggregate metrics from execution_runs tagged with this experiment/variant."""
         query = select(
             func.count(ExecutionRun.id).label("n"),
@@ -231,9 +222,7 @@ def _update_running_metrics(metrics: dict, new_result: dict) -> None:
     metrics["count"] = metrics.get("count", 0) + 1
 
 
-def _z_test_proportions(
-    p1: float, p2: float, n1: int, n2: int
-) -> float | None:
+def _z_test_proportions(p1: float, p2: float, n1: int, n2: int) -> float | None:
     """Two-proportion z-test. Returns p-value or None if computation fails."""
     if n1 == 0 or n2 == 0:
         return None

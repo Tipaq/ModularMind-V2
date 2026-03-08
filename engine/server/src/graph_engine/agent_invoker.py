@@ -63,7 +63,7 @@ class AgentInvoker:
         llm_messages: list[BaseMessage] = [SystemMessage(content=agent.system_prompt)]
 
         # Inject context layers (memory, RAG) before extra_context
-        for _ctx in (context_layers or []):
+        for _ctx in context_layers or []:
             if _ctx and _ctx.strip():
                 llm_messages.append(SystemMessage(content=_ctx))
 
@@ -89,4 +89,3 @@ class AgentInvoker:
             "agent_id": agent_id,
             "agent_name": agent.name,
         }
-

@@ -108,8 +108,6 @@ class BaseHybridVectorStore:
         client = await self._get_client()
         result = await client.delete(
             collection_name=self._collection,
-            points_selector=models.FilterSelector(
-                filter=models.Filter(must=filter_conditions)
-            ),
+            points_selector=models.FilterSelector(filter=models.Filter(must=filter_conditions)),
         )
         return result.status == UpdateStatus.COMPLETED

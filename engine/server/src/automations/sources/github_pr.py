@@ -46,7 +46,11 @@ class GitHubPRSource:
         for repo in repos:
             try:
                 repo_items = await self._fetch_repo_prs(
-                    repo, token, skip_labels, require_labels, branches,
+                    repo,
+                    token,
+                    skip_labels,
+                    require_labels,
+                    branches,
                 )
                 items.extend(repo_items)
             except Exception:
@@ -94,7 +98,7 @@ class GitHubPRSource:
                     continue
 
                 # Filter by labels
-                pr_labels = {l["name"] for l in pr.get("labels", [])}
+                pr_labels = {lbl["name"] for lbl in pr.get("labels", [])}
                 if skip_labels & pr_labels:
                     continue
                 if require_labels and not require_labels.issubset(pr_labels):
@@ -119,25 +123,27 @@ class GitHubPRSource:
                 )
                 files = files_resp.json() if files_resp.status_code == 200 else []
 
-                items.append({
-                    "source_ref": source_ref,
-                    "repo": repo,
-                    "pr_number": pr_number,
-                    "title": pr.get("title", ""),
-                    "body": pr.get("body", "") or "",
-                    "diff": diff[:50000],  # Truncate very large diffs
-                    "files": [
-                        {
-                            "filename": f.get("filename", ""),
-                            "status": f.get("status", ""),
-                            "additions": f.get("additions", 0),
-                            "deletions": f.get("deletions", 0),
-                        }
-                        for f in files[:100]
-                    ],
-                    "file_count": len(files),
-                    "prompt": self._build_prompt(pr, repo, diff, files),
-                })
+                items.append(
+                    {
+                        "source_ref": source_ref,
+                        "repo": repo,
+                        "pr_number": pr_number,
+                        "title": pr.get("title", ""),
+                        "body": pr.get("body", "") or "",
+                        "diff": diff[:50000],  # Truncate very large diffs
+                        "files": [
+                            {
+                                "filename": f.get("filename", ""),
+                                "status": f.get("status", ""),
+                                "additions": f.get("additions", 0),
+                                "deletions": f.get("deletions", 0),
+                            }
+                            for f in files[:100]
+                        ],
+                        "file_count": len(files),
+                        "prompt": self._build_prompt(pr, repo, diff, files),
+                    }
+                )
 
         return items
 
@@ -151,8 +157,9 @@ class GitHubPRSource:
 
             async with async_session_maker() as session:
                 result = await session.execute(
-                    select(AutomationRun.source_ref)
-                    .where(AutomationRun.automation_id == automation_id)
+                    select(AutomationRun.source_ref).where(
+                        AutomationRun.automation_id == automation_id
+                    )
                 )
                 return {row[0] for row in result.all()}
         except Exception:
@@ -160,7 +167,11 @@ class GitHubPRSource:
             return set()
 
     def _build_prompt(
-        self, pr: dict, repo: str, diff: str, files: list,
+        self,
+        pr: dict,
+        repo: str,
+        diff: str,
+        files: list,
     ) -> str:
         """Build a prompt for the execution agent/graph."""
         file_list = "\n".join(

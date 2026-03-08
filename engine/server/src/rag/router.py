@@ -11,13 +11,13 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile
 from fastapi.responses import StreamingResponse
-from src.infra.query_utils import raise_not_found
-from sqlalchemy import case, func, select, update
+from sqlalchemy import func, select, update
 
 from src.auth import CurrentUser, CurrentUserGroups, RequireAdmin, UserRole
 from src.embedding.resolver import get_knowledge_embedding_provider
 from src.infra.config import get_settings
 from src.infra.database import DbSession
+from src.infra.query_utils import raise_not_found
 
 from .models import DocumentStatus, RAGCollection, RAGDocument, RAGScope
 from .processor import MAX_FILE_SIZE, SUPPORTED_EXTENSIONS
@@ -73,17 +73,18 @@ async def get_knowledge_global_stats(db: DbSession) -> KnowledgeGlobalStatsRespo
 
     # Documents by status
     status_result = await db.execute(
-        select(RAGDocument.status, func.count(RAGDocument.id))
-        .group_by(RAGDocument.status)
+        select(RAGDocument.status, func.count(RAGDocument.id)).group_by(RAGDocument.status)
     )
     docs_by_status = {row[0]: row[1] for row in status_result.all()}
 
     # Collections by scope
     scope_result = await db.execute(
-        select(RAGCollection.scope, func.count(RAGCollection.id))
-        .group_by(RAGCollection.scope)
+        select(RAGCollection.scope, func.count(RAGCollection.id)).group_by(RAGCollection.scope)
     )
-    cols_by_scope = {row[0].value if hasattr(row[0], "value") else str(row[0]): row[1] for row in scope_result.all()}
+    cols_by_scope = {
+        row[0].value if hasattr(row[0], "value") else str(row[0]): row[1]
+        for row in scope_result.all()
+    }
 
     return KnowledgeGlobalStatsResponse(
         total_collections=col_count.scalar() or 0,
@@ -176,9 +177,7 @@ async def get_knowledge_graph(
     from .models import RAGCollection, RAGDocument
 
     # Collection nodes
-    collections = await db.execute(
-        select(RAGCollection).order_by(RAGCollection.name).limit(limit)
-    )
+    collections = await db.execute(select(RAGCollection).order_by(RAGCollection.name).limit(limit))
     col_list = list(collections.scalars().all())
 
     nodes: list[KnowledgeGraphNode] = []
@@ -187,14 +186,16 @@ async def get_knowledge_graph(
     col_ids = set()
     for c in col_list:
         col_ids.add(c.id)
-        nodes.append(KnowledgeGraphNode(
-            id=f"col:{c.id}",
-            label=c.name,
-            node_type="collection",
-            scope=c.scope.value if hasattr(c.scope, "value") else str(c.scope),
-            chunk_count=c.chunk_count,
-            size=max(8, min(30, 8 + c.document_count * 2)),
-        ))
+        nodes.append(
+            KnowledgeGraphNode(
+                id=f"col:{c.id}",
+                label=c.name,
+                node_type="collection",
+                scope=c.scope.value if hasattr(c.scope, "value") else str(c.scope),
+                chunk_count=c.chunk_count,
+                size=max(8, min(30, 8 + c.document_count * 2)),
+            )
+        )
 
     # Document nodes (top N by chunk_count for performance)
     if col_ids:
@@ -205,19 +206,23 @@ async def get_knowledge_graph(
             .limit(limit)
         )
         for d in docs.scalars().all():
-            nodes.append(KnowledgeGraphNode(
-                id=f"doc:{d.id}",
-                label=d.filename,
-                node_type="document",
-                status=d.status,
-                chunk_count=d.chunk_count,
-                size=max(4, min(20, 4 + d.chunk_count)),
-            ))
-            edges.append(KnowledgeGraphEdge(
-                source=f"col:{d.collection_id}",
-                target=f"doc:{d.id}",
-                weight=max(0.5, min(3.0, d.chunk_count / 10)),
-            ))
+            nodes.append(
+                KnowledgeGraphNode(
+                    id=f"doc:{d.id}",
+                    label=d.filename,
+                    node_type="document",
+                    status=d.status,
+                    chunk_count=d.chunk_count,
+                    size=max(4, min(20, 4 + d.chunk_count)),
+                )
+            )
+            edges.append(
+                KnowledgeGraphEdge(
+                    source=f"col:{d.collection_id}",
+                    target=f"doc:{d.id}",
+                    weight=max(0.5, min(3.0, d.chunk_count / 10)),
+                )
+            )
 
     return KnowledgeGraphResponse(nodes=nodes, edges=edges)
 
@@ -329,6 +334,7 @@ async def delete_collection(
     # Best-effort Qdrant cleanup
     try:
         from .vector_store import QdrantRAGVectorStore
+
         vs = QdrantRAGVectorStore()
         await vs.delete_by_collection(collection_id)
     except Exception as e:  # Qdrant client can raise various errors
@@ -373,7 +379,7 @@ async def upload_document_endpoint(
     user: CurrentUser,
     user_groups: CurrentUserGroups,
     db: DbSession,
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
 ) -> DocumentResponse:
     """Upload and process a document into a RAG collection.
 
@@ -422,6 +428,7 @@ async def upload_document_endpoint(
     object_key = f"rag/{collection_id}/{doc_id}/{filename}"
 
     from src.infra.object_store import get_object_store
+
     store = get_object_store()
     await store.upload(
         bucket=settings.S3_BUCKET_RAG,
@@ -449,15 +456,19 @@ async def upload_document_endpoint(
     chunk_overlap = getattr(collection, "chunk_overlap", 50) or 50
 
     from src.infra.publish import get_event_bus
+
     bus = await get_event_bus()
-    await bus.publish("tasks:documents", {
-        "collection_id": str(collection_id),
-        "document_id": str(doc_id),
-        "object_key": object_key,
-        "filename": filename,
-        "chunk_size": chunk_size,
-        "chunk_overlap": chunk_overlap,
-    })
+    await bus.publish(
+        "tasks:documents",
+        {
+            "collection_id": str(collection_id),
+            "document_id": str(doc_id),
+            "object_key": object_key,
+            "filename": filename,
+            "chunk_size": chunk_size,
+            "chunk_overlap": chunk_overlap,
+        },
+    )
 
     logger.info("Document %s (%s) queued for processing", filename, doc_id)
 
@@ -510,6 +521,7 @@ async def download_document(
         )
 
     from src.infra.object_store import get_object_store
+
     store = get_object_store()
 
     content_type = document.content_type or "application/octet-stream"
@@ -555,6 +567,7 @@ async def reprocess_document(
     # Delete existing chunks (Qdrant + DB)
     try:
         from .vector_store import QdrantRAGVectorStore
+
         vs = QdrantRAGVectorStore()
         await vs.delete_by_document(document_id)
     except Exception as e:  # Qdrant client can raise various errors
@@ -565,7 +578,9 @@ async def reprocess_document(
     old_chunk_count = document.chunk_count
 
     from sqlalchemy import delete as sa_delete
+
     from .models import RAGChunk
+
     await db.execute(sa_delete(RAGChunk).where(RAGChunk.document_id == document_id))
 
     # Reset document status
@@ -594,15 +609,19 @@ async def reprocess_document(
     chunk_overlap = collection.chunk_overlap if collection else 50
 
     from src.infra.publish import get_event_bus
+
     bus = await get_event_bus()
-    await bus.publish("tasks:documents", {
-        "collection_id": document.collection_id,
-        "document_id": document_id,
-        "object_key": object_key,
-        "filename": document.filename,
-        "chunk_size": chunk_size,
-        "chunk_overlap": chunk_overlap,
-    })
+    await bus.publish(
+        "tasks:documents",
+        {
+            "collection_id": document.collection_id,
+            "document_id": document_id,
+            "object_key": object_key,
+            "filename": document.filename,
+            "chunk_size": chunk_size,
+            "chunk_overlap": chunk_overlap,
+        },
+    )
 
     logger.info("Document %s queued for reprocessing", document_id)
     return DocumentResponse.from_document(document)
@@ -636,6 +655,7 @@ async def delete_document(
     if object_key:
         try:
             from src.infra.object_store import get_object_store
+
             store = get_object_store()
             await store.delete(settings.S3_BUCKET_RAG, object_key)
         except Exception as e:  # S3/MinIO client can raise various errors
@@ -660,6 +680,7 @@ async def delete_document(
     # Best-effort Qdrant cleanup
     try:
         from .vector_store import QdrantRAGVectorStore
+
         vs = QdrantRAGVectorStore()
         await vs.delete_by_document(document_id)
     except Exception as e:  # Qdrant client can raise various errors
@@ -693,7 +714,7 @@ async def search_rag(
             raise HTTPException(
                 status_code=503,
                 detail=f"Embedding service unavailable: {e}",
-            )
+            ) from e
 
     # Instantiate reranker from settings
     from src.rag.reranker import RerankerFactory

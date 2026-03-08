@@ -28,9 +28,4 @@ def escape_like(search: str) -> str:
         escaped = escape_like(user_input)
         query.where(Model.field.ilike(f"%{escaped}%", escape="\\\\"))
     """
-    return (
-        search
-        .replace("\\", "\\\\")
-        .replace("%", "\\%")
-        .replace("_", "\\_")
-    )
+    return search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

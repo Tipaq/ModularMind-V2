@@ -28,6 +28,7 @@ MCPToolResponse = MCPToolDefinition
 
 def _get_registry():
     from src.mcp.service import get_mcp_registry
+
     return get_mcp_registry()
 
 
@@ -43,9 +44,14 @@ async def list_server_tools(server_id: str, user: CurrentUser) -> list[MCPToolRe
 
     try:
         tools = await registry.discover_tools(server_id)
-        return [MCPToolResponse(name=t.name, description=t.description, input_schema=t.input_schema) for t in tools]
+        return [
+            MCPToolResponse(name=t.name, description=t.description, input_schema=t.input_schema)
+            for t in tools
+        ]
     except Exception as e:  # MCP servers raise heterogeneous transport errors
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to discover tools: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to discover tools: {e}"
+        ) from e
 
 
 @usage_router.post("/servers/{server_id}/tools/call")
@@ -61,12 +67,18 @@ async def call_server_tool(
 
     try:
         client = await registry.get_client(server_id)
-        result = await client.call_tool(MCPToolCallRequest(
-            server_id=server_id, tool_name=body.tool_name, arguments=body.arguments,
-        ))
+        result = await client.call_tool(
+            MCPToolCallRequest(
+                server_id=server_id,
+                tool_name=body.tool_name,
+                arguments=body.arguments,
+            )
+        )
         return MCPToolCallResponseBody(content=result.content, is_error=result.is_error)
     except Exception as e:  # MCP servers raise heterogeneous transport errors
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Tool call failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Tool call failed: {e}"
+        ) from e
 
 
 @usage_router.post("/servers/{server_id}/test")
