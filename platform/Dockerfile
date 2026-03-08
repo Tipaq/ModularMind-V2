@@ -25,9 +25,10 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/platform/.next/standalone ./
 COPY --from=builder /app/platform/.next/static ./platform/.next/static
 COPY --from=builder /app/platform/public ./platform/public
-# Prisma schema + full node_modules for db push
-COPY --from=builder /app/platform/prisma ./platform/prisma
+# Full node_modules from builder (overwrites standalone's minimal copy)
 COPY --from=builder /app/node_modules ./node_modules
+# Prisma schema
+COPY --from=builder /app/platform/prisma ./platform/prisma
 # Entrypoint
 COPY platform/docker-entrypoint.sh ./platform/
 RUN chmod +x ./platform/docker-entrypoint.sh
