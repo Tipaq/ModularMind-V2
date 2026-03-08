@@ -10,7 +10,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  cn,
 } from "@modularmind/ui";
 import { useKnowledgeStore } from "../../stores/knowledge";
 

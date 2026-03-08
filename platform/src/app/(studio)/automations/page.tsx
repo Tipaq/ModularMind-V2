@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useTableSort } from "@/hooks/useTableSort";
 import { useRouter } from "next/navigation";
-import { Zap, Plus, Copy, Trash2, Play } from "lucide-react";
+import { Zap, Plus, Copy, Trash2 } from "lucide-react";
 import {
   Button,
   Badge,

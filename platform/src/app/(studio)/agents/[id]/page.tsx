@@ -6,7 +6,6 @@ import {
   Bot,
   Copy,
   Edit,
-  Globe,
   RefreshCw,
   Save,
   Shield,

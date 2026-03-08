@@ -85,10 +85,11 @@ jobs:
         image: qdrant/qdrant:v1.13.0
         ports: ["6333:6333"]
         options: >-
-          --health-cmd "curl -sf http://localhost:6333/healthz || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd "bash -c ':> /dev/tcp/localhost/6333' || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+          --health-start-period 10s
 
     env:
       DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/modularmind_test

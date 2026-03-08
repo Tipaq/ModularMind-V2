@@ -11,7 +11,6 @@ import {
   SlidersHorizontal,
   Trash2,
   X,
-  Zap,
   Clock,
   GitPullRequest,
   Target,

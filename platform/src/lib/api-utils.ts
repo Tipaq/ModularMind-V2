@@ -44,7 +44,7 @@ export async function requireAuthOrEngineKey(
   if (session) return { session };
 
   // Fall back to engine key
-  const { engine, error: engineError } = await validateEngineKey(req);
+  const { engine } = await validateEngineKey(req);
   if (engine) return { session: null };
 
   return { error: errorResponse("Unauthorized", 401) };

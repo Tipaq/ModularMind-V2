@@ -96,17 +96,13 @@ function renderCard(
   }
 }
 
-export function ExecutionTimeline({
-  activities,
-  enabledAgents,
-  enabledGraphs: _enabledGraphs,
-  isStreaming,
-}: {
+export function ExecutionTimeline(props: {
   activities: ExecutionActivity[];
   enabledAgents: EngineAgent[];
   enabledGraphs: EngineGraph[];
   isStreaming: boolean;
 }) {
+  const { activities, enabledAgents, isStreaming } = props;
   if (activities.length === 0 && !isStreaming) return null;
 
   // Flatten activities with children for rendering

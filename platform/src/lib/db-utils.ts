@@ -6,9 +6,10 @@ export const DEFAULT_PAGE_SIZE = 20;
 /** Maximum items allowed per page to prevent abuse. */
 export const MAX_PAGE_SIZE = 100;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface PrismaDelegate {
-  findMany: (args: any) => Promise<any[]>;
-  count: (args: any) => Promise<number>;
+  findMany: (...args: any[]) => Promise<any[]>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  count: (...args: any[]) => Promise<number>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 /**

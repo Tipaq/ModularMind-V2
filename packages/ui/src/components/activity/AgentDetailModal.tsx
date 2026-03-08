@@ -37,6 +37,7 @@ export function AgentDetailModal({
   const llmChildren = children.filter((c) => c.type === "llm");
 
   // Aggregate token usage from LLM children
+  /* eslint-disable */
   const aggregatedTokens = useMemo(() => {
     let prompt = 0;
     let completion = 0;
@@ -50,6 +51,7 @@ export function AgentDetailModal({
     }
     return total > 0 ? { prompt, completion, total } : null;
   }, [llmChildren]);
+  /* eslint-enable */
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

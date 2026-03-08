@@ -79,7 +79,7 @@ function CollectionsContent() {
   const {
     collections, collectionsLoading,
     selectedCollectionId, documents, documentsLoading,
-    fetchCollections, deleteCollection, selectCollection,
+    deleteCollection, selectCollection,
   } = useKnowledgeStore();
 
   const user = useAuthStore((s) => s.user);
