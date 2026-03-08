@@ -3,16 +3,18 @@ RUN corepack enable
 
 FROM base AS deps
 WORKDIR /app
-COPY platform/package.json ./
-COPY packages/ /app/packages/
-COPY pnpm-workspace.yaml pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY platform/package.json ./platform/
+COPY packages/ ./packages/
+RUN pnpm install --frozen-lockfile --filter @modularmind/platform...
 
 FROM base AS builder
 WORKDIR /app
+COPY package.json pnpm-workspace.yaml ./
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/platform/node_modules ./platform/node_modules
+COPY --from=deps /app/packages/ ./packages/
 COPY platform/ ./platform/
-COPY packages/ ./packages/
 RUN cd platform && npx prisma generate && pnpm build
 
 FROM node:22-alpine AS runner
