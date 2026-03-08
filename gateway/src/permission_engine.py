@@ -245,7 +245,12 @@ class PermissionEngine:
         if not perms.network.enabled:
             return EvalResult.AUTO_DENY, "Network access is not enabled for this agent"
 
-        domain = args.get("domain", args.get("url", ""))
+        # Extract domain from URL for pattern matching
+        from urllib.parse import urlparse
+
+        url = args.get("url", "")
+        parsed = urlparse(url)
+        domain = parsed.hostname or url
 
         # 1. Explicit deny
         for pattern in perms.network.deny_domains:

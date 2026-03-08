@@ -27,7 +27,9 @@ from src.approval.service import GatewayApprovalService
 from src.audit.models import GatewayAuditLog
 from src.auth import AdminUser, InternalAuth
 from src.config import get_settings
+from src.executors.browser import BrowserExecutor
 from src.executors.filesystem import FilesystemExecutor
+from src.executors.network import NetworkExecutor
 from src.executors.shell import ShellExecutor
 from src.infra.database import DbSession
 from src.infra.metrics import (
@@ -239,20 +241,37 @@ async def _execute_in_sandbox(
     request: ExecuteRequest,
     perm_engine: PermissionEngine,
 ) -> str:
-    """Execute a tool call inside a sandbox container."""
+    """Execute a tool call (sandbox-based or in-process)."""
     sandbox_mgr = http_request.app.state.sandbox_manager
     perms = await perm_engine.get_permissions(request.agent_id)
     if not perms:
         raise RuntimeError("No permissions found")
 
-    # Acquire or reuse sandbox for this execution
+    # Browser and network run in-process (no sandbox needed)
+    if request.category == "browser":
+        executor = BrowserExecutor()
+        return await executor.execute(
+            action=request.action,
+            args=request.args,
+            sandbox_mgr=sandbox_mgr,
+            execution_id=request.execution_id,
+        )
+    elif request.category == "network":
+        executor = NetworkExecutor()
+        return await executor.execute(
+            action=request.action,
+            args=request.args,
+            sandbox_mgr=sandbox_mgr,
+            execution_id=request.execution_id,
+        )
+
+    # Filesystem and shell require a sandbox container
     await sandbox_mgr.acquire_or_reuse(
         execution_id=request.execution_id,
         agent_id=request.agent_id,
         permissions=perms,
     )
 
-    # Route to the appropriate executor
     if request.category == "filesystem":
         executor = FilesystemExecutor()
         return await executor.execute(
