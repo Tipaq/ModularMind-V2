@@ -304,7 +304,7 @@ function UserProfileSection({
 }) {
   const [draft, setDraft] = useState(preferences);
   const [saving, setSaving] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleBlur = async () => {
     if (draft === preferences) return;

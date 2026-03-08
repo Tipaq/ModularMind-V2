@@ -28,17 +28,24 @@ export function DelegationCard({
           className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/20 transition-colors text-left"
         >
           <StatusIcon status={activity.status} color="text-warning" />
-          <button
-            type="button"
+          <span
+            role="button"
+            tabIndex={0}
             onClick={(e) => {
               e.stopPropagation();
               setModalOpen(true);
             }}
-            className="h-5 w-5 rounded-md bg-primary/10 flex items-center justify-center shrink-0 hover:bg-primary/20 transition-colors"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+                setModalOpen(true);
+              }
+            }}
+            className="h-5 w-5 rounded-md bg-primary/10 flex items-center justify-center shrink-0 hover:bg-primary/20 transition-colors cursor-pointer"
             title="View agent details"
           >
             <Bot className="h-3 w-3 text-primary" />
-          </button>
+          </span>
           <span className="text-xs font-medium flex-1 truncate">
             {activity.agentName || "Agent"}
           </span>
