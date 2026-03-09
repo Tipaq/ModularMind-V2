@@ -24,7 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from src.auth.models import User, UserRole
-from src.groups.models import UserGroupMember  # noqa: F401 — register model for SQLAlchemy mapper
+from src.conversations.models import Conversation, ConversationMessage  # noqa: F401
+from src.groups.models import UserGroup, UserGroupMember  # noqa: F401
 from src.infra.database import Base, get_db, get_db_readonly
 
 # ---------------------------------------------------------------------------
