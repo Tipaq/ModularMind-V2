@@ -34,5 +34,7 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/platform/.next/standalone ./
 COPY --from=builder /app/platform/.next/static ./platform/.next/static
 COPY --from=builder /app/platform/public ./platform/public
+COPY install.sh ./install.sh
+COPY docker/docker-compose.client.yml ./docker/docker-compose.client.yml
 EXPOSE 3000
 CMD ["node", "platform/server.js"]

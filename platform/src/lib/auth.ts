@@ -81,6 +81,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         pathname.startsWith("/login") ||
         pathname.startsWith("/register") ||
         pathname.startsWith("/api/engines") ||
+        pathname.startsWith("/api/install") ||
         pathname.startsWith("/api/sync") ||
         pathname.startsWith("/api/reports")
       ) {

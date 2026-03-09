@@ -2,13 +2,11 @@
 # =============================================================================
 # ModularMind V2 — Client Stack Installer
 # =============================================================================
-# One-liner install:
-#   curl -sSL https://get.modularmind.dev | bash -s -- --key mmk_xxx
+# One-liner install (served by Platform with pre-filled key):
+#   curl -sSL https://platform.modularmind.dev/api/install/mmk_xxx | bash
 #
 # Or with options:
-#   curl -sSL https://get.modularmind.dev | bash -s -- \
-#     --key mmk_xxx \
-#     --platform-url https://platform.modularmind.dev \
+#   curl -sSL https://platform.modularmind.dev/api/install/mmk_xxx | bash -s -- \
 #     --gpu \
 #     --domain mm.example.com
 # =============================================================================
@@ -31,6 +29,8 @@ err()   { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
 die()   { err "$1"; exit 1; }
 
 # --- Defaults -----------------------------------------------------------------
+# When served by the Platform API, ENGINE_KEY and PLATFORM_URL are pre-filled.
+# They can also be passed via --key and --platform-url flags.
 
 MM_VERSION="latest"
 ENGINE_KEY=""
@@ -40,7 +40,6 @@ INSTALL_DIR="./modularmind"
 USE_GPU=false
 USE_TRAEFIK=false
 INTERACTIVE=true
-BASE_URL="https://raw.githubusercontent.com/tipaq/ModularMind-V2/main"
 
 # --- Usage --------------------------------------------------------------------
 
@@ -53,7 +52,7 @@ Usage:
 
 Options:
   --key KEY             Engine API key (from Platform admin)
-  --platform-url URL    Platform URL for config sync
+  --platform-url URL    Platform URL (pre-filled when served by Platform)
   --domain DOMAIN       Domain name (enables Traefik labels)
   --version VER         Image version tag (default: latest)
   --dir PATH            Install directory (default: ./modularmind)
@@ -63,14 +62,11 @@ Options:
   -h, --help            Show this help
 
 Examples:
-  # Minimal install
-  install.sh --key mmk_abc123
+  # One-liner from Platform (key is pre-filled):
+  curl -sSL https://platform.example.com/api/install/mmk_xxx | bash
 
-  # Full install with GPU + Platform sync
-  install.sh --key mmk_abc123 --platform-url https://platform.example.com --gpu
-
-  # With custom domain + Traefik TLS
-  install.sh --key mmk_abc123 --domain mm.example.com --traefik
+  # With GPU + custom domain:
+  curl -sSL https://platform.example.com/api/install/mmk_xxx | bash -s -- --gpu --domain mm.example.com
 EOF
 }
 
@@ -90,6 +86,16 @@ while [[ $# -gt 0 ]]; do
         *)                 die "Unknown option: $1 (use --help for usage)" ;;
     esac
 done
+
+# --- Validate required params ------------------------------------------------
+
+if [[ -z "$ENGINE_KEY" ]]; then
+    die "Engine API key is required. Use --key or install via Platform one-liner."
+fi
+
+if [[ -z "$PLATFORM_URL" ]]; then
+    die "Platform URL is required. Use --platform-url or install via Platform one-liner."
+fi
 
 # --- Prerequisites ------------------------------------------------------------
 
@@ -321,29 +327,43 @@ build_profiles() {
     info "Active profiles: $COMPOSE_PROFILES"
 }
 
+# --- Fetch config & authenticate registry ------------------------------------
+
+fetch_config() {
+    info "Fetching install config from Platform..."
+
+    local config_url="$PLATFORM_URL/api/install/$ENGINE_KEY/config"
+    local config_json
+    config_json=$(curl -sSf "$config_url") || die "Failed to fetch config from Platform. Check your API key."
+
+    # Parse JSON config (use python3 which is available on most systems)
+    REGISTRY_SERVER=$(echo "$config_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['registry']['server'])")
+    REGISTRY_USER=$(echo "$config_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['registry']['username'])")
+    REGISTRY_PASS=$(echo "$config_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['registry']['password'])")
+
+    if [[ -n "$REGISTRY_PASS" ]]; then
+        ok "Config received from Platform"
+    else
+        die "Platform returned empty registry credentials. Contact your administrator."
+    fi
+}
+
+docker_login() {
+    info "Authenticating with container registry..."
+    echo "$REGISTRY_PASS" | docker login "$REGISTRY_SERVER" -u "$REGISTRY_USER" --password-stdin || \
+        die "Docker registry login failed. Check your credentials."
+    ok "Authenticated with $REGISTRY_SERVER"
+}
+
 # --- Download files -----------------------------------------------------------
 
 download_files() {
     info "Setting up in $INSTALL_DIR..."
-    mkdir -p "$INSTALL_DIR/monitoring/prometheus" \
-             "$INSTALL_DIR/monitoring/grafana/provisioning/datasources" \
-             "$INSTALL_DIR/monitoring/grafana/provisioning/dashboards" \
-             "$INSTALL_DIR/monitoring/grafana/dashboards"
+    mkdir -p "$INSTALL_DIR"
 
-    info "Downloading configuration files..."
-
-    curl -sSL "$BASE_URL/docker/docker-compose.client.yml" \
-        -o "$INSTALL_DIR/docker-compose.yml"
-
-    # Monitoring configs (optional — fail silently if not found)
-    curl -sSL "$BASE_URL/docker/monitoring/prometheus/prometheus.yml" \
-        -o "$INSTALL_DIR/monitoring/prometheus/prometheus.yml" 2>/dev/null || true
-
-    curl -sSL "$BASE_URL/docker/monitoring/grafana/provisioning/datasources/datasources.yml" \
-        -o "$INSTALL_DIR/monitoring/grafana/provisioning/datasources/datasources.yml" 2>/dev/null || true
-
-    curl -sSL "$BASE_URL/docker/monitoring/grafana/provisioning/dashboards/dashboards.yml" \
-        -o "$INSTALL_DIR/monitoring/grafana/provisioning/dashboards/dashboards.yml" 2>/dev/null || true
+    info "Downloading docker-compose.yml from Platform..."
+    curl -sSf "$PLATFORM_URL/api/install/compose" \
+        -o "$INSTALL_DIR/docker-compose.yml" || die "Failed to download docker-compose.yml"
 
     ok "Files downloaded"
 }
@@ -493,10 +513,6 @@ print_summary() {
     echo ""
     echo "  Next steps:"
 
-    if [[ -z "$PLATFORM_URL" ]]; then
-        echo "  - Connect to Platform: edit .env → set PLATFORM_URL and ENGINE_API_KEY"
-    fi
-
     if [[ -n "$DOMAIN" ]] && ! $USE_TRAEFIK; then
         echo "  - Configure your reverse proxy to route $DOMAIN → localhost:8080"
     fi
@@ -518,6 +534,8 @@ main() {
     detect_gpu
     generate_secrets
     build_profiles
+    fetch_config
+    docker_login
     download_files
     write_env
     start_services
