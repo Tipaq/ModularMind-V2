@@ -21,28 +21,31 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from src.auth.models import User, UserRole
 from src.groups.models import UserGroupMember  # noqa: F401 — register model for SQLAlchemy mapper
 from src.infra.database import Base, get_db, get_db_readonly
 
 # ---------------------------------------------------------------------------
-# Test database
+# Test database — NullPool avoids cross-event-loop connection reuse issues
 # ---------------------------------------------------------------------------
 
-_engine = create_async_engine(os.environ["DATABASE_URL"], echo=False)
+_engine = create_async_engine(os.environ["DATABASE_URL"], echo=False, poolclass=NullPool)
 _Session = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
 
+_tables_created = False
 
-@pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
+
+@pytest_asyncio.fixture(autouse=True)
 async def _schema():
-    """Create all tables once; drop after the session."""
-    async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Create tables (idempotent, fast when they already exist)."""
+    global _tables_created
+    if not _tables_created:
+        async with _engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        _tables_created = True
     yield
-    async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await _engine.dispose()
 
 
 # ---------------------------------------------------------------------------

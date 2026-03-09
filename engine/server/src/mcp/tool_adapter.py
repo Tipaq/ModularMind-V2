@@ -12,9 +12,9 @@ import logging
 import time
 from typing import Any
 
-from .sdk_client import MCPClientError
 from .registry import MCPRegistry
 from .schemas import MCPToolCallRequest, MCPToolDefinition
+from .sdk_client import MCPClientError
 
 logger = logging.getLogger(__name__)
 

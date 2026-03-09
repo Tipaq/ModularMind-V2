@@ -97,14 +97,14 @@ async def health_check() -> dict[str, Any]:
     try:
         from src.infra.redis_streams import RedisStreamBus
 
-        bus = RedisStreamBus(redis.Redis(connection_pool=get_redis_pool()))
+        bus = RedisStreamBus(redis.asyncio.Redis(connection_pool=get_redis_pool()))
         exec_info = await bus.stream_info("tasks:executions")
         worker_groups = exec_info.get("groups", [])
         components["worker"] = {
             "status": "ok" if worker_groups else "no_consumers",
             "consumer_groups": len(worker_groups),
         }
-    except (ConnectionError, OSError, redis.RedisError):
+    except (ConnectionError, OSError, redis.RedisError, Exception):
         logger.debug("Worker health check unavailable")
         components["worker"] = {"status": "unknown"}
 

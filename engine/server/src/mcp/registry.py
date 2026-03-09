@@ -11,8 +11,8 @@ import logging
 import time
 from pathlib import Path
 
-from .sdk_client import MCPClient, MCPClientError
 from .schemas import MCPServerConfig, MCPServerStatus, MCPToolDefinition
+from .sdk_client import MCPClient, MCPClientError
 
 logger = logging.getLogger(__name__)
 
