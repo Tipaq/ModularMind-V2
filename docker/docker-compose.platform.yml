@@ -27,6 +27,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_TRUST_HOST: "true"
       NEXTAUTH_URL: https://${PLATFORM_DOMAIN}
+      GHCR_READ_TOKEN: ${GHCR_READ_TOKEN:-}
     depends_on:
       platform-db: { condition: service_healthy }
       platform-migrate: { condition: service_completed_successfully }
