@@ -270,10 +270,10 @@ jobs:
 
             # --- Run engine DB migrations (Alembic) ---
             docker compose -f docker/docker-compose.client.yml \
-              run --rm engine alembic upgrade head
+              --env-file docker/.env run --rm engine alembic upgrade head
 
             # --- Deploy client stack ---
-            docker compose -f docker/docker-compose.client.yml up -d
+            docker compose -f docker/docker-compose.client.yml --env-file docker/.env up -d
 
             # --- Health check ---
             sleep 15
