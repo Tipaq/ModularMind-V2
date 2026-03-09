@@ -3,7 +3,7 @@
 # =============================================================================
 # In dev: run engine via `make dev-engine`, chat/ops via `make dev-chat`/`make dev-ops`
 
-name: mm-engine
+name: modularmind
 
 x-engine-env: &engine-env
   DATABASE_URL: postgresql+asyncpg://modularmind:modularmind@db:5432/modularmind

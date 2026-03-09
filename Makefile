@@ -2,7 +2,7 @@
 # ModularMind V2 — Development Commands
 # =============================================================================
 
-.PHONY: help setup dev dev-chat dev-ops dev-platform dev-engine dev-worker dev-gateway dev-infra dev-monitoring stop-monitoring build build-docker build-platform build-mcp-sidecars build-gateway build-sandbox deploy deploy-platform deploy-client stop-client test test-cov lint lint-fix migrate migrate-new db-push db-studio clean
+.PHONY: help setup dev dev-all dev-chat dev-ops dev-platform dev-engine dev-worker dev-gateway dev-infra dev-monitoring stop-monitoring build build-docker build-platform build-mcp-sidecars build-gateway build-sandbox deploy deploy-platform deploy-client stop-client test test-cov lint lint-fix migrate migrate-new db-push db-studio clean
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -21,6 +21,13 @@ setup: ## Initial project setup
 
 dev: ## Start all services (Docker)
 	docker compose -f docker/docker-compose.dev.yml up --build
+
+dev-all: ## Start everything (Docker backend + all frontends)
+	docker compose -f docker/docker-compose.dev.yml up -d --build && \
+	npx concurrently -n platform,ops,chat -c blue,magenta,cyan \
+		"pnpm dev:platform" \
+		"pnpm dev:ops" \
+		"pnpm dev:chat"
 
 dev-chat: ## Start Chat app (Vite dev server)
 	pnpm dev:chat
