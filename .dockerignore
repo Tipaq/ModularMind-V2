@@ -37,6 +37,7 @@ coverage
 
 # Docker configs (avoid recursive context)
 docker/docker-compose*.yml
+!docker/docker-compose.client.yml
 docker/.env*
 docker/proxy-examples
 
