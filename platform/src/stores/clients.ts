@@ -3,6 +3,17 @@
 import { create } from "zustand";
 import { paginatedFetch, mutatingFetch, fetchOne } from "./helpers";
 
+export interface DeploymentConfig {
+  proxyPort?: number;
+  domain?: string;
+  useGpu?: boolean;
+  useTraefik?: boolean;
+  ollamaEnabled?: boolean;
+  monitoringEnabled?: boolean;
+  grafanaPort?: number;
+  mmVersion?: string;
+}
+
 export interface PlatformEngine {
   id: string;
   name: string;
@@ -11,6 +22,7 @@ export interface PlatformEngine {
   status: string;
   lastSeen: string | null;
   version: number;
+  deploymentConfig: DeploymentConfig | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +55,7 @@ interface ClientsState {
   updateClient: (id: string, data: { name?: string }) => Promise<PlatformClient>;
   deleteClient: (id: string) => Promise<void>;
   addEngine: (clientId: string, data: { name: string; url?: string }) => Promise<PlatformEngine>;
+  updateEngine: (engineId: string, data: { deploymentConfig?: DeploymentConfig }) => Promise<PlatformEngine>;
   deleteEngine: (engineId: string) => Promise<void>;
   setSearch: (search: string) => void;
   clearError: () => void;
@@ -92,6 +105,15 @@ export const useClientsStore = create<ClientsState>((set, get) => ({
   addEngine: async (clientId, data) => {
     const engine = await mutatingFetch<PlatformEngine>(`/api/clients/${clientId}/engines`, "POST", "add engine", set, data);
     get().fetchClient(clientId);
+    return engine;
+  },
+
+  updateEngine: async (engineId, data) => {
+    const engine = await mutatingFetch<PlatformEngine>(`/api/engines/${engineId}`, "PATCH", "update engine", set, data);
+    const selected = get().selectedClient;
+    if (selected) {
+      get().fetchClient(selected.id);
+    }
     return engine;
   },
 

@@ -32,15 +32,29 @@ export async function GET(
     process.env.PLATFORM_URL ||
     "https://modularmind-platform.tipaq.dev";
 
+  // Merge deployment config defaults with stored config
+  const defaults = {
+    proxyPort: 8080,
+    domain: "",
+    useGpu: false,
+    useTraefik: false,
+    ollamaEnabled: true,
+    monitoringEnabled: false,
+    grafanaPort: 3333,
+    mmVersion: "latest",
+  };
+  const deployment = { ...defaults, ...(engine.deploymentConfig as Record<string, unknown> ?? {}) };
+
   return NextResponse.json({
     platformUrl,
     engineKey: key,
     clientName: engine.client?.name ?? engine.name,
-    version: "latest",
+    version: deployment.mmVersion as string,
     registry: {
       server: "ghcr.io",
       username: "modularmind",
       password: ghcrToken,
     },
+    deployment,
   });
 }

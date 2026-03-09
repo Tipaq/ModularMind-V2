@@ -38,6 +38,7 @@ export async function PATCH(
     data: {
       ...(data.name !== undefined && { name: data.name }),
       ...(data.url !== undefined && { url: data.url }),
+      ...(data.deploymentConfig !== undefined && { deploymentConfig: data.deploymentConfig }),
     },
   });
 

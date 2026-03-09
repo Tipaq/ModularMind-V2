@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Save,
   Server,
+  Settings,
   Trash2,
   X,
 } from "lucide-react";
@@ -22,12 +23,27 @@ import {
   DialogTitle,
   DialogDescription,
   Input,
+  Label,
+  Switch,
   relativeTime,
   DetailHeader,
 } from "@modularmind/ui";
 import Link from "next/link";
-import { useClientsStore } from "@/stores/clients";
+import { useClientsStore, type DeploymentConfig, type PlatformEngine } from "@/stores/clients";
 import { EngineStatusBadge as StatusBadge } from "@/components/EngineStatusBadge";
+
+// ─── Deployment Config defaults ─────────────────────────────────────────────
+
+const DEPLOYMENT_DEFAULTS: Required<DeploymentConfig> = {
+  proxyPort: 8080,
+  domain: "",
+  useGpu: false,
+  useTraefik: false,
+  ollamaEnabled: true,
+  monitoringEnabled: false,
+  grafanaPort: 3333,
+  mmVersion: "latest",
+};
 
 export default function ClientDetailPage() {
   const params = useParams<{ id: string }>();
@@ -41,6 +57,7 @@ export default function ClientDetailPage() {
     updateClient,
     deleteClient,
     addEngine,
+    updateEngine,
     deleteEngine,
   } = useClientsStore();
 
@@ -51,6 +68,11 @@ export default function ClientDetailPage() {
   const [showAddEngine, setShowAddEngine] = useState(false);
   const [engineForm, setEngineForm] = useState({ name: "", url: "http://localhost:8000" });
   const [addingEngine, setAddingEngine] = useState(false);
+
+  // Deployment config dialog
+  const [deployEngine, setDeployEngine] = useState<PlatformEngine | null>(null);
+  const [deployConfig, setDeployConfig] = useState<Required<DeploymentConfig>>(DEPLOYMENT_DEFAULTS);
+  const [savingDeploy, setSavingDeploy] = useState(false);
 
   useEffect(() => {
     fetchClient(clientId);
@@ -111,6 +133,27 @@ export default function ClientDetailPage() {
       await deleteEngine(engineId);
     } catch {
       // Error handled in store
+    }
+  };
+
+  const openDeployConfig = (engine: PlatformEngine) => {
+    setDeployEngine(engine);
+    setDeployConfig({
+      ...DEPLOYMENT_DEFAULTS,
+      ...(engine.deploymentConfig ?? {}),
+    } as Required<DeploymentConfig>);
+  };
+
+  const handleSaveDeploy = async () => {
+    if (!deployEngine) return;
+    setSavingDeploy(true);
+    try {
+      await updateEngine(deployEngine.id, { deploymentConfig: deployConfig });
+      setDeployEngine(null);
+    } catch {
+      // Error handled in store
+    } finally {
+      setSavingDeploy(false);
     }
   };
 
@@ -229,7 +272,7 @@ export default function ClientDetailPage() {
                     <th className="pb-2 pr-4 hidden md:table-cell">Last Seen</th>
                     <th className="pb-2 pr-4 hidden lg:table-cell">Version</th>
                     <th className="pb-2 pr-4 hidden lg:table-cell">API Key</th>
-                    <th className="pb-2 w-10"></th>
+                    <th className="pb-2 w-20"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -266,12 +309,21 @@ export default function ClientDetailPage() {
                         </div>
                       </td>
                       <td className="py-2.5">
-                        <button
-                          onClick={() => handleDeleteEngine(engine.id, engine.name)}
-                          className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openDeployConfig(engine)}
+                            className="rounded p-1 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                            title="Deployment config"
+                          >
+                            <Settings className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEngine(engine.id, engine.name)}
+                            className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -314,6 +366,121 @@ export default function ClientDetailPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deployment Config Dialog */}
+      <Dialog open={!!deployEngine} onOpenChange={() => setDeployEngine(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Deployment Configuration</DialogTitle>
+            <DialogDescription>
+              Configure infrastructure settings for {deployEngine?.name}. These will be used by the installer script.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            {/* Network */}
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Network
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Proxy Port"
+                  type="number"
+                  value={String(deployConfig.proxyPort)}
+                  onChange={(e) =>
+                    setDeployConfig({ ...deployConfig, proxyPort: parseInt(e.target.value) || 8080 })
+                  }
+                  placeholder="8080"
+                />
+                <Input
+                  label="Domain"
+                  value={deployConfig.domain}
+                  onChange={(e) => setDeployConfig({ ...deployConfig, domain: e.target.value })}
+                  placeholder="mm.example.com"
+                />
+              </div>
+            </div>
+
+            {/* Toggles */}
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Features
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">GPU Acceleration</Label>
+                    <p className="text-xs text-muted-foreground">Enable NVIDIA GPU for Ollama</p>
+                  </div>
+                  <Switch
+                    checked={deployConfig.useGpu}
+                    onCheckedChange={(v) => setDeployConfig({ ...deployConfig, useGpu: v })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">Traefik Integration</Label>
+                    <p className="text-xs text-muted-foreground">Auto TLS with Let&apos;s Encrypt</p>
+                  </div>
+                  <Switch
+                    checked={deployConfig.useTraefik}
+                    onCheckedChange={(v) => setDeployConfig({ ...deployConfig, useTraefik: v })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">Ollama</Label>
+                    <p className="text-xs text-muted-foreground">Local LLM runtime</p>
+                  </div>
+                  <Switch
+                    checked={deployConfig.ollamaEnabled}
+                    onCheckedChange={(v) => setDeployConfig({ ...deployConfig, ollamaEnabled: v })}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">Monitoring</Label>
+                    <p className="text-xs text-muted-foreground">Prometheus + Grafana</p>
+                  </div>
+                  <Switch
+                    checked={deployConfig.monitoringEnabled}
+                    onCheckedChange={(v) => setDeployConfig({ ...deployConfig, monitoringEnabled: v })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Advanced */}
+            {deployConfig.monitoringEnabled && (
+              <Input
+                label="Grafana Port"
+                type="number"
+                value={String(deployConfig.grafanaPort)}
+                onChange={(e) =>
+                  setDeployConfig({ ...deployConfig, grafanaPort: parseInt(e.target.value) || 3333 })
+                }
+                placeholder="3333"
+              />
+            )}
+
+            <Input
+              label="Image Version"
+              value={deployConfig.mmVersion}
+              onChange={(e) => setDeployConfig({ ...deployConfig, mmVersion: e.target.value })}
+              placeholder="latest"
+            />
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" onClick={() => setDeployEngine(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveDeploy} disabled={savingDeploy}>
+                {savingDeploy ? "Saving..." : "Save Configuration"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -124,6 +124,16 @@ export const createEngineSchema = z.object({
 export const updateEngineSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   url: z.url().optional(),
+  deploymentConfig: z.object({
+    proxyPort: z.number().int().min(1).max(65535).optional(),
+    domain: z.string().max(255).optional(),
+    useGpu: z.boolean().optional(),
+    useTraefik: z.boolean().optional(),
+    ollamaEnabled: z.boolean().optional(),
+    monitoringEnabled: z.boolean().optional(),
+    grafanaPort: z.number().int().min(1).max(65535).optional(),
+    mmVersion: z.string().max(50).optional(),
+  }).optional(),
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

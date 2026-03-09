@@ -314,14 +314,21 @@ generate_secrets() {
 
 build_profiles() {
     local profiles=()
+    local ollama_enabled="${DEPLOY_OLLAMA:-True}"
 
-    if $USE_GPU; then
-        profiles+=("gpu")
-    else
-        profiles+=("ollama")
+    if [[ "$ollama_enabled" == "True" ]]; then
+        if $USE_GPU; then
+            profiles+=("gpu")
+        else
+            profiles+=("ollama")
+        fi
     fi
 
     profiles+=("storage")
+
+    if [[ "${DEPLOY_MONITORING:-False}" == "True" ]]; then
+        profiles+=("monitoring")
+    fi
 
     COMPOSE_PROFILES=$(IFS=,; echo "${profiles[*]}")
     info "Active profiles: $COMPOSE_PROFILES"
@@ -341,11 +348,56 @@ fetch_config() {
     REGISTRY_USER=$(echo "$config_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['registry']['username'])")
     REGISTRY_PASS=$(echo "$config_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['registry']['password'])")
 
-    if [[ -n "$REGISTRY_PASS" ]]; then
-        ok "Config received from Platform"
-    else
+    if [[ -z "$REGISTRY_PASS" ]]; then
         die "Platform returned empty registry credentials. Contact your administrator."
     fi
+
+    # Parse deployment config (CLI flags override platform config)
+    local deploy
+    deploy=$(echo "$config_json" | python3 -c "import sys,json; d=json.load(sys.stdin).get('deployment',{}); print(json.dumps(d))" 2>/dev/null || echo "{}")
+
+    # Apply platform deployment config as defaults (CLI flags take precedence)
+    if [[ "$deploy" != "{}" ]]; then
+        info "Applying deployment config from Platform..."
+
+        # Version
+        local cfg_version
+        cfg_version=$(echo "$deploy" | python3 -c "import sys,json; print(json.load(sys.stdin).get('mmVersion','latest'))")
+        [[ "$MM_VERSION" == "latest" && "$cfg_version" != "latest" ]] && MM_VERSION="$cfg_version"
+
+        # GPU (only apply if not set via CLI)
+        if ! $USE_GPU; then
+            local cfg_gpu
+            cfg_gpu=$(echo "$deploy" | python3 -c "import sys,json; print(json.load(sys.stdin).get('useGpu',False))")
+            [[ "$cfg_gpu" == "True" ]] && USE_GPU=true
+        fi
+
+        # Traefik
+        if ! $USE_TRAEFIK; then
+            local cfg_traefik
+            cfg_traefik=$(echo "$deploy" | python3 -c "import sys,json; print(json.load(sys.stdin).get('useTraefik',False))")
+            [[ "$cfg_traefik" == "True" ]] && USE_TRAEFIK=true
+        fi
+
+        # Domain (only if not set via CLI)
+        if [[ -z "$DOMAIN" ]]; then
+            local cfg_domain
+            cfg_domain=$(echo "$deploy" | python3 -c "import sys,json; print(json.load(sys.stdin).get('domain',''))")
+            [[ -n "$cfg_domain" ]] && DOMAIN="$cfg_domain"
+        fi
+
+        # Proxy port
+        DEPLOY_PROXY_PORT=$(echo "$deploy" | python3 -c "import sys,json; print(json.load(sys.stdin).get('proxyPort',8080))")
+
+        # Monitoring
+        DEPLOY_MONITORING=$(echo "$deploy" | python3 -c "import sys,json; print(json.load(sys.stdin).get('monitoringEnabled',False))")
+        DEPLOY_GRAFANA_PORT=$(echo "$deploy" | python3 -c "import sys,json; print(json.load(sys.stdin).get('grafanaPort',3333))")
+
+        # Ollama enabled
+        DEPLOY_OLLAMA=$(echo "$deploy" | python3 -c "import sys,json; print(json.load(sys.stdin).get('ollamaEnabled',True))")
+    fi
+
+    ok "Config received from Platform"
 }
 
 docker_login() {
@@ -410,7 +462,7 @@ DOMAIN=$DOMAIN
 TRAEFIK_ENABLED=$traefik_enabled
 
 # Engine port (direct access)
-PROXY_PORT=8080
+PROXY_PORT=${DEPLOY_PROXY_PORT:-8080}
 
 # S3 (built-in MinIO)
 S3_ENDPOINT=http://minio:9000
@@ -426,7 +478,7 @@ GATEWAY_ENABLED=true
 
 # Monitoring
 GRAFANA_PASSWORD=$(openssl rand -base64 12 | tr -d '\n')
-GRAFANA_PORT=3333
+GRAFANA_PORT=${DEPLOY_GRAFANA_PORT:-3333}
 EOF
 
     ok ".env written"
