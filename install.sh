@@ -38,8 +38,7 @@ PLATFORM_URL=""
 DOMAIN=""
 INSTALL_DIR="./modularmind"
 USE_GPU=false
-NO_PROXY=false
-HEADLESS=false
+USE_TRAEFIK=false
 INTERACTIVE=true
 BASE_URL="https://raw.githubusercontent.com/tipaq/ModularMind-V2/main"
 
@@ -55,12 +54,11 @@ Usage:
 Options:
   --key KEY             Engine API key (from Platform admin)
   --platform-url URL    Platform URL for config sync
-  --domain DOMAIN       Domain name (for display/config hints)
+  --domain DOMAIN       Domain name (enables Traefik labels)
   --version VER         Image version tag (default: latest)
   --dir PATH            Install directory (default: ./modularmind)
   --gpu                 Enable NVIDIA GPU for Ollama
-  --no-proxy            Don't start built-in Nginx proxy
-  --headless            API-only mode (no Nginx, no SPAs)
+  --traefik             Enable Traefik integration (auto TLS)
   --non-interactive     Skip interactive prompts
   -h, --help            Show this help
 
@@ -71,8 +69,8 @@ Examples:
   # Full install with GPU + Platform sync
   install.sh --key mmk_abc123 --platform-url https://platform.example.com --gpu
 
-  # Headless API-only (for custom frontends)
-  install.sh --key mmk_abc123 --headless
+  # With custom domain + Traefik TLS
+  install.sh --key mmk_abc123 --domain mm.example.com --traefik
 EOF
 }
 
@@ -86,8 +84,7 @@ while [[ $# -gt 0 ]]; do
         --version)         MM_VERSION="$2"; shift 2 ;;
         --dir)             INSTALL_DIR="$2"; shift 2 ;;
         --gpu)             USE_GPU=true; shift ;;
-        --no-proxy)        NO_PROXY=true; shift ;;
-        --headless)        HEADLESS=true; NO_PROXY=true; shift ;;
+        --traefik)         USE_TRAEFIK=true; shift ;;
         --non-interactive) INTERACTIVE=false; shift ;;
         -h|--help)         usage; exit 0 ;;
         *)                 die "Unknown option: $1 (use --help for usage)" ;;
@@ -129,11 +126,9 @@ check_prerequisites() {
 # --- GPU detection & driver install -------------------------------------------
 
 has_nvidia_hardware() {
-    # Check for NVIDIA GPU via lspci (works even without drivers)
     if command -v lspci &>/dev/null; then
         lspci | grep -qi 'nvidia' && return 0
     fi
-    # Fallback: check /sys for NVIDIA vendor ID (10de)
     if [[ -d /sys/bus/pci/devices ]]; then
         grep -rql '0x10de' /sys/bus/pci/devices/*/vendor 2>/dev/null && return 0
     fi
@@ -157,7 +152,6 @@ install_nvidia_drivers() {
         return 1
     fi
 
-    # Install the recommended driver via ubuntu-drivers if available
     if command -v ubuntu-drivers &>/dev/null; then
         info "Using ubuntu-drivers to install recommended driver..."
         sudo ubuntu-drivers install || {
@@ -165,7 +159,6 @@ install_nvidia_drivers() {
             return 1
         }
     else
-        # Fallback: install latest available nvidia-driver package
         info "Installing nvidia-driver via apt..."
         sudo apt-get update -qq
         local driver_pkg
@@ -207,7 +200,6 @@ install_nvidia_container_toolkit() {
         return 1
     fi
 
-    # Add NVIDIA container toolkit repo
     curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
         | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg 2>/dev/null
 
@@ -221,7 +213,6 @@ install_nvidia_container_toolkit() {
         return 1
     }
 
-    # Configure Docker runtime
     sudo nvidia-ctk runtime configure --runtime=docker
     sudo systemctl restart docker
 
@@ -231,7 +222,6 @@ install_nvidia_container_toolkit() {
 detect_gpu() {
     if $USE_GPU; then
         info "GPU mode enabled via --gpu flag"
-        # Even with --gpu flag, ensure drivers + toolkit are present
         if ! has_nvidia_drivers; then
             warn "GPU flag set but NVIDIA drivers not found."
             if has_nvidia_hardware; then
@@ -257,13 +247,11 @@ detect_gpu() {
         return
     fi
 
-    # Step 1: Check for NVIDIA hardware
     if ! has_nvidia_hardware; then
         info "No NVIDIA GPU detected (Ollama will run in CPU mode)"
         return
     fi
 
-    # Step 2: Hardware found — check drivers
     if ! has_nvidia_drivers; then
         warn "NVIDIA GPU hardware detected but drivers are not installed."
         printf "  Install NVIDIA drivers automatically? [Y/n] "
@@ -279,12 +267,10 @@ detect_gpu() {
         fi
     fi
 
-    # Step 3: Drivers work — get GPU info
     local gpu_name
     gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
     info "NVIDIA GPU detected: $gpu_name"
 
-    # Step 4: Check container toolkit
     if ! has_nvidia_container_toolkit; then
         warn "NVIDIA Container Toolkit is not installed (required for Docker GPU access)."
         printf "  Install NVIDIA Container Toolkit automatically? [Y/n] "
@@ -300,7 +286,6 @@ detect_gpu() {
         fi
     fi
 
-    # Step 5: Everything ready — ask to enable
     printf "  Enable GPU acceleration for Ollama? [Y/n] "
     read -r answer
     if [[ "$answer" != "n" && "$answer" != "N" ]]; then
@@ -324,10 +309,6 @@ generate_secrets() {
 build_profiles() {
     local profiles=()
 
-    if ! $HEADLESS && ! $NO_PROXY; then
-        profiles+=("proxy")
-    fi
-
     if $USE_GPU; then
         profiles+=("gpu")
     else
@@ -344,7 +325,7 @@ build_profiles() {
 
 download_files() {
     info "Setting up in $INSTALL_DIR..."
-    mkdir -p "$INSTALL_DIR/nginx" "$INSTALL_DIR/monitoring/prometheus" \
+    mkdir -p "$INSTALL_DIR/monitoring/prometheus" \
              "$INSTALL_DIR/monitoring/grafana/provisioning/datasources" \
              "$INSTALL_DIR/monitoring/grafana/provisioning/dashboards" \
              "$INSTALL_DIR/monitoring/grafana/dashboards"
@@ -354,9 +335,7 @@ download_files() {
     curl -sSL "$BASE_URL/docker/docker-compose.client.yml" \
         -o "$INSTALL_DIR/docker-compose.yml"
 
-    curl -sSL "$BASE_URL/docker/nginx/client-standalone.conf" \
-        -o "$INSTALL_DIR/nginx/client-standalone.conf"
-
+    # Monitoring configs (optional — fail silently if not found)
     curl -sSL "$BASE_URL/docker/monitoring/prometheus/prometheus.yml" \
         -o "$INSTALL_DIR/monitoring/prometheus/prometheus.yml" 2>/dev/null || true
 
@@ -379,9 +358,9 @@ write_env() {
         ollama_url="http://ollama-gpu:11434"
     fi
 
-    local engine_port="127.0.0.1:8000:8000"
-    if $NO_PROXY || $HEADLESS; then
-        engine_port="0.0.0.0:8000:8000"
+    local traefik_enabled="false"
+    if $USE_TRAEFIK; then
+        traefik_enabled="true"
     fi
 
     cat > "$INSTALL_DIR/.env" <<EOF
@@ -406,9 +385,12 @@ SECRET_KEY=$SECRET_KEY
 PLATFORM_URL=$PLATFORM_URL
 ENGINE_API_KEY=$ENGINE_KEY
 
-# Proxy
+# Domain & TLS
+DOMAIN=$DOMAIN
+TRAEFIK_ENABLED=$traefik_enabled
+
+# Engine port (direct access)
 PROXY_PORT=8080
-ENGINE_PORT=$engine_port
 
 # S3 (built-in MinIO)
 S3_ENDPOINT=http://minio:9000
@@ -420,7 +402,7 @@ OLLAMA_BASE_URL=$ollama_url
 OLLAMA_KEEP_ALIVE=24h
 
 # Gateway
-GATEWAY_ENABLED=false
+GATEWAY_ENABLED=true
 
 # Monitoring
 GRAFANA_PASSWORD=$(openssl rand -base64 12 | tr -d '\n')
@@ -433,9 +415,16 @@ EOF
 # --- Pull & start -------------------------------------------------------------
 
 start_services() {
+    # Create proxy-network if it doesn't exist (required by docker-compose.client.yml)
+    docker network create proxy-network 2>/dev/null || true
+
     info "Pulling images (this may take a few minutes)..."
     (cd "$INSTALL_DIR" && docker compose pull)
     ok "Images pulled"
+
+    info "Running database migrations..."
+    (cd "$INSTALL_DIR" && docker compose run --rm engine alembic upgrade head)
+    ok "Migrations complete"
 
     info "Starting services..."
     (cd "$INSTALL_DIR" && docker compose up -d)
@@ -447,38 +436,35 @@ start_services() {
 wait_for_health() {
     info "Waiting for engine to be healthy..."
 
-    local max_wait=60
+    local max_wait=90
     local elapsed=0
-    local engine_url="http://127.0.0.1:8000/health"
-
-    if ! $NO_PROXY && ! $HEADLESS; then
-        engine_url="http://127.0.0.1:${PROXY_PORT:-8080}/health"
-    fi
+    local engine_url="http://127.0.0.1:8080/health"
 
     while [[ $elapsed -lt $max_wait ]]; do
         if curl -sf "$engine_url" &>/dev/null; then
             ok "Engine is healthy!"
             return 0
         fi
-        sleep 2
-        elapsed=$((elapsed + 2))
+        sleep 3
+        elapsed=$((elapsed + 3))
         printf "  Waiting... (%ds/%ds)\r" "$elapsed" "$max_wait"
     done
 
+    echo ""
     warn "Engine health check timed out after ${max_wait}s"
-    warn "Services may still be starting. Check with: docker compose -f $INSTALL_DIR/docker-compose.yml logs"
+    warn "Services may still be starting. Check with: cd $INSTALL_DIR && docker compose logs -f"
 }
 
 # --- Print summary ------------------------------------------------------------
 
 print_summary() {
-    local access_url="http://localhost:${PROXY_PORT:-8080}"
+    local access_url="http://localhost:8080"
     if [[ -n "$DOMAIN" ]]; then
-        access_url="http://$DOMAIN"
-    fi
-
-    if $HEADLESS; then
-        access_url="http://localhost:8000 (API only)"
+        if $USE_TRAEFIK; then
+            access_url="https://$DOMAIN"
+        else
+            access_url="http://$DOMAIN:8080"
+        fi
     fi
 
     echo ""
@@ -488,8 +474,11 @@ print_summary() {
     echo "============================================"
     printf "${NC}"
     echo ""
-    echo "  Access:     $access_url"
-    echo "  Engine API: http://localhost:8000/health"
+    echo "  Chat:       $access_url/"
+    echo "  Ops:        $access_url/ops/"
+    echo "  API Docs:   $access_url/api/docs"
+    echo "  Health:     $access_url/health"
+    echo ""
     echo "  Profiles:   $COMPOSE_PROFILES"
     echo "  Version:    $MM_VERSION"
     echo "  Directory:  $(cd "$INSTALL_DIR" && pwd)"
@@ -508,9 +497,8 @@ print_summary() {
         echo "  - Connect to Platform: edit .env → set PLATFORM_URL and ENGINE_API_KEY"
     fi
 
-    if [[ -n "$DOMAIN" ]]; then
-        echo "  - Configure your reverse proxy to route $DOMAIN → localhost:${PROXY_PORT:-8080}"
-        echo "  - See proxy examples: docker/proxy-examples/"
+    if [[ -n "$DOMAIN" ]] && ! $USE_TRAEFIK; then
+        echo "  - Configure your reverse proxy to route $DOMAIN → localhost:8080"
     fi
 
     echo "  - View logs:   cd $INSTALL_DIR && docker compose logs -f"
