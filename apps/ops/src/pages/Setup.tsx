@@ -136,6 +136,67 @@ async function apiFetch(path: string, options?: RequestInit) {
   });
 }
 
+// ─── Shared layout components ───────────────────────────────────────────────
+
+function ProgressBar({ stepIndex }: { stepIndex: number }) {
+  return (
+    <div className="flex items-center justify-center gap-1.5">
+      {STEPS.map((s, i) => (
+        <div
+          key={s}
+          className={`h-1.5 rounded-full transition-all duration-300 ${
+            i < stepIndex
+              ? "w-6 bg-primary"
+              : i === stepIndex
+                ? "w-8 bg-primary"
+                : "w-3 bg-muted"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SetupWrapper({
+  children,
+  wide,
+  step,
+  stepIndex,
+  error,
+}: {
+  children: React.ReactNode;
+  wide?: boolean;
+  step: Step;
+  stepIndex: number;
+  error: string;
+}) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className={`w-full ${wide ? "max-w-lg" : "max-w-sm"} space-y-6`}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/60">
+            <Bot className="h-7 w-7 text-white" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-xl font-bold">ModularMind</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{STEP_LABELS[step]}</p>
+          </div>
+        </div>
+
+        <ProgressBar stepIndex={stepIndex} />
+
+        {error && (
+          <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function Setup() {
@@ -318,67 +379,15 @@ export default function Setup() {
     goNext();
   };
 
-  // ── Shared: progress bar ──
-
   const configuredProviderCount = Object.keys(savedKeys).length;
 
-  const ProgressBar = () => (
-    <div className="flex items-center justify-center gap-1.5">
-      {STEPS.map((s, i) => (
-        <div
-          key={s}
-          className={`h-1.5 rounded-full transition-all duration-300 ${
-            i < stepIndex
-              ? "w-6 bg-primary"
-              : i === stepIndex
-                ? "w-8 bg-primary"
-                : "w-3 bg-muted"
-          }`}
-        />
-      ))}
-    </div>
-  );
-
-  // ── Shared: layout wrapper ──
-
-  const Wrapper = ({
-    children,
-    wide,
-  }: {
-    children: React.ReactNode;
-    wide?: boolean;
-  }) => (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className={`w-full ${wide ? "max-w-lg" : "max-w-sm"} space-y-6`}>
-        {/* Header */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/60">
-            <Bot className="h-7 w-7 text-white" />
-          </div>
-          <div className="text-center">
-            <h1 className="text-xl font-bold">ModularMind</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{STEP_LABELS[step]}</p>
-          </div>
-        </div>
-
-        <ProgressBar />
-
-        {error && (
-          <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-
-        {children}
-      </div>
-    </div>
-  );
+  const wrapperProps = { step, stepIndex, error };
 
   // ─── STEP: Welcome ────────────────────────────────────────────────────────
 
   if (step === "welcome") {
     return (
-      <Wrapper>
+      <SetupWrapper {...wrapperProps}>
         <div className="space-y-6">
           <div className="space-y-2 text-center">
             <h2 className="text-lg font-semibold">Welcome</h2>
@@ -407,7 +416,7 @@ export default function Setup() {
             <ArrowRight className="h-4 w-4" />
           </button>
         </div>
-      </Wrapper>
+      </SetupWrapper>
     );
   }
 
@@ -415,7 +424,7 @@ export default function Setup() {
 
   if (step === "account") {
     return (
-      <Wrapper>
+      <SetupWrapper {...wrapperProps}>
         <div className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="setup-email" className="text-sm font-medium">
@@ -519,7 +528,7 @@ export default function Setup() {
             </button>
           </div>
         </div>
-      </Wrapper>
+      </SetupWrapper>
     );
   }
 
@@ -527,7 +536,7 @@ export default function Setup() {
 
   if (step === "providers") {
     return (
-      <Wrapper wide>
+      <SetupWrapper {...wrapperProps} wide>
         <div className="space-y-4">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
@@ -660,7 +669,7 @@ export default function Setup() {
             </button>
           </div>
         </div>
-      </Wrapper>
+      </SetupWrapper>
     );
   }
 
@@ -668,7 +677,7 @@ export default function Setup() {
 
   if (step === "models") {
     return (
-      <Wrapper wide>
+      <SetupWrapper {...wrapperProps} wide>
         <div className="space-y-4">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
@@ -763,7 +772,7 @@ export default function Setup() {
             </button>
           </div>
         </div>
-      </Wrapper>
+      </SetupWrapper>
     );
   }
 
@@ -771,7 +780,7 @@ export default function Setup() {
 
   if (step === "embedding") {
     return (
-      <Wrapper>
+      <SetupWrapper {...wrapperProps}>
         <div className="space-y-4">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
@@ -846,14 +855,14 @@ export default function Setup() {
             </button>
           </div>
         </div>
-      </Wrapper>
+      </SetupWrapper>
     );
   }
 
   // ─── STEP: Complete ───────────────────────────────────────────────────────
 
   return (
-    <Wrapper>
+    <SetupWrapper {...wrapperProps}>
       <div className="space-y-6">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success/20">
           <Check className="h-8 w-8 text-success" />
@@ -912,6 +921,6 @@ export default function Setup() {
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>
-    </Wrapper>
+    </SetupWrapper>
   );
 }
