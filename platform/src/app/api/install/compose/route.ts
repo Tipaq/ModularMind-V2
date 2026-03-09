@@ -8,7 +8,9 @@ import { errorResponse } from "@/lib/api-utils";
  * Public endpoint (no auth needed — the compose file isn't secret).
  */
 export async function GET() {
-  const composePath = join(process.cwd(), "docker", "docker-compose.client.yml");
+  // In standalone mode, process.cwd() is /app/platform (due to server.js chdir).
+  // The compose file is at /app/docker/docker-compose.client.yml.
+  const composePath = join(process.cwd(), "..", "docker", "docker-compose.client.yml");
   let content: string;
   try {
     content = await readFile(composePath, "utf-8");

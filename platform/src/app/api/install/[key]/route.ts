@@ -25,8 +25,9 @@ export async function GET(
     return errorResponse("Invalid API key", 401);
   }
 
-  // Read install.sh from project root
-  const scriptPath = join(process.cwd(), "install.sh");
+  // In standalone mode, process.cwd() is /app/platform (due to server.js chdir).
+  // install.sh is at /app/install.sh.
+  const scriptPath = join(process.cwd(), "..", "install.sh");
   let script: string;
   try {
     script = await readFile(scriptPath, "utf-8");
