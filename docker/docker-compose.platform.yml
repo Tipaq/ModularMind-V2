@@ -65,3 +65,4 @@ networks:
 volumes:
   platform-postgres-data:
     name: modularmind_platform-postgres-data
+    external: true
