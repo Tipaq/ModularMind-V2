@@ -13,26 +13,26 @@
 name: modularmind-platform
 
 services:
-  platform-migrate:
+  migrate:
     image: ghcr.io/tipaq/modularmind-platform-migrate:${MM_VERSION:-latest}
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@platform-db:5432/modularmind_platform
+      DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@db:5432/modularmind_platform
     depends_on:
-      platform-db: { condition: service_healthy }
+      db: { condition: service_healthy }
     restart: "no"
 
-  platform:
+  web:
     image: ghcr.io/tipaq/modularmind-platform:${MM_VERSION:-latest}
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@platform-db:5432/modularmind_platform
+      DATABASE_URL: postgresql://${DB_USER:-modularmind}:${DB_PASSWORD}@db:5432/modularmind_platform
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_TRUST_HOST: "true"
       NEXTAUTH_URL: https://${PLATFORM_DOMAIN}
       GHCR_READ_TOKEN: ${GHCR_READ_TOKEN:-}
     depends_on:
-      platform-db: { condition: service_healthy }
-      platform-migrate: { condition: service_completed_successfully }
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     labels:
       traefik.enable: "true"
       traefik.http.routers.modularmind-platform.rule: Host(`${PLATFORM_DOMAIN}`)
@@ -43,7 +43,7 @@ services:
       - default
       - proxy-network
 
-  platform-db:
+  db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
