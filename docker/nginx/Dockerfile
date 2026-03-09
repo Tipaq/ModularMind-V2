@@ -19,6 +19,7 @@ RUN pnpm install --frozen-lockfile
 # --- Build Chat + Ops ---
 FROM deps AS builder
 WORKDIR /app
+COPY tsconfig.base.json ./
 COPY packages/ ./packages/
 COPY apps/chat/ ./apps/chat/
 COPY apps/ops/ ./apps/ops/
