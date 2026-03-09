@@ -1,8 +1,8 @@
 # =============================================================================
-# ModularMind V2 — Client Deployment (Engine + Worker + Nginx + Infra)
+# ModularMind V2 — Client Deployment (Engine + Worker + Gateway + Infra)
 # =============================================================================
-# 7 containers: nginx, engine, worker, db, redis, qdrant, ollama
-# Chat + Ops are static SPAs baked into the nginx image (no dedicated containers)
+# 7 containers: engine, worker, gateway, db, redis, qdrant, ollama
+# Chat + Ops are static SPAs baked into the engine image
 
 x-engine-env: &engine-env
   DATABASE_URL: postgresql+asyncpg://${DB_USER:-modularmind}:${DB_PASSWORD}@db:5432/modularmind
@@ -122,20 +122,7 @@ services:
       retries: 3
     # CRITICAL: single worker to maintain sandbox state consistency
     command: uvicorn src.main:app --host 0.0.0.0 --port 8200 --workers 1
-    profiles: [gateway]
 
-  # --- Nginx (Chat + Ops static baked in, proxies Engine API) ---
-  nginx:
-    build:
-      context: ..
-      dockerfile: docker/nginx/Dockerfile
-    image: modularmind/nginx:latest
-    volumes:
-      - ./nginx/client.conf:/etc/nginx/conf.d/default.conf:ro
-    ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
-    depends_on: [engine]
 
 volumes:
   postgres-data:

@@ -5,10 +5,8 @@
 # Clients put their own reverse proxy (Traefik, Caddy, etc.) in front.
 #
 # Profiles (set COMPOSE_PROFILES in .env):
-#   proxy      - Built-in Nginx on single port (default)
 #   ollama     - Ollama LLM runtime (CPU)
 #   gpu        - Ollama with NVIDIA GPU (use instead of 'ollama')
-#   gateway    - Secure tool execution sandbox
 #   storage    - Built-in MinIO S3
 #   monitoring - Prometheus + Grafana
 #
@@ -34,7 +32,7 @@ x-engine-env: &engine-env
   SECRET_KEY: ${SECRET_KEY}
   PLATFORM_URL: ${PLATFORM_URL:-}
   ENGINE_API_KEY: ${ENGINE_API_KEY:-}
-  GATEWAY_ENABLED: ${GATEWAY_ENABLED:-false}
+  GATEWAY_ENABLED: ${GATEWAY_ENABLED:-true}
   GATEWAY_URL: http://gateway:8200
 
 x-engine-depends: &engine-depends
@@ -85,7 +83,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - "${ENGINE_PORT:-127.0.0.1:8000:8000}"
+      - "${PROXY_PORT:-8080}:8000"
     environment:
       <<: *engine-env
     healthcheck:
@@ -106,20 +104,6 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-
-  # ==========================================================================
-  # PROFILE: proxy — Built-in Nginx on single port
-  # ==========================================================================
-
-  nginx:
-    <<: *common
-    image: ghcr.io/tipaq/modularmind-nginx:${MM_VERSION:-latest}
-    profiles: [proxy]
-    volumes:
-      - ./nginx/client-standalone.conf:/etc/nginx/conf.d/default.conf:ro
-    ports:
-      - "${PROXY_PORT:-8080}:8080"
-    depends_on: [engine]
 
   # ==========================================================================
   # PROFILE: ollama — LLM runtime (CPU)
@@ -153,13 +137,12 @@ services:
               capabilities: [gpu]
 
   # ==========================================================================
-  # PROFILE: gateway — Secure tool execution sandbox
+  # Gateway — Secure tool execution sandbox
   # ==========================================================================
 
   gateway:
     <<: *common
     image: ghcr.io/tipaq/modularmind-gateway:${MM_VERSION:-latest}
-    profiles: [gateway]
     depends_on: *engine-depends
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

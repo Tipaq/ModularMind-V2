@@ -176,9 +176,6 @@ jobs:
           - image: engine
             dockerfile: engine/server/Dockerfile
             context: .
-          - image: nginx
-            dockerfile: docker/nginx/Dockerfile
-            context: .
           - image: gateway
             dockerfile: gateway/Dockerfile
             context: .
@@ -258,7 +255,7 @@ jobs:
             # --- Login to GHCR & pull pre-built images ---
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-            for img in engine nginx gateway platform platform-migrate; do
+            for img in engine gateway platform platform-migrate; do
               docker pull "$REGISTRY/$OWNER/modularmind-$img:sha-$SHA"
               docker tag "$REGISTRY/$OWNER/modularmind-$img:sha-$SHA" \
                          "$REGISTRY/$OWNER/modularmind-$img:latest"

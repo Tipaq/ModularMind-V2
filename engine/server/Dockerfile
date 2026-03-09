@@ -1,7 +1,8 @@
 # =============================================================================
-# Engine Dockerfile — multi-stage build (shared + engine)
+# Engine Dockerfile — multi-stage build (shared + engine + SPAs)
 # =============================================================================
 # Used by both `engine` and `worker` services (same image, different CMD)
+# BuildKit parallelizes `deps` and `spa-builder` stages automatically.
 
 FROM python:3.12-slim AS base
 
@@ -11,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# --- Dependencies stage ---
+# --- Python dependencies ---
 FROM base AS deps
 
 # Install shared package first (rarely changes)
@@ -23,7 +24,23 @@ RUN pip install --no-cache-dir /tmp/shared/ && rm -rf /tmp/shared/
 COPY engine/server/pyproject.toml /tmp/engine/pyproject.toml
 RUN cd /tmp/engine && pip install --no-cache-dir . && rm -rf /tmp/engine/
 
-# --- Runtime stage ---
+# --- SPA build (Chat + Ops) ---
+FROM node:22-alpine AS spa-builder
+RUN corepack enable
+WORKDIR /app
+COPY pnpm-workspace.yaml pnpm-lock.yaml* package.json turbo.json ./
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/api-client/package.json ./packages/api-client/
+COPY apps/chat/package.json ./apps/chat/
+COPY apps/ops/package.json ./apps/ops/
+RUN pnpm install --frozen-lockfile
+COPY tsconfig.base.json ./
+COPY packages/ ./packages/
+COPY apps/chat/ ./apps/chat/
+COPY apps/ops/ ./apps/ops/
+RUN pnpm --filter @modularmind/chat build && pnpm --filter @modularmind/ops build
+
+# --- Runtime ---
 FROM base AS runtime
 
 # Copy installed packages from deps stage
@@ -35,6 +52,10 @@ COPY engine/server/src ./src
 COPY engine/server/seed ./seed
 COPY engine/server/alembic.ini ./alembic.ini
 COPY engine/server/alembic ./alembic
+
+# Copy SPA builds
+COPY --from=spa-builder /app/apps/chat/dist ./static/chat
+COPY --from=spa-builder /app/apps/ops/dist ./static/ops
 
 EXPOSE 8000
 

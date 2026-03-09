@@ -218,6 +218,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from starlette.middleware.gzip import GZipMiddleware
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 
 # Security headers middleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -227,21 +231,36 @@ from starlette.responses import Response
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers (CSP, X-Content-Type-Options, etc.) to all responses."""
 
+    _API_CSP = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'"
+    )
+    _SPA_CSP = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; "
+        "font-src 'self' https://rsms.me; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'"
+    )
+
     async def dispatch(self, request: Request, call_next) -> Response:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; "
-            "font-src 'self'; "
-            "connect-src 'self'; "
-            "frame-ancestors 'none'"
-        )
+        path = request.url.path
+        if path.startswith("/api/") or path.startswith("/health") or path.startswith("/metrics"):
+            response.headers["Content-Security-Policy"] = self._API_CSP
+        else:
+            response.headers["Content-Security-Policy"] = self._SPA_CSP
         return response
 
 
@@ -326,3 +345,22 @@ app.include_router(mcp_admin_router, prefix=f"{API_PREFIX}/internal")
 app.include_router(models_admin_router, prefix=API_PREFIX)
 app.include_router(admin_user_router, prefix=f"{API_PREFIX}/admin")
 app.include_router(conversations_admin_router, prefix=f"{API_PREFIX}/admin")
+
+# ---------------------------------------------------------------------------
+# Static SPA files (Chat + Ops) — only if built into image
+# ---------------------------------------------------------------------------
+
+from pathlib import Path
+
+_static_dir = Path(__file__).resolve().parent.parent / "static"
+
+if (_static_dir / "ops").exists():
+    from src.spa import SPAStaticFiles
+
+    app.mount("/ops", SPAStaticFiles(directory=str(_static_dir / "ops"), html=True), name="ops")
+
+if (_static_dir / "chat").exists():
+    from src.spa import SPAStaticFiles
+
+    # Chat is the catch-all (mounted at /) — all API/health/metrics routes above take priority
+    app.mount("/", SPAStaticFiles(directory=str(_static_dir / "chat"), html=True), name="chat")
