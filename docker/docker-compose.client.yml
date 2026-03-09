@@ -80,12 +80,21 @@ services:
     <<: *common
     image: ghcr.io/tipaq/modularmind-engine:${MM_VERSION:-latest}
     depends_on: *engine-depends
+    networks:
+      - default
+      - proxy-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "${PROXY_PORT:-8080}:8000"
     environment:
       <<: *engine-env
+    labels:
+      traefik.enable: "${TRAEFIK_ENABLED:-false}"
+      traefik.http.routers.modularmind.entrypoints: websecure
+      traefik.http.routers.modularmind.rule: "Host(`${DOMAIN:-localhost}`)"
+      traefik.http.routers.modularmind.tls.certresolver: letsencrypt
+      traefik.http.services.modularmind.loadbalancer.server.port: "8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 15s
@@ -210,6 +219,12 @@ services:
     ports:
       - "${GRAFANA_PORT:-3333}:3000"
     depends_on: [prometheus]
+
+networks:
+  default:
+  proxy-network:
+    external: true
+    name: ${PROXY_NETWORK:-proxy-network}
 
 volumes:
   postgres-data:
