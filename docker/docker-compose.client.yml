@@ -18,6 +18,8 @@
 #   curl -sSL https://get.modularmind.dev | bash -s -- --key mmk_xxx
 # =============================================================================
 
+name: modularmind
+
 x-common: &common
   restart: unless-stopped
 

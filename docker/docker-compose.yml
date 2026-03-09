@@ -4,6 +4,8 @@
 # 7 containers: engine, worker, gateway, db, redis, qdrant, ollama
 # Chat + Ops are static SPAs baked into the engine image
 
+name: modularmind
+
 x-engine-env: &engine-env
   DATABASE_URL: postgresql+asyncpg://${DB_USER:-modularmind}:${DB_PASSWORD}@db:5432/modularmind
   REDIS_URL: redis://redis:6379/0

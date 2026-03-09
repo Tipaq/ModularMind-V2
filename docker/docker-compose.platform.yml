@@ -10,6 +10,8 @@
 #   cp .env.platform.example .env.platform   # fill in values
 #   docker compose -f docker-compose.platform.yml --env-file .env.platform up -d
 
+name: modularmind
+
 services:
   platform-migrate:
     image: ghcr.io/tipaq/modularmind-platform-migrate:${MM_VERSION:-latest}
