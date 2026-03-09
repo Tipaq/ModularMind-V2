@@ -194,6 +194,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set lowercase owner
+        run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
@@ -211,8 +214,8 @@ jobs:
           target: ${{ matrix.target }}
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/modularmind-${{ matrix.image }}:latest
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/modularmind-${{ matrix.image }}:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/modularmind-${{ matrix.image }}:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/modularmind-${{ matrix.image }}:sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -226,11 +229,14 @@ jobs:
     environment: production
 
     steps:
+      - name: Set lowercase owner
+        run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         env:
           REGISTRY: ${{ env.REGISTRY }}
-          OWNER: ${{ github.repository_owner }}
+          OWNER: ${{ env.OWNER }}
           SHA: ${{ github.sha }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
