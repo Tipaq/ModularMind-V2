@@ -10,7 +10,7 @@
 #   cp .env.platform.example .env.platform   # fill in values
 #   docker compose -f docker-compose.platform.yml --env-file .env.platform up -d
 
-name: modularmind
+name: modularmind-platform
 
 services:
   platform-migrate:
@@ -64,3 +64,4 @@ networks:
 
 volumes:
   platform-postgres-data:
+    name: modularmind_platform-postgres-data
