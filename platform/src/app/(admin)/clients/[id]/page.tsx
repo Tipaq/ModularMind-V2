@@ -5,7 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import {
   Building2,
   Edit,
+  Globe,
   Key,
+  Layers,
+  Package,
   Plus,
   RefreshCw,
   Save,
@@ -24,6 +27,12 @@ import {
   DialogDescription,
   Input,
   Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Separator,
   Switch,
   relativeTime,
   DetailHeader,
@@ -45,6 +54,267 @@ const DEPLOYMENT_DEFAULTS: Required<DeploymentConfig> = {
   mmVersion: "latest",
 };
 
+const VERSION_OPTIONS = [
+  { value: "latest", label: "latest", description: "Latest stable build" },
+  { value: "dev", label: "dev", description: "Development build" },
+];
+
+// ─── Section header component ───────────────────────────────────────────────
+
+function SectionHeader({ icon: Icon, title }: { icon: typeof Server; title: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <Icon className="h-4 w-4 text-primary" />
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </h3>
+    </div>
+  );
+}
+
+// ─── Toggle row component ───────────────────────────────────────────────────
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onCheckedChange,
+  children,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (v: boolean) => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <Label className="text-sm font-medium">{label}</Label>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+        <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      </div>
+      {checked && children && (
+        <div className="ml-2 border-l-2 border-primary/20 pl-4 space-y-3">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Engine Config Dialog ───────────────────────────────────────────────────
+
+function EngineConfigDialog({
+  open,
+  onOpenChange,
+  editingEngine,
+  clientName,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  editingEngine: PlatformEngine | null;
+  clientName: string;
+  onSubmit: (form: { name: string; url: string }, config: Required<DeploymentConfig>) => Promise<void>;
+}) {
+  const isEditing = !!editingEngine;
+
+  const [engineForm, setEngineForm] = useState({ name: "", url: "http://localhost:8000" });
+  const [config, setConfig] = useState<Required<DeploymentConfig>>(DEPLOYMENT_DEFAULTS);
+  const [saving, setSaving] = useState(false);
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      if (editingEngine) {
+        setEngineForm({ name: editingEngine.name, url: editingEngine.url });
+        setConfig({
+          ...DEPLOYMENT_DEFAULTS,
+          ...(editingEngine.deploymentConfig ?? {}),
+        } as Required<DeploymentConfig>);
+      } else {
+        setEngineForm({ name: "", url: "http://localhost:8000" });
+        setConfig(DEPLOYMENT_DEFAULTS);
+      }
+    }
+  }, [open, editingEngine]);
+
+  const handleSubmit = async () => {
+    if (!engineForm.name.trim()) return;
+    setSaving(true);
+    try {
+      await onSubmit(engineForm, config);
+      onOpenChange(false);
+    } catch {
+      // Error handled in store
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateConfig = (patch: Partial<DeploymentConfig>) => {
+    setConfig((prev) => ({ ...prev, ...patch }));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{isEditing ? "Engine Configuration" : "Add Engine"}</DialogTitle>
+          <DialogDescription>
+            {isEditing
+              ? `Configure deployment settings for ${editingEngine.name}.`
+              : `Add a new engine to ${clientName} and configure its deployment.`}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-2">
+          {/* ── Engine Identity ── */}
+          <section>
+            <SectionHeader icon={Server} title="Engine" />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Name"
+                value={engineForm.name}
+                onChange={(e) => setEngineForm({ ...engineForm, name: e.target.value })}
+                placeholder={`${clientName} Engine`}
+                required
+              />
+              <Input
+                label="URL"
+                value={engineForm.url}
+                onChange={(e) => setEngineForm({ ...engineForm, url: e.target.value })}
+                placeholder="http://localhost:8000"
+              />
+            </div>
+          </section>
+
+          <Separator />
+
+          {/* ── Services ── */}
+          <section>
+            <SectionHeader icon={Layers} title="Services" />
+            <div className="space-y-3">
+              <ToggleRow
+                label="Ollama"
+                description="Local LLM runtime for running open-source models"
+                checked={config.ollamaEnabled}
+                onCheckedChange={(v) => updateConfig({ ollamaEnabled: v, ...(!v && { useGpu: false }) })}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-medium">GPU Acceleration</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Enable NVIDIA CUDA for faster inference
+                    </p>
+                  </div>
+                  <Switch
+                    checked={config.useGpu}
+                    onCheckedChange={(v) => updateConfig({ useGpu: v })}
+                  />
+                </div>
+              </ToggleRow>
+
+              <ToggleRow
+                label="Monitoring"
+                description="Prometheus metrics + Grafana dashboards"
+                checked={config.monitoringEnabled}
+                onCheckedChange={(v) => updateConfig({ monitoringEnabled: v })}
+              >
+                <Input
+                  label="Grafana Port"
+                  type="number"
+                  value={String(config.grafanaPort)}
+                  onChange={(e) => updateConfig({ grafanaPort: parseInt(e.target.value) || 3333 })}
+                  placeholder="3333"
+                />
+              </ToggleRow>
+            </div>
+          </section>
+
+          <Separator />
+
+          {/* ── Network ── */}
+          <section>
+            <SectionHeader icon={Globe} title="Network" />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Proxy Port"
+                type="number"
+                value={String(config.proxyPort)}
+                onChange={(e) => updateConfig({ proxyPort: parseInt(e.target.value) || 8080 })}
+                placeholder="8080"
+              />
+              <Input
+                label="Domain"
+                value={config.domain}
+                onChange={(e) => updateConfig({ domain: e.target.value })}
+                placeholder="mm.example.com"
+              />
+            </div>
+            <div className="mt-3 rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">Traefik</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Reverse proxy with automatic TLS via Let&apos;s Encrypt
+                  </p>
+                </div>
+                <Switch
+                  checked={config.useTraefik}
+                  onCheckedChange={(v) => updateConfig({ useTraefik: v })}
+                />
+              </div>
+            </div>
+          </section>
+
+          <Separator />
+
+          {/* ── Deployment ── */}
+          <section>
+            <SectionHeader icon={Package} title="Deployment" />
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Image Version</Label>
+              <Select
+                value={config.mmVersion}
+                onValueChange={(v) => updateConfig({ mmVersion: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select version" />
+                </SelectTrigger>
+                <SelectContent>
+                  {VERSION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm">{opt.label}</span>
+                        <span className="text-xs text-muted-foreground">— {opt.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </section>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-4 border-t">
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={saving || !engineForm.name.trim()}>
+            {saving ? "Saving..." : isEditing ? "Save Configuration" : "Create Engine"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main Page ──────────────────────────────────────────────────────────────
+
 export default function ClientDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -65,14 +335,10 @@ export default function ClientDetailPage() {
   const [editName, setEditName] = useState("");
   const [saving, setSaving] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
-  const [showAddEngine, setShowAddEngine] = useState(false);
-  const [engineForm, setEngineForm] = useState({ name: "", url: "http://localhost:8000" });
-  const [addingEngine, setAddingEngine] = useState(false);
 
-  // Deployment config dialog
-  const [deployEngine, setDeployEngine] = useState<PlatformEngine | null>(null);
-  const [deployConfig, setDeployConfig] = useState<Required<DeploymentConfig>>(DEPLOYMENT_DEFAULTS);
-  const [savingDeploy, setSavingDeploy] = useState(false);
+  // Unified engine dialog state
+  const [engineDialogOpen, setEngineDialogOpen] = useState(false);
+  const [editingEngine, setEditingEngine] = useState<PlatformEngine | null>(null);
 
   useEffect(() => {
     fetchClient(clientId);
@@ -109,21 +375,32 @@ export default function ClientDetailPage() {
     }
   };
 
-  const handleAddEngine = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!engineForm.name.trim()) return;
-    setAddingEngine(true);
-    try {
-      await addEngine(clientId, {
-        name: engineForm.name.trim(),
-        url: engineForm.url.trim() || undefined,
+  const openAddEngine = () => {
+    setEditingEngine(null);
+    setEngineDialogOpen(true);
+  };
+
+  const openEditEngine = (engine: PlatformEngine) => {
+    setEditingEngine(engine);
+    setEngineDialogOpen(true);
+  };
+
+  const handleEngineSubmit = async (
+    form: { name: string; url: string },
+    config: Required<DeploymentConfig>,
+  ) => {
+    if (editingEngine) {
+      await updateEngine(editingEngine.id, {
+        name: form.name,
+        url: form.url,
+        deploymentConfig: config,
       });
-      setShowAddEngine(false);
-      setEngineForm({ name: "", url: "http://localhost:8000" });
-    } catch {
-      // Error handled in store
-    } finally {
-      setAddingEngine(false);
+    } else {
+      await addEngine(clientId, {
+        name: form.name.trim(),
+        url: form.url.trim() || undefined,
+        deploymentConfig: config,
+      });
     }
   };
 
@@ -133,27 +410,6 @@ export default function ClientDetailPage() {
       await deleteEngine(engineId);
     } catch {
       // Error handled in store
-    }
-  };
-
-  const openDeployConfig = (engine: PlatformEngine) => {
-    setDeployEngine(engine);
-    setDeployConfig({
-      ...DEPLOYMENT_DEFAULTS,
-      ...(engine.deploymentConfig ?? {}),
-    } as Required<DeploymentConfig>);
-  };
-
-  const handleSaveDeploy = async () => {
-    if (!deployEngine) return;
-    setSavingDeploy(true);
-    try {
-      await updateEngine(deployEngine.id, { deploymentConfig: deployConfig });
-      setDeployEngine(null);
-    } catch {
-      // Error handled in store
-    } finally {
-      setSavingDeploy(false);
     }
   };
 
@@ -250,7 +506,7 @@ export default function ClientDetailPage() {
                 Engines
               </h2>
             </div>
-            <Button size="sm" variant="outline" onClick={() => setShowAddEngine(true)} className="gap-1">
+            <Button size="sm" variant="outline" onClick={openAddEngine} className="gap-1">
               <Plus className="h-3.5 w-3.5" />
               Add Engine
             </Button>
@@ -311,9 +567,9 @@ export default function ClientDetailPage() {
                       <td className="py-2.5">
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => openDeployConfig(engine)}
+                            onClick={() => openEditEngine(engine)}
                             className="rounded p-1 text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                            title="Deployment config"
+                            title="Edit configuration"
                           >
                             <Settings className="h-3.5 w-3.5" />
                           </button>
@@ -334,155 +590,14 @@ export default function ClientDetailPage() {
         </section>
       </div>
 
-      {/* Add Engine Dialog */}
-      <Dialog open={showAddEngine} onOpenChange={setShowAddEngine}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Engine</DialogTitle>
-            <DialogDescription>
-              Add a new engine to {client.name}. An API key will be auto-generated.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAddEngine} className="space-y-4 py-2">
-            <Input
-              label="Engine Name"
-              value={engineForm.name}
-              onChange={(e) => setEngineForm({ ...engineForm, name: e.target.value })}
-              placeholder={`${client.name} Engine`}
-              required
-            />
-            <Input
-              label="URL"
-              value={engineForm.url}
-              onChange={(e) => setEngineForm({ ...engineForm, url: e.target.value })}
-              placeholder="http://localhost:8000"
-            />
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="ghost" onClick={() => setShowAddEngine(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={addingEngine || !engineForm.name.trim()}>
-                {addingEngine ? "Adding..." : "Add Engine"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Deployment Config Dialog */}
-      <Dialog open={!!deployEngine} onOpenChange={() => setDeployEngine(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Deployment Configuration</DialogTitle>
-            <DialogDescription>
-              Configure infrastructure settings for {deployEngine?.name}. These will be used by the installer script.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-5 py-2">
-            {/* Network */}
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                Network
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="Proxy Port"
-                  type="number"
-                  value={String(deployConfig.proxyPort)}
-                  onChange={(e) =>
-                    setDeployConfig({ ...deployConfig, proxyPort: parseInt(e.target.value) || 8080 })
-                  }
-                  placeholder="8080"
-                />
-                <Input
-                  label="Domain"
-                  value={deployConfig.domain}
-                  onChange={(e) => setDeployConfig({ ...deployConfig, domain: e.target.value })}
-                  placeholder="mm.example.com"
-                />
-              </div>
-            </div>
-
-            {/* Toggles */}
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                Features
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-sm">GPU Acceleration</Label>
-                    <p className="text-xs text-muted-foreground">Enable NVIDIA GPU for Ollama</p>
-                  </div>
-                  <Switch
-                    checked={deployConfig.useGpu}
-                    onCheckedChange={(v) => setDeployConfig({ ...deployConfig, useGpu: v })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-sm">Traefik Integration</Label>
-                    <p className="text-xs text-muted-foreground">Auto TLS with Let&apos;s Encrypt</p>
-                  </div>
-                  <Switch
-                    checked={deployConfig.useTraefik}
-                    onCheckedChange={(v) => setDeployConfig({ ...deployConfig, useTraefik: v })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-sm">Ollama</Label>
-                    <p className="text-xs text-muted-foreground">Local LLM runtime</p>
-                  </div>
-                  <Switch
-                    checked={deployConfig.ollamaEnabled}
-                    onCheckedChange={(v) => setDeployConfig({ ...deployConfig, ollamaEnabled: v })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-sm">Monitoring</Label>
-                    <p className="text-xs text-muted-foreground">Prometheus + Grafana</p>
-                  </div>
-                  <Switch
-                    checked={deployConfig.monitoringEnabled}
-                    onCheckedChange={(v) => setDeployConfig({ ...deployConfig, monitoringEnabled: v })}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Advanced */}
-            {deployConfig.monitoringEnabled && (
-              <Input
-                label="Grafana Port"
-                type="number"
-                value={String(deployConfig.grafanaPort)}
-                onChange={(e) =>
-                  setDeployConfig({ ...deployConfig, grafanaPort: parseInt(e.target.value) || 3333 })
-                }
-                placeholder="3333"
-              />
-            )}
-
-            <Input
-              label="Image Version"
-              value={deployConfig.mmVersion}
-              onChange={(e) => setDeployConfig({ ...deployConfig, mmVersion: e.target.value })}
-              placeholder="latest"
-            />
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="ghost" onClick={() => setDeployEngine(null)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveDeploy} disabled={savingDeploy}>
-                {savingDeploy ? "Saving..." : "Save Configuration"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Unified Engine Config Dialog */}
+      <EngineConfigDialog
+        open={engineDialogOpen}
+        onOpenChange={setEngineDialogOpen}
+        editingEngine={editingEngine}
+        clientName={client.name}
+        onSubmit={handleEngineSubmit}
+      />
     </div>
   );
 }

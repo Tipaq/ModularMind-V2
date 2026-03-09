@@ -338,42 +338,57 @@ export default function Setup() {
 
   const handlePullModels = async () => {
     setLoading(true);
+    setError("");
     const toPull = [...selectedModels];
+    let dispatched = 0;
 
     for (const modelId of toPull) {
       setPullingModels((prev) => new Set(prev).add(modelId));
       try {
-        await apiFetch("/models/pull", {
+        const res = await apiFetch("/models/pull", {
           method: "POST",
           body: JSON.stringify({ model_name: modelId }),
         });
+        if (res.ok) dispatched++;
+        else setError(`Failed to queue ${modelId} for download`);
       } catch {
-        // Non-fatal: pull continues in background
+        setError(`Failed to queue ${modelId} for download`);
       }
     }
 
     setLoading(false);
-    goNext();
+    if (dispatched > 0) goNext();
   };
 
   // ── Step 5: Save embedding ──
 
   const handleSaveEmbedding = async () => {
     setLoading(true);
+    setError("");
     try {
       // Save embedding setting
-      await apiFetch("/internal/settings", {
+      const settingsRes = await apiFetch("/internal/settings", {
         method: "PATCH",
         body: JSON.stringify({ knowledge_embedding_model: embeddingModel }),
       });
+      if (!settingsRes.ok) {
+        setError("Failed to save embedding configuration");
+        setLoading(false);
+        return;
+      }
 
       // Also pull the embedding model
-      await apiFetch("/models/pull", {
+      const pullRes = await apiFetch("/models/pull", {
         method: "POST",
         body: JSON.stringify({ model_name: embeddingModel }),
       });
+      if (!pullRes.ok) {
+        setError("Embedding saved but failed to queue model download");
+      }
     } catch {
-      // Non-fatal
+      setError("Failed to save embedding configuration");
+      setLoading(false);
+      return;
     }
     setLoading(false);
     goNext();

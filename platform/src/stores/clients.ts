@@ -54,8 +54,8 @@ interface ClientsState {
   createClient: (data: { name: string; engineUrl?: string }) => Promise<PlatformClient>;
   updateClient: (id: string, data: { name?: string }) => Promise<PlatformClient>;
   deleteClient: (id: string) => Promise<void>;
-  addEngine: (clientId: string, data: { name: string; url?: string }) => Promise<PlatformEngine>;
-  updateEngine: (engineId: string, data: { deploymentConfig?: DeploymentConfig }) => Promise<PlatformEngine>;
+  addEngine: (clientId: string, data: { name: string; url?: string; deploymentConfig?: DeploymentConfig }) => Promise<PlatformEngine>;
+  updateEngine: (engineId: string, data: { name?: string; url?: string; deploymentConfig?: DeploymentConfig }) => Promise<PlatformEngine>;
   deleteEngine: (engineId: string) => Promise<void>;
   setSearch: (search: string) => void;
   clearError: () => void;

@@ -32,6 +32,7 @@ export async function POST(
       url: data.url ?? "http://localhost:8000",
       apiKey,
       clientId: id,
+      ...(data.deploymentConfig !== undefined && { deploymentConfig: data.deploymentConfig }),
     },
   });
 

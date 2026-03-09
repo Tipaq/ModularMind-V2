@@ -116,24 +116,27 @@ export const engineRegisterSchema = z.object({
   version: z.number().int().optional(),
 });
 
+export const deploymentConfigSchema = z.object({
+  proxyPort: z.number().int().min(1).max(65535).optional(),
+  domain: z.string().max(255).optional(),
+  useGpu: z.boolean().optional(),
+  useTraefik: z.boolean().optional(),
+  ollamaEnabled: z.boolean().optional(),
+  monitoringEnabled: z.boolean().optional(),
+  grafanaPort: z.number().int().min(1).max(65535).optional(),
+  mmVersion: z.string().max(50).optional(),
+});
+
 export const createEngineSchema = z.object({
   name: z.string().min(1).max(255),
   url: z.url().optional(),
+  deploymentConfig: deploymentConfigSchema.optional(),
 });
 
 export const updateEngineSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   url: z.url().optional(),
-  deploymentConfig: z.object({
-    proxyPort: z.number().int().min(1).max(65535).optional(),
-    domain: z.string().max(255).optional(),
-    useGpu: z.boolean().optional(),
-    useTraefik: z.boolean().optional(),
-    ollamaEnabled: z.boolean().optional(),
-    monitoringEnabled: z.boolean().optional(),
-    grafanaPort: z.number().int().min(1).max(65535).optional(),
-    mmVersion: z.string().max(50).optional(),
-  }).optional(),
+  deploymentConfig: deploymentConfigSchema.optional(),
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
