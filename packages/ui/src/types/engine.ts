@@ -11,6 +11,12 @@ export interface EngineAgent {
   model_id?: string;
   system_prompt?: string;
   version?: number;
+  memory_enabled?: boolean;
+  timeout_seconds?: number;
+  rag_enabled?: boolean;
+  rag_collection_ids?: string[];
+  rag_retrieval_count?: number;
+  rag_similarity_threshold?: number;
 }
 
 /** Graph configuration as returned by the engine API. */

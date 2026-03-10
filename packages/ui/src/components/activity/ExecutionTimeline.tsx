@@ -105,12 +105,14 @@ export function ExecutionTimeline(props: {
   const { activities, enabledAgents, isStreaming } = props;
   if (activities.length === 0 && !isStreaming) return null;
 
-  // Flatten activities with children for rendering
+  // Flatten activities with children for rendering.
+  // For agent_execution, skip LLM children (shown inside the agent card instead).
   const items: { activity: ExecutionActivity; depth: number }[] = [];
   for (const activity of activities) {
     items.push({ activity, depth: 0 });
     if (activity.children?.length) {
       for (const child of activity.children) {
+        if (activity.type === "agent_execution" && child.type === "llm") continue;
         items.push({ activity: child, depth: 1 });
       }
     }

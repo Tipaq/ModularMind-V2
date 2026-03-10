@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Bot, Cpu, FileText, Clock, Sparkles, Wrench, Brain, Zap } from "lucide-react";
+import { useMemo } from "react";
+import {
+  Bot, Clock, Sparkles, Wrench, Zap,
+  ArrowRight,
+} from "lucide-react";
 import { Badge } from "../badge";
 import { Separator } from "../separator";
 import {
@@ -12,6 +15,7 @@ import {
 } from "../dialog";
 import type { ExecutionActivity } from "../../types/chat";
 import type { EngineAgent } from "../../types/engine";
+import { formatModelName } from "../../lib/utils";
 import { DurationBadge, formatK } from "./shared";
 
 export interface AgentDetailModalProps {
@@ -21,22 +25,49 @@ export interface AgentDetailModalProps {
   activity: ExecutionActivity;
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+function ContentBlock({ children, maxH = "max-h-40" }: {
+  children: React.ReactNode;
+  maxH?: string;
+}) {
+  return (
+    <div className={`rounded-md border border-border/40 bg-muted/5 px-2.5 py-2 ${maxH} overflow-y-auto`}>
+      <p className="text-[11px] text-muted-foreground/70 whitespace-pre-wrap break-words leading-relaxed">
+        {children}
+      </p>
+    </div>
+  );
+}
+
 export function AgentDetailModal({
   open,
   onOpenChange,
   agent,
   activity,
 }: AgentDetailModalProps) {
-  const [promptExpanded, setPromptExpanded] = useState(false);
-  const [inputExpanded, setInputExpanded] = useState(false);
-  const [responseExpanded, setResponseExpanded] = useState(false);
   const name = agent?.name || activity.agentName || "Agent";
+  const modelId = activity.model || agent?.model_id;
 
   const children = activity.children || [];
   const toolChildren = children.filter((c) => c.type === "tool");
   const llmChildren = children.filter((c) => c.type === "llm");
+  const llmMessages = llmChildren[0]?.llmData?.messages || [];
 
-  // Aggregate token usage from LLM children
+  // Separate history messages from system/user prompt
+  const historyMessages = llmMessages.filter(
+    (m) => m.role === "system" && m.content.startsWith("### Recent Conversation History"),
+  );
+  const otherMessages = llmMessages.filter(
+    (m) => !(m.role === "system" && m.content.startsWith("### Recent Conversation History")),
+  );
+
   /* eslint-disable */
   const aggregatedTokens = useMemo(() => {
     let prompt = 0;
@@ -55,194 +86,157 @@ export function AgentDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[480px] max-h-[80vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
               <Bot className="h-4 w-4 text-primary" />
             </div>
-            <div className="flex-1 min-w-0">
-              <span className="truncate block">{name}</span>
-            </div>
-            <Badge
-              variant={
-                activity.status === "running"
-                  ? "default"
-                  : activity.status === "failed"
-                    ? "destructive"
-                    : "secondary"
-              }
-              className="text-[10px] shrink-0"
-            >
-              {activity.status}
-            </Badge>
+            <span className="truncate flex-1 min-w-0">{name}</span>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 mt-2">
-          {/* Execution stats */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {activity.durationMs != null && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" />
-                <DurationBadge durationMs={activity.durationMs} />
-              </div>
+        <div className="space-y-3 mt-1 min-w-0">
+          {/* ── Compact Config ── */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {modelId && (
+              <Badge variant="secondary" className="text-[10px] font-mono">
+                {formatModelName(modelId)}
+              </Badge>
             )}
-            {activity.isEphemeral && (
+            {agent?.version != null && (
               <Badge variant="outline" className="text-[10px]">
-                <Sparkles className="h-3 w-3 mr-1" />
-                ephemeral
+                v{agent.version}
               </Badge>
             )}
-            {activity.model && (
-              <Badge variant="secondary" className="text-[10px]">
-                <Cpu className="h-3 w-3 mr-1" />
-                {activity.model}
+            {agent?.timeout_seconds != null && (
+              <Badge variant="outline" className="text-[10px]">
+                {agent.timeout_seconds}s timeout
               </Badge>
             )}
-            {aggregatedTokens && (
-              <div className="flex items-center gap-1 text-[11px]">
-                <Zap className="h-3 w-3 text-warning" />
-                <span className="font-mono">{formatK(aggregatedTokens.total)}</span>
-                <span className="text-[10px] text-muted-foreground">tok</span>
-              </div>
+            {agent?.memory_enabled && (
+              <Badge variant="outline" className="text-[10px] text-success border-success/30">
+                Memory
+              </Badge>
+            )}
+            {agent?.rag_enabled && (
+              <Badge variant="outline" className="text-[10px] text-info border-info/30">
+                RAG
+              </Badge>
             )}
           </div>
 
-          {/* Agent description */}
+          {/* ── Description ── */}
           {agent?.description && (
-            <div className="space-y-1">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                Description
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {agent.description}
-              </p>
-            </div>
-          )}
-
-          {/* Model */}
-          {agent?.model_id && (
-            <div className="space-y-1">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                Model
-              </p>
-              <div className="flex items-center gap-1.5">
-                <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-sm font-mono">{agent.model_id}</span>
-              </div>
-            </div>
-          )}
-
-          {/* System prompt */}
-          {agent?.system_prompt && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                  System Prompt
+            <>
+              <Separator />
+              <div className="space-y-1.5">
+                <SectionLabel>Description</SectionLabel>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  {agent.description}
                 </p>
-                <button
-                  onClick={() => setPromptExpanded(!promptExpanded)}
-                  className="text-[10px] text-primary hover:underline"
-                >
-                  {promptExpanded ? "Collapse" : "Expand"}
-                </button>
               </div>
-              <pre
-                className={`text-[11px] bg-muted/50 rounded-md p-2.5 whitespace-pre-wrap break-words text-muted-foreground overflow-hidden ${
-                  promptExpanded ? "" : "line-clamp-4"
-                }`}
-              >
-                {agent.system_prompt}
-              </pre>
-            </div>
+            </>
           )}
 
-          {/* Version */}
-          {agent?.version != null && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <FileText className="h-3.5 w-3.5" />
-              <span>Version {agent.version}</span>
-            </div>
+          {/* ── System Prompt ── */}
+          {agent?.system_prompt && (
+            <>
+              <Separator />
+              <div className="space-y-1.5">
+                <SectionLabel>System Prompt</SectionLabel>
+                <ContentBlock maxH="max-h-32">{agent.system_prompt}</ContentBlock>
+              </div>
+            </>
           )}
 
+          {/* ── Conversation History ── */}
+          {(() => {
+            const msgs = historyMessages.length > 0
+              ? historyMessages
+              : otherMessages.filter((m) => m.role !== "user" || otherMessages.indexOf(m) !== otherMessages.length - 1);
+            if (msgs.length === 0) return null;
+            return (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <SectionLabel>History</SectionLabel>
+                  <ContentBlock>
+                    {msgs.map((m) => m.content).join("\n\n")}
+                  </ContentBlock>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* ── Execution ── */}
           <Separator />
-
-          {/* Execution I/O */}
           <div className="space-y-3">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Execution
-            </p>
+            <div className="flex items-center justify-between">
+              <SectionLabel>Execution</SectionLabel>
+              <div className="flex items-center gap-2">
+                {activity.durationMs != null && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    <DurationBadge durationMs={activity.durationMs} />
+                  </div>
+                )}
+                {activity.isEphemeral && (
+                  <Badge variant="outline" className="text-[10px]">
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    ephemeral
+                  </Badge>
+                )}
+                {aggregatedTokens && (
+                  <div className="flex items-center gap-1 text-[11px]">
+                    <Zap className="h-3 w-3 text-warning" />
+                    <span className="font-mono">{formatK(aggregatedTokens.total)}</span>
+                    <span className="text-[10px] text-muted-foreground">tok</span>
+                  </div>
+                )}
+              </div>
+            </div>
 
-            {/* Input prompt */}
+            {/* Input */}
             {activity.inputPrompt && (
               <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] text-muted-foreground">Input</p>
-                  {activity.inputPrompt.length > 200 && (
-                    <button
-                      onClick={() => setInputExpanded(!inputExpanded)}
-                      className="text-[10px] text-primary hover:underline"
-                    >
-                      {inputExpanded ? "Collapse" : "Expand"}
-                    </button>
-                  )}
+                <div className="flex items-center gap-1">
+                  <ArrowRight className="h-3 w-3 text-info shrink-0" />
+                  <span className="text-[10px] font-medium text-muted-foreground">Input</span>
                 </div>
-                <pre
-                  className={`text-[11px] bg-muted/50 rounded-md p-2.5 overflow-x-auto whitespace-pre-wrap break-words text-muted-foreground ${
-                    inputExpanded ? "" : "max-h-24 overflow-hidden"
-                  }`}
-                >
-                  {activity.inputPrompt}
-                </pre>
+                <ContentBlock maxH="max-h-24">{activity.inputPrompt}</ContentBlock>
               </div>
             )}
 
-            {/* Response */}
+            {/* Output */}
             {activity.agentResponse && (
               <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] text-muted-foreground">Response</p>
-                  {activity.agentResponse.length > 200 && (
-                    <button
-                      onClick={() => setResponseExpanded(!responseExpanded)}
-                      className="text-[10px] text-primary hover:underline"
-                    >
-                      {responseExpanded ? "Collapse" : "Expand"}
-                    </button>
-                  )}
+                <div className="flex items-center gap-1">
+                  <ArrowRight className="h-3 w-3 text-success shrink-0 rotate-180" />
+                  <span className="text-[10px] font-medium text-muted-foreground">Output</span>
                 </div>
-                <pre
-                  className={`text-[11px] bg-muted/50 rounded-md p-2.5 overflow-x-auto whitespace-pre-wrap break-words text-muted-foreground ${
-                    responseExpanded ? "" : "max-h-40 overflow-hidden"
-                  }`}
-                >
-                  {activity.agentResponse}
-                </pre>
+                <ContentBlock maxH="max-h-32">{activity.agentResponse}</ContentBlock>
               </div>
             )}
 
             {/* Token breakdown */}
             {aggregatedTokens && (
-              <div className="space-y-1">
-                <p className="text-[10px] text-muted-foreground">Token Usage</p>
-                <div className="flex items-center gap-2 text-[11px] font-mono">
-                  <span>{formatK(aggregatedTokens.prompt)}</span>
-                  <span className="text-muted-foreground">\u2192</span>
-                  <span>{formatK(aggregatedTokens.completion)}</span>
-                  <span className="text-muted-foreground">=</span>
-                  <span className="font-medium">{formatK(aggregatedTokens.total)}</span>
-                  <span className="text-[10px] text-muted-foreground">tokens</span>
-                </div>
+              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+                <span>{formatK(aggregatedTokens.prompt)} in</span>
+                <span>{"\u2192"}</span>
+                <span>{formatK(aggregatedTokens.completion)} out</span>
+                <span>=</span>
+                <span className="font-medium text-foreground">{formatK(aggregatedTokens.total)}</span>
+                <span className="text-[10px]">tokens</span>
               </div>
             )}
 
             {/* Tools used */}
             {toolChildren.length > 0 && (
               <div className="space-y-1">
-                <p className="text-[10px] text-muted-foreground">
-                  Tools Used ({toolChildren.length})
-                </p>
+                <span className="text-[10px] text-muted-foreground">
+                  Tools ({toolChildren.length})
+                </span>
                 <div className="flex flex-wrap gap-1">
                   {toolChildren.map((tool) => (
                     <Badge key={tool.id} variant="outline" className="text-[10px] font-mono">
@@ -257,42 +251,16 @@ export function AgentDetailModal({
               </div>
             )}
 
-            {/* LLM calls */}
-            {llmChildren.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-[10px] text-muted-foreground">
-                  LLM Calls ({llmChildren.length})
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {llmChildren.map((llm) => (
-                    <Badge key={llm.id} variant="outline" className="text-[10px] font-mono">
-                      <Brain className="h-2.5 w-2.5 mr-1" />
-                      {llm.model || llm.llmData?.model || "LLM"}
-                      {llm.llmData?.tokens && (
-                        <span className="text-muted-foreground ml-1">
-                          {formatK(llm.llmData.tokens.total)} tok
-                        </span>
-                      )}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Legacy: Output preview (for non-agent_execution types) */}
+            {/* Legacy fallbacks */}
             {!activity.inputPrompt && !activity.agentResponse && activity.preview && (
               <div className="space-y-1">
-                <p className="text-[10px] text-muted-foreground">Output</p>
-                <pre className="text-[11px] bg-muted/50 rounded-md p-2.5 overflow-x-auto max-h-40 whitespace-pre-wrap break-words text-muted-foreground">
-                  {activity.preview}
-                </pre>
+                <span className="text-[10px] text-muted-foreground">Output</span>
+                <ContentBlock>{activity.preview}</ContentBlock>
               </div>
             )}
-
-            {/* Legacy: Tools available (for non-agent_execution types) */}
             {activity.tools && activity.tools.length > 0 && toolChildren.length === 0 && (
               <div className="space-y-1">
-                <p className="text-[10px] text-muted-foreground">Tools available</p>
+                <span className="text-[10px] text-muted-foreground">Tools available</span>
                 <div className="flex flex-wrap gap-1">
                   {activity.tools.map((tool) => (
                     <Badge key={tool} variant="outline" className="text-[10px] font-mono">

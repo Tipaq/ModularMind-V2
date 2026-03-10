@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Loader2,
   CheckCircle2,
@@ -63,4 +64,63 @@ export function formatK(n: number): string {
   if (n >= 10_000) return `${Math.round(n / 1000)}K`;
   if (n >= 1_000) return `${(n / 1000).toFixed(1)}K`;
   return String(n);
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  system: "system",
+  human: "user",
+  ai: "assistant",
+};
+
+export function MessageItem({ msg }: { msg: { role: string; content: string } }) {
+  const [open, setOpen] = useState(false);
+  const label = ROLE_LABEL[msg.role] || msg.role;
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full text-left flex items-center gap-1 rounded px-1 -mx-1 hover:bg-muted/30 transition-colors"
+      >
+        <span className="text-[10px] font-mono text-muted-foreground/60 uppercase shrink-0">
+          {label}
+        </span>
+        {!open && (
+          <span className="text-[11px] text-muted-foreground truncate min-w-0 flex-1">
+            {msg.content}
+          </span>
+        )}
+        {open && <span className="flex-1" />}
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 shrink-0 text-muted-foreground/30 transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-0.5 mb-1 max-h-48 overflow-y-auto rounded bg-muted/20 px-2 py-1.5">
+          <p className="text-[11px] text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">
+            {msg.content}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function MessagesContext({ messages }: { messages: { role: string; content: string }[] }) {
+  if (!messages.length) return null;
+  return (
+    <div className="space-y-1.5">
+      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+        Context ({messages.length})
+      </span>
+      <div className="space-y-1">
+        {messages.map((msg, i) => (
+          <MessageItem key={i} msg={msg} />
+        ))}
+      </div>
+    </div>
+  );
 }
