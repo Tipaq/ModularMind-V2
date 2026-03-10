@@ -12,7 +12,7 @@ export { useExecutionActivities } from "./hooks/useExecutionActivities";
 export { extractResponse } from "./hooks/useChatUtils";
 
 // Utilities
-export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTime, stripProvider, isLocalModel, formatDurationMs, formatCost, toggleArrayItem } from "./lib/utils";
+export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTime, stripProvider, isLocalModel, formatModelName, formatDurationMs, formatCost, toggleArrayItem } from "./lib/utils";
 
 // Mappers (snake_case API → camelCase UI)
 export { mapKnowledgeData } from "./lib/mappers";

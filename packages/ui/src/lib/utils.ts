@@ -68,6 +68,64 @@ export function isLocalModel(modelId: string): boolean {
   return modelId.startsWith('ollama:');
 }
 
+/**
+ * Format a raw model ID into a clean display name.
+ * e.g. "ollama:qwen3:8b" → "Qwen3 8B"
+ *      "openai:gpt-4o" → "GPT-4o"
+ *      "anthropic:claude-sonnet-4-20250514" → "Claude Sonnet 4"
+ */
+export function formatModelName(modelId: string): string {
+  // Strip provider prefix
+  let name = stripProvider(modelId);
+
+  // Split size tag (e.g. "qwen3:8b" → name="qwen3", tag="8b")
+  const colonIdx = name.indexOf(':');
+  let tag = '';
+  if (colonIdx !== -1) {
+    tag = name.slice(colonIdx + 1);
+    name = name.slice(0, colonIdx);
+  }
+
+  // Remove date suffixes like -20250514
+  name = name.replace(/-\d{8}$/, '');
+
+  // Remove trailing version-like suffixes (e.g. -v2, -v1.5) but keep them for short names
+  const versionMatch = name.match(/-v(\d+(?:\.\d+)?)$/);
+  let version = '';
+  if (versionMatch) {
+    version = ` v${versionMatch[1]}`;
+    name = name.slice(0, -versionMatch[0].length);
+  }
+
+  // Capitalize segments separated by hyphens
+  name = name
+    .split('-')
+    .map((seg) => {
+      // Keep known uppercase patterns
+      if (/^gpt$/i.test(seg)) return 'GPT';
+      if (/^llama$/i.test(seg)) return 'Llama';
+      if (/^claude$/i.test(seg)) return 'Claude';
+      if (/^gemma$/i.test(seg)) return 'Gemma';
+      if (/^gemini$/i.test(seg)) return 'Gemini';
+      if (/^phi$/i.test(seg)) return 'Phi';
+      if (/^command$/i.test(seg)) return 'Command';
+      if (/^mistral$/i.test(seg)) return 'Mistral';
+      if (/^mixtral$/i.test(seg)) return 'Mixtral';
+      if (/^deepseek$/i.test(seg)) return 'DeepSeek';
+      if (/^qwen\d*/i.test(seg)) return seg.charAt(0).toUpperCase() + seg.slice(1);
+      if (/^o\d+$/i.test(seg)) return seg; // o1, o3, etc.
+      // Capitalize first letter
+      return seg.charAt(0).toUpperCase() + seg.slice(1);
+    })
+    .join(' ');
+
+  // Append tag (size) in uppercase
+  if (tag) name += ` ${tag.toUpperCase()}`;
+  if (version) name += version;
+
+  return name;
+}
+
 export function formatDurationMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
