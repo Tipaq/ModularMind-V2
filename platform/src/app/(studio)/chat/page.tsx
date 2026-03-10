@@ -187,6 +187,11 @@ export default function ChatPage() {
         body.supervisor_mode = false;
       }
 
+      // Raw LLM mode — no agent, no supervisor, just model_id
+      if (!body.agent_id && !body.supervisor_mode && effectiveChatConfig.modelId) {
+        body.config = { model_id: effectiveChatConfig.modelId };
+      }
+
       const res = await fetch("/api/chat/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -203,7 +208,7 @@ export default function ChatPage() {
       console.error("[Chat]", err);
       return null;
     }
-  }, [enabledAgentIds, enabledGraphIds, effectiveChatConfig.supervisorMode, setInitialMessages]);
+  }, [enabledAgentIds, enabledGraphIds, effectiveChatConfig.supervisorMode, effectiveChatConfig.modelId, setInitialMessages]);
 
   const handleCreateConversation = useCallback(async () => {
     await createConversation();
@@ -328,7 +333,7 @@ export default function ChatPage() {
     }).catch((e) => console.warn("[Chat] pre-send config persist failed", e));
 
     const files = attachedFiles.length > 0 ? attachedFiles.map((af) => af.file) : undefined;
-    sendMessage(inputValue, convId ?? undefined, files);
+    sendMessage(inputValue, convId ?? undefined, files, effectiveChatConfig.supervisorMode);
     setInputValue("");
     setAttachedFiles([]);
   }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, effectiveChatConfig, sendMessage, conversations, messages.length]);
@@ -424,7 +429,7 @@ export default function ChatPage() {
           liveActivities={activities}
           isStreaming={isStreaming}
           isLiveSelected={isLiveSelected}
-          config={chatConfig}
+          config={effectiveChatConfig}
           onConfigChange={handleConfigChange}
           models={models}
           supervisorLayers={supervisorLayers}

@@ -117,7 +117,7 @@ export function useChat(conversationId: string | null) {
   );
 
   const sendMessage = useCallback(
-    async (content: string, overrideConversationId?: string, files?: File[]) => {
+    async (content: string, overrideConversationId?: string, files?: File[], supervisorMode?: boolean) => {
       const targetConvId = overrideConversationId || conversationId;
       if (!targetConvId || isStreaming) return;
 
@@ -164,7 +164,9 @@ export function useChat(conversationId: string | null) {
         { id: assistantId, role: "assistant" as const, content: "", created_at: new Date().toISOString(), metadata: {} },
       ]);
 
-      handleTraceEvent({ type: "trace:supervisor_routing" });
+      if (supervisorMode) {
+        handleTraceEvent({ type: "trace:supervisor_routing" });
+      }
 
       const sendStartMs = Date.now();
 

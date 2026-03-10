@@ -7,7 +7,7 @@ export async function GET(): Promise<NextResponse> {
   const { session, error } = await requireAuth();
   if (error) return error;
 
-  const res = await engineFetch("/api/v1/models", {}, session.user?.email ?? undefined);
+  const res = await engineFetch("/api/v1/models?available=true", {}, session.user?.email ?? undefined);
   const data = await res.json().catch(() => []);
 
   return NextResponse.json(data, { status: res.status });
