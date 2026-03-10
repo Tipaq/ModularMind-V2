@@ -212,11 +212,12 @@ async def create_conversation(
     db: DbSession,
 ) -> ConversationResponse:
     """Create a new conversation."""
-    # Require at least one of agent_id or supervisor_mode
-    if not data.agent_id and not data.supervisor_mode:
+    # Require agent_id, supervisor_mode, or a model_id in config (raw LLM mode)
+    has_model = bool((data.config or {}).get("model_id"))
+    if not data.agent_id and not data.supervisor_mode and not has_model:
         raise HTTPException(
             status_code=400,
-            detail="Either agent_id or supervisor_mode is required",
+            detail="Either agent_id, supervisor_mode, or model_id in config is required",
         )
 
     service = ConversationService(db)
@@ -802,14 +803,22 @@ async def _handle_direct_execution(
         input_data={"mcp_server_ids": _mcp_ids} if _mcp_ids else None,
     )
 
-    if not conversation.agent_id:
-        raise ValueError("Conversation has no agent configured")
-
-    execution = await exec_service.start_agent_execution(
-        agent_id=conversation.agent_id,
-        data=execution_data,
-        user_id=user.id,
-    )
+    if conversation.agent_id:
+        execution = await exec_service.start_agent_execution(
+            agent_id=conversation.agent_id,
+            data=execution_data,
+            user_id=user.id,
+        )
+    else:
+        # Raw LLM mode — no agent, use model_id from conversation config
+        model_id = conv_config.get("model_id")
+        if not model_id:
+            raise ValueError("No agent and no model_id configured")
+        execution = await exec_service.start_raw_execution(
+            model_id=model_id,
+            data=execution_data,
+            user_id=user.id,
+        )
     await db.commit()
 
     acquired = await fair_scheduler.acquire(user.id, execution.id)

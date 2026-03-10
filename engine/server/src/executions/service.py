@@ -98,6 +98,35 @@ class ExecutionService:
         logger.info("Created execution %s for agent %s", execution.id, agent_id)
         return execution
 
+    async def start_raw_execution(
+        self,
+        model_id: str,
+        data: ExecutionCreate,
+        user_id: str,
+    ) -> ExecutionRun:
+        """Start a raw LLM execution (no agent, direct model call)."""
+        execution = ExecutionRun(
+            id=str(uuid4()),
+            execution_type=ExecutionType.AGENT,
+            agent_id=None,
+            session_id=data.session_id,
+            user_id=user_id,
+            status=ExecutionStatus.PENDING,
+            input_prompt=data.prompt,
+            input_data={
+                **(data.input_data or {}),
+                "_raw_model_id": model_id,
+            },
+            model=model_id,
+        )
+
+        self.db.add(execution)
+        await self.db.flush()
+        await self.db.refresh(execution)
+
+        logger.info("Created raw LLM execution %s with model %s", execution.id, model_id)
+        return execution
+
     async def start_graph_execution(
         self,
         graph_id: str,
@@ -450,9 +479,27 @@ class ExecutionService:
         execution: ExecutionRun,
     ) -> AsyncIterator[dict[str, Any]]:
         """Execute a single agent (inline mode)."""
-        agent = await self.config_provider.get_agent_config(execution.agent_id)
-        if not agent:
-            raise ValueError(f"Agent not found: {execution.agent_id}")
+        input_data = dict(execution.input_data or {})
+        raw_model_id = input_data.get("_raw_model_id")
+
+        if raw_model_id:
+            # Raw LLM mode — synthetic agent, no DB lookup
+            from src.graph_engine.interfaces import AgentConfig, RAGConfig
+
+            agent = AgentConfig(
+                id="__raw__",
+                name="Raw LLM",
+                model_id=raw_model_id,
+                system_prompt="",
+                memory_enabled=False,
+                rag_config=RAGConfig(enabled=False),
+                capabilities=[],
+                gateway_permissions=None,
+            )
+        else:
+            agent = await self.config_provider.get_agent_config(execution.agent_id)
+            if not agent:
+                raise ValueError(f"Agent not found: {execution.agent_id}")
 
         # Validate model is in the catalog (soft check — log warning but allow)
         models = await self.config_provider.list_models()
@@ -589,6 +636,8 @@ class ExecutionService:
         self.db.add(step)
         await self.db.flush()
 
+        is_raw = agent.id == "__raw__"
+
         yield {
             "type": "step",
             "event": "step_started",
@@ -602,6 +651,7 @@ class ExecutionService:
             "agent_name": agent.name,
             "input_prompt": execution.input_prompt,
             "model": agent.model_id,
+            "raw_mode": is_raw,
         }
 
         # Set up trace handler to capture LLM/tool/chain events during execution.
@@ -686,6 +736,7 @@ class ExecutionService:
             "duration_ms": step.duration_ms,
             "agent_name": agent.name,
             "agent_response": response[:OUTPUT_TRUNCATION_LENGTH],
+            "raw_mode": is_raw,
         }
 
     async def execute_graph(
