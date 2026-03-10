@@ -57,7 +57,13 @@ COPY engine/server/alembic ./alembic
 COPY --from=spa-builder /app/apps/chat/dist ./static/chat
 COPY --from=spa-builder /app/apps/ops/dist ./static/ops
 
+# Entrypoint: run migrations before starting
+COPY engine/server/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
 EXPOSE 8000
+
+ENTRYPOINT ["./entrypoint.sh"]
 
 # Default: run engine server (worker overrides via docker-compose command)
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
