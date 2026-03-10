@@ -124,8 +124,11 @@ def _decode_progress(raw: dict) -> tuple[str | None, int | None, str | None]:
 
 
 @usage_router.get("")
-async def list_models(user: CurrentUser) -> list[ModelResponse]:
-    """List all models in the runtime catalog (legacy format)."""
+async def list_models(
+    user: CurrentUser,
+    available: bool = Query(False, description="Only return ready/available models"),
+) -> list[ModelResponse]:
+    """List models in the runtime catalog. Use ?available=true for ready models only."""
     svc = get_model_service()
     models = svc.list_models()
     ollama_details = await svc.get_ollama_model_details()
@@ -158,6 +161,9 @@ async def list_models(user: CurrentUser) -> list[ModelResponse]:
                 pull_progress = pull_progress or None
         elif provider in configured_providers:
             is_available = configured_providers[provider]
+
+        if available and not is_available:
+            continue
 
         results.append(
             ModelResponse(
