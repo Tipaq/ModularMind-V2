@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "@modularmind/ui";
 import {
   Bot,
   Check,
@@ -274,19 +275,10 @@ export default function Setup() {
         return;
       }
 
-      // 2. Auto-login
-      const form = new URLSearchParams();
-      form.append("username", email);
-      form.append("password", password);
+      // 2. Auto-login (via auth store so session is persisted client-side)
+      const loggedIn = await useAuthStore.getState().login(email, password);
 
-      const loginRes = await fetch("/api/v1/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: form.toString(),
-        credentials: "include",
-      });
-
-      if (!loginRes.ok) {
+      if (!loggedIn) {
         // Account created but login failed — redirect to login page
         setError("Account created but auto-login failed. Please log in manually.");
         setLoading(false);
