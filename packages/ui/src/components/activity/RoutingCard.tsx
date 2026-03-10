@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Route } from "lucide-react";
+import { Loader2, Route } from "lucide-react";
 import { Badge } from "../badge";
 import type { ExecutionActivity } from "../../types/chat";
 import { StatusIcon, DurationBadge, ChevronToggle } from "./shared";
@@ -21,7 +21,8 @@ export function RoutingCard({ activity }: { activity: ExecutionActivity }) {
   const strategy = routing?.strategy || activity.detail || "";
   const strategyLabel = strategy.replace(/_/g, " ").toLowerCase();
   const variant = STRATEGY_VARIANT[strategy] || "outline";
-  const isCompleted = activity.status !== "running";
+  const isRunning = activity.status === "running";
+  const isCompleted = !isRunning;
 
   return (
     <div className="rounded-lg overflow-hidden border border-border/40 bg-muted/10">
@@ -37,9 +38,18 @@ export function RoutingCard({ activity }: { activity: ExecutionActivity }) {
         <ChevronToggle expanded={expanded} />
       </button>
 
-      {expanded && (
+      {isRunning && (
+        <div className="border-t border-border/30 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-3 w-3 animate-spin text-warning" />
+            <span className="text-[11px] text-muted-foreground">Analyzing request...</span>
+          </div>
+        </div>
+      )}
+
+      {expanded && isCompleted && (
         <div className="border-t border-border/30 px-3 py-2 space-y-1.5">
-          {isCompleted && strategy && (
+          {strategy && (
             <div className="flex items-center gap-1.5 text-[11px]">
               <span className="text-muted-foreground">Strategy:</span>
               <Badge variant={variant as "default"} className="text-[10px]">

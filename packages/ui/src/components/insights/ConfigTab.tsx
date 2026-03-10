@@ -19,7 +19,7 @@ import { Badge } from "../badge";
 import { Button } from "../button";
 import { Switch } from "../switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../tooltip";
-import { cn } from "../../lib/utils";
+import { cn, formatModelName } from "../../lib/utils";
 import type { BudgetOverview } from "../../types/chat";
 import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "../../types/engine";
 
@@ -420,7 +420,7 @@ export function ConfigTab({
       <SectionCard icon={Cpu} title="Model">
         {selectedModel ? (
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium truncate">{selectedModel.display_name || selectedModel.name}</span>
+            <span className="text-xs font-medium truncate">{formatModelName(selectedModel.model_id || selectedModel.name)}</span>
             <Badge variant="secondary" className="text-[10px] h-4 shrink-0">{selectedModel.provider}</Badge>
           </div>
         ) : (

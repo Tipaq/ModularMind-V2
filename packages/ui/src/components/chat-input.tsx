@@ -22,7 +22,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "./dropdown-menu";
-import { cn } from "../lib/utils";
+import { cn, formatModelName } from "../lib/utils";
 import type { EngineAgent, EngineGraph, EngineModel } from "../types/engine";
 import type { AttachedFile } from "../types/chat";
 
@@ -105,7 +105,7 @@ function formatFileSize(bytes: number) {
 }
 
 const defaultGetModelId = (m: EngineModel) => m.id;
-const defaultModelLabel = (m: EngineModel) => m.display_name || m.name;
+const defaultModelLabel = (m: EngineModel) => formatModelName(m.model_id || m.name);
 
 export const ChatInput = memo(function ChatInput({
   value,

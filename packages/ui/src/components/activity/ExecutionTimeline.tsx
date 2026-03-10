@@ -127,7 +127,7 @@ export function ExecutionTimeline(props: {
           depth={depth}
         />
       ))}
-      {isStreaming && (
+      {isStreaming && !activities.some((a) => a.status === "running") && (
         <div className="relative flex gap-3">
           <div className="flex flex-col items-center shrink-0">
             <div className="h-2.5 w-2.5 rounded-full bg-primary/50 animate-pulse border-2 border-card z-10 mt-2.5" />
