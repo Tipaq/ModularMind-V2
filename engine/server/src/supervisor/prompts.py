@@ -52,7 +52,6 @@ Respond with a JSON object matching this schema:
   "graph_id": "uuid or null",
   "reasoning": "brief explanation of routing decision",
   "confidence": 0.0-1.0,
-  "direct_response": "response text (only for DIRECT_RESPONSE)",
   "ephemeral_config": {{ "name": "...", "description": "...", "system_prompt": "...", "capabilities": [...] }} (only for CREATE_AGENT)
 }}
 

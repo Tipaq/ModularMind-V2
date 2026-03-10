@@ -587,7 +587,6 @@ async def _build_supervisor_response(
         ContextHistory,
         ContextHistoryBudget,
         ContextHistoryMessage,
-        KnowledgeDataResponse,
     )
 
     routing_meta = result.get("routing_metadata", {})
@@ -604,15 +603,6 @@ async def _build_supervisor_response(
             is_ephemeral = (
                 bool(_agent.routing_metadata.get("ephemeral")) if _agent.routing_metadata else False
             )
-
-    knowledge_data_response = None
-    raw_knowledge = result.get("knowledge_data")
-    if raw_knowledge:
-        knowledge_data_response = KnowledgeDataResponse(
-            collections=raw_knowledge.get("collections", []),
-            chunks=raw_knowledge.get("chunks", []),
-            total_results=raw_knowledge.get("total_results", 0),
-        )
 
     # Build context data for frontend memory panel
     context_data_response = None
@@ -647,16 +637,16 @@ async def _build_supervisor_response(
     exec_id = result.get("execution_id")
     exec_ids = result.get("execution_ids")
 
-    if result.get("direct_response"):
+    # Error fallback: some strategy handlers return direct_response on failure
+    if result.get("direct_response") and not exec_id and not exec_ids:
         return SendMessageResponse(
             **base_kwargs,
             execution_id=None,
-            message_id=result.get("message_id"),
             stream_url=None,
             direct_response=result["direct_response"],
-            knowledge_data=knowledge_data_response,
         )
-    elif exec_ids:
+
+    if exec_ids:
         return SendMessageResponse(
             **base_kwargs,
             execution_id=exec_ids[0],

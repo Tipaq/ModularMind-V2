@@ -427,10 +427,6 @@ class SuperSupervisorService:
                 strategy=RoutingStrategy.DIRECT_RESPONSE,
                 reasoning=f"Routing failed: {e}",
                 confidence=0.0,
-                direct_response=(
-                    "I couldn't determine the best routing — could you be "
-                    "more specific or try @mentioning an agent directly?"
-                ),
             )
 
     async def _build_routing_prompt(
@@ -546,7 +542,9 @@ class SuperSupervisorService:
         """Execute the chosen routing strategy."""
         match decision.strategy:
             case RoutingStrategy.DIRECT_RESPONSE:
-                return await self._handle_direct_response(decision, conv_id)
+                return await self._handle_direct_response(
+                    decision, conv_id, content, user_id, conv_config,
+                )
             case RoutingStrategy.TOOL_RESPONSE:
                 return await self._handle_tool_response(
                     decision,
@@ -596,23 +594,32 @@ class SuperSupervisorService:
         self,
         decision: RoutingDecision,
         conv_id: str,
+        content: str,
+        user_id: str,
+        conv_config: dict[str, Any],
     ) -> dict[str, Any]:
-        """Handle DIRECT_RESPONSE — return supervisor's own answer."""
-        from src.conversations.models import MessageRole
-        from src.conversations.service import ConversationService
+        """Handle DIRECT_RESPONSE — create a raw execution for SSE streaming."""
+        from src.prompt_layers import get_supervisor_identity
 
-        conv_service = ConversationService(self.db)
-        msg = await conv_service.add_message(
-            conversation_id=conv_id,
-            role=MessageRole.ASSISTANT,
-            content=decision.direct_response or "",
-            metadata={"routing": "direct", "strategy": "DIRECT_RESPONSE"},
+        model_id = conv_config.get("model_id", "ollama:qwen3:8b")
+
+        execution_data = ExecutionCreate(
+            prompt=content,
+            session_id=conv_id,
+            input_data={
+                "routing_strategy": "DIRECT_RESPONSE",
+                "_supervisor_direct": True,
+                "_raw_system_prompt": get_supervisor_identity(),
+            },
+        )
+        execution = await self.exec_service.start_raw_execution(
+            model_id=model_id,
+            data=execution_data,
+            user_id=user_id,
         )
 
         return {
-            "direct_response": decision.direct_response,
-            "execution_id": None,
-            "message_id": msg.id,
+            "execution_id": execution.id,
         }
 
     # =========================================================================
@@ -632,7 +639,9 @@ class SuperSupervisorService:
 
         lc_tools, tool_executor = await self._discover_mcp_tools(conv_config)
         if not lc_tools or not tool_executor:
-            return await self._handle_direct_response(decision, conv_id)
+            return await self._handle_direct_response(
+                decision, conv_id, content, user_id, conv_config,
+            )
 
         execution, publish_fn = await self._setup_tool_execution(
             conv_id,
@@ -648,7 +657,9 @@ class SuperSupervisorService:
 
             if not tools_bound:
                 logger.info("Model %s doesn't support tools, falling back", model_name)
-                return await self._handle_direct_response(decision, conv_id)
+                return await self._handle_direct_response(
+                    decision, conv_id, content, user_id, conv_config,
+                )
 
             memory_context, _ = await self._get_memory_context(user_id, content)
             llm_messages = self._compose_tool_messages(
@@ -702,7 +713,9 @@ class SuperSupervisorService:
                     "message": str(e),
                 }
             )
-            return await self._handle_direct_response(decision, conv_id)
+            return await self._handle_direct_response(
+                decision, conv_id, content, user_id, conv_config,
+            )
 
     async def _discover_mcp_tools(self, conv_config: dict[str, Any]) -> tuple[list | None, Any]:
         """Discover and convert MCP tools for tool-calling execution."""
