@@ -41,16 +41,23 @@ def _transform_agent(raw: dict[str, Any]) -> dict[str, Any]:
 def _transform_graph_node(raw: dict[str, Any]) -> dict[str, Any]:
     """Transform a Platform graph node into Engine NodeConfig format.
 
-    Platform sends:  id, type, label, config, agentId
-    Engine expects:  id, type, data (dict with label, config, agentId etc.)
+    Platform may send data in two layouts:
+      1. Flat:   id, type, label, config, agentId  (legacy / some Studio paths)
+      2. Nested: id, type, data: {label, config, agent_id, ...}  (ReactFlow format)
+    Engine expects: id, type, data (dict with label, config, agent_id, etc.)
     """
-    data: dict[str, Any] = {}
+    # Start from nested data if present, else build from flat keys
+    nested = raw.get("data") or {}
+    data: dict[str, Any] = dict(nested)
+
+    # Flat top-level overrides (legacy compat)
     if "label" in raw:
         data["label"] = raw["label"]
     if "config" in raw:
         data["config"] = raw["config"]
     if "agentId" in raw:
         data["agent_id"] = raw["agentId"]
+
     return {
         "id": raw["id"],
         "type": raw.get("type", "agent"),

@@ -548,7 +548,11 @@ class GraphCompiler:
 
     async def _create_agent_node(self, node_id: str, node_data: dict[str, Any]) -> NodeFn:
         """Create an agent node function."""
-        agent_id = node_data.get("config", {}).get("agentId")
+        agent_id = (
+            node_data.get("agent_id")
+            or node_data.get("config", {}).get("agentId")
+            or node_data.get("config", {}).get("agent_id")
+        )
 
         agent = None
         if agent_id:
