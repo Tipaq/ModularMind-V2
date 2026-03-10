@@ -335,6 +335,16 @@ class ExecutionTraceHandler(BaseCallbackHandler):
                 type_counts[m.type] = type_counts.get(m.type, 0) + 1
             event["message_types"] = type_counts
 
+            # Include truncated message previews (skip empty/None content)
+            event["messages"] = [
+                {
+                    "role": m.type,
+                    "content": _safe_str(m.content, 300),
+                }
+                for m in flat_messages
+                if m.content
+            ]
+
             self._publish(event)
         except Exception:  # noqa: BLE001 — callback must never crash LLM execution
             logger.debug("on_chat_model_start trace error", exc_info=True)
