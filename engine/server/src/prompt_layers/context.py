@@ -294,10 +294,14 @@ class AgentContextBuilder:
 
             # Load recent messages (newest first, then reverse).
             # Safety limit of 200 rows to avoid loading entire conversation.
+            # Skip the first (newest) row — it's the current user message that
+            # will already be injected as the HumanMessage in the graph state.
             result = await session.execute(
-                msg_query.order_by(ConversationMessage.created_at.desc()).limit(200)
+                msg_query.order_by(ConversationMessage.created_at.desc()).limit(201)
             )
             rows = list(result.scalars().all())
+            if rows:
+                rows = rows[1:]  # drop the current user message
             if not rows:
                 return ""
 
