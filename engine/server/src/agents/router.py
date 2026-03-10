@@ -51,6 +51,11 @@ async def list_agents(
             version=a.version,
             memory_enabled=a.memory_enabled,
             timeout_seconds=a.timeout_seconds,
+            system_prompt=a.system_prompt,
+            rag_enabled=a.rag_config.enabled,
+            rag_collection_ids=[str(c) for c in a.rag_config.collection_ids],
+            rag_retrieval_count=a.rag_config.retrieval_count,
+            rag_similarity_threshold=a.rag_config.similarity_threshold,
         )
         for a in page_agents
     ]
@@ -91,6 +96,6 @@ async def get_agent(
         rag_collection_ids=[str(c) for c in agent.rag_config.collection_ids],
         rag_retrieval_count=agent.rag_config.retrieval_count,
         rag_similarity_threshold=agent.rag_config.similarity_threshold,
-        config_version=version_number,
+        config_version=version_number or 0,
         config_hash=config_hash,
     )

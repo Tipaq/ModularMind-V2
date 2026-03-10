@@ -19,16 +19,16 @@ class AgentSummary(BaseModel):
     version: int
     memory_enabled: bool
     timeout_seconds: int
+    system_prompt: str = ""
+    rag_enabled: bool = False
+    rag_collection_ids: list[str] = []
+    rag_retrieval_count: int = 5
+    rag_similarity_threshold: float = 0.7
 
 
 class AgentDetail(AgentSummary):
-    """Agent detail view."""
+    """Agent detail view with config metadata."""
 
-    system_prompt: str
-    rag_enabled: bool
-    rag_collection_ids: list[str]
-    rag_retrieval_count: int
-    rag_similarity_threshold: float
     config_version: int | None = None
     config_hash: str | None = None
 

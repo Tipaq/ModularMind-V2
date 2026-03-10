@@ -33,6 +33,7 @@ class RoutingDecision(BaseModel):
     reasoning: str = ""
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     direct_response: str | None = None
+    extracted_prompt: str | None = None
     ephemeral_config: dict | None = None
     sub_decisions: list[RoutingDecision] | None = None
 
