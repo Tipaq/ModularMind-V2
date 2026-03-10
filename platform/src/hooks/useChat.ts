@@ -248,14 +248,12 @@ export function useChat(conversationId: string | null) {
 
       const routingDurationMs = Date.now() - sendStartMs;
 
-      // Direct response (no execution needed)
+      // Error fallback: direct_response without execution (e.g. agent not found)
       if (!execution_id && direct_response) {
         handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy || "DIRECT_RESPONSE", duration_ms: routingDurationMs });
-        handleTraceEvent({ type: "trace:supervisor_direct", preview: direct_response.slice(0, 150), duration_ms: routingDurationMs });
-        const durationMs = routingDurationMs;
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantId ? { ...m, content: direct_response, metadata: { routing_strategy, delegated_to, duration_ms: durationMs } } : m,
+            m.id === assistantId ? { ...m, content: direct_response, metadata: { routing_strategy, delegated_to, duration_ms: routingDurationMs } } : m,
           ),
         );
         finalizeActivities();

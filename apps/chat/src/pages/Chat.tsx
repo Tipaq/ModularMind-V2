@@ -4,7 +4,7 @@ import { useChat } from "../hooks/useChat";
 import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
 import { useConversations } from "../hooks/useConversations";
 import { ChatSidebar } from "../components/ChatSidebar";
-import { ChatMessages, ChatInput, InsightsPanel, useAuthStore, DEFAULT_CHAT_CONFIG, toggleArrayItem } from "@modularmind/ui";
+import { ChatMessages, ChatInput, InsightsPanel, useAuthStore, DEFAULT_CHAT_CONFIG, toggleArrayItem, formatModelName } from "@modularmind/ui";
 import type { AttachedFile, MessageExecutionData, ChatConfig } from "@modularmind/ui";
 import { api } from "../lib/api";
 
@@ -314,7 +314,7 @@ export default function Chat() {
               models={models}
               selectedModelId={effectiveModelId}
               onModelChange={handleModelChange}
-              modelLabel={(m) => `${m.display_name || m.name} (${m.provider})`}
+              modelLabel={(m) => formatModelName(m.model_id || m.name)}
               onCompact={handleCompactFromInput}
               compactDisabled={messages.length < 4 || isStreaming}
             />
