@@ -27,6 +27,7 @@ export interface LlmCallData {
   model: string;
   messageCount?: number;
   messageTypes?: Record<string, number>;
+  messages?: { role: string; content: string }[];
   tokens?: {
     prompt: number;
     completion: number;

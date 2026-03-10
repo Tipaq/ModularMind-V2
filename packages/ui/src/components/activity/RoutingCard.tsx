@@ -22,40 +22,31 @@ export function RoutingCard({ activity }: { activity: ExecutionActivity }) {
   const strategyLabel = strategy.replace(/_/g, " ").toLowerCase();
   const variant = STRATEGY_VARIANT[strategy] || "outline";
   const isCompleted = activity.status !== "running";
-  const hasExpandable = routing?.reasoning || routing?.confidence != null || routing?.targetAgent || routing?.targetGraph;
-
-  // Label: "Supervisor" while running, "Supervisor · strategy" when completed
-  const displayLabel = isCompleted && strategyLabel
-    ? `Supervisor \u00b7 ${strategyLabel}`
-    : "Supervisor";
-
-  // Target summary for collapsed state
-  const targetSummary = routing?.targetAgent || routing?.targetGraph || (strategy === "DIRECT_RESPONSE" ? "Direct response" : undefined);
 
   return (
     <div className="rounded-lg overflow-hidden border border-border/40 bg-muted/10">
       <button
-        onClick={() => hasExpandable && setExpanded(!expanded)}
+        onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/20 transition-colors text-left"
       >
         <StatusIcon status={activity.status} color="text-warning" />
         <Route className="h-3.5 w-3.5 text-warning shrink-0" />
-        <span className="text-xs font-medium truncate">{displayLabel}</span>
-        {isCompleted && targetSummary && (
-          <span className="text-[10px] text-muted-foreground truncate">\u2192 {targetSummary}</span>
-        )}
+        <span className="text-xs font-medium truncate">Supervisor</span>
         <span className="flex-1" />
-        {isCompleted && strategy && (
-          <Badge variant={variant as "default"} className="text-[10px] shrink-0">
-            {strategyLabel}
-          </Badge>
-        )}
         <DurationBadge durationMs={activity.durationMs} />
-        {hasExpandable && <ChevronToggle expanded={expanded} />}
+        <ChevronToggle expanded={expanded} />
       </button>
 
       {expanded && (
         <div className="border-t border-border/30 px-3 py-2 space-y-1.5">
+          {isCompleted && strategy && (
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span className="text-muted-foreground">Strategy:</span>
+              <Badge variant={variant as "default"} className="text-[10px]">
+                {strategyLabel}
+              </Badge>
+            </div>
+          )}
           {routing?.confidence != null && (
             <div className="flex items-center gap-1.5 text-[11px]">
               <span className="text-muted-foreground">Confidence:</span>

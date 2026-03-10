@@ -128,6 +128,7 @@ export function useExecutionActivities() {
           model,
           messageCount: data.message_count as number | undefined,
           messageTypes: data.message_types as Record<string, number> | undefined,
+          messages: data.messages as { role: string; content: string }[] | undefined,
         },
       };
       if (agentParent) {
@@ -147,18 +148,34 @@ export function useExecutionActivities() {
           parts.push(`${tokens.prompt}\u2192${tokens.completion}`);
         detail = parts.join(" \u00b7 ");
       }
+      const llmEndData: Partial<ExecutionActivity["llmData"]> = {
+        tokens: tokens ? { ...tokens, estimated: data.tokens_estimated as boolean | undefined } : undefined,
+        responsePreview: data.response_preview ? truncate(data.response_preview as string, 300) : undefined,
+      };
+      if (data.model) llmEndData.model = data.model as string;
+
       const patch: Partial<ExecutionActivity> = {
         durationMs: data.duration_ms as number | undefined,
         detail,
         preview: data.response_preview ? truncate(data.response_preview as string, 150) : undefined,
-        llmData: {
-          model: (data.model as string) || "LLM",
-          tokens: tokens ? { ...tokens, estimated: data.tokens_estimated as boolean | undefined } : undefined,
-          responsePreview: data.response_preview ? truncate(data.response_preview as string, 300) : undefined,
-        },
       };
       if (agentParent) {
-        setActivities((prev) => completeChild(prev, agentParent, "llm", patch));
+        setActivities((prev) =>
+          prev.map((a) => {
+            if (a.id !== agentParent) return a;
+            const children = [...(a.children || [])];
+            const idx = children.findLastIndex((c) => c.type === "llm" && c.status === "running");
+            if (idx === -1) return a;
+            children[idx] = {
+              ...children[idx],
+              status: "completed",
+              durationMs: patch.durationMs ?? Date.now() - children[idx].startedAt,
+              ...patch,
+              llmData: { ...children[idx].llmData!, ...llmEndData },
+            };
+            return { ...a, children };
+          }),
+        );
       } else {
         setActivities((prev) => {
           const realIdx = prev.findLastIndex((a) => a.type === "llm" && a.status === "running");
@@ -170,7 +187,7 @@ export function useExecutionActivities() {
             status: "completed",
             durationMs: patch.durationMs ?? Date.now() - existing.startedAt,
             ...patch,
-            llmData: { ...existing.llmData!, ...patch.llmData },
+            llmData: { ...existing.llmData!, ...llmEndData },
           };
           return updated;
         });
@@ -468,6 +485,9 @@ export function useExecutionActivities() {
 
     // --- Step events (execution) ---
     if (eventType === "step" && data.event === "step_started") {
+      // Raw LLM mode — skip agent_execution wrapper, LLM calls appear top-level
+      if (data.raw_mode) return;
+
       const agentName = data.agent_name as string | undefined;
       const inputPrompt = data.input_prompt as string | undefined;
       const model = data.model as string | undefined;
@@ -505,6 +525,9 @@ export function useExecutionActivities() {
       return;
     }
     if (eventType === "step" && data.event === "step_completed") {
+      // Raw LLM mode — no agent_execution to complete
+      if (data.raw_mode) return;
+
       const agentResponse = data.agent_response as string | undefined;
       setActivities((prev) => {
         const idx = prev.findLastIndex((a) => a.type === "agent_execution" && a.status === "running");
