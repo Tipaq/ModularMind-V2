@@ -540,6 +540,9 @@ class SuperSupervisorService:
         conv_config: dict[str, Any],
     ) -> dict[str, Any]:
         """Execute the chosen routing strategy."""
+        # Use extracted prompt for delegation strategies (refined by routing LLM)
+        agent_prompt = decision.extracted_prompt or content
+
         match decision.strategy:
             case RoutingStrategy.DIRECT_RESPONSE:
                 return await self._handle_direct_response(
@@ -557,7 +560,7 @@ class SuperSupervisorService:
                 return await self._handle_agent_delegation(
                     decision,
                     conv_id,
-                    content,
+                    agent_prompt,
                     user_id,
                     conv_config,
                 )
@@ -565,14 +568,14 @@ class SuperSupervisorService:
                 return await self._handle_graph_execution(
                     decision,
                     conv_id,
-                    content,
+                    agent_prompt,
                     user_id,
                 )
             case RoutingStrategy.CREATE_AGENT:
                 return await self._handle_create_agent(
                     decision,
                     conv_id,
-                    content,
+                    agent_prompt,
                     user_id,
                     conv_config,
                 )

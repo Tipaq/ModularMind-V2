@@ -50,12 +50,14 @@ Respond with a JSON object matching this schema:
   "strategy": "DIRECT_RESPONSE|TOOL_RESPONSE|DELEGATE_AGENT|EXECUTE_GRAPH|CREATE_AGENT|MULTI_ACTION",
   "agent_id": "uuid or null",
   "graph_id": "uuid or null",
+  "extracted_prompt": "the refined task/question to send to the agent (only for DELEGATE_AGENT/EXECUTE_GRAPH/CREATE_AGENT)",
   "reasoning": "brief explanation of routing decision",
   "confidence": 0.0-1.0,
   "ephemeral_config": {{ "name": "...", "description": "...", "system_prompt": "...", "capabilities": [...] }} (only for CREATE_AGENT)
 }}
 
 Rules:
+- When using DELEGATE_AGENT, EXECUTE_GRAPH, or CREATE_AGENT, always provide "extracted_prompt" — a clear, focused reformulation of the user's request tailored for the target agent. Strip meta-language ("can you", "I'd like to"), conversation references, and anything irrelevant to the agent's task. If the user's message is already a clear task, keep it as-is.
 - Use DIRECT_RESPONSE for greetings, small talk, simple factual questions, ANY question about your identity or capabilities ("who are you?", "what can you do?", "describe yourself"), and questions that can be answered using the provided knowledge context. YOU must answer these yourself — never delegate identity questions to an agent.
 - Use TOOL_RESPONSE when the user needs information you can get via available tools (search, lookups, etc.)
 - Use DELEGATE_AGENT when a specific agent clearly matches the request
