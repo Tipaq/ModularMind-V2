@@ -486,11 +486,12 @@ class ExecutionService:
             # Raw LLM mode — synthetic agent, no DB lookup
             from src.graph_engine.interfaces import AgentConfig, RAGConfig
 
+            raw_system_prompt = input_data.get("_raw_system_prompt", "")
             agent = AgentConfig(
                 id="__raw__",
                 name="Raw LLM",
                 model_id=raw_model_id,
-                system_prompt="",
+                system_prompt=raw_system_prompt,
                 memory_enabled=False,
                 rag_config=RAGConfig(enabled=False),
                 capabilities=[],

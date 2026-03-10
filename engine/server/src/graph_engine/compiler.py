@@ -450,6 +450,10 @@ class GraphCompiler:
             try:
                 llm = await self.llm_provider.get_model(effective_model)
 
+                # Raw LLM mode — no tools, direct invocation only
+                if agent.id == "__raw__":
+                    active_tools = []
+
                 if active_tools and unified_executor:
                     from src.infra.config import get_settings
 
