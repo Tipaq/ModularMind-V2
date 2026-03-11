@@ -134,8 +134,8 @@ class SidecarManager:
         """Deploy a sidecar container for a catalog entry.
 
         Args:
-            catalog_id: Catalog entry ID (e.g., "brave-search")
-            secrets: Environment variables the server needs (e.g., {"BRAVE_API_KEY": "..."})
+            catalog_id: Catalog entry ID (e.g., "slack")
+            secrets: Environment variables the server needs (e.g., {"SLACK_BOT_TOKEN": "..."})
             server_id: Optional pre-generated server UUID
 
         Returns:

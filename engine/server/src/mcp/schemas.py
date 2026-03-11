@@ -124,7 +124,7 @@ class MCPCatalogEntryResponse(BaseModel):
 
 
 class MCPDeployFromCatalogRequest(BaseModel):
-    catalog_id: str = Field(..., description="Catalog entry ID (e.g., 'brave-search')")
+    catalog_id: str = Field(..., description="Catalog entry ID (e.g., 'slack')")
     secrets: dict[str, str] = Field(..., description="Required secrets/env vars")
     project_id: str | None = None
 

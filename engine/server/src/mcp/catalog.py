@@ -88,18 +88,6 @@ class CatalogSecret(BaseModel):
 
 MCP_CATALOG: list[MCPCatalogEntry] = [
     MCPCatalogEntry(
-        id="brave-search",
-        name="Brave Search",
-        description="Web search via Brave Search API",
-        category="search",
-        icon="search",
-        npm_package="@modelcontextprotocol/server-brave-search",
-        required_secrets=[
-            CatalogSecret(key="BRAVE_API_KEY", label="Brave API Key", placeholder="BSA..."),
-        ],
-        documentation_url="https://github.com/modelcontextprotocol/servers",
-    ),
-    MCPCatalogEntry(
         id="slack",
         name="Slack",
         description="Send and read Slack messages, manage channels",
@@ -225,18 +213,6 @@ MCP_CATALOG: list[MCPCatalogEntry] = [
     ),
     # --- New npm-based entries ---
     MCPCatalogEntry(
-        id="tavily",
-        name="Tavily Search",
-        description="Web search optimized for LLMs with content extraction (1000 free credits/month)",
-        category="search",
-        icon="search",
-        npm_package="tavily-mcp",
-        required_secrets=[
-            CatalogSecret(key="TAVILY_API_KEY", label="Tavily API Key", placeholder="tvly-..."),
-        ],
-        documentation_url="https://github.com/tavily-ai/tavily-mcp",
-    ),
-    MCPCatalogEntry(
         id="firecrawl",
         name="Firecrawl",
         description="Web scraping and crawling — converts pages to clean markdown (self-hostable)",
@@ -254,18 +230,6 @@ MCP_CATALOG: list[MCPCatalogEntry] = [
             ),
         ],
         documentation_url="https://github.com/mendableai/firecrawl-mcp-server",
-    ),
-    MCPCatalogEntry(
-        id="exa",
-        name="Exa Search",
-        description="Semantic web search with neural retrieval and deep research capabilities",
-        category="search",
-        icon="brain",
-        npm_package="exa-mcp-server",
-        required_secrets=[
-            CatalogSecret(key="EXA_API_KEY", label="Exa API Key"),
-        ],
-        documentation_url="https://github.com/exa-labs/exa-mcp-server",
     ),
     MCPCatalogEntry(
         id="filesystem",
@@ -341,23 +305,6 @@ MCP_CATALOG: list[MCPCatalogEntry] = [
             ),
         ],
         documentation_url="https://github.com/qdrant/mcp-server-qdrant",
-    ),
-    MCPCatalogEntry(
-        id="duckdb",
-        name="DuckDB Analytics",
-        description="SQL analytics engine — query CSV, Parquet, JSON files directly (in-memory, data resets on restart)",
-        category="database",
-        icon="bar-chart",
-        docker_image="modularmind/mcp-motherduck:latest",
-        server_command=[
-            "/app/.venv/bin/mcp-server-motherduck",
-            "--db-path",
-            ":memory:",
-            "--read-write",
-        ],
-        mem_limit="512m",
-        volumes={"mm-projects": {"bind": "/data/projects", "mode": "ro"}},
-        documentation_url="https://github.com/motherduckdb/mcp-server-motherduck",
     ),
     # --- Phase 2: New npm-based entries (verified on npmjs.com 2026-02-16) ---
     MCPCatalogEntry(
@@ -547,16 +494,6 @@ MCP_CATALOG: list[MCPCatalogEntry] = [
         server_command=["npx", "-y", "@modelcontextprotocol/server-puppeteer"],
         mem_limit="512m",
         documentation_url="https://github.com/modelcontextprotocol/servers",
-    ),
-    MCPCatalogEntry(
-        id="duckduckgo",
-        name="DuckDuckGo Search",
-        description="Free web search via DuckDuckGo — no API key required",
-        category="search",
-        icon="search",
-        docker_image="modularmind/mcp-duckduckgo:latest",
-        server_command=["/app/.venv/bin/duckduckgo-mcp-server"],
-        documentation_url="https://github.com/nickclyde/duckduckgo-mcp-server",
     ),
     # --- Phase 3: Free MCPs for agent capabilities (verified on npmjs.com 2026-02-17) ---
     MCPCatalogEntry(
