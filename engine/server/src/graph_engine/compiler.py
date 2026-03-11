@@ -17,7 +17,7 @@ from src.graph_engine.state import GraphState
 # A compiled node function: async (GraphState) -> dict
 NodeFn = Callable[[GraphState], Awaitable[dict[str, Any]]]
 
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -464,6 +464,16 @@ class GraphCompiler:
                         # Extract publish_fn from callbacks (if ExecutionTraceHandler present)
                         _tool_publish_fn = _extract_tool_publish_fn(config)
 
+                        # If agent has search tools, require multiple searches
+                        _search_tool_names = {
+                            "gateway__browser_search",
+                        }
+                        _tool_fn_names = {
+                            t.get("function", {}).get("name", "")
+                            for t in active_tools
+                        }
+                        _has_search = bool(_search_tool_names & _tool_fn_names)
+
                         response_text, _ = await run_tool_loop(
                             llm_with_tools,
                             llm_messages,
@@ -472,6 +482,7 @@ class GraphCompiler:
                             tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
                             cancel_check_fn=_is_cancelled,
                             publish_fn=_tool_publish_fn,
+                            min_tool_calls=3 if _has_search else 0,
                         )
                     else:
                         response = await llm.ainvoke(llm_messages, config=config)
@@ -565,6 +576,11 @@ class GraphCompiler:
             # Allow per-conversation model override via input_data
             effective_model = state.get("input_data", {}).get("_model_override") or model_id
             logger.info("Executing agent node: %s with model: %s", node_id, effective_model)
+
+            # Signal that this agent node has started (for real-time Activity tracking)
+            _started_fn = (config.get("configurable") or {}).get("_node_started_fn") if config else None
+            if _started_fn:
+                _started_fn(node_id, effective_model)
             messages = state.get("messages", [])
             llm_messages = [SystemMessage(content=system_prompt)]
             _inject_context_layers(llm_messages, state, agent_id=agent_id)
@@ -580,12 +596,122 @@ class GraphCompiler:
                     )
                 llm_messages.append(SystemMessage(content=correction_text))
 
-            llm_messages.extend(messages)
+            # In a graph pipeline, build contextual input from previous agent outputs
+            # so each agent receives the prior agent's work as its input
+            node_outputs = state.get("node_outputs", {})
+            agent_input_msg = None
+            if node_outputs:
+                # Get the original user request (first human message)
+                original_request = ""
+                for m in messages:
+                    if hasattr(m, "type") and m.type == "human":
+                        original_request = str(m.content)
+                        break
+
+                # Build pipeline context from previous agents' outputs
+                prior_outputs = []
+                for nid, out in node_outputs.items():
+                    resp = out.get("response", "") if isinstance(out, dict) else str(out)
+                    if resp:
+                        prior_outputs.append(resp)
+
+                # Give this agent: original request + previous agent output as context
+                context_msg = f"Original request: {original_request}"
+                if prior_outputs:
+                    last_output = prior_outputs[-1]
+                    context_msg += f"\n\n--- Previous agent output ---\n{last_output}"
+                agent_input_msg = HumanMessage(content=context_msg)
+                llm_messages.append(agent_input_msg)
+            else:
+                # First agent in pipeline — just pass the original messages
+                llm_messages.extend(messages)
+
+            # Build cancellation check from execution_id
+            _exec_id = (config or {}).get("configurable", {}).get("thread_id")
+
+            async def _is_cancelled() -> bool:
+                if not _exec_id:
+                    return False
+                from src.executions.cancel import check_revoke_intent
+
+                return await check_revoke_intent(_exec_id) == "cancel"
+
+            # Build tool executor for this agent (gateway + builtin)
+            active_tools: list[dict] = []
+            unified_executor = None
+
+            if agent and agent.gateway_permissions:
+                from src.infra.config import get_settings as _get_settings
+
+                _settings = _get_settings()
+                if _settings.GATEWAY_ENABLED:
+                    from src.gateway.executor import GatewayToolExecutor
+                    from src.gateway.tool_definitions import get_gateway_tool_definitions
+                    from src.internal.auth import get_internal_bearer_token
+
+                    gateway_tool_defs = get_gateway_tool_definitions(
+                        agent.gateway_permissions
+                    )
+                    active_tools.extend(gateway_tool_defs)
+                    user_id = (state.get("metadata") or {}).get("user_id")
+                    gateway_executor = GatewayToolExecutor(
+                        gateway_url=_settings.GATEWAY_URL,
+                        agent_id=agent.id,
+                        execution_id=_exec_id or "",
+                        user_id=user_id or "",
+                        internal_token=get_internal_bearer_token(),
+                    )
+
+                    from src.graph_engine.builtin_tools import UnifiedToolExecutor
+
+                    unified_executor = UnifiedToolExecutor(
+                        lambda *a: (_ for _ in ()).throw(
+                            ValueError("No builtin tools in graph node")
+                        ),
+                        None,
+                        set(),
+                        gateway_executor=gateway_executor,
+                    )
 
             try:
                 llm = await self.llm_provider.get_model(effective_model)
-                response = await llm.ainvoke(llm_messages, config=config)
-                response_text = response.content
+
+                if active_tools and unified_executor:
+                    from src.infra.config import get_settings
+
+                    from .tool_loop import run_tool_loop, try_bind_tools
+
+                    llm_with_tools, tools_bound = try_bind_tools(llm, active_tools)
+                    if tools_bound:
+                        _tool_publish_fn = _extract_tool_publish_fn(config)
+
+                        # Require multiple searches for agents with search tools
+                        _search_tool_names = {
+                            "gateway__browser_search",
+                        }
+                        _tool_fn_names = {
+                            t.get("function", {}).get("name", "")
+                            for t in active_tools
+                        }
+                        _has_search = bool(_search_tool_names & _tool_fn_names)
+
+                        response_text, _ = await run_tool_loop(
+                            llm_with_tools,
+                            llm_messages,
+                            unified_executor,
+                            max_iterations=10,
+                            tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
+                            cancel_check_fn=_is_cancelled,
+                            publish_fn=_tool_publish_fn,
+                            min_tool_calls=3 if _has_search else 0,
+                        )
+                    else:
+                        response = await llm.ainvoke(llm_messages, config=config)
+                        response_text = response.content
+                else:
+                    response = await llm.ainvoke(llm_messages, config=config)
+                    response_text = response.content
+
                 logger.info("Agent %s response: %.100s...", node_id, response_text)
             except Exception as e:  # LLM providers raise heterogeneous errors
                 from src.executions.cancel import ExecutionCancelled
@@ -595,8 +721,14 @@ class GraphCompiler:
                 logger.error("Agent %s LLM error: %s", node_id, e)
                 response_text = f"[Error] Failed to get response from {effective_model}: {str(e)}"
 
+            # Build returned messages: include contextual input if present
+            new_messages = list(messages)
+            if agent_input_msg:
+                new_messages.append(agent_input_msg)
+            new_messages.append(AIMessage(content=response_text))
+
             return {
-                "messages": messages + [AIMessage(content=response_text)],
+                "messages": new_messages,
                 "current_node": node_id,
                 "node_outputs": {
                     **state.get("node_outputs", {}),
