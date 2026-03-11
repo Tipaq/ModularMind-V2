@@ -25,38 +25,65 @@ function completeLastRunning(
   return updated;
 }
 
-/** Append a child activity to an agent_execution by ID. */
+/** Append a child activity to a parent by ID (searches top-level and inside graph children). */
 function appendChild(
   prev: ExecutionActivity[],
   parentId: string,
   child: ExecutionActivity,
 ): ExecutionActivity[] {
-  return prev.map((a) =>
-    a.id === parentId
-      ? { ...a, children: [...(a.children || []), child] }
-      : a,
-  );
+  return prev.map((a) => {
+    if (a.id === parentId) {
+      return { ...a, children: [...(a.children || []), child] };
+    }
+    // Search inside graph_execution children for nested agent_execution
+    if (a.type === "graph_execution" && a.children?.some((c) => c.id === parentId)) {
+      return {
+        ...a,
+        children: a.children!.map((c) =>
+          c.id === parentId
+            ? { ...c, children: [...(c.children || []), child] }
+            : c,
+        ),
+      };
+    }
+    return a;
+  });
 }
 
-/** Complete the last running child of a given type inside an agent_execution. */
-function completeChild(
+/**
+ * Update the last running child of `childType` inside `parentId`.
+ * Searches top-level and inside graph_execution children (for graph→agent→llm/tool).
+ */
+function updateChildDeep(
   prev: ExecutionActivity[],
   parentId: string,
   childType: ActivityType,
-  patch: Partial<ExecutionActivity>,
+  updater: (child: ExecutionActivity) => ExecutionActivity,
 ): ExecutionActivity[] {
   return prev.map((a) => {
-    if (a.id !== parentId) return a;
-    const children = [...(a.children || [])];
-    const idx = children.findLastIndex((c) => c.type === childType && c.status === "running");
-    if (idx === -1) return a;
-    children[idx] = {
-      ...children[idx],
-      status: "completed",
-      durationMs: patch.durationMs ?? Date.now() - children[idx].startedAt,
-      ...patch,
-    };
-    return { ...a, children };
+    // Direct parent match
+    if (a.id === parentId) {
+      const children = [...(a.children || [])];
+      const idx = children.findLastIndex((c) => c.type === childType && c.status === "running");
+      if (idx === -1) return a;
+      children[idx] = updater(children[idx]);
+      return { ...a, children };
+    }
+    // Inside graph_execution children
+    if (a.type === "graph_execution" && a.children?.some((c) => c.id === parentId)) {
+      return {
+        ...a,
+        children: a.children!.map((c) => {
+          if (c.id !== parentId) return c;
+          const children = [...(c.children || [])];
+          const idx = children.findLastIndex((ch) => ch.type === childType && ch.status === "running");
+          if (idx === -1) return c;
+          children[idx] = updater(children[idx]);
+          return { ...c, children };
+        }),
+      };
+    }
+    return a;
   });
 }
 
@@ -72,34 +99,29 @@ export function useExecutionActivities() {
   const seqRef = useRef(0);
   /** ID of the currently active agent_execution whose children we append to. */
   const currentAgentIdRef = useRef<string | null>(null);
+  /** ID of the currently active graph_execution whose children we append to. */
+  const currentGraphIdRef = useRef<string | null>(null);
 
   const reset = useCallback(() => {
     setActivities([]);
     seqRef.current = 0;
     currentAgentIdRef.current = null;
+    currentGraphIdRef.current = null;
   }, []);
 
   const finalize = useCallback(() => {
-    setActivities((prev) =>
-      prev.map((a) => {
-        const base = a.status === "running"
-          ? { ...a, status: "completed" as const, durationMs: Date.now() - a.startedAt }
-          : a;
-        // Also finalize children
-        if (base.children?.length) {
-          return {
-            ...base,
-            children: base.children.map((c) =>
-              c.status === "running"
-                ? { ...c, status: "completed" as const, durationMs: Date.now() - c.startedAt }
-                : c,
-            ),
-          };
-        }
-        return base;
-      }),
-    );
+    const completeIfRunning = (a: ExecutionActivity): ExecutionActivity => {
+      const base = a.status === "running"
+        ? { ...a, status: "completed" as const, durationMs: Date.now() - a.startedAt }
+        : a;
+      if (base.children?.length) {
+        return { ...base, children: base.children.map(completeIfRunning) };
+      }
+      return base;
+    };
+    setActivities((prev) => prev.map(completeIfRunning));
     currentAgentIdRef.current = null;
+    currentGraphIdRef.current = null;
   }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -161,20 +183,13 @@ export function useExecutionActivities() {
       };
       if (agentParent) {
         setActivities((prev) =>
-          prev.map((a) => {
-            if (a.id !== agentParent) return a;
-            const children = [...(a.children || [])];
-            const idx = children.findLastIndex((c) => c.type === "llm" && c.status === "running");
-            if (idx === -1) return a;
-            children[idx] = {
-              ...children[idx],
-              status: "completed",
-              durationMs: patch.durationMs ?? Date.now() - children[idx].startedAt,
-              ...patch,
-              llmData: { ...children[idx].llmData!, ...llmEndData },
-            };
-            return { ...a, children };
-          }),
+          updateChildDeep(prev, agentParent, "llm", (c) => ({
+            ...c,
+            status: "completed",
+            durationMs: patch.durationMs ?? Date.now() - c.startedAt,
+            ...patch,
+            llmData: { ...c.llmData!, ...llmEndData },
+          })),
         );
       } else {
         setActivities((prev) => {
@@ -199,7 +214,10 @@ export function useExecutionActivities() {
     if (eventType === "trace:tool_start") {
       const id = `tool-${++seqRef.current}`;
       const rawName = (data.tool_name as string) || "tool";
-      const displayName = rawName.includes("__") ? rawName.split("__").slice(1).join("__") : rawName;
+      const stripped = rawName.includes("__") ? rawName.split("__").slice(1).join("__") : rawName;
+      const displayName = stripped
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
       const serverHint = rawName.includes("__") ? rawName.split("__")[0] : undefined;
       const activity: ExecutionActivity = {
         id,
@@ -231,22 +249,15 @@ export function useExecutionActivities() {
         },
       };
       if (agentParent) {
-        setActivities((prev) => {
-          return prev.map((a) => {
-            if (a.id !== agentParent) return a;
-            const children = [...(a.children || [])];
-            const idx = children.findLastIndex((c) => c.type === "tool" && c.status === "running");
-            if (idx === -1) return a;
-            children[idx] = {
-              ...children[idx],
-              status: "completed",
-              durationMs: patch.durationMs ?? Date.now() - children[idx].startedAt,
-              preview: patch.preview ?? children[idx].preview,
-              toolData: { ...children[idx].toolData!, result: data.output_preview as string | undefined },
-            };
-            return { ...a, children };
-          });
-        });
+        setActivities((prev) =>
+          updateChildDeep(prev, agentParent, "tool", (c) => ({
+            ...c,
+            status: "completed",
+            durationMs: patch.durationMs ?? Date.now() - c.startedAt,
+            preview: patch.preview ?? c.preview,
+            toolData: { ...c.toolData!, result: data.output_preview as string | undefined },
+          })),
+        );
       } else {
         setActivities((prev) => {
           const realIdx = prev.findLastIndex((a) => a.type === "tool" && a.status === "running");
@@ -291,6 +302,42 @@ export function useExecutionActivities() {
           }),
         );
       }
+      return;
+    }
+
+    // --- Graph ---
+    if (eventType === "trace:graph_start") {
+      const id = `graph-${++seqRef.current}`;
+      currentGraphIdRef.current = id;
+      setActivities((prev) => [
+        ...prev,
+        {
+          id,
+          type: "graph_execution",
+          status: "running",
+          label: (data.graph_name as string) || "Graph",
+          graphName: data.graph_name as string | undefined,
+          nodeCount: data.node_count as number | undefined,
+          startedAt: Date.now(),
+          children: [],
+        },
+      ]);
+      return;
+    }
+    if (eventType === "trace:graph_end") {
+      setActivities((prev) => {
+        const idx = prev.findLastIndex((a) => a.type === "graph_execution" && a.status === "running");
+        if (idx === -1) return prev;
+        const updated = [...prev];
+        const graph = updated[idx];
+        updated[idx] = {
+          ...graph,
+          status: "completed",
+          durationMs: Date.now() - graph.startedAt,
+        };
+        return updated;
+      });
+      currentGraphIdRef.current = null;
       return;
     }
 
@@ -491,37 +538,57 @@ export function useExecutionActivities() {
       const agentName = data.agent_name as string | undefined;
       const inputPrompt = data.input_prompt as string | undefined;
       const model = data.model as string | undefined;
+      const graphParent = currentGraphIdRef.current;
+      const existingAgentId = currentAgentIdRef.current;
 
-      // If an agent_execution already exists (from supervisor_delegate), enrich it
-      setActivities((prev) => {
-        if (currentAgentIdRef.current) {
+      if (existingAgentId) {
+        // Enrich existing agent_execution (from supervisor_delegate)
+        setActivities((prev) => {
+          if (graphParent) {
+            return prev.map((a) => {
+              if (a.id !== graphParent) return a;
+              return {
+                ...a,
+                children: (a.children || []).map((c) =>
+                  c.id === existingAgentId
+                    ? { ...c, inputPrompt, model, agentName: agentName ?? c.agentName }
+                    : c,
+                ),
+              };
+            });
+          }
           return prev.map((a) =>
-            a.id === currentAgentIdRef.current
+            a.id === existingAgentId
               ? { ...a, inputPrompt, model, agentName: agentName ?? a.agentName }
               : a,
           );
-        }
-        // No supervisor — create agent_execution directly
+        });
+      } else {
+        // No supervisor — create agent_execution
+        // Set ref BEFORE setActivities so subsequent events see it immediately
         const id = `agent-${++seqRef.current}`;
         currentAgentIdRef.current = id;
-        return [
-          ...prev,
-          {
-            id,
-            type: "agent_execution",
-            status: "running",
-            label: agentName || "Agent executing",
-            startedAt: Date.now(),
-            agentName,
-            inputPrompt,
-            model,
-            children: [],
-            toolCallCount: 0,
-            llmCallCount: 0,
-            iterationCount: 0,
-          },
-        ];
-      });
+        const agentActivity: ExecutionActivity = {
+          id,
+          type: "agent_execution",
+          status: "running",
+          label: agentName || "Agent executing",
+          startedAt: Date.now(),
+          agentName,
+          inputPrompt,
+          model,
+          children: [],
+          toolCallCount: 0,
+          llmCallCount: 0,
+          iterationCount: 0,
+        };
+        setActivities((prev) => {
+          if (graphParent) {
+            return appendChild(prev, graphParent, agentActivity);
+          }
+          return [...prev, agentActivity];
+        });
+      }
       return;
     }
     if (eventType === "step" && data.event === "step_completed") {
@@ -529,7 +596,34 @@ export function useExecutionActivities() {
       if (data.raw_mode) return;
 
       const agentResponse = data.agent_response as string | undefined;
+      const inputPrompt = data.input_prompt as string | undefined;
+      const graphParent = currentGraphIdRef.current;
+
+      // Reset ref BEFORE setActivities so subsequent events don't target stale agent
+      currentAgentIdRef.current = null;
+
       setActivities((prev) => {
+        if (graphParent) {
+          // Complete agent_execution inside graph
+          return prev.map((a) => {
+            if (a.id !== graphParent) return a;
+            const children = [...(a.children || [])];
+            const idx = children.findLastIndex((c) => c.type === "agent_execution" && c.status === "running");
+            if (idx === -1) return a;
+            const agent = children[idx];
+            const agentChildren = agent.children || [];
+            children[idx] = {
+              ...agent,
+              status: "completed",
+              durationMs: (data.duration_ms as number | undefined) ?? Date.now() - agent.startedAt,
+              agentResponse,
+              inputPrompt: inputPrompt ?? agent.inputPrompt,
+              toolCallCount: agentChildren.filter((c) => c.type === "tool").length,
+              llmCallCount: agentChildren.filter((c) => c.type === "llm").length,
+            };
+            return { ...a, children };
+          });
+        }
         const idx = prev.findLastIndex((a) => a.type === "agent_execution" && a.status === "running");
         if (idx === -1) return completeLastRunning(prev, "step", { durationMs: data.duration_ms as number | undefined });
         const updated = [...prev];
@@ -545,7 +639,6 @@ export function useExecutionActivities() {
         };
         return updated;
       });
-      currentAgentIdRef.current = null;
       return;
     }
 
