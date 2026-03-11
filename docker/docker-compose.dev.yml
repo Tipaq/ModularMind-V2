@@ -125,6 +125,13 @@ services:
       OLLAMA_KEEP_ALIVE: "24h"
     volumes:
       - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   gateway:
     image: modularmind/gateway:dev
