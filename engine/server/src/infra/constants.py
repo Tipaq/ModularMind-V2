@@ -42,7 +42,10 @@ EMBEDDING_DIMENSION: int = 768
 
 # ── Output & Display ──────────────────────────────────────────────────────────
 OUTPUT_TRUNCATION_LENGTH: int = 500
-"""Max characters kept when truncating LLM/node output for storage."""
+"""Max characters kept when truncating LLM/node output for DB storage."""
+
+SSE_CONTENT_LENGTH: int = 5000
+"""Max characters for agent responses/inputs sent via SSE events."""
 
 # ── Timeouts (seconds) ────────────────────────────────────────────────────────
 GRAPH_COMPILATION_TIMEOUT: int = 30
