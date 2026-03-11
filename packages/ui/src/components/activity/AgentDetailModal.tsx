@@ -33,7 +33,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ContentBlock({ children, maxH = "max-h-40" }: {
+function ContentBlock({ children, maxH = "max-h-48" }: {
   children: React.ReactNode;
   maxH?: string;
 }) {
@@ -60,13 +60,22 @@ export function AgentDetailModal({
   const llmChildren = children.filter((c) => c.type === "llm");
   const llmMessages = llmChildren[0]?.llmData?.messages || [];
 
-  // Separate history messages from system/user prompt
+  // Classify LLM messages:
+  // - First system message (without history prefix) = system prompt
+  // - System messages with "### Recent Conversation History" = history
+  // - Remaining = context (user prompts, etc.)
+  const systemPromptFromLlm = llmMessages.find(
+    (m) => m.role === "system" && !m.content.startsWith("### Recent Conversation History"),
+  )?.content;
   const historyMessages = llmMessages.filter(
     (m) => m.role === "system" && m.content.startsWith("### Recent Conversation History"),
   );
-  const otherMessages = llmMessages.filter(
-    (m) => !(m.role === "system" && m.content.startsWith("### Recent Conversation History")),
-  );
+  const userMessages = llmMessages.filter((m) => m.role === "human" || m.role === "user");
+
+  // Use agent config system prompt, fallback to LLM message
+  const effectiveSystemPrompt = agent?.system_prompt || systemPromptFromLlm;
+  // Input: from activity or from last user message in LLM context
+  const effectiveInput = activity.inputPrompt || userMessages[userMessages.length - 1]?.content;
 
   /* eslint-disable */
   const aggregatedTokens = useMemo(() => {
@@ -86,7 +95,7 @@ export function AgentDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] max-h-[80vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="sm:max-w-[520px] max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -140,34 +149,28 @@ export function AgentDetailModal({
           )}
 
           {/* ── System Prompt ── */}
-          {agent?.system_prompt && (
+          {effectiveSystemPrompt && (
             <>
               <Separator />
               <div className="space-y-1.5">
                 <SectionLabel>System Prompt</SectionLabel>
-                <ContentBlock maxH="max-h-32">{agent.system_prompt}</ContentBlock>
+                <ContentBlock maxH="max-h-40">{effectiveSystemPrompt}</ContentBlock>
               </div>
             </>
           )}
 
           {/* ── Conversation History ── */}
-          {(() => {
-            const msgs = historyMessages.length > 0
-              ? historyMessages
-              : otherMessages.filter((m) => m.role !== "user" || otherMessages.indexOf(m) !== otherMessages.length - 1);
-            if (msgs.length === 0) return null;
-            return (
-              <>
-                <Separator />
-                <div className="space-y-2">
-                  <SectionLabel>History</SectionLabel>
-                  <ContentBlock>
-                    {msgs.map((m) => m.content).join("\n\n")}
-                  </ContentBlock>
-                </div>
-              </>
-            );
-          })()}
+          <Separator />
+          <div className="space-y-2">
+            <SectionLabel>History</SectionLabel>
+            {historyMessages.length > 0 ? (
+              <ContentBlock maxH="max-h-40">
+                {historyMessages.map((m) => m.content).join("\n\n")}
+              </ContentBlock>
+            ) : (
+              <p className="text-[11px] text-muted-foreground/50 italic">No conversation history</p>
+            )}
+          </div>
 
           {/* ── Execution ── */}
           <Separator />
@@ -198,13 +201,13 @@ export function AgentDetailModal({
             </div>
 
             {/* Input */}
-            {activity.inputPrompt && (
+            {effectiveInput && (
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
                   <ArrowRight className="h-3 w-3 text-info shrink-0" />
                   <span className="text-[10px] font-medium text-muted-foreground">Input</span>
                 </div>
-                <ContentBlock maxH="max-h-24">{activity.inputPrompt}</ContentBlock>
+                <ContentBlock maxH="max-h-36">{effectiveInput}</ContentBlock>
               </div>
             )}
 
@@ -215,7 +218,7 @@ export function AgentDetailModal({
                   <ArrowRight className="h-3 w-3 text-success shrink-0 rotate-180" />
                   <span className="text-[10px] font-medium text-muted-foreground">Output</span>
                 </div>
-                <ContentBlock maxH="max-h-32">{activity.agentResponse}</ContentBlock>
+                <ContentBlock maxH="max-h-48">{activity.agentResponse}</ContentBlock>
               </div>
             )}
 

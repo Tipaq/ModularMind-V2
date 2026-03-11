@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import {
   Clock,
   Brain,
@@ -13,6 +14,7 @@ import { formatK } from "./shared";
 
 export interface ExecutionSummary {
   totalDurationMs: number | null;
+  earliestStartedAt: number | null;
   tokenUsage: { prompt: number; completion: number; total: number } | null;
   tokensPerSecond: number | null;
   llmCalls: number;
@@ -25,33 +27,37 @@ export function computeSummary(
   activities: ExecutionActivity[],
   tokenUsage: { prompt: number; completion: number; total: number } | null,
 ): ExecutionSummary {
-  // Flatten children for counting
-  const allActivities = activities.flatMap((a) => [a, ...(a.children || [])]);
+  // Flatten all nested children (graph → agent → llm/tool) for counting
+  const allActivities: ExecutionActivity[] = [];
+  const collect = (list: ExecutionActivity[]) => {
+    for (const a of list) {
+      allActivities.push(a);
+      if (a.children?.length) collect(a.children);
+    }
+  };
+  collect(activities);
   const llmActivities = allActivities.filter((a) => a.type === "llm");
   const toolActivities = allActivities.filter((a) => a.type === "tool");
 
+  // Find earliest start across all activities
+  const withStart = allActivities.filter((a) => a.startedAt > 0);
+  const earliestStartedAt = withStart.length > 0
+    ? Math.min(...withStart.map((a) => a.startedAt))
+    : null;
+
+  // Total duration: from earliest start to latest end
   let totalDurationMs: number | null = null;
-  const agentExec = activities.find(
-    (a) => a.type === "agent_execution" && a.status !== "running" && a.durationMs,
-  );
-  const delegationEnd = activities.find(
-    (a) => a.type === "delegation" && a.status !== "running" && a.durationMs,
-  );
-  const directResponse = activities.find(
-    (a) => a.type === "direct_response" && a.durationMs,
-  );
-  if (agentExec?.durationMs) {
-    totalDurationMs = agentExec.durationMs;
-  } else if (delegationEnd?.durationMs) {
-    totalDurationMs = delegationEnd.durationMs;
-  } else if (directResponse?.durationMs) {
-    totalDurationMs = directResponse.durationMs;
-  } else {
-    const withDuration = activities.filter((a) => a.startedAt && a.durationMs != null);
-    if (withDuration.length > 0) {
-      const earliest = Math.min(...activities.filter((a) => a.startedAt).map((a) => a.startedAt));
-      const latest = Math.max(...withDuration.map((a) => a.startedAt + (a.durationMs || 0)));
-      if (latest > earliest) totalDurationMs = latest - earliest;
+  const hasRunning = allActivities.some((a) => a.status === "running");
+  if (!hasRunning) {
+    // All done — compute from earliest start to latest completion
+    const withDuration = allActivities.filter(
+      (a) => a.startedAt > 0 && a.durationMs != null && a.durationMs > 0,
+    );
+    if (withDuration.length > 0 && earliestStartedAt) {
+      const latestEnd = Math.max(
+        ...withDuration.map((a) => a.startedAt + (a.durationMs || 0)),
+      );
+      totalDurationMs = latestEnd - earliestStartedAt;
     }
   }
 
@@ -61,12 +67,12 @@ export function computeSummary(
     tokensPerSecond = Math.round(tokenUsage.completion / (llmDurationMs / 1000));
   }
 
-  const hasRunning = activities.some((a) => a.status === "running");
-  const hasFailed = activities.some((a) => a.status === "failed");
+  const hasFailed = allActivities.some((a) => a.status === "failed");
   const overallStatus = hasRunning ? "running" : hasFailed ? "failed" : "completed";
 
   return {
     totalDurationMs,
+    earliestStartedAt,
     tokenUsage,
     tokensPerSecond,
     llmCalls: llmActivities.length,
@@ -82,6 +88,29 @@ const STATUS_VARIANT: Record<string, "default" | "destructive" | "secondary"> = 
   failed: "destructive",
 };
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function LiveTimer({ startedAt }: { startedAt: number }) {
+  const [elapsed, setElapsed] = useState(() => Date.now() - startedAt);
+  const rafRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
+  useEffect(() => {
+    rafRef.current = setInterval(() => {
+      setElapsed(Date.now() - startedAt);
+    }, 100);
+    return () => clearInterval(rafRef.current);
+  }, [startedAt]);
+
+  return (
+    <span className="font-mono font-medium tabular-nums">
+      {formatDuration(elapsed)}
+    </span>
+  );
+}
+
 export function ExecutionSummaryHeader({
   summary,
   isStreaming,
@@ -90,27 +119,30 @@ export function ExecutionSummaryHeader({
   isStreaming: boolean;
 }) {
   const status = isStreaming ? "running" : summary.overallStatus;
+  const isRunning = status === "running";
 
   return (
     <div className="mx-4 mt-3 mb-1 rounded-lg border border-border/50 bg-muted/10 px-3 py-2.5">
       <div className="flex items-center gap-3 flex-wrap">
         <Badge variant={STATUS_VARIANT[status]} className="text-[10px] h-5">
-          {status === "running" && (
+          {isRunning && (
             <span className="mr-1 h-1.5 w-1.5 rounded-full bg-current animate-pulse inline-block" />
           )}
           {status}
         </Badge>
 
-        {summary.totalDurationMs != null && (
-          <div className="flex items-center gap-1 text-[11px]">
-            <Clock className="h-3 w-3 text-muted-foreground" />
+        <div className="flex items-center gap-1 text-[11px]">
+          <Clock className={cn("h-3 w-3", isRunning ? "text-primary" : "text-muted-foreground")} />
+          {isRunning && summary.earliestStartedAt ? (
+            <LiveTimer startedAt={summary.earliestStartedAt} />
+          ) : summary.totalDurationMs != null ? (
             <span className="font-mono font-medium">
-              {summary.totalDurationMs < 1000
-                ? `${summary.totalDurationMs}ms`
-                : `${(summary.totalDurationMs / 1000).toFixed(1)}s`}
+              {formatDuration(summary.totalDurationMs)}
             </span>
-          </div>
-        )}
+          ) : (
+            <span className="font-mono text-muted-foreground">—</span>
+          )}
+        </div>
 
         {summary.tokenUsage && (
           <div className="flex items-center gap-1 text-[11px]">

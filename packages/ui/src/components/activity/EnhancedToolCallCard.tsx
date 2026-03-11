@@ -21,8 +21,8 @@ export function EnhancedToolCallCard({ activity }: { activity: ExecutionActivity
       >
         <StatusIcon status={activity.status} color="text-warning" />
         <Wrench className="h-3.5 w-3.5 text-warning shrink-0" />
-        <span className="text-xs font-mono font-medium truncate flex-1">{tool.toolName}</span>
-        {tool.serverName && (
+        <span className="text-xs font-medium truncate flex-1">{tool.toolName}</span>
+        {tool.serverName && tool.serverName !== "gateway" && (
           <Badge variant="secondary" className="text-[10px] shrink-0">
             {tool.serverName}
           </Badge>
