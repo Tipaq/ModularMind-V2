@@ -21,7 +21,7 @@ from src.domain_config import get_config_provider
 from src.graph_engine import GraphCompiler, create_initial_state
 from src.infra.config import get_settings
 from src.infra.constants import KNOWN_PROVIDERS as _KNOWN_PROVIDERS
-from src.infra.constants import OUTPUT_TRUNCATION_LENGTH
+from src.infra.constants import OUTPUT_TRUNCATION_LENGTH, SSE_CONTENT_LENGTH
 from src.infra.utils import utcnow
 from src.llm import get_llm_provider
 from src.mcp.service import get_mcp_registry
@@ -410,7 +410,12 @@ class ExecutionService:
         await self.db.flush()
 
         try:
-            async with asyncio.timeout(settings.MAX_EXECUTION_TIMEOUT):
+            # Graph executions run multiple agents sequentially — use longer timeout
+            timeout = settings.MAX_EXECUTION_TIMEOUT
+            if execution.execution_type == ExecutionType.GRAPH:
+                timeout = min(timeout * 3, 1800)
+
+            async with asyncio.timeout(timeout):
                 if execution.execution_type == ExecutionType.AGENT:
                     async for event in self.execute_agent(execution):
                         yield event
@@ -736,7 +741,7 @@ class ExecutionService:
             "timestamp": utcnow().isoformat(),
             "duration_ms": step.duration_ms,
             "agent_name": agent.name,
-            "agent_response": response[:OUTPUT_TRUNCATION_LENGTH],
+            "agent_response": response[:SSE_CONTENT_LENGTH],
             "raw_mode": is_raw,
         }
 
@@ -765,71 +770,222 @@ class ExecutionService:
             messages=[HumanMessage(content=execution.input_prompt)],
         )
 
-        # Set up trace handler for LLM/tool/chain events
+        # Set up trace handler — events go into a merged queue for real-time streaming
         from src.graph_engine.callbacks import ExecutionTraceHandler
 
-        trace_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        merged_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
         def _enqueue_trace(event: dict[str, Any]) -> None:
-            trace_queue.put_nowait(event)
+            merged_queue.put_nowait(event)
 
         trace_handler = ExecutionTraceHandler(
             execution_id=execution.id,
             publish_fn=_enqueue_trace,
         )
 
-        # Execute with streaming (with timeout to prevent infinite blocking)
-        step_number = 0
+        # Emit graph start event
+        yield {
+            "type": "trace:graph_start",
+            "graph_id": graph_config.id,
+            "graph_name": graph_config.name,
+            "node_count": len(graph_config.nodes),
+            "edge_count": len(graph_config.edges),
+        }
+
+        # Build node info map for agent name resolution + model lookup
+        node_info: dict[str, dict[str, Any]] = {}
+        for n in graph_config.nodes:
+            agent_id = (
+                n.data.get("agent_id")
+                or n.data.get("config", {}).get("agentId")
+                or n.data.get("config", {}).get("agent_id")
+            )
+            agent_cfg = await self.config_provider.get_agent_config(agent_id) if agent_id else None
+            node_info[n.id] = {
+                "label": n.data.get("label", n.id),
+                "type": n.type,
+                "agent_id": agent_id,
+                "model_id": agent_cfg.model_id if agent_cfg else None,
+            }
+
+        # Notifier: called by agent_node at the START of execution (before LLM call)
+        def _node_started(nid: str, model: str | None) -> None:
+            info = node_info.get(nid)
+            if info and info["type"] not in ("start", "end"):
+                merged_queue.put_nowait({
+                    "_type": "step_started",
+                    "node_id": nid,
+                    "agent_name": info.get("label", nid),
+                    "model": model or info.get("model_id"),
+                })
+
         config = {
-            "configurable": {"thread_id": execution.id},
+            "configurable": {
+                "thread_id": execution.id,
+                "_node_started_fn": _node_started,
+            },
             "callbacks": [trace_handler],
         }
 
-        async for event in graph.astream(state, config):
-            step_number += 1
+        # Run astream in a background task so trace events arrive in real-time
+        step_number = 0
+        stream_error: Exception | None = None
+        db_ref = self.db
 
-            # Drain any trace events that arrived during this node's execution
-            while not trace_queue.empty():
-                yield trace_queue.get_nowait()
+        async def _run_stream() -> None:
+            nonlocal step_number, stream_error
+            try:
+                async for event in graph.astream(state, config, stream_mode="updates"):
+                    step_number += 1
+                    for nid, output in event.items():
+                        if nid.startswith("__"):
+                            continue
+                        info = node_info.get(nid)
+                        if not info or info["type"] in ("start", "end"):
+                            continue
+                        merged_queue.put_nowait({
+                            "_type": "node_completed",
+                            "node_id": nid,
+                            "output": output,
+                            "step_number": step_number,
+                        })
+            except Exception as e:
+                stream_error = e
+            finally:
+                merged_queue.put_nowait({"_type": "stream_done"})
 
-            for node_id, output in event.items():
+        stream_task = asyncio.create_task(_run_stream())
+
+        # Consume merged queue — yields events in real-time
+        while True:
+            event = await merged_queue.get()
+
+            internal_type = event.get("_type")
+
+            if internal_type == "stream_done":
+                break
+
+            # Agent node started (from _node_started_fn callback)
+            if internal_type == "step_started":
+                yield {
+                    "type": "step",
+                    "event": "step_started",
+                    "agent_name": event["agent_name"],
+                    "node_id": event["node_id"],
+                    "model": event.get("model"),
+                }
+                continue
+
+            # Agent node completed (from astream)
+            if internal_type == "node_completed":
+                nid = event["node_id"]
+                output = event["output"]
+                info = node_info[nid]
+                node_label = info.get("label", nid)
+                node_type = info.get("type", "node")
+
+                # Extract input prompt and agent response
+                input_prompt = None
+                agent_response = None
+                if isinstance(output, dict):
+                    msgs = output.get("messages", [])
+                    for m in reversed(msgs):
+                        if hasattr(m, "type") and m.type == "human" and hasattr(m, "content"):
+                            input_prompt = str(m.content)[:SSE_CONTENT_LENGTH]
+                            break
+                    for m in reversed(msgs):
+                        if hasattr(m, "type") and m.type == "ai" and hasattr(m, "content"):
+                            agent_response = str(m.content)[:SSE_CONTENT_LENGTH]
+                            break
+                    if not agent_response:
+                        node_outputs = output.get("node_outputs", {})
+                        for v in node_outputs.values():
+                            if isinstance(v, dict) and "response" in v:
+                                agent_response = str(v["response"])[:SSE_CONTENT_LENGTH]
+                                break
+
+                # Serialize output for DB
+                safe_output: dict[str, Any] = {}
+                if isinstance(output, dict):
+                    for k, v in output.items():
+                        if k == "messages":
+                            safe_output[k] = [
+                                {"role": getattr(m, "type", "unknown"), "content": str(getattr(m, "content", m))}
+                                if hasattr(m, "content") else str(m)
+                                for m in v
+                            ] if isinstance(v, list) else str(v)
+                        else:
+                            try:
+                                import json
+                                json.dumps(v)
+                                safe_output[k] = v
+                            except (TypeError, ValueError):
+                                safe_output[k] = str(v)[:OUTPUT_TRUNCATION_LENGTH]
+                else:
+                    safe_output = {"value": str(output)[:OUTPUT_TRUNCATION_LENGTH]}
+
                 step = ExecutionStep(
                     id=str(uuid4()),
                     run_id=execution.id,
-                    step_number=step_number,
-                    node_id=node_id,
-                    node_type="node",
+                    step_number=event["step_number"],
+                    node_id=nid,
+                    node_type=node_type,
                     status=ExecutionStatus.COMPLETED,
-                    output_data=output if isinstance(output, dict) else {"value": str(output)},
+                    output_data=safe_output,
                     started_at=utcnow(),
                     completed_at=utcnow(),
                 )
-                self.db.add(step)
+                db_ref.add(step)
 
                 yield {
                     "type": "step",
-                    "step_id": step.id,
-                    "step_number": step_number,
-                    "node_id": node_id,
-                    "node_type": "node",
-                    "status": "completed",
-                    "output": output
-                    if isinstance(output, dict)
-                    else {"value": str(output)[:OUTPUT_TRUNCATION_LENGTH]},
-                    "timestamp": utcnow().isoformat(),
+                    "event": "step_completed",
+                    "agent_name": node_label,
+                    "node_id": nid,
+                    "agent_response": agent_response,
+                    "input_prompt": input_prompt,
                 }
+                continue
 
-        # Drain remaining trace events
-        while not trace_queue.empty():
-            yield trace_queue.get_nowait()
+            # Trace events (llm_start, llm_end, tool_start, etc.) — pass through
+            yield event
+
+        await stream_task
+        if stream_error:
+            raise stream_error
+
+        # Emit graph end event
+        yield {
+            "type": "trace:graph_end",
+            "graph_id": graph_config.id,
+            "graph_name": graph_config.name,
+        }
 
         # Update execution with token counts
         execution.tokens_prompt = trace_handler.tokens.prompt_tokens
         execution.tokens_completion = trace_handler.tokens.completion_tokens
 
-        # Get final state
+        # Get final state — serialize safely (LangChain messages aren't JSON-safe)
         final_state = await graph.aget_state(config)
-        execution.output_data = dict(final_state.values) if final_state else {}
+        if final_state and final_state.values:
+            safe_final: dict[str, Any] = {}
+            for k, v in dict(final_state.values).items():
+                if k == "messages" and isinstance(v, list):
+                    safe_final[k] = [
+                        {"role": getattr(m, "type", "unknown"), "content": str(getattr(m, "content", m))}
+                        if hasattr(m, "content") else str(m)
+                        for m in v
+                    ]
+                else:
+                    try:
+                        import json
+                        json.dumps(v)
+                        safe_final[k] = v
+                    except (TypeError, ValueError):
+                        safe_final[k] = str(v)[:OUTPUT_TRUNCATION_LENGTH]
+            execution.output_data = safe_final
+        else:
+            execution.output_data = {}
 
     async def get_execution(self, execution_id: str) -> ExecutionRun | None:
         """Get execution by ID."""
