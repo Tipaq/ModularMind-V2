@@ -171,6 +171,38 @@ def get_gateway_tool_definitions(permissions: dict[str, Any]) -> list[dict]:
             }
         )
 
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "gateway__browser_search",
+                    "description": (
+                        "Search the web using DuckDuckGo and return results "
+                        "with titles, URLs, and snippets."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Search query",
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Max results to return (default: 10, max: 25)",
+                            },
+                            "safesearch": {
+                                "type": "string",
+                                "enum": ["strict", "moderate", "off"],
+                                "description": "SafeSearch filtering level (default: moderate)",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            }
+        )
+
     # Network tools (Phase 7)
     network = permissions.get("network", {})
     if network.get("enabled"):
