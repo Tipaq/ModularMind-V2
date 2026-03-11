@@ -85,7 +85,7 @@ CURATED_OLLAMA_MODELS: list[dict] = [
     # Sweet spot for tool calling, RAG retrieval, single-task agents
     # ================================================================
     {
-        "model_name": "qwen3:latest",
+        "model_name": "qwen3:8b",
         "display_name": "Qwen3 8B",
         "family": "qwen",
         "size": "8B",
