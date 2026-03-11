@@ -12,6 +12,7 @@
   "dependencies": {
     "@modularmind/api-client": "workspace:*",
     "@modularmind/ui": "workspace:*",
+    "@tailwindcss/typography": "^0.5.19",
     "lucide-react": "^0.575.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

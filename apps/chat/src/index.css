@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@tailwindcss/typography";
 @import "@modularmind/ui/styles/theme.css";
 
 /* Scan shared UI package so Tailwind generates classes used in @modularmind/ui components */

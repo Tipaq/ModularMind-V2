@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef } from "react";
+import Markdown from "react-markdown";
 import { ArrowRight, Bot, Loader2, User } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { ExecutionActivity } from "../types/chat";
@@ -167,9 +168,15 @@ const MessageBubble = memo(function MessageBubble({
                 onClick={selectable ? onSelect : undefined}
               >
                 {msg.content ? (
-                  <div className="text-sm whitespace-pre-wrap break-words">
-                    {msg.content}
-                  </div>
+                  isUser ? (
+                    <div className="text-sm whitespace-pre-wrap break-words">
+                      {msg.content}
+                    </div>
+                  ) : (
+                    <div className="chat-markdown text-sm break-words">
+                      <Markdown>{msg.content}</Markdown>
+                    </div>
+                  )
                 ) : isStreaming && isLastAssistant ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />

@@ -193,4 +193,87 @@
   select::-ms-expand {
     display: none;
   }
+
+  /* ── Chat markdown rendering ── */
+
+  .chat-markdown h1,
+  .chat-markdown h2,
+  .chat-markdown h3,
+  .chat-markdown h4 {
+    font-weight: 600;
+    margin-top: 1.25em;
+    margin-bottom: 0.5em;
+    line-height: 1.3;
+  }
+  .chat-markdown h1 { font-size: 1.15em; }
+  .chat-markdown h2 { font-size: 1.05em; }
+  .chat-markdown h3 { font-size: 1em; }
+
+  .chat-markdown p {
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+    line-height: 1.65;
+  }
+  .chat-markdown > p:first-child { margin-top: 0; }
+  .chat-markdown > p:last-child { margin-bottom: 0; }
+
+  .chat-markdown ul,
+  .chat-markdown ol {
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+    padding-left: 1.5em;
+  }
+  .chat-markdown ul { list-style-type: disc; }
+  .chat-markdown ol { list-style-type: decimal; }
+  .chat-markdown li {
+    margin-top: 0.35em;
+    margin-bottom: 0.35em;
+    line-height: 1.6;
+  }
+
+  .chat-markdown hr {
+    margin-top: 1.5em;
+    margin-bottom: 1.5em;
+    border-color: hsl(var(--border));
+  }
+
+  .chat-markdown a {
+    color: hsl(var(--primary));
+    text-decoration: none;
+  }
+  .chat-markdown a:hover {
+    text-decoration: underline;
+  }
+
+  .chat-markdown code {
+    background-color: hsl(var(--muted));
+    padding: 0.15em 0.4em;
+    border-radius: 0.25em;
+    font-size: 0.85em;
+  }
+  .chat-markdown pre {
+    background-color: hsl(var(--muted));
+    padding: 0.85em 1em;
+    border-radius: 0.5em;
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+    overflow-x: auto;
+  }
+  .chat-markdown pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.85em;
+  }
+
+  .chat-markdown blockquote {
+    border-left: 3px solid hsl(var(--primary) / 0.4);
+    padding-left: 1em;
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .chat-markdown strong {
+    font-weight: 600;
+  }
 }
