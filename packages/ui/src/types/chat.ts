@@ -11,7 +11,8 @@ export type ActivityType =
   | "direct_response"
   | "agent_created"
   | "compaction"
-  | "agent_execution";
+  | "agent_execution"
+  | "graph_execution";
 
 export type ActivityStatus = "running" | "completed" | "failed";
 
@@ -86,6 +87,10 @@ export interface ExecutionActivity {
   llmCallCount?: number;
   /** For agent_execution: number of tool-loop iterations */
   iterationCount?: number;
+  /** For graph_execution: graph name */
+  graphName?: string;
+  /** For graph_execution: number of nodes */
+  nodeCount?: number;
 }
 
 // ─── Shared camelCase types for Insights / Knowledge / Memory panels ─────────

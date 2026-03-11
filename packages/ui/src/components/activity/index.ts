@@ -6,3 +6,6 @@ export type { ExecutionSummary } from "./ExecutionSummaryHeader";
 export { AgentDetailModal } from "./AgentDetailModal";
 export type { AgentDetailModalProps } from "./AgentDetailModal";
 export { AgentExecutionCard } from "./AgentExecutionCard";
+export { GraphExecutionCard } from "./GraphExecutionCard";
+export { GraphDetailModal } from "./GraphDetailModal";
+export type { GraphDetailModalProps } from "./GraphDetailModal";

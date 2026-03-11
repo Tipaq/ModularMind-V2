@@ -7,6 +7,7 @@ import type { EngineAgent, EngineGraph } from "../../types/engine";
 import { RoutingCard } from "./RoutingCard";
 import { DelegationCard } from "./DelegationCard";
 import { AgentExecutionCard } from "./AgentExecutionCard";
+import { GraphExecutionCard } from "./GraphExecutionCard";
 import { LlmCallCard } from "./LlmCallCard";
 import { EnhancedToolCallCard } from "./EnhancedToolCallCard";
 import { RetrievalCard } from "./RetrievalCard";
@@ -19,6 +20,7 @@ const DOT_BG: Record<string, string> = {
   routing: "bg-warning",
   delegation: "bg-warning",
   agent_execution: "bg-info",
+  graph_execution: "bg-success",
   llm: "bg-primary",
   tool: "bg-warning",
   retrieval: "bg-info",
@@ -34,11 +36,13 @@ const DOT_BG: Record<string, string> = {
 function TimelineItem({
   activity,
   enabledAgents,
+  enabledGraphs,
   isLast,
   depth = 0,
 }: {
   activity: ExecutionActivity;
   enabledAgents: EngineAgent[];
+  enabledGraphs: EngineGraph[];
   isLast: boolean;
   depth?: number;
 }) {
@@ -62,7 +66,7 @@ function TimelineItem({
       </div>
 
       <div className="flex-1 min-w-0 pb-2">
-        {renderCard(activity, enabledAgents)}
+        {renderCard(activity, enabledAgents, enabledGraphs)}
       </div>
     </div>
   );
@@ -71,6 +75,7 @@ function TimelineItem({
 function renderCard(
   activity: ExecutionActivity,
   enabledAgents: EngineAgent[],
+  enabledGraphs: EngineGraph[],
 ) {
   switch (activity.type) {
     case "routing":
@@ -79,6 +84,8 @@ function renderCard(
       return <DelegationCard activity={activity} enabledAgents={enabledAgents} />;
     case "agent_execution":
       return <AgentExecutionCard activity={activity} enabledAgents={enabledAgents} />;
+    case "graph_execution":
+      return <GraphExecutionCard activity={activity} enabledAgents={enabledAgents} enabledGraphs={enabledGraphs} />;
     case "llm":
       return <LlmCallCard activity={activity} />;
     case "tool":
@@ -102,14 +109,16 @@ export function ExecutionTimeline(props: {
   enabledGraphs: EngineGraph[];
   isStreaming: boolean;
 }) {
-  const { activities, enabledAgents, isStreaming } = props;
+  const { activities, enabledAgents, enabledGraphs, isStreaming } = props;
   if (activities.length === 0 && !isStreaming) return null;
 
   // Flatten activities with children for rendering.
-  // For agent_execution, skip LLM children (shown inside the agent card instead).
+  // graph_execution: children rendered inside the card (not flattened).
+  // agent_execution: skip LLM children (shown inside the agent card).
   const items: { activity: ExecutionActivity; depth: number }[] = [];
   for (const activity of activities) {
     items.push({ activity, depth: 0 });
+    if (activity.type === "graph_execution") continue; // children inside card
     if (activity.children?.length) {
       for (const child of activity.children) {
         if (activity.type === "agent_execution" && child.type === "llm") continue;
@@ -125,6 +134,7 @@ export function ExecutionTimeline(props: {
           key={activity.id}
           activity={activity}
           enabledAgents={enabledAgents}
+          enabledGraphs={enabledGraphs}
           isLast={i === items.length - 1 && !isStreaming}
           depth={depth}
         />
