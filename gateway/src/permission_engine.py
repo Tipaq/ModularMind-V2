@@ -213,6 +213,10 @@ class PermissionEngine:
         if not perms.browser.enabled:
             return EvalResult.AUTO_DENY, "Browser access is not enabled for this agent"
 
+        # Search action always hits DuckDuckGo (not user-controlled) — auto-approve
+        if action == "search":
+            return EvalResult.AUTO_APPROVE, None
+
         url = args.get("url", "")
 
         # 1. Explicit deny

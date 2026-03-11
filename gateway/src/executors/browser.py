@@ -1,4 +1,4 @@
-"""Browser executor — fetch URL and extract readable text content."""
+"""Browser executor — fetch URL and extract readable text content, plus web search."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 MAX_CONTENT_SIZE = 2_097_152  # 2MB raw HTML
 MAX_TEXT_OUTPUT = 50_000  # ~50k chars of extracted text
+MAX_SEARCH_RESULTS = 25
 DEFAULT_TIMEOUT = 30.0
 
 # Tags whose content should be removed entirely
@@ -51,6 +52,8 @@ class BrowserExecutor(BaseExecutor):
         sandbox_mgr: SandboxManager,
         execution_id: str,
     ) -> str:
+        if action == "search":
+            return await self._search_duckduckgo(args)
         if action != "browse":
             return f"Unknown browser action: {action}"
 
@@ -121,6 +124,51 @@ class BrowserExecutor(BaseExecutor):
             return "Error: too many redirects (max 5)"
         except httpx.RequestError as e:
             return f"Error: request failed — {e}"
+
+    async def _search_duckduckgo(self, args: dict[str, Any]) -> str:
+        """Search the web via DuckDuckGo and return formatted results."""
+        import asyncio
+
+        from ddgs import DDGS
+
+        query = args.get("query", "").strip()
+        if not query:
+            return "Error: query is required"
+
+        max_results = min(int(args.get("max_results", 10)), MAX_SEARCH_RESULTS)
+        safesearch = args.get("safesearch", "moderate")
+
+        try:
+            # ddgs is sync — run in thread to avoid blocking
+            def _do_search() -> list[dict]:
+                with DDGS() as ddgs:
+                    return list(
+                        ddgs.text(
+                            query,
+                            max_results=max_results,
+                            safesearch=safesearch,
+                        )
+                    )
+
+            results = await asyncio.to_thread(_do_search)
+
+            if not results:
+                return f"No results found for: {query}"
+
+            lines = [f"Search results for: {query}\n"]
+            for i, r in enumerate(results, 1):
+                lines.append(f"{i}. {r.get('title', '(no title)')}")
+                lines.append(f"   URL: {r.get('href', '')}")
+                body = r.get("body", "")
+                if body:
+                    lines.append(f"   {body}")
+                lines.append("")
+
+            return "\n".join(lines).strip()
+
+        except Exception as e:
+            logger.warning("DuckDuckGo search failed: %s", e)
+            return f"Error: search failed — {e}"
 
 
 def _extract_title(html: str) -> str:
