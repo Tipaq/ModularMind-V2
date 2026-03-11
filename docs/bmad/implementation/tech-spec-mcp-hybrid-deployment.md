@@ -50,7 +50,7 @@ test_patterns:
 
 The MCP system has three issues blocking production use:
 
-1. **Non-existent Docker images**: Five catalog entries reference custom images via `docker_image` (`modularmind/mcp-duckduckgo`, `modularmind/mcp-qdrant`, `modularmind/mcp-motherduck`, `modularmind/mcp-puppeteer`, `modularmind/mcp-whatsapp`) that have never been built. Additionally, `modularmind/mcp-node-proxy` (base image for npm-based sidecar deployments) and `modularmind/mcp-brave-search` have Dockerfiles but are also unbuilt. The 7 Dockerfiles exist at `engine/mcp-sidecars/mcp-sidecars/` but there is no build infrastructure (no Makefile target, no CI step). Deploying any catalog entry that depends on these images fails with a 502 "pull access denied" error.
+1. **Non-existent Docker images**: Catalog entries reference custom images via `docker_image` (`modularmind/mcp-qdrant`, `modularmind/mcp-puppeteer`, `modularmind/mcp-whatsapp`) that have never been built. Additionally, `modularmind/mcp-node-proxy` (base image for npm-based sidecar deployments) has a Dockerfile but is also unbuilt. The Dockerfiles exist at `engine/mcp-sidecars/mcp-sidecars/` but there is no build infrastructure (no Makefile target, no CI step). Deploying any catalog entry that depends on these images fails with a 502 "pull access denied" error. Note: web search (Brave, DuckDuckGo, Tavily, Exa) and MotherDuck MCPs have been removed — search is built into the Gateway browser executor.
 
 2. **Outdated custom client**: The MCP client (`client.py`, 300 lines) manually implements JSON-RPC 2.0 with protocol version `2024-11-05`. The current MCP spec version is `2025-11-25`. The official `mcp` Python SDK (v1.26.0) handles protocol negotiation, session management, SSE parsing, and resumability natively.
 
@@ -106,12 +106,9 @@ The MCP system has three issues blocking production use:
 - `APScheduler` in `worker/scheduler.py` runs 4 periodic jobs in the worker process (sync, report, cleanup, consolidation)
 - Worker process has its own `MCPRegistry` instance with NO live client connections (see `service.py` docstring)
 
-**Sidecar Dockerfiles (7 files at `engine/mcp-sidecars/mcp-sidecars/`):**
+**Sidecar Dockerfiles (4 files at `engine/mcp-sidecars/mcp-sidecars/`):**
 - `Dockerfile.node-proxy`: mcp-proxy + Node.js + npm (base for npm entries)
-- `Dockerfile.duckduckgo`: mcp-proxy + `pip install duckduckgo-mcp-server`
 - `Dockerfile.qdrant`: mcp-proxy + `pip install mcp-server-qdrant fastembed`
-- `Dockerfile.motherduck`: mcp-proxy + build tools + `pip install mcp-server-motherduck`
-- `Dockerfile.brave-search`: mcp-proxy + Node.js + npm (for brave-search)
 - `Dockerfile.puppeteer`: mcp-node-proxy + Chromium
 - `Dockerfile.whatsapp`: mcp-node-proxy + git + pre-installed npm packages
 
@@ -121,10 +118,7 @@ ghcr.io/sparfenyuk/mcp-proxy:latest  (external)
 ├── modularmind/mcp-node-proxy       (Dockerfile.node-proxy)
 │   ├── modularmind/mcp-puppeteer    (Dockerfile.puppeteer)
 │   └── modularmind/mcp-whatsapp     (Dockerfile.whatsapp)
-├── modularmind/mcp-brave-search     (Dockerfile.brave-search)
-├── modularmind/mcp-duckduckgo       (Dockerfile.duckduckgo)
-├── modularmind/mcp-qdrant           (Dockerfile.qdrant)
-└── modularmind/mcp-motherduck       (Dockerfile.motherduck)
+└── modularmind/mcp-qdrant           (Dockerfile.qdrant)
 ```
 
 **MCP SDK API (v1.26.0):**
@@ -197,14 +191,11 @@ async with stdio_client(params) as (read, write):
 
 - [ ] Task 1: Add `build-mcp-sidecars` Makefile target
   - File: `Makefile`
-  - Action: Add target that builds all 7 sidecar images in dependency order (`mcp-node-proxy` first).
+  - Action: Add target that builds all 5 sidecar images in dependency order (`mcp-node-proxy` first).
     ```makefile
     build-mcp-sidecars: ## Build MCP sidecar Docker images
     	docker build -t modularmind/mcp-node-proxy:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.node-proxy engine/mcp-sidecars/mcp-sidecars/
-    	docker build -t modularmind/mcp-brave-search:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.brave-search engine/mcp-sidecars/mcp-sidecars/
-    	docker build -t modularmind/mcp-duckduckgo:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.duckduckgo engine/mcp-sidecars/mcp-sidecars/
     	docker build -t modularmind/mcp-qdrant:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.qdrant engine/mcp-sidecars/mcp-sidecars/
-    	docker build -t modularmind/mcp-motherduck:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.motherduck engine/mcp-sidecars/mcp-sidecars/
     	docker build -t modularmind/mcp-puppeteer:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.puppeteer engine/mcp-sidecars/mcp-sidecars/
     	docker build -t modularmind/mcp-whatsapp:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.whatsapp engine/mcp-sidecars/mcp-sidecars/
     ```

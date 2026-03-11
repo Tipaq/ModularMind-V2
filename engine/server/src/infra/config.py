@@ -302,7 +302,7 @@ class Settings(BaseSettings):
         default="",
         description=(
             "Comma-separated MCP servers to auto-register on startup. "
-            "Format: name|url  (e.g. 'Brave Search|http://mcp-brave:9100'). "
+            "Format: name|url  (e.g. 'Qdrant|http://mcp-qdrant:9100'). "
             "Servers already registered (by URL) are skipped."
         ),
     )

@@ -71,10 +71,7 @@ build-platform: ## Build Platform Docker image
 
 build-mcp-sidecars: ## Build MCP sidecar Docker images
 	docker build -t modularmind/mcp-node-proxy:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.node-proxy engine/mcp-sidecars/mcp-sidecars/
-	docker build -t modularmind/mcp-brave-search:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.brave-search engine/mcp-sidecars/mcp-sidecars/
-	docker build -t modularmind/mcp-duckduckgo:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.duckduckgo engine/mcp-sidecars/mcp-sidecars/
 	docker build -t modularmind/mcp-qdrant:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.qdrant engine/mcp-sidecars/mcp-sidecars/
-	docker build -t modularmind/mcp-motherduck:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.motherduck engine/mcp-sidecars/mcp-sidecars/
 	docker build -t modularmind/mcp-puppeteer:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.puppeteer engine/mcp-sidecars/mcp-sidecars/
 	docker build -t modularmind/mcp-whatsapp:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.whatsapp engine/mcp-sidecars/mcp-sidecars/
 

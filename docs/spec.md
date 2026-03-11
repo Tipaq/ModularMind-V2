@@ -231,9 +231,6 @@ ModularMind-V2/
 │   │   └── tests/
 │   │
 │   └── mcp-sidecars/
-│       ├── Dockerfile.brave-search
-│       ├── Dockerfile.duckduckgo
-│       ├── Dockerfile.motherduck
 │       ├── Dockerfile.node-proxy
 │       ├── Dockerfile.puppeteer
 │       ├── Dockerfile.qdrant
