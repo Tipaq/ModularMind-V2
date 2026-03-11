@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,8 @@ async def run_tool_loop(
     tool_call_timeout: float = 60.0,
     publish_fn: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     cancel_check_fn: Callable[[], Awaitable[bool]] | None = None,
+    min_tool_calls: int = 0,
+    reflection_prompt: str | None = None,
 ) -> tuple[str, list[BaseMessage]]:
     """Run an LLM tool-calling loop until completion or max iterations.
 
@@ -55,12 +57,21 @@ async def run_tool_loop(
         cancel_check_fn: Optional async callback that returns True if
             the execution has been cancelled. Checked before each LLM
             call and before each tool call.
+        min_tool_calls: Minimum number of tool calls before the loop can
+            exit with a text response. If the model tries to respond with
+            text before reaching this threshold, a reflection message is
+            injected to push it to use more tools.
+        reflection_prompt: Custom message injected when min_tool_calls is
+            not yet met. Defaults to a generic "search more" nudge.
 
     Returns:
         Tuple of ``(final_text_response, full_message_history)``.
     """
     # Work on a copy to avoid mutating the caller's list
     msgs = list(messages)
+    total_tool_calls = 0
+    reflections_sent = 0
+    max_reflections = 2  # Safety cap to avoid infinite reflection loops
 
     for iteration in range(max_iterations):
         # Check for cancellation before each LLM call
@@ -77,16 +88,40 @@ async def run_tool_loop(
 
         tool_calls = getattr(response, "tool_calls", None)
         if not tool_calls:
-            # No tool calls — final text response
+            # No tool calls — check if we need more tool usage
+            if (
+                min_tool_calls > 0
+                and total_tool_calls < min_tool_calls
+                and reflections_sent < max_reflections
+            ):
+                nudge = reflection_prompt or (
+                    "You have only used your tools "
+                    f"{total_tool_calls} time(s) so far. "
+                    f"Please perform at least {min_tool_calls - total_tool_calls} more "
+                    "search(es) with different keywords or angles to ensure comprehensive "
+                    "coverage before giving your final answer."
+                )
+                logger.info(
+                    "Reflection nudge: %d/%d tool calls, injecting prompt",
+                    total_tool_calls,
+                    min_tool_calls,
+                )
+                msgs.append(HumanMessage(content=nudge))
+                reflections_sent += 1
+                continue
+
+            # Final text response
             text = response.content if isinstance(response.content, str) else str(response.content)
             logger.info(
-                "Tool loop completed after %d iteration(s), response length=%d",
+                "Tool loop completed after %d iteration(s), %d tool call(s), response length=%d",
                 iteration + 1,
+                total_tool_calls,
                 len(text),
             )
             return text, msgs
 
         # Execute each tool call sequentially
+        total_tool_calls += len(tool_calls)
         for call in tool_calls:
             # Check for cancellation before each tool call
             if cancel_check_fn and await cancel_check_fn():
