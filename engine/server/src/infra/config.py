@@ -158,7 +158,7 @@ class Settings(BaseSettings):
         default="inline",
         description="inline=blocking in-process execution (V2 default)",
     )
-    MAX_EXECUTION_TIMEOUT: int = Field(default=900, ge=60, le=1800)
+    MAX_EXECUTION_TIMEOUT: int = Field(default=7200, ge=60, le=14400)
     MAX_PROMPT_LENGTH: int = Field(default=10000, ge=1000, le=50000)
     MAX_INPUT_PROMPT_SIZE: int = Field(default=32768, ge=1024, le=131072)
     MAX_INPUT_DATA_SIZE: int = Field(default=1048576, ge=1024, le=10485760)
@@ -296,6 +296,11 @@ class Settings(BaseSettings):
         description="Max tokens per training example.",
     )
     AB_TESTING_ENABLED: bool = True
+
+    # ---- GitHub (tiered MCP tokens) -----------------------------------------
+    GITHUB_TOKEN_READ: str = Field(default="", description="GitHub PAT for read-only MCP access")
+    GITHUB_TOKEN_WRITE: str = Field(default="", description="GitHub PAT for read+write MCP access")
+    GITHUB_TOKEN_ADMIN: str = Field(default="", description="GitHub PAT for admin MCP access")
 
     # ---- MCP ----------------------------------------------------------------
     MCP_BOOTSTRAP_SERVERS: str = Field(

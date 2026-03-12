@@ -17,6 +17,10 @@ x-engine-env: &engine-env
   PLATFORM_URL: http://host.docker.internal:3000
   ENGINE_API_KEY: mmk_dev-engine-api-key-2024
   DEBUG: "true"
+  # GitHub MCP tiered tokens (set in .env or export before compose up)
+  GITHUB_TOKEN_READ: ${GITHUB_TOKEN_READ:-}
+  GITHUB_TOKEN_WRITE: ${GITHUB_TOKEN_WRITE:-}
+  GITHUB_TOKEN_ADMIN: ${GITHUB_TOKEN_ADMIN:-}
 
 x-engine-depends: &engine-depends
   db: { condition: service_healthy }
@@ -41,6 +45,7 @@ services:
       - ../engine/server/entrypoint.sh:/app/entrypoint.sh
       - ../shared/src:/tmp/shared-src
       - /var/run/docker.sock:/var/run/docker.sock
+      - engine-config:/data/config
     environment:
       <<: *engine-env
       GATEWAY_ENABLED: "true"
@@ -57,6 +62,8 @@ services:
       - ../engine/server/seed:/app/seed
       - ../engine/server/seeds:/app/seeds
       - ../shared/src:/tmp/shared-src
+      - /var/run/docker.sock:/var/run/docker.sock
+      - engine-config:/data/config
     environment:
       <<: *engine-env
       GATEWAY_ENABLED: "true"
@@ -151,8 +158,8 @@ services:
     depends_on:
       <<: *engine-depends
     command: uvicorn src.main:app --reload --host 0.0.0.0 --port 8200 --workers 1
-    profiles: [gateway]
 
 volumes:
   ollama-data:
   gateway-workspaces:
+  engine-config:
