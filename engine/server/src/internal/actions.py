@@ -170,6 +170,115 @@ async def action_scheduler_cleanup(user: CurrentUser) -> ActionResponse:
         return ActionResponse(status="error", message="Scheduler cleanup failed")
 
 
+@router.post("/actions/redis/cleanup", dependencies=[RequireAdmin])
+async def action_redis_cleanup(user: CurrentUser) -> ActionResponse:
+    """Clean up stale Redis keys from executions, approvals, and scheduler.
+
+    Removes:
+    - exec_stream:* (stale execution SSE streams)
+    - approval_decision:* / approval_node:* (stale approval gates)
+    - revoke_intent:* (stale cancellation signals)
+    - scheduler:slot:* / scheduler:global / scheduler:team:* / scheduler:active_slots
+    """
+    from src.infra.redis import get_redis_client
+
+    r = await get_redis_client()
+    if not r:
+        return ActionResponse(status="error", message="Redis unavailable")
+    try:
+        cleaned: dict[str, int] = {}
+        patterns = [
+            "exec_stream:*",
+            "approval_decision:*",
+            "approval_node:*",
+            "revoke_intent:*",
+            "scheduler:slot:*",
+            "scheduler:team:*",
+        ]
+        for pattern in patterns:
+            keys = []
+            async for key in r.scan_iter(match=pattern, count=500):
+                keys.append(key)
+            if keys:
+                await r.delete(*keys)
+            cleaned[pattern] = len(keys)
+
+        # Also reset the global counter and active slots set
+        for fixed_key in ["scheduler:global", "scheduler:active_slots"]:
+            exists = await r.exists(fixed_key)
+            if exists:
+                await r.delete(fixed_key)
+                cleaned[fixed_key] = 1
+            else:
+                cleaned[fixed_key] = 0
+
+        total = sum(cleaned.values())
+        return ActionResponse(
+            status="ok",
+            message=f"Cleaned {total} Redis key(s)",
+            details=cleaned,
+        )
+    finally:
+        await r.aclose()
+
+
+@router.post("/actions/executions/stop-all", dependencies=[RequireAdmin])
+async def action_stop_all_executions(user: CurrentUser) -> ActionResponse:
+    """Stop all running/pending executions and clean their Redis state."""
+    from sqlalchemy import select, update
+
+    from src.executions.models import ExecutionRun, ExecutionStatus
+    from src.infra.database import async_session_maker
+    from src.infra.redis import get_redis_client
+
+    try:
+        stopped_count = 0
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(ExecutionRun.id).where(
+                    ExecutionRun.status.in_([
+                        ExecutionStatus.RUNNING,
+                        ExecutionStatus.PENDING,
+                        ExecutionStatus.AWAITING_APPROVAL,
+                    ])
+                )
+            )
+            exec_ids = [row[0] for row in result.all()]
+
+            if exec_ids:
+                # Set revoke intents in Redis
+                r = await get_redis_client()
+                if r:
+                    try:
+                        pipe = r.pipeline()
+                        for eid in exec_ids:
+                            pipe.set(f"revoke_intent:{eid}", "cancel", ex=300)
+                        await pipe.execute()
+                    finally:
+                        await r.aclose()
+
+                # Mark all as stopped in DB
+                await session.execute(
+                    update(ExecutionRun)
+                    .where(ExecutionRun.id.in_(exec_ids))
+                    .values(status=ExecutionStatus.STOPPED)
+                )
+                await session.commit()
+                stopped_count = len(exec_ids)
+
+        return ActionResponse(
+            status="ok",
+            message=f"Stopped {stopped_count} execution(s)",
+            details={
+                "stopped": stopped_count,
+                "execution_ids": exec_ids if stopped_count > 0 else [],
+            },
+        )
+    except Exception:
+        logger.exception("Stop all executions failed")
+        return ActionResponse(status="error", message="Failed to stop executions")
+
+
 @router.post("/actions/sync/reload", dependencies=[RequireAdmin])
 async def action_sync_reload(user: CurrentUser) -> ActionResponse:
     """Trigger a config reload from the platform."""
