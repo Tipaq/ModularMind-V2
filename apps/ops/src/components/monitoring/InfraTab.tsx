@@ -3,6 +3,7 @@
 import { cn } from "@modularmind/ui";
 import type { MonitoringData } from "@modularmind/api-client";
 import { Sparkline } from "./Sparkline";
+import { InfraManagementSection } from "./InfraManagementSection";
 
 type SparklineData = Array<{ ts: number; value: number }>;
 
@@ -184,6 +185,15 @@ export function InfraTab({ monitoring, sparklines }: Props) {
           <p className="mt-2 text-xs text-muted-foreground">● = currently in VRAM</p>
         </section>
       )}
+
+      {/* Infrastructure Management */}
+      <section>
+        <h2 className="mb-2 text-lg font-semibold">Infrastructure Management</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Administrative actions for managing infrastructure state. Use with caution.
+        </p>
+        <InfraManagementSection />
+      </section>
     </div>
   );
 }
