@@ -193,8 +193,6 @@ export function useChat(conversationId: string | null) {
         source.removeEventListener("trace", onEvent);
         source.removeEventListener("step", onEvent);
         source.removeEventListener("complete", onEvent);
-        source.removeEventListener("approval_required", onEvent);
-        source.removeEventListener("approval_granted", onEvent);
         source.removeEventListener("error", onError);
         source.close();
         if (sourceRef.current === source) {
@@ -205,14 +203,33 @@ export function useChat(conversationId: string | null) {
       const onEvent = (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data);
-          // DEBUG: log approval events
-          if (data.type === "approval_required" || data.type === "approval_granted") {
-            console.log("[useChat] APPROVAL EVENT:", data.type, data);
-          }
+          const eventType: string = data.type || "";
+
           handleTraceEvent(data);
           handlePanelEvent(data);
 
-          if (data.type === "step") {
+          // Approval gate events: type="step" + event="approval_required"
+          if (eventType === "step" && data.event === "approval_required") {
+            console.log("[useChat] Approval required:", data);
+            setPendingApproval({
+              executionId: data.execution_id,
+              nodeId: data.node_id,
+              message: data.message || "Review and approve to continue.",
+              plan: data.plan || "",
+              timeoutSeconds: data.timeout_seconds || 0,
+            });
+            setApprovalDecision(null);
+            return;
+          }
+
+          if (eventType === "step" && data.event === "approval_granted") {
+            console.log("[useChat] Approval granted:", data);
+            setApprovalDecision("approved");
+            setPendingApproval(null);
+            return;
+          }
+
+          if (eventType === "step") {
             const output = data.output_data || data.output;
             const response = extractResponse(output);
             if (response) {
@@ -223,11 +240,11 @@ export function useChat(conversationId: string | null) {
             }
           }
 
-          if (data.type === "tokens") {
+          if (eventType === "tokens") {
             setTokenUsage({ prompt: data.prompt_tokens || 0, completion: data.completion_tokens || 0, total: data.total_tokens || 0 });
           }
 
-          if (data.type === "complete") {
+          if (eventType === "complete") {
             executionIdRef.current = null;
             const output = data.output_data || data.output;
 
@@ -256,24 +273,7 @@ export function useChat(conversationId: string | null) {
             cleanup();
           }
 
-          if (data.type === "approval_required") {
-            console.log("[useChat] Setting pendingApproval:", data);
-            setPendingApproval({
-              executionId: data.execution_id,
-              nodeId: data.node_id,
-              message: data.message || "Review and approve to continue.",
-              plan: data.plan || "",
-              timeoutSeconds: data.timeout_seconds || 3600,
-            });
-            setApprovalDecision(null);
-          }
-
-          if (data.type === "approval_granted") {
-            setApprovalDecision("approved");
-            setPendingApproval(null);
-          }
-
-          if (data.type === "error") {
+          if (eventType === "error") {
             executionIdRef.current = null;
             setError(data.message || "Execution error");
             setIsStreaming(false);
@@ -302,8 +302,6 @@ export function useChat(conversationId: string | null) {
       source.addEventListener("trace", onEvent);
       source.addEventListener("step", onEvent);
       source.addEventListener("complete", onEvent);
-      source.addEventListener("approval_required", onEvent);
-      source.addEventListener("approval_granted", onEvent);
       source.addEventListener("error", onError);
 
       source.onerror = () => {
