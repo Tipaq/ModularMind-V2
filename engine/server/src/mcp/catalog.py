@@ -200,16 +200,32 @@ MCP_CATALOG: list[MCPCatalogEntry] = [
     MCPCatalogEntry(
         id="github",
         name="GitHub",
-        description="Manage repositories, issues, and pull requests",
+        description="Access GitHub repos, issues, PRs via tiered access (read/write/admin)",
         category="development",
         icon="github",
         npm_package="@modelcontextprotocol/server-github",
         required_secrets=[
             CatalogSecret(
-                key="GITHUB_TOKEN", label="GitHub Personal Access Token", placeholder="ghp_..."
+                key="GITHUB_TOKEN_READ",
+                label="Read Token",
+                placeholder="ghp_...",
+                required=False,
+            ),
+            CatalogSecret(
+                key="GITHUB_TOKEN_WRITE",
+                label="Write Token",
+                placeholder="ghp_...",
+                required=False,
+            ),
+            CatalogSecret(
+                key="GITHUB_TOKEN_ADMIN",
+                label="Admin Token",
+                placeholder="ghp_...",
+                required=False,
             ),
         ],
-        documentation_url="https://github.com/modelcontextprotocol/servers",
+        setup_flow="github_tiered",
+        documentation_url="https://github.com/modelcontextprotocol/servers/tree/main/src/github",
     ),
     # --- New npm-based entries ---
     MCPCatalogEntry(

@@ -108,9 +108,9 @@ class MCPToolExecutor:
 
 
 def _namespace_tool_name(server_id: str, tool_name: str) -> str:
-    """Create a namespaced tool name: ``short_id__tool_name``."""
+    """Create a namespaced tool name: ``short_id_tool_name``."""
     short_id = server_id[:8]
-    return f"{short_id}__{tool_name}"
+    return f"{short_id}_{tool_name}"
 
 
 def _tool_to_langchain_dict(ns_name: str, tool: MCPToolDefinition) -> dict[str, Any]:

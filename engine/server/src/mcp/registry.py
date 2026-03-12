@@ -79,6 +79,14 @@ class MCPRegistry:
         self._tool_cache_ts.pop(server_id, None)
         return removed
 
+    def disconnect(self, server_id: str) -> None:
+        """Disconnect a client without unregistering the server config."""
+        client = self._clients.pop(server_id, None)
+        if client:
+            asyncio.ensure_future(self._safe_disconnect(client))
+        self._tool_cache.pop(server_id, None)
+        self._tool_cache_ts.pop(server_id, None)
+
     def list_servers(self, project_id: str | None = None) -> list[MCPServerConfig]:
         """List MCP servers, optionally filtered by project.
 

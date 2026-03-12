@@ -222,6 +222,61 @@ async def _auto_deploy_free_catalog_entries() -> None:
         lock_fd.close()
 
 
+def _auto_deploy_github_tiered() -> None:
+    """Register GitHub MCP server instances for each configured access tier.
+
+    Reads GITHUB_TOKEN_READ, GITHUB_TOKEN_WRITE, GITHUB_TOKEN_ADMIN from env.
+    Each non-empty token gets its own stdio MCP server instance.
+    """
+    from src.mcp.schemas import MCPServerConfig, MCPTransport
+
+    settings = get_settings()
+    tiers = {
+        "read": settings.GITHUB_TOKEN_READ,
+        "write": settings.GITHUB_TOKEN_WRITE,
+        "admin": settings.GITHUB_TOKEN_ADMIN,
+    }
+
+    active = {k: v for k, v in tiers.items() if v}
+    if not active:
+        return
+
+    registry = get_mcp_registry()
+    existing_tiers = {
+        s.access_tier
+        for s in registry.list_servers()
+        if s.catalog_id == "github" and s.access_tier
+    }
+
+    deployed = 0
+    for tier, token in active.items():
+        if tier in existing_tiers:
+            logger.debug("GitHub MCP (%s) already registered, skipping", tier)
+            continue
+
+        from src.infra.secrets import secrets_store
+
+        server_id = str(uuid.uuid4())
+        config = MCPServerConfig(
+            id=server_id,
+            name=f"GitHub ({tier.title()})",
+            transport=MCPTransport.STDIO,
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-github"],
+            enabled=True,
+            catalog_id="github",
+            access_tier=tier,
+        )
+        secrets_store.set(f"MCP_{server_id}_GITHUB_PERSONAL_ACCESS_TOKEN", token)
+        registry.register(config)
+        registry.persist_config(config)
+        deployed += 1
+        logger.info("GitHub MCP (%s): registered (id=%s)", tier, server_id)
+
+    if deployed:
+        logger.info("GitHub MCP: deployed %d tiered instance(s)", deployed)
+
+
 async def startup_mcp(*, leader_only: bool = False) -> None:
     """Startup hook — recover sidecars, bootstrap, warm-up, and auto-deploy.
 
@@ -260,6 +315,12 @@ async def startup_mcp(*, leader_only: bool = False) -> None:
         _bootstrap_mcp_servers()
     except Exception as e:  # Resilience: bootstrap is non-fatal startup work
         logger.warning("MCP bootstrap failed (non-fatal): %s", e)
+
+    # Auto-deploy GitHub MCP instances for configured access tiers
+    try:
+        _auto_deploy_github_tiered()
+    except Exception as e:  # Resilience: non-fatal startup work
+        logger.warning("GitHub MCP tiered deploy failed (non-fatal): %s", e)
 
     # Eagerly connect to all enabled MCP servers so the dashboard shows
     # them as "Online" immediately rather than waiting for first use.

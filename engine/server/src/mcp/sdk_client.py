@@ -153,7 +153,7 @@ class MCPClient:
             MCPToolDefinition(
                 name=tool.name,
                 description=tool.description,
-                input_schema=tool.input_schema or {},
+                input_schema=tool.inputSchema or {},
             )
             for tool in result.tools
         ]
@@ -171,7 +171,7 @@ class MCPClient:
     async def _call_tool_inner(self, request: MCPToolCallRequest) -> MCPToolCallResult:
         result = await self._session.call_tool(request.tool_name, request.arguments)
 
-        if result.is_error:
+        if getattr(result, "isError", None) or getattr(result, "is_error", None):
             raise MCPToolError(f"Tool '{request.tool_name}' on '{self.config.name}' returned error")
 
         content = [
