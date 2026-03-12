@@ -35,6 +35,61 @@ from .state import GraphState
 logger = logging.getLogger(__name__)
 
 
+def _filter_mcp_for_agent(
+    server_ids: list[str],
+    agent: AgentConfig,
+    registry: Any,
+) -> list[str]:
+    """Filter MCP server IDs based on agent's gateway_permissions.
+
+    Only includes servers whose catalog matches a permission the agent has:
+    - github.access_level → catalog_id "github" (tiered: match access_level)
+    - browser.enabled → catalog_id in ("puppeteer", "brave-search", ...)
+    - Non-tiered GitHub servers are included for any github access level.
+
+    Agents with no gateway_permissions get no MCP servers.
+    """
+    perms = agent.gateway_permissions or {}
+    if not perms:
+        return []
+
+    github_level = perms.get("github", {}).get("access_level")
+
+    # Pre-scan: if tiered GitHub servers exist, skip untiered ones (avoids duplicates)
+    has_tiered_github = False
+    if github_level:
+        for sid in server_ids:
+            srv = registry.get_server(sid) if hasattr(registry, "get_server") else None
+            if srv and getattr(srv, "catalog_id", None) == "github" and getattr(srv, "access_tier", None):
+                has_tiered_github = True
+                break
+
+    filtered = []
+    for sid in server_ids:
+        server = registry.get_server(sid) if hasattr(registry, "get_server") else None
+        if not server:
+            continue
+
+        catalog = getattr(server, "catalog_id", None) or ""
+        tier = getattr(server, "access_tier", None)
+
+        if catalog == "github":
+            if not github_level:
+                continue  # Agent has no github permission
+            if not tier and has_tiered_github:
+                continue  # Skip untiered when tiered servers exist
+            if tier and tier != github_level:
+                continue  # Tiered server doesn't match agent's level
+            filtered.append(sid)
+        elif catalog in ("brave-search", "puppeteer", "fetch"):
+            if perms.get("browser", {}).get("enabled"):
+                filtered.append(sid)
+        # Skip non-matching servers (filesystem, git, memory, shell, etc.)
+        # These are general-purpose and handled by gateway, not graph agents
+
+    return filtered
+
+
 def _resolve_dot_path(state: dict, path: str) -> Any:
     """Resolve a dot-separated path against graph state.
 
@@ -316,9 +371,13 @@ class GraphCompiler:
         model_id = agent.model_id
         system_prompt = agent.system_prompt
 
-        # Pre-discover MCP tools if server IDs provided
+        # Pre-discover MCP tools (auto-discover from all enabled servers if none specified)
         lc_tools: list[dict] = []
         tool_executor = None
+        if not mcp_server_ids and self.mcp_registry:
+            mcp_server_ids = [s.id for s in self.mcp_registry.list_servers() if s.enabled]
+        if mcp_server_ids and self.mcp_registry:
+            mcp_server_ids = _filter_mcp_for_agent(mcp_server_ids, agent, self.mcp_registry)
         if mcp_server_ids and self.mcp_registry:
             try:
                 from src.mcp.tool_adapter import discover_and_convert
@@ -327,6 +386,17 @@ class GraphCompiler:
                     self.mcp_registry,
                     mcp_server_ids,
                 )
+                # Apply per-agent tool whitelist if configured
+                _perms = agent.gateway_permissions or {}
+                _tool_filter = _perms.get("mcp_tool_filter")
+                if _tool_filter and lc_tools:
+                    lc_tools = [
+                        t for t in lc_tools
+                        if any(
+                            t.get("function", {}).get("name", "").endswith(f"_{tn}")
+                            for tn in _tool_filter
+                        )
+                    ]
                 if lc_tools:
                     logger.info(
                         "Agent '%s': bound %d MCP tools from %d servers",
@@ -528,6 +598,7 @@ class GraphCompiler:
         "merge": "_create_merge_node",
         "loop": "_create_loop_node",
         "supervisor": "_create_supervisor_node",
+        "approval": "_create_approval_node",
     }
 
     async def _create_node_function(
@@ -571,6 +642,44 @@ class GraphCompiler:
 
         model_id = agent.model_id if agent else "ollama:llama3.2"
         system_prompt = agent.system_prompt if agent else "You are a helpful assistant."
+
+        # Pre-discover MCP tools at compile time (same pattern as compile_agent_graph)
+        mcp_tools: list[dict] = []
+        mcp_executor = None
+        if agent and self.mcp_registry:
+            all_server_ids = [
+                s.id for s in self.mcp_registry.list_servers() if s.enabled
+            ]
+            if all_server_ids:
+                filtered_ids = _filter_mcp_for_agent(all_server_ids, agent, self.mcp_registry)
+                if filtered_ids:
+                    try:
+                        from src.mcp.tool_adapter import discover_and_convert
+
+                        mcp_tools, mcp_executor = await discover_and_convert(
+                            self.mcp_registry, filtered_ids,
+                        )
+                        # Apply per-agent tool whitelist if configured
+                        _agent_perms = agent.gateway_permissions or {}
+                        tool_filter = _agent_perms.get("mcp_tool_filter")
+                        if tool_filter and mcp_tools:
+                            mcp_tools = [
+                                t for t in mcp_tools
+                                if any(
+                                    t.get("function", {}).get("name", "").endswith(f"_{tn}")
+                                    for tn in tool_filter
+                                )
+                            ]
+                        if mcp_tools:
+                            logger.info(
+                                "Graph agent '%s' (%s): bound %d MCP tools from %d servers",
+                                agent.name, node_id, len(mcp_tools), len(filtered_ids),
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to discover MCP tools for graph agent '%s': %s",
+                            agent.name, e,
+                        )
 
         async def agent_node(state: GraphState, config: RunnableConfig | None = None) -> dict:
             # Allow per-conversation model override via input_data
@@ -636,10 +745,11 @@ class GraphCompiler:
 
                 return await check_revoke_intent(_exec_id) == "cancel"
 
-            # Build tool executor for this agent (gateway + builtin)
-            active_tools: list[dict] = []
-            unified_executor = None
+            # Build tool executor for this agent (MCP + gateway)
+            active_tools: list[dict] = list(mcp_tools)
+            unified_executor = mcp_executor
 
+            gateway_executor = None
             if agent and agent.gateway_permissions:
                 from src.infra.config import get_settings as _get_settings
 
@@ -662,16 +772,18 @@ class GraphCompiler:
                         internal_token=get_internal_bearer_token(),
                     )
 
-                    from src.graph_engine.builtin_tools import UnifiedToolExecutor
+            # Build unified executor combining MCP + gateway
+            if active_tools and (mcp_executor or gateway_executor):
+                from src.graph_engine.builtin_tools import UnifiedToolExecutor
 
-                    unified_executor = UnifiedToolExecutor(
-                        lambda *a: (_ for _ in ()).throw(
-                            ValueError("No builtin tools in graph node")
-                        ),
-                        None,
-                        set(),
-                        gateway_executor=gateway_executor,
-                    )
+                unified_executor = UnifiedToolExecutor(
+                    lambda *a: (_ for _ in ()).throw(
+                        ValueError("No builtin tools in graph node")
+                    ),
+                    mcp_executor,
+                    set(),
+                    gateway_executor=gateway_executor,
+                )
 
             try:
                 llm = await self.llm_provider.get_model(effective_model)
@@ -681,6 +793,13 @@ class GraphCompiler:
 
                     from .tool_loop import run_tool_loop, try_bind_tools
 
+                    logger.info(
+                        "Binding %d tools to %s for %s: %s",
+                        len(active_tools),
+                        effective_model,
+                        node_id,
+                        [t.get("function", {}).get("name", "?") for t in active_tools],
+                    )
                     llm_with_tools, tools_bound = try_bind_tools(llm, active_tools)
                     if tools_bound:
                         _tool_publish_fn = _extract_tool_publish_fn(config)
@@ -1009,6 +1128,143 @@ class GraphCompiler:
                 }
 
         return merge_node
+
+    # -------------------------------------------------------------------------
+    # Approval gate node
+    # -------------------------------------------------------------------------
+
+    def _create_approval_node(self, node_id: str, node_data: dict[str, Any]) -> NodeFn:
+        """Create a human-in-the-loop approval gate.
+
+        Pauses execution, publishes the previous agent's output as an
+        ``approval_required`` SSE event, and polls Redis until the user
+        approves or rejects (or timeout is reached).
+
+        Config keys (in ``node_data.config``):
+        - approvalTimeout: seconds to wait (default 3600 = 1h)
+        - message: optional message template shown to the user
+        """
+        node_config = node_data.get("config", {})
+        timeout_seconds = node_config.get("approvalTimeout", 0)  # 0 = no timeout
+        gate_message = node_config.get("message", "Review the plan above and approve to continue.")
+
+        async def approval_node(state: GraphState, config: RunnableConfig | None = None) -> dict:
+            exec_id = (config or {}).get("configurable", {}).get("thread_id")
+            if not exec_id:
+                logger.warning("Approval node %s: no execution_id, skipping gate", node_id)
+                return {"current_node": node_id}
+
+            # Gather the plan from previous agent outputs
+            node_outputs = state.get("node_outputs", {})
+            plan_parts = []
+            for nid, out in node_outputs.items():
+                resp = out.get("response", "") if isinstance(out, dict) else str(out)
+                if resp:
+                    plan_parts.append(f"**{nid}**:\n{resp}")
+            plan_summary = "\n\n---\n\n".join(plan_parts) if plan_parts else "(no plan)"
+
+            logger.info("Approval gate %s: requesting approval for execution %s", node_id, exec_id)
+
+            import asyncio as _asyncio
+            import json as _json
+
+            from src.infra.redis import get_redis_client as _get_redis
+
+            # Use Redis for the entire approval flow to avoid asyncpg session
+            # conflicts (the worker's DB session is tied to the outer generator).
+            # 1. Set AWAITING_APPROVAL status + publish SSE event
+            # 2. Poll Redis key for decision
+            # 3. Reset status on approve, or cancel on reject
+
+            approval_key = f"approval:{exec_id}"
+            stream_key = f"exec_stream:{exec_id}"
+
+            r = await _get_redis()
+            try:
+                # Use Redis exclusively for approval signalling — DB operations
+                # from inside LangGraph nodes cause asyncpg pool/event-loop
+                # contention that blocks silently.
+                #
+                # Flow:
+                # 1. Set Redis key  approval_decision:{exec_id} = "pending"
+                # 2. Publish approval_required SSE event
+                # 3. Poll Redis key until "approved" or "rejected"
+                # The approve/reject API endpoints will SET this Redis key.
+
+                decision_key = f"approval_decision:{exec_id}"
+                await r.set(decision_key, "pending")
+                # Also store node_id so the API endpoints can reference it
+                await r.set(f"approval_node:{exec_id}", node_id)
+
+                # Publish approval_required to SSE stream
+                await r.xadd(stream_key, {"data": _json.dumps({
+                    "type": "approval_required",
+                    "node_id": node_id,
+                    "execution_id": exec_id,
+                    "message": gate_message,
+                    "plan": plan_summary[:4000],
+                    "timeout_seconds": timeout_seconds,
+                })})
+
+                logger.info(
+                    "Approval gate %s: published approval_required event", node_id
+                )
+
+                # 2. Poll Redis for approval decision
+                poll_interval = 2.0
+                decision = None
+
+                while True:
+                    await _asyncio.sleep(poll_interval)
+
+                    # Check cancellation
+                    revoke = await r.get(f"revoke_intent:{exec_id}")
+                    if revoke and revoke.decode() == "cancel":
+                        from src.executions.cancel import ExecutionCancelled
+                        raise ExecutionCancelled()
+
+                    # Check approval decision
+                    val = await r.get(decision_key)
+                    if val:
+                        val_str = val.decode() if isinstance(val, bytes) else val
+                        if val_str == "approved":
+                            decision = "approved"
+                            break
+                        elif val_str == "rejected":
+                            decision = "rejected"
+                            break
+
+                # 3. Handle decision
+                if decision == "approved":
+                    logger.info(
+                        "Approval gate %s: APPROVED, continuing", node_id
+                    )
+                    await r.xadd(stream_key, {"data": _json.dumps({
+                        "type": "approval_granted",
+                        "node_id": node_id,
+                        "execution_id": exec_id,
+                    })})
+                    # Clean up Redis keys
+                    await r.delete(decision_key, f"approval_node:{exec_id}")
+                else:
+                    logger.info(
+                        "Approval gate %s: REJECTED, stopping", node_id
+                    )
+                    await r.delete(decision_key, f"approval_node:{exec_id}")
+                    from src.executions.cancel import ExecutionCancelled
+                    raise ExecutionCancelled()
+            finally:
+                await r.aclose()
+
+            return {
+                "current_node": node_id,
+                "node_outputs": {
+                    **state.get("node_outputs", {}),
+                    node_id: {"response": f"Approved by user. {gate_message}"},
+                },
+            }
+
+        return approval_node
 
     # -------------------------------------------------------------------------
     # Loop node

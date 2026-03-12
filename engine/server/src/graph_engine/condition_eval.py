@@ -105,10 +105,13 @@ def build_condition_context(state: dict) -> dict[str, Any]:
     key_count: dict[str, int] = {}
 
     # First pass: add namespaced keys and count occurrences
+    # Normalize node IDs: replace hyphens with underscores so they are valid
+    # Python identifiers in condition expressions (e.g. node-validator → node_validator)
     for node_id, output in node_outputs.items():
+        safe_id = node_id.replace("-", "_")
         if isinstance(output, dict):
             for key, value in output.items():
-                ctx[f"{node_id}_{key}"] = value
+                ctx[f"{safe_id}_{key}"] = value
                 key_count[key] = key_count.get(key, 0) + 1
 
     # Second pass: add unambiguous flat keys

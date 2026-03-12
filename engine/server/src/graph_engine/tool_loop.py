@@ -86,6 +86,20 @@ async def run_tool_loop(
         response: AIMessage = await llm.ainvoke(msgs)
         msgs.append(response)
 
+        # Debug: log raw response details for tool-calling diagnostics
+        _raw_tc = getattr(response, "tool_calls", None)
+        _raw_invalid = getattr(response, "invalid_tool_calls", None)
+        _content_preview = (response.content or "")[:300] if response.content else "(empty)"
+        logger.info(
+            "LLM raw response: content_len=%d, tool_calls=%s, "
+            "invalid_tool_calls=%s, additional_keys=%s, content_preview=%s",
+            len(response.content) if response.content else 0,
+            _raw_tc[:3] if _raw_tc else _raw_tc,
+            _raw_invalid[:3] if _raw_invalid else _raw_invalid,
+            list((response.additional_kwargs or {}).keys()),
+            _content_preview,
+        )
+
         tool_calls = getattr(response, "tool_calls", None)
         if not tool_calls:
             # No tool calls — check if we need more tool usage
