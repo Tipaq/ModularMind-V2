@@ -1,12 +1,14 @@
 """APScheduler setup for periodic tasks.
 
 Configures interval and cron jobs for:
-- Platform sync polling (every SYNC_INTERVAL_SECONDS)
+- Platform sync polling (every SYNC_INTERVAL_SECONDS, runs immediately on startup)
 - Report to platform (every 15 minutes)
 - Stale execution cleanup (every 5 minutes)
 - Profile synthesis (every PROFILE_SYNTHESIS_INTERVAL seconds)
 - RAG consolidation (every RAG_CONSOLIDATION_INTERVAL seconds)
 """
+
+from datetime import datetime, timezone
 
 import logging
 from datetime import UTC
@@ -34,6 +36,7 @@ def create_scheduler() -> AsyncIOScheduler:
             seconds=settings.SYNC_INTERVAL_SECONDS,
             id="sync_platform",
             name="Poll platform for config updates",
+            next_run_time=datetime.now(timezone.utc),
         )
 
         # Report metrics to platform

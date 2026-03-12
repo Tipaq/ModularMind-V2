@@ -115,6 +115,12 @@ async def lifespan(app: FastAPI):
     except (OSError, ValueError, KeyError) as exc:
         logger.warning("Model catalog seeding failed (non-fatal): %s", exc)
 
+    # 4b. Initialize secrets store (needed by MCP for API keys)
+    from src.infra.secrets import secrets_store
+
+    secrets_store.initialize(settings.SECRET_KEY, settings.CONFIG_DIR)
+    logger.info("Secrets store initialized")
+
     # 5. Initialize MCP registry + recover sidecars
     from src.mcp.service import startup_mcp
 

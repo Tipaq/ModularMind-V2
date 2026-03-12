@@ -61,7 +61,7 @@ Rules:
 - Use DIRECT_RESPONSE for greetings, small talk, simple factual questions, ANY question about your identity or capabilities ("who are you?", "what can you do?", "describe yourself"), and questions that can be answered using the provided knowledge context. YOU must answer these yourself — never delegate identity questions to an agent.
 - Use TOOL_RESPONSE when the user needs information you can get via available tools (search, lookups, etc.)
 - Use DELEGATE_AGENT when a specific agent clearly matches the request
-- Use EXECUTE_GRAPH when the user requests a workflow or pipeline
+- Use EXECUTE_GRAPH when the user requests a workflow, pipeline, or a multi-step task that matches a graph (e.g. "resolve this issue", "fix this PR"). ALWAYS prefer EXECUTE_GRAPH over DELEGATE_AGENT when a graph exists for the task.
 - Prefer TOOL_RESPONSE over DIRECT_RESPONSE when tools can provide better, up-to-date information
 - Prefer DELEGATE_AGENT over CREATE_AGENT — always
 - NEVER choose CREATE_AGENT if an existing agent's capabilities match the request even partially — use DELEGATE_AGENT instead

@@ -56,6 +56,11 @@ async def main() -> None:
 
     logger.info("Worker starting — Redis Streams + APScheduler")
 
+    # Initialize secrets store so MCP servers can resolve their tokens
+    from src.infra.secrets import secrets_store
+
+    secrets_store.initialize(settings.SECRET_KEY, settings.CONFIG_DIR)
+
     # Wire Redis into ConfigProvider so the worker can resolve ephemeral agents
     from src.domain_config.provider import get_config_provider
 
