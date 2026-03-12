@@ -503,6 +503,9 @@ async def approve_execution(
 
     redis_client = await get_redis_client()
     try:
+        # Signal the approval node polling loop via Redis
+        await redis_client.set(f"approval_decision:{execution_id}", "approved")
+
         approval_svc = ApprovalService(db, redis_client)
         success = await approval_svc.approve(
             execution_id,
@@ -516,7 +519,6 @@ async def approve_execution(
                 detail="Execution is not awaiting approval or not found",
             )
 
-        # Single query with eager-loaded steps (avoids redundant DB round-trip)
         result = await db.execute(
             select(ExecutionRun)
             .where(ExecutionRun.id == execution_id)
@@ -525,10 +527,6 @@ async def approve_execution(
         execution = result.scalar_one_or_none()
         if not execution:
             raise_not_found("Execution")
-
-        # Dispatch task to resume execution
-        service = ExecutionService(db)
-        await service.dispatch_execution(execution)
 
         await db.commit()
 
@@ -551,6 +549,9 @@ async def reject_execution(
 
     redis_client = await get_redis_client()
     try:
+        # Signal the approval node polling loop via Redis
+        await redis_client.set(f"approval_decision:{execution_id}", "rejected")
+
         approval_svc = ApprovalService(db, redis_client)
         success = await approval_svc.reject(
             execution_id,

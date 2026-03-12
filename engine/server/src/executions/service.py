@@ -410,52 +410,75 @@ class ExecutionService:
         await self.db.flush()
 
         try:
-            # Graph executions run multiple agents sequentially — use longer timeout
-            timeout = settings.MAX_EXECUTION_TIMEOUT
+            # Graph executions with approval gates need no timeout (human is in the loop)
+            timeout: float | None = settings.MAX_EXECUTION_TIMEOUT
             if execution.execution_type == ExecutionType.GRAPH:
-                timeout = min(timeout * 3, 1800)
-
-            async with asyncio.timeout(timeout):
-                if execution.execution_type == ExecutionType.AGENT:
-                    async for event in self.execute_agent(execution):
-                        yield event
+                graph_config = await self.config_provider.get_graph_config(execution.graph_id)
+                has_approval = graph_config and any(
+                    n.type == "approval" for n in graph_config.nodes
+                )
+                if has_approval:
+                    timeout = None
                 else:
-                    async for event in self.execute_graph(execution):
-                        yield event
+                    timeout = min(timeout * 3, 3600)
+                node_types = [n.type for n in graph_config.nodes] if graph_config else []
+                logger.info(
+                    "Execution %s: graph=%s has_approval=%s timeout=%s node_types=%s",
+                    execution_id, execution.graph_id, has_approval, timeout, node_types,
+                )
 
-            # Mark complete
-            execution.status = ExecutionStatus.COMPLETED
-            execution.completed_at = utcnow()
+            # Use a sentinel to distinguish execution-level timeout from internal ones
+            _execution_timed_out = False
+            try:
+                async with asyncio.timeout(timeout):
+                    if execution.execution_type == ExecutionType.AGENT:
+                        async for event in self.execute_agent(execution):
+                            yield event
+                    else:
+                        async for event in self.execute_graph(execution):
+                            yield event
+            except TimeoutError:
+                if timeout is None:
+                    # timeout=None means asyncio.timeout never fires — this is an
+                    # internal TimeoutError (Redis/DB/HTTP), re-raise as generic error
+                    raise RuntimeError(
+                        "Internal timeout during execution (not execution-level)"
+                    )
+                _execution_timed_out = True
 
-            yield {
-                "type": "complete",
-                "execution_id": execution.id,
-                "status": execution.status.value,
-                "output": execution.output_data,
-                "error": None,
-                "duration_ms": int(
-                    (execution.completed_at - execution.started_at).total_seconds() * 1000
-                ),
-            }
+            if _execution_timed_out:
+                logger.error(
+                    "Execution %s timed out after %ds", execution_id, timeout
+                )
+                execution.status = ExecutionStatus.FAILED
+                execution.error_message = f"Execution timed out after {timeout}s"
+                execution.completed_at = utcnow()
 
-        except TimeoutError:
-            logger.error(
-                "Execution %s timed out after %ds", execution_id, settings.MAX_EXECUTION_TIMEOUT
-            )
-            execution.status = ExecutionStatus.FAILED
-            execution.error_message = f"Execution timed out after {settings.MAX_EXECUTION_TIMEOUT}s"
-            execution.completed_at = utcnow()
+                yield {
+                    "type": "complete",
+                    "execution_id": execution.id,
+                    "status": execution.status.value,
+                    "output": None,
+                    "error": execution.error_message,
+                    "duration_ms": int(
+                        (execution.completed_at - execution.started_at).total_seconds() * 1000
+                    ),
+                }
+            else:
+                # Mark complete
+                execution.status = ExecutionStatus.COMPLETED
+                execution.completed_at = utcnow()
 
-            yield {
-                "type": "complete",
-                "execution_id": execution.id,
-                "status": execution.status.value,
-                "output": None,
-                "error": execution.error_message,
-                "duration_ms": int(
-                    (execution.completed_at - execution.started_at).total_seconds() * 1000
-                ),
-            }
+                yield {
+                    "type": "complete",
+                    "execution_id": execution.id,
+                    "status": execution.status.value,
+                    "output": execution.output_data,
+                    "error": None,
+                    "duration_ms": int(
+                        (execution.completed_at - execution.started_at).total_seconds() * 1000
+                    ),
+                }
 
         except Exception as e:  # Resilience: catch-all for LLM, graph, and DB errors in execution
             logger.exception("Execution %s failed: %s", execution_id, e)
