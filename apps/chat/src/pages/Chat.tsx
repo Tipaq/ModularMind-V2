@@ -1,12 +1,11 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Bot, Zap, PanelRight } from "lucide-react";
-import { useChat } from "../hooks/useChat";
-import { useChatConfig, type EngineModel } from "../hooks/useChatConfig";
-import { useConversations } from "../hooks/useConversations";
+import { useChat, useConversations, useChatConfig } from "@modularmind/ui";
+import type { EngineModel } from "@modularmind/ui";
 import { ChatSidebar } from "../components/ChatSidebar";
 import { ChatMessages, ChatInput, InsightsPanel, useAuthStore, DEFAULT_CHAT_CONFIG, toggleArrayItem, formatModelName } from "@modularmind/ui";
-import type { AttachedFile, MessageExecutionData, ChatConfig } from "@modularmind/ui";
-import { api } from "../lib/api";
+import type { AttachedFile, ChatConfig } from "@modularmind/ui";
+import { chatAdapter, conversationAdapter, chatConfigAdapter } from "../lib/chat-adapter";
 
 
 export default function Chat() {
@@ -17,67 +16,9 @@ export default function Chat() {
   const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CHAT_CONFIG);
 
   const user = useAuthStore((s) => s.user);
-  const { agents, graphs, models, load: loadConfig } = useChatConfig();
+  const { agents, graphs, models, load: loadConfig } = useChatConfig(chatConfigAdapter);
 
-  // ─── useChat (messages, streaming, SSE) ─────────────────────────────────
-  // We need activeConversationId before calling useChat, but useConversations
-  // depends on setInitialMessages from useChat.  Break the cycle by lifting
-  // activeConversationId into a local useState that both hooks can share via
-  // the returned setter from useConversations.
-  //
-  // useChat only reads the id for its sendMessage closure, so we can safely
-  // initialise it as null and let useConversations keep it updated.
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-
-  const {
-    messages,
-    isStreaming,
-    error,
-    tokenUsage,
-    activities,
-    panelState,
-    pendingApproval,
-    approvalDecision,
-    sendMessage,
-    setInitialMessages,
-    cancelStream,
-    approveExecution,
-    rejectExecution,
-  } = useChat(activeConversationId);
-
-  // ─── useConversations (CRUD, list, selection) ───────────────────────────
-  const {
-    conversations,
-    setConversations,
-    crudError,
-    handleSelectConversation,
-    createConversation,
-    handleDeleteConversation,
-    handleRenameConversation,
-  } = useConversations({
-    user,
-    activeConversationId,
-    setActiveConversationId,
-    setInitialMessages,
-    setChatConfig,
-    setEnabledAgentIds,
-    setEnabledGraphIds,
-    enabledAgentIds,
-    enabledGraphIds,
-    supervisorMode: chatConfig.supervisorMode,
-  });
-
-  const [panelOpen, setPanelOpen] = useState(false);
-
-  // Debounce config persistence
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Load config once user is authenticated
-  // (conversations are loaded by useConversations internally)
-  useEffect(() => {
-    if (!user) return;
-    loadConfig();
-  }, [user, loadConfig]);
 
   // Build the full model identifier the Engine expects: "provider:model_id"
   const toEngineModelId = useCallback((m: EngineModel) => `${m.provider}:${m.model_id}`, []);
@@ -93,6 +34,57 @@ export default function Chat() {
     if (availableModels.length > 0) return toEngineModelId(availableModels[0]);
     return null;
   }, [chatConfig.modelId, availableModels, toEngineModelId]);
+
+  const {
+    messages,
+    isStreaming,
+    error,
+    activities,
+    executionDataMap,
+    streamingMessageId,
+    pendingApproval,
+    approvalDecision,
+    sendMessage,
+    setInitialMessages,
+    cancelStream,
+    approveExecution,
+    rejectExecution,
+  } = useChat(activeConversationId, chatAdapter);
+
+  // ─── useConversations (CRUD, list, selection) ───────────────────────────
+  const {
+    conversations,
+    setConversations,
+    crudError,
+    handleSelectConversation,
+    createConversation,
+    handleDeleteConversation,
+    handleRenameConversation,
+  } = useConversations({
+    authenticated: user,
+    activeConversationId,
+    setActiveConversationId,
+    setInitialMessages,
+    setChatConfig,
+    setEnabledAgentIds,
+    setEnabledGraphIds,
+    enabledAgentIds,
+    enabledGraphIds,
+    supervisorMode: chatConfig.supervisorMode,
+    modelId: effectiveModelId,
+    adapter: conversationAdapter,
+  });
+
+  const [panelOpen, setPanelOpen] = useState(false);
+
+  // Debounce config persistence
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load config once user is authenticated
+  useEffect(() => {
+    if (!user) return;
+    loadConfig();
+  }, [user, loadConfig]);
 
   // Determine if sending is blocked
   const sendDisabledReason = useMemo(() => {
@@ -110,7 +102,7 @@ export default function Chat() {
       if (!activeConversationId) return;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        api.patch(`/conversations/${activeConversationId}`, {
+        conversationAdapter.patchConversation(activeConversationId, {
           supervisor_mode: newConfig.supervisorMode,
           config: {
             enabled_agent_ids: enabledAgentIds,
@@ -142,7 +134,7 @@ export default function Chat() {
       setConversations((prev) =>
         prev.map((c) => (c.id === convId ? { ...c, title } : c)),
       );
-      api.patch(`/conversations/${convId}`, { title }).catch((err) => console.error("[Chat]", err));
+      conversationAdapter.patchConversation(convId, { title }).catch((err) => console.error("[Chat]", err));
     }
 
     // Cancel any pending debounced PATCH
@@ -152,7 +144,7 @@ export default function Chat() {
     }
 
     // Persist config before sending
-    await api.patch(`/conversations/${convId}`, {
+    await conversationAdapter.patchConversation(convId, {
       config: {
         enabled_agent_ids: enabledAgentIds,
         enabled_graph_ids: enabledGraphIds,
@@ -162,7 +154,7 @@ export default function Chat() {
     }).catch((err) => console.error("[Chat]", err));
 
     const files = attachedFiles.length > 0 ? attachedFiles.map((af) => af.file) : undefined;
-    sendMessage(inputValue, convId ?? undefined, files);
+    sendMessage(inputValue, convId ?? undefined, files, chatConfig.supervisorMode);
     setInputValue("");
     setAttachedFiles([]);
   }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, effectiveModelId, sendMessage, conversations, messages.length, setConversations]);
@@ -213,25 +205,33 @@ export default function Chat() {
     });
   }, [persistConfig]);
 
-  const selectedExecution = useMemo<MessageExecutionData>(() => ({
-    activities,
-    knowledgeData: panelState.knowledge.totalResults > 0 ? panelState.knowledge : null,
-    tokenUsage,
-    contextData: null,
-  }), [activities, panelState.knowledge, tokenUsage]);
+  // Use execution data from the streaming message, or null
+  const isLiveSelected = isStreaming && !!streamingMessageId;
+  const selectedExecution = useMemo(() => {
+    if (!streamingMessageId) return null;
+    return executionDataMap[streamingMessageId] ?? null;
+  }, [streamingMessageId, executionDataMap]);
+
+  // Token usage from the latest execution
+  const latestTokenUsage = useMemo(() => {
+    if (streamingMessageId && executionDataMap[streamingMessageId]?.tokenUsage) {
+      return executionDataMap[streamingMessageId].tokenUsage;
+    }
+    // Fallback: find the last assistant message's execution data
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+    if (lastAssistant && executionDataMap[lastAssistant.id]?.tokenUsage) {
+      return executionDataMap[lastAssistant.id].tokenUsage;
+    }
+    return null;
+  }, [streamingMessageId, executionDataMap, messages]);
 
   const handleCompactFromInput = useCallback(async () => {
     if (!activeConversationId) return;
-    await api.post(`/conversations/${activeConversationId}/compact`);
+    await conversationAdapter.compactConversation(activeConversationId);
   }, [activeConversationId]);
 
   const handleCompactFromPanel = useCallback(async () => {
-    const result = await api.post<{
-      summary_preview: string;
-      compacted_count: number;
-      duration_ms: number;
-    }>(`/conversations/${activeConversationId}/compact`);
-    return result;
+    return conversationAdapter.compactConversation(activeConversationId!);
   }, [activeConversationId]);
 
   const noOpUpdateLayer = useCallback(async () => false, []);
@@ -271,10 +271,10 @@ export default function Chat() {
 
           <div className="flex items-center gap-2 shrink-0">
             {/* Token usage */}
-            {tokenUsage && (
+            {latestTokenUsage && (
               <span className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground">
                 <Zap className="h-3 w-3" />
-                {tokenUsage.total}
+                {latestTokenUsage.total}
               </span>
             )}
 
@@ -336,7 +336,7 @@ export default function Chat() {
           selectedExecution={selectedExecution}
           liveActivities={activities}
           isStreaming={isStreaming}
-          isLiveSelected={true}
+          isLiveSelected={isLiveSelected}
           config={insightsConfig}
           onConfigChange={handleConfigChange}
           models={models}
