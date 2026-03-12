@@ -6,7 +6,7 @@ import type { SendMessageResponse } from "@modularmind/api-client";
 
 export type { ExecutionActivity, ActivityType, ActivityStatus, ToolCallData } from "@modularmind/ui";
 
-import type { ChatMessage, KnowledgeCollection, KnowledgeChunk, KnowledgeData, TokenUsage, ContextData, MessageExecutionData } from "@modularmind/ui";
+import type { ChatMessage, KnowledgeCollection, KnowledgeChunk, KnowledgeData, TokenUsage, ContextData, MessageExecutionData, ApprovalRequest } from "@modularmind/ui";
 import { extractResponse, mapKnowledgeData } from "@modularmind/ui";
 
 export type { KnowledgeCollection, KnowledgeChunk, KnowledgeData };
@@ -20,6 +20,8 @@ export function useChat(conversationId: string | null) {
   const [error, setError] = useState<string | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [executionDataMap, setExecutionDataMap] = useState<Record<string, MessageExecutionData>>({});
+  const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null);
+  const [approvalDecision, setApprovalDecision] = useState<"approved" | "rejected" | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef("");
 
@@ -289,6 +291,26 @@ export function useChat(conversationId: string | null) {
           const data = JSON.parse(e.data);
           handleTraceEvent(data);
 
+          if (data.type === "step" && data.event === "approval_required") {
+            console.log("[useChat] Approval required:", data);
+            setPendingApproval({
+              executionId: data.execution_id,
+              nodeId: data.node_id,
+              message: data.message || "Review and approve to continue.",
+              plan: data.plan || "",
+              timeoutSeconds: data.timeout_seconds || 0,
+            });
+            setApprovalDecision(null);
+            return;
+          }
+
+          if (data.type === "step" && data.event === "approval_granted") {
+            console.log("[useChat] Approval granted:", data);
+            setApprovalDecision("approved");
+            setPendingApproval(null);
+            return;
+          }
+
           if (data.type === "step") {
             const output = data.output_data || data.output;
             const response = extractResponse(output);
@@ -463,6 +485,18 @@ export function useChat(conversationId: string | null) {
     setIsStreaming(false);
   }, []);
 
+  const approveExecution = useCallback(async (executionId: string) => {
+    await fetch(`/api/chat/executions/${executionId}/approve`, { method: "POST" });
+    setApprovalDecision("approved");
+    setPendingApproval(null);
+  }, []);
+
+  const rejectExecution = useCallback(async (executionId: string) => {
+    await fetch(`/api/chat/executions/${executionId}/reject`, { method: "POST" });
+    setApprovalDecision("rejected");
+    setPendingApproval(null);
+  }, []);
+
   // ID of the message currently being streamed (for live activity display)
   const streamingMessageId = isStreaming ? currentAssistantIdRef.current : null;
 
@@ -475,8 +509,12 @@ export function useChat(conversationId: string | null) {
     selectedMessageId,
     setSelectedMessageId,
     streamingMessageId,
+    pendingApproval,
+    approvalDecision,
     sendMessage,
     setInitialMessages,
     cancelStream,
+    approveExecution,
+    rejectExecution,
   };
 }

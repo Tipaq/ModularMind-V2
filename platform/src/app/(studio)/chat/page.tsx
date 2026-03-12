@@ -35,9 +35,13 @@ export default function ChatPage() {
     selectedMessageId,
     setSelectedMessageId,
     streamingMessageId,
+    pendingApproval,
+    approvalDecision,
     sendMessage,
     setInitialMessages,
     cancelStream,
+    approveExecution,
+    rejectExecution,
   } = useChat(activeConversationId);
 
   // Auto-select the last assistant message when loading a conversation
@@ -387,6 +391,10 @@ export default function ChatPage() {
           selectedMessageId={selectedMessageId}
           onSelectMessage={setSelectedMessageId}
           attachmentBaseUrl="/api/chat"
+          pendingApproval={pendingApproval}
+          approvalDecision={approvalDecision}
+          onApprove={approveExecution}
+          onReject={rejectExecution}
           stickyFooter={
             <ChatInput
               value={inputValue}
