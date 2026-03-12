@@ -82,6 +82,8 @@ export { ChatMessages } from "./components/chat-messages";
 export type { ChatMessagesProps, ChatMessage } from "./components/chat-messages";
 export { ExecutionActivityList } from "./components/execution-activity";
 export type { ExecutionActivityListProps } from "./components/execution-activity";
+export { ApprovalCard } from "./components/approval-card";
+export type { ApprovalCardProps, ApprovalRequest } from "./components/approval-card";
 export { ChatPanel } from "./components/chat-panel";
 export type { ChatPanelProps, ChatPanelTab } from "./components/chat-panel";
 export { ChatInput } from "./components/chat-input";

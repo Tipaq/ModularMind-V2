@@ -27,6 +27,7 @@ export interface MCPServer {
   managed: boolean;
   catalog_id: string | null;
   transport: 'http' | 'stdio';
+  access_tier: string | null;
 }
 
 export interface MCPCatalogSecret {

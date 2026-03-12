@@ -7,6 +7,7 @@ import { cn } from "../lib/utils";
 import type { ExecutionActivity } from "../types/chat";
 import { ExecutionActivityList } from "./execution-activity";
 import { AttachmentChip, type AttachmentChipData } from "./attachment-chip";
+import { ApprovalCard, type ApprovalRequest } from "./approval-card";
 import { ChatEmptyState } from "./chat-empty-state";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
@@ -235,6 +236,14 @@ export interface ChatMessagesProps {
   suggestedPrompts?: Array<{ label: string; prompt: string }>;
   /** Callback when a suggestion chip is clicked. */
   onSuggestionClick?: (prompt: string) => void;
+  /** Pending approval request from a graph approval gate. */
+  pendingApproval?: ApprovalRequest | null;
+  /** Decision already made for the current approval. */
+  approvalDecision?: "approved" | "rejected" | null;
+  /** Callback to approve the execution. */
+  onApprove?: (executionId: string) => Promise<void>;
+  /** Callback to reject the execution. */
+  onReject?: (executionId: string) => Promise<void>;
 }
 
 export const ChatMessages = memo(function ChatMessages({
@@ -248,6 +257,10 @@ export const ChatMessages = memo(function ChatMessages({
   stickyFooter,
   suggestedPrompts,
   onSuggestionClick,
+  pendingApproval,
+  approvalDecision,
+  onApprove,
+  onReject,
 }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastMsg = messages[messages.length - 1];
@@ -306,6 +319,16 @@ export const ChatMessages = memo(function ChatMessages({
                     </div>
                   );
                 })}
+                {pendingApproval && onApprove && onReject && (
+                  <div className="mt-4 max-w-2xl">
+                    <ApprovalCard
+                      approval={pendingApproval}
+                      onApprove={onApprove}
+                      onReject={onReject}
+                      decision={approvalDecision}
+                    />
+                  </div>
+                )}
                 <div ref={bottomRef} />
               </div>
             )}
