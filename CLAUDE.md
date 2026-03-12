@@ -183,6 +183,9 @@ make db-push            # Push Prisma schema (platform)
 - Python: ruff (E, F, I, UP, B, SIM), line-length 100, Python 3.12
 - TypeScript: strict mode, paths alias `@/*` for platform
 - Commits: conventional commits (fix/feat/chore), no force-push to main
+- Commits must be small and atomic — group related changes only, avoid bundling unrelated files
+- Commit messages must be explicit and descriptive — explain the "why", not just the "what"
+- Always set the user as commit author: `Tim North <tim@modularmind.dev>`
 - No `from shared.` imports — use `from modularmind_shared.`
 - No Celery, no WebSocket — Redis Streams + SSE only
 - No hardcoded Tailwind colors (`bg-blue-500`, `text-green-600`) — use semantic tokens (`bg-primary`, `text-success`)
