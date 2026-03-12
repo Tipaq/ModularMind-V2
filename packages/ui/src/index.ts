@@ -8,6 +8,25 @@ export { useAuth } from "./hooks/useAuth";
 // Execution activities hook
 export { useExecutionActivities } from "./hooks/useExecutionActivities";
 
+// Chat adapter (transport abstraction for useChat)
+export type { ChatAdapter, UploadedAttachment } from "./hooks/chat-adapter";
+
+// Conversation adapter (transport abstraction for useConversations)
+export type { ConversationAdapter } from "./hooks/conversation-adapter";
+
+// Shared conversations hook
+export { useConversations } from "./hooks/useConversations";
+export type { UseConversationsOptions } from "./hooks/useConversations";
+
+// Chat config adapter (transport abstraction for useChatConfig)
+export type { ChatConfigAdapter, ChatConfigData } from "./hooks/chat-config-adapter";
+
+// Shared chat config hook
+export { useChatConfig } from "./hooks/useChatConfig";
+
+// Shared chat hook
+export { useChat } from "./hooks/useChat";
+
 // Chat utilities
 export { extractResponse } from "./hooks/useChatUtils";
 
@@ -15,8 +34,8 @@ export { extractResponse } from "./hooks/useChatUtils";
 export { cn, formatBytes, formatDuration, formatNumber, formatTokens, relativeTime, stripProvider, isLocalModel, formatModelName, formatDurationMs, formatCost, toggleArrayItem } from "./lib/utils";
 
 // Mappers (snake_case API → camelCase UI)
-export { mapKnowledgeData } from "./lib/mappers";
-export type { RawKnowledgeData } from "./lib/mappers";
+export { mapKnowledgeData, mapContextData } from "./lib/mappers";
+export type { RawKnowledgeData, RawContextData } from "./lib/mappers";
 
 // Color constants
 export { ACTIVITY_COLORS, CHANNEL_COLORS, STATUS_COLORS, ROLE_COLORS, HEALTH_COLORS } from "./lib/colors";
