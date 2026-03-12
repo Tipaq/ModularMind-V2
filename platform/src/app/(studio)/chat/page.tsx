@@ -2,20 +2,17 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
-import { useChat, type Message } from "@/hooks/useChat";
-import { useChatConfig } from "@/hooks/useChatConfig";
-import type { Conversation } from "@modularmind/api-client";
+import { useChat, useConversations, useChatConfig } from "@modularmind/ui";
 import { ConversationSidebar, ChatMessages, ChatInput, InsightsPanel, DEFAULT_CHAT_CONFIG, toggleArrayItem } from "@modularmind/ui";
 import type { AttachedFile, ChatConfig } from "@modularmind/ui";
 import { PanelRight } from "lucide-react";
+import { chatAdapter, conversationAdapter, chatConfigAdapter } from "@/lib/chat-adapter";
 
 
-const CONVERSATION_PAGE_SIZE = 50;
 const TITLE_MAX_LENGTH = 50;
 const CONFIG_DEBOUNCE_MS = 500;
 
 export default function ChatPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -25,7 +22,7 @@ export default function ChatPage() {
   const [panelOpen, setPanelOpen] = useState(true);
 
   const { status: sessionStatus } = useSession();
-  const { agents, graphs, models, supervisorLayers, load: loadConfig, updateSupervisorLayer } = useChatConfig();
+  const { agents, graphs, models, supervisorLayers, load: loadConfig, updateSupervisorLayer } = useChatConfig(chatConfigAdapter);
   const {
     messages,
     isStreaming,
@@ -42,7 +39,7 @@ export default function ChatPage() {
     cancelStream,
     approveExecution,
     rejectExecution,
-  } = useChat(activeConversationId);
+  } = useChat(activeConversationId, chatAdapter);
 
   // Auto-select the last assistant message when loading a conversation
   useEffect(() => {
@@ -109,149 +106,42 @@ export default function ChatPage() {
     return null;
   }, [effectiveChatConfig.modelId]);
 
-  // Debounce config persistence
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ─── useConversations (CRUD, list, selection) ───────────────────────────
+  const {
+    conversations,
+    setConversations,
+    crudError,
+    handleSelectConversation,
+    createConversation,
+    handleDeleteConversation,
+    handleRenameConversation,
+  } = useConversations({
+    authenticated: sessionStatus === "authenticated",
+    activeConversationId,
+    setActiveConversationId,
+    setInitialMessages,
+    setChatConfig,
+    setEnabledAgentIds,
+    setEnabledGraphIds,
+    enabledAgentIds,
+    enabledGraphIds,
+    supervisorMode: effectiveChatConfig.supervisorMode,
+    modelId: effectiveChatConfig.modelId,
+    adapter: conversationAdapter,
+  });
 
-  // Load data once session is authenticated
+  // Load engine config once session is authenticated
   useEffect(() => {
     if (sessionStatus !== "authenticated") return;
-    let active = true;
     loadConfig();
-    (async () => {
-      try {
-        const res = await fetch(`/api/chat/conversations?page_size=${CONVERSATION_PAGE_SIZE}`);
-        if (!res.ok || !active) return;
-        const data = await res.json();
-        const items: Conversation[] = data.items || [];
-
-        // Clean up orphaned conversations (created but cancelled before first response)
-        const orphans = items.filter((c) => c.message_count === 0);
-        const valid = items.filter((c) => c.message_count > 0);
-        if (orphans.length > 0) {
-          orphans.forEach((c) =>
-            fetch(`/api/chat/conversations/${c.id}`, { method: "DELETE" }).catch(() => {}),
-          );
-        }
-
-        if (active) setConversations(valid);
-      } catch {
-        // Silently ignore – component will show empty state
-      }
-    })();
-    return () => { active = false; };
   }, [sessionStatus, loadConfig]);
-
-  // Load messages when selecting a conversation
-  const handleSelectConversation = useCallback(
-    async (id: string) => {
-      setActiveConversationId(id);
-      try {
-        const res = await fetch(`/api/chat/conversations/${id}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const msgs: Message[] = (data.messages || []).map(
-          (m: { id: string; role: string; content: string; created_at: string; metadata?: Record<string, unknown>; attachments?: { id: string; filename: string; content_type: string; size_bytes: number }[] }) => ({
-            id: m.id,
-            role: m.role as "user" | "assistant" | "system",
-            content: m.content,
-            created_at: m.created_at,
-            metadata: m.metadata || {},
-            attachments: m.attachments,
-          }),
-        );
-        setInitialMessages(msgs);
-
-        // Apply conversation config
-        const convConfig = data.config || {};
-        setEnabledAgentIds(convConfig.enabled_agent_ids || []);
-        setEnabledGraphIds(convConfig.enabled_graph_ids || []);
-        setChatConfig({
-          supervisorMode: data.supervisor_mode ?? true,
-          supervisorPrompt: convConfig.supervisor_prompt || "",
-          modelId: convConfig.model_id || null,
-          modelOverride: convConfig.model_override || false,
-          userPreferences: convConfig.user_preferences || null,
-        });
-      } catch {
-        // Fetch failed – conversation panel stays in previous state
-      }
-    },
-    [setInitialMessages],
-  );
-
-  const createConversation = useCallback(async (): Promise<string | null> => {
-    try {
-      const body: Record<string, unknown> = {
-        title: "New Chat",
-        supervisor_mode: effectiveChatConfig.supervisorMode,
-      };
-      // If a single agent is selected, use direct mode
-      if (enabledAgentIds.length === 1 && enabledGraphIds.length === 0) {
-        body.agent_id = enabledAgentIds[0];
-        body.supervisor_mode = false;
-      }
-
-      // Raw LLM mode — no agent, no supervisor, just model_id
-      if (!body.agent_id && !body.supervisor_mode && effectiveChatConfig.modelId) {
-        body.config = { model_id: effectiveChatConfig.modelId };
-      }
-
-      const res = await fetch("/api/chat/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) return null;
-      const conv = await res.json();
-      setConversations((prev) => [conv, ...prev]);
-      setActiveConversationId(conv.id);
-      setInitialMessages([]);
-      setChatConfig({ ...DEFAULT_CHAT_CONFIG, supervisorMode: effectiveChatConfig.supervisorMode });
-      return conv.id as string;
-    } catch (err) {
-      console.error("[Chat]", err);
-      return null;
-    }
-  }, [enabledAgentIds, enabledGraphIds, effectiveChatConfig.supervisorMode, effectiveChatConfig.modelId, setInitialMessages]);
 
   const handleCreateConversation = useCallback(async () => {
     await createConversation();
   }, [createConversation]);
 
-  const handleDeleteConversation = useCallback(
-    async (id: string) => {
-      try {
-        await fetch(`/api/chat/conversations/${id}`, { method: "DELETE" });
-        setConversations((prev) => prev.filter((c) => c.id !== id));
-        if (activeConversationId === id) {
-          setActiveConversationId(null);
-          setInitialMessages([]);
-          setChatConfig(DEFAULT_CHAT_CONFIG);
-        }
-      } catch {
-        // Delete failed – keep conversation in list
-      }
-    },
-    [activeConversationId, setInitialMessages],
-  );
-
-  const handleRenameConversation = useCallback(
-    async (id: string, title: string) => {
-      try {
-        await fetch(`/api/chat/conversations/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title }),
-        });
-        setConversations((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, title } : c)),
-        );
-      } catch {
-        // Rename failed – keep previous title
-      }
-    },
-    [],
-  );
+  // Debounce config persistence
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Persist config changes to conversation (debounced)
   const persistConfig = useCallback(
@@ -259,19 +149,15 @@ export default function ChatPage() {
       if (!activeConversationId) return;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        fetch(`/api/chat/conversations/${activeConversationId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            supervisor_mode: newConfig.supervisorMode,
-            config: {
-              enabled_agent_ids: enabledAgentIds,
-              enabled_graph_ids: enabledGraphIds,
-              model_id: newConfig.modelId,
-              model_override: newConfig.modelOverride,
-              supervisor_prompt: newConfig.supervisorPrompt,
-            },
-          }),
+        conversationAdapter.patchConversation(activeConversationId, {
+          supervisor_mode: newConfig.supervisorMode,
+          config: {
+            enabled_agent_ids: enabledAgentIds,
+            enabled_graph_ids: enabledGraphIds,
+            model_id: newConfig.modelId,
+            model_override: newConfig.modelOverride,
+            supervisor_prompt: newConfig.supervisorPrompt,
+          },
         }).catch(() => { /* best-effort persist */ });
       }, CONFIG_DEBOUNCE_MS);
     },
@@ -307,11 +193,7 @@ export default function ChatPage() {
       setConversations((prev) =>
         prev.map((c) => (c.id === convId ? { ...c, title } : c)),
       );
-      fetch(`/api/chat/conversations/${convId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
-      }).catch((e) => console.warn("[Chat] title update failed", e));
+      conversationAdapter.patchConversation(convId, { title }).catch((e) => console.warn("[Chat] title update failed", e));
     }
 
     // Cancel any pending debounced PATCH to avoid concurrent writes
@@ -322,18 +204,14 @@ export default function ChatPage() {
 
     // Persist config before sending — must complete before message POST
     // so the Engine sees the model_id in the conversation config
-    await fetch(`/api/chat/conversations/${convId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        config: {
-          enabled_agent_ids: enabledAgentIds,
-          enabled_graph_ids: enabledGraphIds,
-          model_id: effectiveChatConfig.modelId,
-          model_override: effectiveChatConfig.modelOverride,
-          supervisor_prompt: effectiveChatConfig.supervisorPrompt,
-        },
-      }),
+    await conversationAdapter.patchConversation(convId, {
+      config: {
+        enabled_agent_ids: enabledAgentIds,
+        enabled_graph_ids: enabledGraphIds,
+        model_id: effectiveChatConfig.modelId,
+        model_override: effectiveChatConfig.modelOverride,
+        supervisor_prompt: effectiveChatConfig.supervisorPrompt,
+      },
     }).catch((e) => console.warn("[Chat] pre-send config persist failed", e));
 
     const files = attachedFiles.length > 0 ? attachedFiles.map((af) => af.file) : undefined;
@@ -378,9 +256,9 @@ export default function ChatPage() {
           </button>
         </div>
 
-        {error && (
+        {(error || crudError) && (
           <div className="px-4 py-2 bg-destructive/10 text-destructive text-sm border-b border-destructive/20 shrink-0">
-            {error}
+            {error || crudError}
           </div>
         )}
 
@@ -414,15 +292,9 @@ export default function ChatPage() {
               selectedModelId={effectiveChatConfig.modelId}
               onModelChange={(modelId) => handleConfigChange({ modelId })}
               getModelId={(m) => `${m.provider}:${m.model_id}`}
-              onCompact={async () => {
-                if (!activeConversationId) return;
-                const res = await fetch("/api/chat/compact", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ conversation_id: activeConversationId }),
-                });
-                if (!res.ok) throw new Error("Compaction failed");
-              }}
+              onCompact={activeConversationId ? async () => {
+                await conversationAdapter.compactConversation(activeConversationId);
+              } : undefined}
               compactDisabled={messages.length < 4 || isStreaming}
               contextPercent={contextPercent}
             />
@@ -448,13 +320,7 @@ export default function ChatPage() {
           allAgents={agents || []}
           allGraphs={graphs || []}
           onCompact={activeConversationId ? async () => {
-            const res = await fetch("/api/chat/compact", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ conversation_id: activeConversationId }),
-            });
-            if (!res.ok) throw new Error("Compaction failed");
-            return res.json();
+            return conversationAdapter.compactConversation(activeConversationId);
           } : undefined}
         />
       )}
