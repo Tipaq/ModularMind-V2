@@ -1,4 +1,4 @@
-import type { KnowledgeCollection, KnowledgeChunk, KnowledgeData } from "../types/chat";
+import type { KnowledgeCollection, KnowledgeChunk, KnowledgeData, ContextData } from "../types/chat";
 
 /** Raw snake_case collection from API response. */
 interface RawCollection {
@@ -55,6 +55,76 @@ export function mapKnowledgeData(raw: RawKnowledgeData): KnowledgeData {
     collections: (raw.collections || []).map(mapCollection),
     chunks: (raw.chunks || []).map(mapChunk),
     totalResults: raw.total_results || 0,
+  };
+}
+
+// ─── Context Data Mapping ───────────────────────────────────────────────────
+
+/** Raw snake_case context data from API/SSE (history + budget + user profile). */
+export interface RawContextData {
+  history?: {
+    budget?: {
+      included_count: number;
+      total_chars: number;
+      max_chars: number;
+      budget_exceeded: boolean;
+      context_window?: number;
+      history_budget_pct?: number;
+      history_budget_tokens?: number;
+    };
+    messages?: { role: string; content: string }[];
+    summary?: string;
+  };
+  user_profile?: string | null;
+  budget_overview?: {
+    context_window: number;
+    effective_context: number;
+    max_pct: number;
+    layers: {
+      history: { pct: number; allocated: number; used: number };
+      memory: { pct: number; allocated: number; used: number };
+      rag: { pct: number; allocated: number; used: number };
+      system?: { pct: number; allocated: number; used: number };
+    };
+  };
+}
+
+/** Map snake_case API context data to camelCase UI types. */
+export function mapContextData(raw: RawContextData): ContextData {
+  const h = raw.history;
+  const bo = raw.budget_overview;
+  return {
+    history: h
+      ? {
+          budget: h.budget
+            ? {
+                includedCount: h.budget.included_count ?? 0,
+                totalChars: h.budget.total_chars ?? 0,
+                maxChars: h.budget.max_chars ?? 0,
+                budgetExceeded: h.budget.budget_exceeded ?? false,
+                contextWindow: h.budget.context_window,
+                historyBudgetPct: h.budget.history_budget_pct,
+                historyBudgetTokens: h.budget.history_budget_tokens,
+              }
+            : null,
+          messages: h.messages || [],
+          summary: h.summary || "",
+        }
+      : null,
+    userProfile: raw.user_profile || null,
+    budgetOverview: bo
+      ? {
+          contextWindow: bo.context_window,
+          effectiveContext: bo.effective_context,
+          maxPct: bo.max_pct,
+          layers: {
+            history: bo.layers.history,
+            memory: bo.layers.memory,
+            rag: bo.layers.rag,
+            ...(bo.layers.system ? { system: bo.layers.system } : {}),
+          },
+        }
+      : null,
   };
 }
 
