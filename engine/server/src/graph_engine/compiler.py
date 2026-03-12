@@ -1196,9 +1196,14 @@ class GraphCompiler:
                 # Also store node_id so the API endpoints can reference it
                 await r.set(f"approval_node:{exec_id}", node_id)
 
-                # Publish approval_required to SSE stream
+                # Publish approval_required to SSE stream.
+                # Use type="step" + event="approval_required" to match the
+                # format of other step events (step_started, step_completed).
+                # The SSE normalizer emits event: step which the frontend
+                # already listens to.
                 await r.xadd(stream_key, {"data": _json.dumps({
-                    "type": "approval_required",
+                    "type": "step",
+                    "event": "approval_required",
                     "node_id": node_id,
                     "execution_id": exec_id,
                     "message": gate_message,
@@ -1240,7 +1245,8 @@ class GraphCompiler:
                         "Approval gate %s: APPROVED, continuing", node_id
                     )
                     await r.xadd(stream_key, {"data": _json.dumps({
-                        "type": "approval_granted",
+                        "type": "step",
+                        "event": "approval_granted",
                         "node_id": node_id,
                         "execution_id": exec_id,
                     })})
