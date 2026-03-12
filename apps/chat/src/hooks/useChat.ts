@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Message as ApiMessage, MessageAttachment, SendMessageResponse } from "@modularmind/api-client";
-import type { TokenUsage } from "@modularmind/ui";
+import type { TokenUsage, ApprovalRequest } from "@modularmind/ui";
 import { extractResponse } from "@modularmind/ui";
 import { api } from "../lib/api";
 import { useExecutionActivities } from "@modularmind/ui";
@@ -23,6 +23,8 @@ export function useChat(conversationId: string | null) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
+  const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null);
+  const [approvalDecision, setApprovalDecision] = useState<"approved" | "rejected" | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef("");
   const executionIdRef = useRef<string | null>(null);
@@ -191,6 +193,8 @@ export function useChat(conversationId: string | null) {
         source.removeEventListener("trace", onEvent);
         source.removeEventListener("step", onEvent);
         source.removeEventListener("complete", onEvent);
+        source.removeEventListener("approval_required", onEvent);
+        source.removeEventListener("approval_granted", onEvent);
         source.removeEventListener("error", onError);
         source.close();
         if (sourceRef.current === source) {
@@ -201,6 +205,10 @@ export function useChat(conversationId: string | null) {
       const onEvent = (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data);
+          // DEBUG: log approval events
+          if (data.type === "approval_required" || data.type === "approval_granted") {
+            console.log("[useChat] APPROVAL EVENT:", data.type, data);
+          }
           handleTraceEvent(data);
           handlePanelEvent(data);
 
@@ -248,6 +256,23 @@ export function useChat(conversationId: string | null) {
             cleanup();
           }
 
+          if (data.type === "approval_required") {
+            console.log("[useChat] Setting pendingApproval:", data);
+            setPendingApproval({
+              executionId: data.execution_id,
+              nodeId: data.node_id,
+              message: data.message || "Review and approve to continue.",
+              plan: data.plan || "",
+              timeoutSeconds: data.timeout_seconds || 3600,
+            });
+            setApprovalDecision(null);
+          }
+
+          if (data.type === "approval_granted") {
+            setApprovalDecision("approved");
+            setPendingApproval(null);
+          }
+
           if (data.type === "error") {
             executionIdRef.current = null;
             setError(data.message || "Execution error");
@@ -277,6 +302,8 @@ export function useChat(conversationId: string | null) {
       source.addEventListener("trace", onEvent);
       source.addEventListener("step", onEvent);
       source.addEventListener("complete", onEvent);
+      source.addEventListener("approval_required", onEvent);
+      source.addEventListener("approval_granted", onEvent);
       source.addEventListener("error", onError);
 
       source.onerror = () => {
@@ -322,6 +349,18 @@ export function useChat(conversationId: string | null) {
     };
   }, []);
 
+  const approveExecution = useCallback(async (executionId: string) => {
+    await api.post(`/executions/${executionId}/approve`);
+    setApprovalDecision("approved");
+    setPendingApproval(null);
+  }, []);
+
+  const rejectExecution = useCallback(async (executionId: string) => {
+    await api.post(`/executions/${executionId}/reject`);
+    setApprovalDecision("rejected");
+    setPendingApproval(null);
+  }, []);
+
   return {
     messages,
     isStreaming,
@@ -329,8 +368,12 @@ export function useChat(conversationId: string | null) {
     tokenUsage,
     activities,
     panelState,
+    pendingApproval,
+    approvalDecision,
     sendMessage,
     setInitialMessages,
     cancelStream,
+    approveExecution,
+    rejectExecution,
   };
 }

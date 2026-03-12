@@ -36,9 +36,13 @@ export default function Chat() {
     tokenUsage,
     activities,
     panelState,
+    pendingApproval,
+    approvalDecision,
     sendMessage,
     setInitialMessages,
     cancelStream,
+    approveExecution,
+    rejectExecution,
   } = useChat(activeConversationId);
 
   // ─── useConversations (CRUD, list, selection) ───────────────────────────
@@ -296,6 +300,10 @@ export default function Chat() {
           isStreaming={isStreaming}
           activities={activities}
           showRoutingMetadata
+          pendingApproval={pendingApproval}
+          approvalDecision={approvalDecision}
+          onApprove={approveExecution}
+          onReject={rejectExecution}
           stickyFooter={
             <ChatInput
               value={inputValue}
