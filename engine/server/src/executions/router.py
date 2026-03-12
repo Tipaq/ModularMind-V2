@@ -200,12 +200,6 @@ async def stream_execution(
                             if raw is None:
                                 continue
                             event = json.loads(raw)
-                            event_type = event.get("type", "?")
-                            if "approval" in event_type:
-                                logger.info(
-                                    "SSE stream %s: yielding event type=%s",
-                                    execution_id, event_type,
-                                )
                             yield event
                             if event.get("type") in ("complete", "error"):
                                 completed = True
