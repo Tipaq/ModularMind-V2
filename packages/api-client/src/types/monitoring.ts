@@ -246,3 +246,28 @@ export interface PipelinesData {
   dlq_messages: DLQMessage[];
   counters: PipelineCounters;
 }
+
+// ─── Alert management ────────────────────────────────────────────────────────
+
+export interface ThresholdConfig {
+  cpu_percent: number;
+  memory_percent: number;
+  workers_min: number;
+  dlq_max: number;
+  queue_depth_max: number;
+  enabled: boolean;
+}
+
+export interface ThresholdUpdate {
+  cpu_percent?: number;
+  memory_percent?: number;
+  workers_min?: number;
+  dlq_max?: number;
+  queue_depth_max?: number;
+  enabled?: boolean;
+}
+
+export interface AlertHistoryResponse {
+  items: AlertItem[];
+  total: number;
+}
