@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -49,7 +50,7 @@ class NetworkExecutor(BaseExecutor):
             return "Error: invalid URL — no hostname"
 
         # Block private/internal addresses
-        error = _check_ssrf(parsed.hostname)
+        error = await _check_ssrf(parsed.hostname)
         if error:
             return error
 
@@ -102,10 +103,9 @@ class NetworkExecutor(BaseExecutor):
             return f"Error: request failed — {e}"
 
 
-def _check_ssrf(hostname: str) -> str | None:
+async def _check_ssrf(hostname: str) -> str | None:
     """Block requests to private/internal addresses (SSRF protection)."""
     import ipaddress
-    import socket
 
     # Block obvious internal hostnames
     lower = hostname.lower()
@@ -115,14 +115,18 @@ def _check_ssrf(hostname: str) -> str | None:
     if lower.endswith(".local") or lower.endswith(".internal"):
         return f"Error: requests to '{hostname}' are blocked (internal domain)"
 
-    # Resolve hostname and check for private IPs
+    # Resolve hostname asynchronously and check for private IPs
     try:
-        results = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        loop = asyncio.get_event_loop()
+        results = await loop.getaddrinfo(hostname, None)
         for _family, _type, _proto, _canonname, sockaddr in results:
             ip = ipaddress.ip_address(sockaddr[0])
             if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
                 return f"Error: '{hostname}' resolves to private IP {ip} (blocked)"
-    except socket.gaierror:
+            # Block cloud metadata endpoint (AWS/GCP/Azure)
+            if str(ip) == "169.254.169.254":
+                return f"Error: '{hostname}' resolves to cloud metadata IP (blocked)"
+    except OSError:
         return f"Error: cannot resolve hostname '{hostname}'"
 
     return None

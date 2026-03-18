@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shlex
 from typing import TYPE_CHECKING, Any
 
 from src.executors.base import BaseExecutor
@@ -76,7 +77,7 @@ class FilesystemExecutor(BaseExecutor):
         escaped = content.replace("\\", "\\\\").replace("'", "'\\''")
         exit_code, output = await sandbox_mgr.exec_in_sandbox(
             execution_id,
-            ["sh", "-c", f"printf '%s' '{escaped}' > {path}"],
+            ["sh", "-c", f"printf '%s' '{escaped}' > {shlex.quote(path)}"],
         )
 
         if exit_code != 0:
