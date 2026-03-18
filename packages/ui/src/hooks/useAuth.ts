@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { AUTH_SESSION_EXPIRED_EVENT } from "@modularmind/api-client";
 import { useAuthStore } from "../stores/auth";
 
 interface UseAuthOptions {
@@ -25,6 +26,17 @@ export function useAuth({ requireAuth = true, api }: UseAuthOptions) {
       logout();
     });
   }, [user, isLoading, logout, api]);
+
+  // Listen for session expiry from ApiClient and immediately redirect
+  useEffect(() => {
+    if (!requireAuth) return;
+    const handleExpired = () => {
+      logout();
+      navigate("/login", { replace: true });
+    };
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleExpired);
+    return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleExpired);
+  }, [requireAuth, logout, navigate]);
 
   useEffect(() => {
     if (requireAuth && !isLoading && !user) {
