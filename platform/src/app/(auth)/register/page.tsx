@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import Link from "next/link";
+import { Button, Input } from "@modularmind/ui";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -31,7 +33,19 @@ export default function RegisterPage() {
         return;
       }
 
-      router.push("/login");
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError("Account created but auto-login failed. Please sign in.");
+        router.push("/login");
+        return;
+      }
+
+      router.push("/agents");
     } catch {
       setError("Something went wrong");
       setLoading(false);
@@ -56,12 +70,11 @@ export default function RegisterPage() {
           <label htmlFor="name" className="mb-1 block text-sm font-medium">
             Name
           </label>
-          <input
+          <Input
             id="name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
             required
           />
         </div>
@@ -70,12 +83,11 @@ export default function RegisterPage() {
           <label htmlFor="email" className="mb-1 block text-sm font-medium">
             Email
           </label>
-          <input
+          <Input
             id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
             required
           />
         </div>
@@ -84,24 +96,23 @@ export default function RegisterPage() {
           <label htmlFor="password" className="mb-1 block text-sm font-medium">
             Password
           </label>
-          <input
+          <Input
             id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
             required
             minLength={8}
           />
         </div>
 
-        <button
+        <Button
           type="submit"
           disabled={loading}
-          className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="w-full"
         >
           {loading ? "Creating account..." : "Create account"}
-        </button>
+        </Button>
       </form>
 
       <p className="mt-4 text-center text-sm text-muted-foreground">
