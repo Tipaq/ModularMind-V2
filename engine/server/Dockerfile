@@ -66,6 +66,10 @@ COPY --from=spa-builder /app/apps/ops/dist ./static/ops
 COPY engine/server/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
+RUN useradd -u 1000 -m -s /bin/bash appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 ENTRYPOINT ["./entrypoint.sh"]

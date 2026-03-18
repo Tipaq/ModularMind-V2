@@ -36,5 +36,10 @@ COPY --from=builder /app/platform/.next/static ./platform/.next/static
 COPY --from=builder /app/platform/public ./platform/public
 COPY install.sh ./install.sh
 COPY docker/docker-compose.client.yml ./docker/docker-compose.client.yml
+
+RUN adduser -u 1000 -D -s /bin/sh appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 3000
 CMD ["node", "platform/server.js"]

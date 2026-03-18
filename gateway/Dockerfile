@@ -27,6 +27,10 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 
 COPY gateway/src ./src
 
+RUN useradd -u 1000 -m -s /bin/bash appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8200
 
 # CRITICAL: single worker to maintain sandbox state consistency
