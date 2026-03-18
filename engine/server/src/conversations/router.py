@@ -949,7 +949,8 @@ async def send_message(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        logger.warning("Message send failed: %s", e)
+        raise HTTPException(status_code=400, detail="Message send failed") from e
     except (RuntimeError, OSError, KeyError, TypeError) as e:
         logger.exception("Failed to create execution: %s", e)
         raise HTTPException(status_code=500, detail="Failed to start execution") from e
@@ -994,9 +995,11 @@ async def compact_conversation(
             user_id=user.id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        logger.warning("Compact failed: %s", e)
+        raise HTTPException(status_code=400, detail="Compact failed") from e
     except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+        logger.warning("Compact failed: %s", e)
+        raise HTTPException(status_code=503, detail="Compact unavailable") from e
 
     await db.commit()
     return CompactResponse(**result)
