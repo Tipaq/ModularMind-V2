@@ -258,7 +258,8 @@ async def update_preferences(
         await auth_service.update_preferences(user.id, body.preferences)
         await db.commit()
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+        logger.warning("Preferences update failed: %s", e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Preferences update failed") from e
     return PreferencesResponse(preferences=body.preferences)
 
 
