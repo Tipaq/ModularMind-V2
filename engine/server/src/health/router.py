@@ -15,6 +15,7 @@ import redis
 import sqlalchemy.exc
 from fastapi import APIRouter
 
+from src.auth import RequireAdmin
 from src.infra.config import get_settings
 from src.infra.redis import check_redis_health, get_redis_pool
 
@@ -27,7 +28,7 @@ router = APIRouter(tags=["Health"])
 _startup_time = time.time()
 
 
-@router.get("/health")
+@router.get("/health", dependencies=[RequireAdmin])
 async def health_check() -> dict[str, Any]:
     """Comprehensive health check endpoint.
 
@@ -94,19 +95,24 @@ async def health_check() -> dict[str, Any]:
         components["ollama"] = {"status": "unavailable"}
 
     # Check worker (Redis Streams consumer health)
+    _bus_redis = None
     try:
         from src.infra.redis_streams import RedisStreamBus
 
-        bus = RedisStreamBus(redis.asyncio.Redis(connection_pool=get_redis_pool()))
+        _bus_redis = redis.asyncio.Redis(connection_pool=get_redis_pool())
+        bus = RedisStreamBus(_bus_redis)
         exec_info = await bus.stream_info("tasks:executions")
         worker_groups = exec_info.get("groups", [])
         components["worker"] = {
             "status": "ok" if worker_groups else "no_consumers",
             "consumer_groups": len(worker_groups),
         }
-    except (ConnectionError, OSError, redis.RedisError, Exception):
+    except (ConnectionError, OSError, redis.RedisError):
         logger.debug("Worker health check unavailable")
         components["worker"] = {"status": "unknown"}
+    finally:
+        if _bus_redis is not None:
+            await _bus_redis.aclose()
 
     # System metrics (run blocking psutil calls in thread to avoid stalling event loop)
     mem, cpu, disk = await asyncio.gather(
