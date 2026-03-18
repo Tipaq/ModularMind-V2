@@ -143,6 +143,7 @@ mcp_sidecars_active = Gauge(
 METRIC_KEYS = [
     "metrics:cpu",
     "metrics:memory",
+    "metrics:disk",
     "metrics:tasks",
     "metrics:queue",
     "metrics:latency",
@@ -249,7 +250,7 @@ async def sample_dlq_depth(r) -> None:
         logger.debug("DLQ depth sample failed: %s", e)
 
 
-async def snapshot_metrics(r) -> None:
+async def snapshot_metrics(r, *, http_client: httpx.AsyncClient | None = None) -> None:
     """Collect current metrics and store in Redis sorted sets for history."""
     global _last_cpu_percent
     try:
@@ -265,6 +266,7 @@ async def snapshot_metrics(r) -> None:
         cpu = await asyncio.to_thread(psutil.cpu_percent, 0.1)
         _last_cpu_percent = cpu
         mem = await asyncio.to_thread(psutil.virtual_memory)
+        disk = await asyncio.to_thread(psutil.disk_usage, "/")
 
         queued_exec = await r.xlen("tasks:executions")
         queued_models = await r.xlen("tasks:models")
@@ -273,8 +275,11 @@ async def snapshot_metrics(r) -> None:
         active_slots = await r.scard("scheduler:active_slots")
 
         pipe = r.pipeline(transaction=False)
-        pipe.zadd("metrics:cpu", {json.dumps({"v": cpu}): now})
-        pipe.zadd("metrics:memory", {json.dumps({"v": mem.percent}): now})
+        # Include timestamp in JSON to guarantee member uniqueness in sorted set
+        # (without it, identical values like {"v": 22.8} overwrite each other)
+        pipe.zadd("metrics:cpu", {json.dumps({"v": cpu, "t": now}): now})
+        pipe.zadd("metrics:memory", {json.dumps({"v": mem.percent, "t": now}): now})
+        pipe.zadd("metrics:disk", {json.dumps({"v": disk.percent, "t": now}): now})
         pipe.zadd(
             "metrics:tasks",
             {
@@ -282,6 +287,7 @@ async def snapshot_metrics(r) -> None:
                     {
                         "active": active_slots,
                         "queued": queued_exec + queued_models,
+                        "t": now,
                     }
                 ): now
             },
@@ -293,12 +299,13 @@ async def snapshot_metrics(r) -> None:
                     {
                         "executions": queued_exec,
                         "models": queued_models,
+                        "t": now,
                     }
                 ): now
             },
         )
         if latency is not None:
-            pipe.zadd("metrics:latency", {json.dumps({"v": round(latency, 2)}): now})
+            pipe.zadd("metrics:latency", {json.dumps({"v": round(latency, 2), "t": now}): now})
 
         for key in METRIC_KEYS:
             pipe.zremrangebyscore(key, "-inf", cutoff)
@@ -309,19 +316,21 @@ async def snapshot_metrics(r) -> None:
         global _previous_model_names
         try:
             ollama_models = []
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{settings.OLLAMA_BASE_URL}/api/ps")
+            _owns_client = http_client is None
+            _client = http_client or httpx.AsyncClient(timeout=5.0)
+            try:
+                resp = await _client.get(f"{settings.OLLAMA_BASE_URL}/api/ps")
                 if resp.status_code == 200:
                     ollama_models = resp.json().get("models", [])
+            finally:
+                if _owns_client:
+                    await _client.aclose()
 
-            vram_used = sum(m.get("size_vram", 0) for m in ollama_models)
-            total_vram_gb = settings.GPU_TOTAL_VRAM_GB
-            if total_vram_gb == 0:
-                from src.infra.gpu import detect_gpu
+            from src.infra.gpu import compute_vram_stats
 
-                total_vram_gb = detect_gpu().memory_gb
-            total_vram_bytes = int(total_vram_gb * (1024**3))
-            vram_pct = (vram_used / total_vram_bytes * 100) if total_vram_bytes > 0 else 0.0
+            vram_used, total_vram_gb, vram_pct = compute_vram_stats(
+                ollama_models, settings.GPU_TOTAL_VRAM_GB
+            )
 
             # Update Prometheus gauges
             vram_used_bytes.set(vram_used)
@@ -337,6 +346,7 @@ async def snapshot_metrics(r) -> None:
                             "v": round(vram_pct, 2),
                             "used_bytes": vram_used,
                             "model_count": len(ollama_models),
+                            "t": now,
                         }
                     ): now
                 },
@@ -392,6 +402,7 @@ async def snapshot_metrics(r) -> None:
                             {
                                 "v": round(avg_latency_ms, 2),
                                 "count": len(latencies),
+                                "t": now,
                             }
                         ): now
                     },
@@ -404,6 +415,7 @@ async def snapshot_metrics(r) -> None:
                         json.dumps(
                             {
                                 "v": round(avg_tps, 2),
+                                "t": now,
                             }
                         ): now
                     },
@@ -416,6 +428,7 @@ async def snapshot_metrics(r) -> None:
                         json.dumps(
                             {
                                 "v": round(avg_ttft_ms, 2),
+                                "t": now,
                             }
                         ): now
                     },
@@ -579,13 +592,15 @@ async def evaluate_alerts(r) -> None:
 async def start_metrics_sampler(interval: float = 10.0) -> None:
     """Run periodic metrics sampling in background.
 
-    Uses a single persistent Redis client for the entire sampler lifetime.
-    Collects metric snapshots every 10s and evaluates alerts every 30s.
+    Uses a single persistent Redis client and httpx client for the entire
+    sampler lifetime. Collects metric snapshots every 10s and evaluates
+    alerts every 30s.
     """
     from src.infra.redis import get_redis_client
 
     logger.info("Metrics sampler started (interval=%.0fs)", interval)
     r = None
+    http_client = httpx.AsyncClient(timeout=5.0)
     tick = 0
     while True:
         try:
@@ -597,7 +612,7 @@ async def start_metrics_sampler(interval: float = 10.0) -> None:
                 continue
 
             await sample_dlq_depth(r)
-            await snapshot_metrics(r)
+            await snapshot_metrics(r, http_client=http_client)
 
             # Evaluate alerts every 3rd tick (30s at 10s interval)
             if tick % 3 == 0:
@@ -620,6 +635,7 @@ async def start_metrics_sampler(interval: float = 10.0) -> None:
         await asyncio.sleep(interval)
 
     # Cleanup on exit
+    await http_client.aclose()
     if r:
         try:
             await r.aclose()
