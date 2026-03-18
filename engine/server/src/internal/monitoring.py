@@ -248,6 +248,7 @@ async def get_metrics_history(
     valid_metrics = {
         "cpu",
         "memory",
+        "disk",
         "tasks",
         "queue",
         "latency",
@@ -325,13 +326,14 @@ async def get_llm_gpu_monitoring(user: CurrentUser) -> LlmGpuMonitoring:
     except Exception:
         logger.debug("Ollama model list failed", exc_info=True)
 
-    # --- VRAM totals ---
-    total_vram_gb = settings.GPU_TOTAL_VRAM_GB
-    if total_vram_gb == 0:
-        total_vram_gb = detect_gpu().memory_gb
-    total_vram_bytes = int(total_vram_gb * (1024**3))
+    # --- VRAM totals (reuse already-fetched loaded_models data) ---
+    from src.infra.gpu import compute_vram_stats
+
+    vram_used, total_vram_gb, vram_pct = compute_vram_stats(
+        [{"size_vram": m.size_vram_bytes} for m in loaded_models],
+        settings.GPU_TOTAL_VRAM_GB,
+    )
     used_vram_gb = round(vram_used / (1024**3), 2)
-    vram_pct = (vram_used / total_vram_bytes * 100) if total_vram_bytes > 0 else 0.0
 
     gpu_vram = GpuVramMonitoring(
         total_vram_gb=round(total_vram_gb, 2),
