@@ -12,8 +12,8 @@ x-engine-env: &engine-env
   QDRANT_URL: http://qdrant:6333
   OLLAMA_BASE_URL: http://ollama:11434
   S3_ENDPOINT: http://minio:9000
-  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-modularmind}
-  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
   SECRET_KEY: ${SECRET_KEY}
   PLATFORM_URL: ${PLATFORM_URL:-}
   ENGINE_API_KEY: ${ENGINE_API_KEY:-}
@@ -59,8 +59,8 @@ services:
     command: server /data
     volumes: [minio-data:/data]
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-modularmind}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
