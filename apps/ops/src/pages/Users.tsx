@@ -7,7 +7,7 @@ import {
   Pencil,
   Eye,
 } from "lucide-react";
-import { cn, PageHeader, Badge, Button, Input, useAuthStore, formatTokens, formatCost } from "@modularmind/ui";
+import { cn, PageHeader, Badge, Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, useAuthStore, formatTokens, formatCost } from "@modularmind/ui";
 import { api } from "../lib/api";
 import { roleConfig } from "../lib/constants";
 import { Pagination } from "../components/shared/Pagination";
@@ -105,32 +105,28 @@ export default function Users() {
           />
         </div>
 
-        <select
-          value={roleFilter}
-          onChange={(e) => {
-            setRoleFilter(e.target.value);
-            setPage(1);
-          }}
-          className="rounded-md border bg-background px-3 py-2 text-sm"
-        >
-          <option value="">All roles</option>
-          <option value="owner">Owner</option>
-          <option value="admin">Admin</option>
-          <option value="user">User</option>
-        </select>
+        <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v === "all" ? "" : v); setPage(1); }}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="All roles" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All roles</SelectItem>
+            <SelectItem value="owner">Owner</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+            <SelectItem value="user">User</SelectItem>
+          </SelectContent>
+        </Select>
 
-        <select
-          value={activeFilter}
-          onChange={(e) => {
-            setActiveFilter(e.target.value);
-            setPage(1);
-          }}
-          className="rounded-md border bg-background px-3 py-2 text-sm"
-        >
-          <option value="">All statuses</option>
-          <option value="true">Active</option>
-          <option value="false">Inactive</option>
-        </select>
+        <Select value={activeFilter} onValueChange={(v) => { setActiveFilter(v === "all" ? "" : v); setPage(1); }}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="true">Active</SelectItem>
+            <SelectItem value="false">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
