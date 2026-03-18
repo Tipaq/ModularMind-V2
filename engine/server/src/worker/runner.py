@@ -17,6 +17,17 @@ import redis.exceptions
 
 from src.infra.config import settings
 from src.infra.redis_streams import RedisStreamBus
+from src.infra.stream_names import (
+    STREAM_AUTOMATION_TRIGGER,
+    STREAM_DOCUMENTS,
+    STREAM_EXECUTIONS,
+    STREAM_MEMORY_EXTRACTED,
+    STREAM_MEMORY_RAW,
+    STREAM_MEMORY_SCORED,
+    STREAM_MODELS,
+    STREAM_RAG_EMBEDDED,
+    STREAM_RAG_EXTRACTED,
+)
 from src.worker.scheduler import create_scheduler
 from src.worker.tasks import graph_execution_handler, model_pull_handler
 
@@ -89,8 +100,8 @@ async def main() -> None:
 
     tasks = [
         # Task queues
-        bus.subscribe("tasks:executions", "workers", "w-1", graph_execution_handler),
-        bus.subscribe("tasks:models", "workers", "w-1", model_pull_handler),
+        bus.subscribe(STREAM_EXECUTIONS, "workers", "w-1", graph_execution_handler),
+        bus.subscribe(STREAM_MODELS, "workers", "w-1", model_pull_handler),
     ]
 
     # Document processing: multi-stage RAG pipeline or monolithic handler
@@ -102,10 +113,10 @@ async def main() -> None:
         tasks.extend(
             [
                 bus.subscribe(
-                    "tasks:documents", "rag-extractors", "ext-1", document_extract_handler
+                    STREAM_DOCUMENTS, "rag-extractors", "ext-1", document_extract_handler
                 ),
-                bus.subscribe("rag:extracted", "rag-embedders", "emb-1", document_embed_handler),
-                bus.subscribe("rag:embedded", "rag-storers", "stor-1", document_store_handler),
+                bus.subscribe(STREAM_RAG_EXTRACTED, "rag-embedders", "emb-1", document_embed_handler),
+                bus.subscribe(STREAM_RAG_EMBEDDED, "rag-storers", "stor-1", document_store_handler),
             ]
         )
         logger.info(
@@ -115,7 +126,7 @@ async def main() -> None:
         from src.worker.tasks import document_process_handler
 
         tasks.append(
-            bus.subscribe("tasks:documents", "doc-processors", "dp-1", document_process_handler),
+            bus.subscribe(STREAM_DOCUMENTS, "doc-processors", "dp-1", document_process_handler),
         )
         logger.info("RAG monolithic handler enabled: documents -> process_document")
 
@@ -127,8 +138,8 @@ async def main() -> None:
 
         tasks.extend(
             [
-                bus.subscribe("memory:raw", "extractors", "ext-1", extractor_handler),
-                bus.subscribe("memory:raw", "summarizers", "sum-1", summarizer_handler),
+                bus.subscribe(STREAM_MEMORY_RAW, "extractors", "ext-1", extractor_handler),
+                bus.subscribe(STREAM_MEMORY_RAW, "summarizers", "sum-1", summarizer_handler),
             ]
         )
         if settings.MEMORY_SCORER_ENABLED:
@@ -136,13 +147,13 @@ async def main() -> None:
 
             tasks.extend(
                 [
-                    bus.subscribe("memory:extracted", "scorers", "scr-1", scorer_handler),
-                    bus.subscribe("memory:scored", "embedders", "emb-1", embedder_handler),
+                    bus.subscribe(STREAM_MEMORY_EXTRACTED, "scorers", "scr-1", scorer_handler),
+                    bus.subscribe(STREAM_MEMORY_SCORED, "embedders", "emb-1", embedder_handler),
                 ]
             )
         else:
             tasks.append(
-                bus.subscribe("memory:extracted", "embedders", "emb-1", embedder_handler),
+                bus.subscribe(STREAM_MEMORY_EXTRACTED, "embedders", "emb-1", embedder_handler),
             )
     except ImportError:
         logger.info("Memory pipeline handlers not available (removed in Phase 9)")
@@ -156,12 +167,17 @@ async def main() -> None:
 
     tasks.append(
         bus.subscribe(
-            "tasks:automation_trigger",
+            STREAM_AUTOMATION_TRIGGER,
             "automation-triggers",
             "at-1",
             automation_trigger_handler,
         ),
     )
+
+    # Metrics sampler (system, VRAM, LLM, DLQ snapshots every 10s)
+    from src.infra.metrics import start_metrics_sampler
+
+    tasks.append(start_metrics_sampler())
 
     tasks.append(
         # Health
