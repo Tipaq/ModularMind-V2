@@ -53,11 +53,18 @@ async def action_purge_streams(body: PurgeRequest, user: CurrentUser) -> ActionR
     """Trim Redis Streams to remove old messages."""
     from src.infra.redis import get_redis_client
 
+    from src.infra.stream_names import (
+        STREAM_EXECUTIONS,
+        STREAM_MEMORY_EXTRACTED,
+        STREAM_MEMORY_RAW,
+        STREAM_MODELS,
+    )
+
     stream_map = {
-        "executions": ["tasks:executions"],
-        "models": ["tasks:models"],
-        "memory": ["memory:raw", "memory:extracted"],
-        "all": ["tasks:executions", "tasks:models", "memory:raw", "memory:extracted"],
+        "executions": [STREAM_EXECUTIONS],
+        "models": [STREAM_MODELS],
+        "memory": [STREAM_MEMORY_RAW, STREAM_MEMORY_EXTRACTED],
+        "all": [STREAM_EXECUTIONS, STREAM_MODELS, STREAM_MEMORY_RAW, STREAM_MEMORY_EXTRACTED],
     }
     streams = stream_map.get(body.queue)
     if not streams:
