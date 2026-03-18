@@ -5,14 +5,12 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  Loader2,
+  RotateCcw,
 } from "lucide-react";
+import { cn } from "@modularmind/ui";
 import type { DLQMessage } from "@modularmind/api-client";
-
-// ── Types ────────────────────────────────────────────────────
-
-export interface DLQSectionProps {
-  dlqMessages: DLQMessage[];
-}
+import { filterDLQByDomain, type DLQDomain, DLQ_DOMAIN_LABELS } from "../../../lib/dlqDomains";
 
 // ── DLQ Message Row ──────────────────────────────────────────
 
@@ -64,15 +62,67 @@ function DLQMessageRow({ msg }: { msg: DLQMessage }) {
 
 // ── DLQ Section ──────────────────────────────────────────────
 
-export function DLQSection({ dlqMessages }: DLQSectionProps) {
-  if (dlqMessages.length === 0) return null;
+export interface DLQSectionProps {
+  /** All DLQ messages (will be filtered if domain is provided). */
+  dlqMessages: DLQMessage[];
+  /** Filter to a specific business domain. If omitted, shows all messages. */
+  domain?: DLQDomain;
+  /** Callback to retry N messages. If provided, shows retry button. */
+  onRetryBatch?: (count: number) => Promise<void>;
+}
+
+export function DLQSection({ dlqMessages, domain, onRetryBatch }: DLQSectionProps) {
+  const [retrying, setRetrying] = useState(false);
+
+  const filtered = domain ? filterDLQByDomain(dlqMessages, domain) : dlqMessages;
+
+  if (filtered.length === 0) return null;
+
+  const label = domain ? `${DLQ_DOMAIN_LABELS[domain]} DLQ` : "Dead Letter Queue";
+
+  const handleRetry = async (count: number) => {
+    if (!onRetryBatch || retrying) return;
+    setRetrying(true);
+    try {
+      await onRetryBatch(count);
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   return (
     <section>
-      <h2 className="mb-4 text-lg font-semibold flex items-center gap-2 text-destructive">
-        <AlertTriangle className="h-5 w-5" />
-        Dead Letter Queue — {dlqMessages.length} message{dlqMessages.length !== 1 ? "s" : ""}
-      </h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-5 w-5" />
+          {label} — {filtered.length} message{filtered.length !== 1 ? "s" : ""}
+        </h2>
+        {onRetryBatch && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleRetry(Math.min(filtered.length, 5))}
+              disabled={retrying}
+              className="flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+            >
+              {retrying ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RotateCcw className="h-3 w-3" />
+              )}
+              Retry {Math.min(filtered.length, 5)}
+            </button>
+            {filtered.length > 5 && (
+              <button
+                onClick={() => handleRetry(filtered.length)}
+                disabled={retrying}
+                className="flex items-center gap-1.5 rounded-md bg-warning/10 px-3 py-1.5 text-xs font-medium text-warning hover:bg-warning/20 transition-colors disabled:opacity-50"
+              >
+                Retry All ({filtered.length})
+              </button>
+            )}
+          </div>
+        )}
+      </div>
       <div className="overflow-x-auto rounded-xl border border-destructive/20 bg-card/50">
         <table className="w-full text-sm">
           <thead>
@@ -84,13 +134,16 @@ export function DLQSection({ dlqMessages }: DLQSectionProps) {
             </tr>
           </thead>
           <tbody>
-            {dlqMessages.slice(0, 20).map((msg) => (
+            {filtered.slice(0, 20).map((msg) => (
               <DLQMessageRow key={msg.id} msg={msg} />
             ))}
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">Click a row to expand error details and data payload.</p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        {filtered.length > 20 ? `Showing 20 of ${filtered.length} messages. ` : ""}
+        Click a row to expand error details and data payload.
+      </p>
     </section>
   );
 }
