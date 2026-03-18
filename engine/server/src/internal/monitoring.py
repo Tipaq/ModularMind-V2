@@ -128,20 +128,6 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
         logger.warning("Worker monitoring failed: %s", e)
         worker_data = {"status": "unavailable"}
 
-    # Queue depth from streams
-    try:
-        from src.infra.redis import get_redis_client as _get_rc
-
-        r = await _get_rc()
-        if r:
-            try:
-                _exec_depth = await r.xlen("tasks:executions")  # noqa: F841
-                _model_depth = await r.xlen("tasks:models")  # noqa: F841
-            finally:
-                await r.aclose()
-    except Exception:
-        logger.debug("Redis stream depth check failed", exc_info=True)
-
     from src.infra.sse import get_active_streams
 
     streaming_data = StreamingMonitoring(active_streams=get_active_streams())
