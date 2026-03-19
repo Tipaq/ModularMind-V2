@@ -15,6 +15,7 @@ import {
   X,
   Brain,
   Database,
+  Wrench,
 } from "lucide-react";
 import {
   Badge,
@@ -94,6 +95,13 @@ export default function AgentDetailPage() {
     rag_enabled: false,
     rag_retrieval_count: 5,
     rag_similarity_threshold: 0.7,
+    tc_memory: true,
+    tc_knowledge: true,
+    tc_code_search: false,
+    tc_file_storage: false,
+    tc_human_interaction: true,
+    tc_image_generation: false,
+    tc_custom_tools: false,
     gateway_enabled: false,
     gw_fs_read: "",
     gw_fs_write: "",
@@ -127,6 +135,7 @@ export default function AgentDetailPage() {
     const gwSh = (gw.shell ?? {}) as Record<string, unknown>;
     const gwBr = (gw.browser ?? {}) as Record<string, unknown>;
     const gwNet = (gw.network ?? {}) as Record<string, unknown>;
+    const tc = (config.tool_categories ?? {}) as Record<string, unknown>;
     setEditValues({
       name: agent.name,
       description: agent.description || "",
@@ -139,6 +148,13 @@ export default function AgentDetailPage() {
       rag_enabled: (config.rag_enabled as boolean) || false,
       rag_retrieval_count: (config.rag_retrieval_count as number) || 5,
       rag_similarity_threshold: (config.rag_similarity_threshold as number) || 0.7,
+      tc_memory: (tc as Record<string, boolean>).memory ?? true,
+      tc_knowledge: (tc as Record<string, boolean>).knowledge ?? true,
+      tc_code_search: (tc as Record<string, boolean>).code_search ?? false,
+      tc_file_storage: (tc as Record<string, boolean>).file_storage ?? false,
+      tc_human_interaction: (tc as Record<string, boolean>).human_interaction ?? true,
+      tc_image_generation: (tc as Record<string, boolean>).image_generation ?? false,
+      tc_custom_tools: (tc as Record<string, boolean>).custom_tools ?? false,
       gateway_enabled: !!config.gateway_permissions,
       gw_fs_read: ((gwFs.read as string[]) || []).join(", "),
       gw_fs_write: ((gwFs.write as string[]) || []).join(", "),
@@ -213,6 +229,15 @@ export default function AgentDetailPage() {
           rag_enabled: editValues.rag_enabled,
           rag_retrieval_count: editValues.rag_retrieval_count,
           rag_similarity_threshold: editValues.rag_similarity_threshold,
+          tool_categories: {
+            memory: editValues.tc_memory,
+            knowledge: editValues.tc_knowledge,
+            code_search: editValues.tc_code_search,
+            file_storage: editValues.tc_file_storage,
+            human_interaction: editValues.tc_human_interaction,
+            image_generation: editValues.tc_image_generation,
+            custom_tools: editValues.tc_custom_tools,
+          },
           gateway_permissions: gatewayPermissions,
         },
       });
@@ -243,6 +268,16 @@ export default function AgentDetailPage() {
     }
   };
 
+  const toolCategoryMeta: { id: string; label: string; description: string; field: keyof typeof editValues }[] = [
+    { id: "memory", label: "Memory", description: "Search past conversations and user facts", field: "tc_memory" },
+    { id: "knowledge", label: "Knowledge", description: "Search document collections (RAG)", field: "tc_knowledge" },
+    { id: "code_search", label: "Code Search", description: "Search and analyze code in workspace", field: "tc_code_search" },
+    { id: "file_storage", label: "File Storage", description: "Upload and manage files via S3", field: "tc_file_storage" },
+    { id: "human_interaction", label: "Human Interaction", description: "Prompt user for approval during execution", field: "tc_human_interaction" },
+    { id: "image_generation", label: "Image Generation", description: "Generate images via LLM providers", field: "tc_image_generation" },
+    { id: "custom_tools", label: "Custom Tools", description: "Agent-defined shell, HTTP, or Python tools", field: "tc_custom_tools" },
+  ];
+
   if (loading || !agent) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -257,6 +292,7 @@ export default function AgentDetailPage() {
   const ragEnabled = (config.rag_enabled as boolean) || false;
   const ragRetrievalCount = (config.rag_retrieval_count as number) || 5;
   const ragSimilarityThreshold = (config.rag_similarity_threshold as number) || 0.7;
+  const toolCategories = (config.tool_categories ?? {}) as Record<string, boolean>;
   const gatewayPerms = (config.gateway_permissions ?? null) as Record<string, unknown> | null;
   const gatewayEnabled = !!gatewayPerms;
 
@@ -489,6 +525,46 @@ export default function AgentDetailPage() {
                     <p className="text-sm font-medium">{ragSimilarityThreshold}</p>
                   </div>
                 </div>
+              </div>
+            )}
+          </Section>
+
+          <Separator />
+
+          {/* Tools */}
+          <Section icon={Wrench} title="Tools">
+            {isEditing ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground mb-3">
+                  Enable or disable tool categories available to this agent.
+                </p>
+                {toolCategoryMeta.map((cat) => (
+                  <div key={cat.id} className="flex items-center justify-between gap-3 py-1.5">
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium">{cat.label}</span>
+                      <p className="text-[11px] text-muted-foreground">{cat.description}</p>
+                    </div>
+                    <Switch
+                      checked={editValues[cat.field] as boolean}
+                      onCheckedChange={(checked) => setEditValues((v) => ({ ...v, [cat.field]: checked }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {toolCategoryMeta.map((cat) => {
+                  const isEnabled = toolCategories[cat.id] ?? (cat.id === "memory" || cat.id === "knowledge" || cat.id === "human_interaction");
+                  return (
+                    <Badge
+                      key={cat.id}
+                      variant={isEnabled ? "default" : "secondary"}
+                      className="text-[10px]"
+                    >
+                      {cat.label}
+                    </Badge>
+                  );
+                })}
               </div>
             )}
           </Section>
