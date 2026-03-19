@@ -39,11 +39,17 @@ class BrowserPermissions(BaseModel):
     max_page_load_seconds: int = 30
 
 
+class CodeSearchPermissions(BaseModel):
+    enabled: bool = False
+    require_approval: bool = False
+
+
 class GatewayPermissions(BaseModel):
     filesystem: FilesystemPermissions = FilesystemPermissions()
     shell: ShellPermissions = ShellPermissions()
     network: NetworkPermissions = NetworkPermissions()
     browser: BrowserPermissions = BrowserPermissions()
+    code_search: CodeSearchPermissions = CodeSearchPermissions()
 
 
 # =============================================================================

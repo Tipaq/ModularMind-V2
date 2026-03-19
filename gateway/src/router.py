@@ -28,6 +28,7 @@ from src.audit.models import GatewayAuditLog
 from src.auth import AdminUser, InternalAuth
 from src.config import get_settings
 from src.executors.browser import BrowserExecutor
+from src.executors.code_search import CodeSearchExecutor
 from src.executors.filesystem import FilesystemExecutor
 from src.executors.network import NetworkExecutor
 from src.executors.shell import ShellExecutor
@@ -283,6 +284,14 @@ async def _execute_in_sandbox(
     elif request.category == "shell":
         timeout = perms.shell.max_execution_seconds if perms else 30
         executor = ShellExecutor(max_execution_seconds=timeout)
+        return await executor.execute(
+            action=request.action,
+            args=request.args,
+            sandbox_mgr=sandbox_mgr,
+            execution_id=request.execution_id,
+        )
+    elif request.category == "code_search":
+        executor = CodeSearchExecutor()
         return await executor.execute(
             action=request.action,
             args=request.args,
