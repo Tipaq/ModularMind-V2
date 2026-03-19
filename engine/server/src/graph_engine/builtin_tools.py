@@ -128,12 +128,14 @@ class UnifiedToolExecutor:
         builtin_names: set[str],
         gateway_executor: Any | None = None,
         automation_executor: Any | None = None,
+        extended_executor: Any | None = None,
     ):
         self._builtin = builtin_fn
         self._mcp = mcp_executor
         self._names = builtin_names
         self._gateway = gateway_executor
         self._automation = automation_executor
+        self._extended = extended_executor
 
     async def execute(self, name: str, args: dict[str, Any]) -> str:
         if name in self._names:
@@ -142,6 +144,8 @@ class UnifiedToolExecutor:
             return await self._gateway.execute(name, args)
         if name.startswith("automation__") and self._automation:
             return await self._automation.execute(name, args)
+        if self._extended and self._extended.handles(name):
+            return await self._extended.execute(name, args)
         if self._mcp:
             return await self._mcp.execute(name, args)
         raise ValueError(f"Unknown tool: {name}")

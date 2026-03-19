@@ -482,12 +482,39 @@ class GraphCompiler:
                         engine_api_key=_auto_settings.ENGINE_API_KEY,
                     )
 
+            # Extended tools (memory, knowledge, file_storage, etc.)
+            extended_executor = None
+            tool_categories = getattr(agent, "tool_categories", {})
+            if tool_categories and any(tool_categories.values()):
+                from src.tools.registry import resolve_tool_definitions
+
+                extended_defs = resolve_tool_definitions(tool_categories)
+                if extended_defs:
+                    active_tools.extend(extended_defs)
+                    logger.info(
+                        "Agent '%s': %d extended tools from %d categories",
+                        agent.name, len(extended_defs),
+                        sum(1 for v in tool_categories.values() if v),
+                    )
+
             if user_id:
                 from src.graph_engine.builtin_tools import (
                     UnifiedToolExecutor,
                     create_builtin_executor,
                 )
                 from src.infra.database import async_session_maker
+
+                # Build extended executor if any categories are enabled
+                if tool_categories and any(tool_categories.values()):
+                    from src.tools.executor import ExtendedToolExecutor
+
+                    extended_executor = ExtendedToolExecutor(
+                        session_maker=async_session_maker,
+                        user_id=user_id,
+                        agent_id=agent.id,
+                        gateway_executor=gateway_executor,
+                        publish_fn=_extract_tool_publish_fn(config),
+                    )
 
                 builtin_exec = create_builtin_executor(user_id, async_session_maker)
                 unified_executor = UnifiedToolExecutor(
@@ -496,6 +523,7 @@ class GraphCompiler:
                     BUILTIN_TOOL_NAMES,
                     gateway_executor=gateway_executor,
                     automation_executor=automation_executor,
+                    extended_executor=extended_executor,
                 )
             else:
                 # No user_id — filter out built-in tool defs to avoid LLM calling them
