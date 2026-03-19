@@ -69,6 +69,18 @@ class AgentConfig(BaseModel):
         default=None,
         description="Gateway permissions for system access tools (filesystem, shell, etc.)",
     )
+    tool_categories: dict[str, bool] = Field(
+        default_factory=lambda: {
+            "memory": True,
+            "knowledge": True,
+            "code_search": False,
+            "file_storage": False,
+            "human_interaction": True,
+            "image_generation": False,
+            "custom_tools": False,
+        },
+        description="Enable/disable extended tool categories for this agent.",
+    )
 
     @field_validator("version", mode="before")
     @classmethod
