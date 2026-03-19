@@ -46,6 +46,7 @@ from src.report.router import router as report_router
 from src.setup.router import router as setup_router
 from src.supervisor.router import router as supervisor_router
 from src.sync.router import router as sync_router
+from src.tools.router import router as tools_admin_router
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -348,6 +349,7 @@ app.include_router(automations_router)
 app.include_router(internal_router, prefix=f"{API_PREFIX}/internal")
 app.include_router(fine_tuning_router, prefix=API_PREFIX)
 app.include_router(mcp_admin_router, prefix=f"{API_PREFIX}/internal")
+app.include_router(tools_admin_router, prefix=f"{API_PREFIX}/internal")
 app.include_router(models_admin_router, prefix=API_PREFIX)
 app.include_router(admin_user_router, prefix=f"{API_PREFIX}/admin")
 app.include_router(conversations_admin_router, prefix=f"{API_PREFIX}/admin")
