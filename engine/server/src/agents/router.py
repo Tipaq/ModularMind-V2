@@ -56,6 +56,7 @@ async def list_agents(
             rag_collection_ids=[str(c) for c in a.rag_config.collection_ids],
             rag_retrieval_count=a.rag_config.retrieval_count,
             rag_similarity_threshold=a.rag_config.similarity_threshold,
+            tool_categories=dict(a.tool_categories),
         )
         for a in page_agents
     ]
@@ -96,6 +97,7 @@ async def get_agent(
         rag_collection_ids=[str(c) for c in agent.rag_config.collection_ids],
         rag_retrieval_count=agent.rag_config.retrieval_count,
         rag_similarity_threshold=agent.rag_config.similarity_threshold,
+        tool_categories=dict(agent.tool_categories),
         config_version=version_number or 0,
         config_hash=config_hash,
     )

@@ -24,6 +24,7 @@ class AgentSummary(BaseModel):
     rag_collection_ids: list[str] = []
     rag_retrieval_count: int = 5
     rag_similarity_threshold: float = 0.7
+    tool_categories: dict[str, bool] = {}
 
 
 class AgentDetail(AgentSummary):
