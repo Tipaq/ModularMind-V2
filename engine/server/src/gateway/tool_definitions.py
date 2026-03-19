@@ -203,6 +203,82 @@ def get_gateway_tool_definitions(permissions: dict[str, Any]) -> list[dict]:
             }
         )
 
+    # Code search tools
+    code_search = permissions.get("code_search", {})
+    if code_search.get("enabled"):
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "gateway__code_grep",
+                    "description": (
+                        "Search file contents in the workspace using regex patterns. "
+                        "Returns matching lines with file paths and line numbers."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "pattern": {
+                                "type": "string",
+                                "description": "Regex pattern to search for",
+                            },
+                            "path": {
+                                "type": "string",
+                                "description": "Directory to search (default: /workspace)",
+                            },
+                            "glob": {
+                                "type": "string",
+                                "description": "File glob filter (e.g., '*.py')",
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Max results (1-500, default 50)",
+                            },
+                            "context": {
+                                "type": "integer",
+                                "description": "Context lines around matches (0-5)",
+                            },
+                        },
+                        "required": ["pattern"],
+                    },
+                },
+            }
+        )
+
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "gateway__code_multi_edit",
+                    "description": (
+                        "Apply multiple text replacements to a file atomically."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "File path to edit",
+                            },
+                            "edits": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "old_text": {"type": "string"},
+                                        "new_text": {"type": "string"},
+                                    },
+                                    "required": ["old_text", "new_text"],
+                                },
+                                "description": "List of replacements (max 50)",
+                            },
+                        },
+                        "required": ["path", "edits"],
+                    },
+                },
+            }
+        )
+
     # Network tools (Phase 7)
     network = permissions.get("network", {})
     if network.get("enabled"):
