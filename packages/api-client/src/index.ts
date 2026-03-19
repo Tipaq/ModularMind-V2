@@ -19,6 +19,7 @@ export type * from "./types/supervisor";
 export type * from "./types/mcp";
 export type * from "./types/admin";
 export type * from "./types/engine";
+export type * from "./types/tools";
 
 // Utils
 export { snakeToCamel, mapKeysToCamel } from "./utils";

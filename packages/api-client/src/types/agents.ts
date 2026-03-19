@@ -10,6 +10,7 @@ export interface Agent {
   version: number;
   memory_enabled: boolean;
   timeout_seconds: number;
+  tool_categories: Record<string, boolean>;
 }
 
 export interface AgentDetail extends Agent {
