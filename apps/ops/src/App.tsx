@@ -17,6 +17,7 @@ const Users = lazy(() => import("./pages/Users"));
 const UserDetail = lazy(() => import("./pages/UserDetail"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Tools = lazy(() => import("./pages/Tools"));
 
 function SetupGuard({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<"loading" | "initialized" | "needs-setup">("loading");
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/models" element={<Models />} />
           <Route path="/models/:id" element={<ModelDetail />} />
           <Route path="/knowledge" element={<Knowledge />} />
+          <Route path="/tools" element={<Tools />} />
           <Route path="/users" element={<Users />} />
           <Route path="/users/:userId" element={<UserDetail />} />
 

@@ -8,6 +8,7 @@ import {
   Bot,
   Settings2,
   BookOpen,
+  Wrench,
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
@@ -29,6 +30,7 @@ const navItems: NavItem[] = [
   { name: "Configuration", to: "/configuration", icon: Settings2 },
   { name: "Models", to: "/models", icon: Layers },
   { name: "Knowledge", to: "/knowledge", icon: BookOpen },
+  { name: "Tools", to: "/tools", icon: Wrench },
   { name: "Users", to: "/users", icon: Users },
   { name: "Monitoring", to: "/monitoring", icon: Activity },
 ];
