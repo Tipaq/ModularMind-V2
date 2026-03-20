@@ -69,6 +69,10 @@ class GatewaySettings(BaseSettings):
         le=100,
         description="Maximum concurrent sandbox containers",
     )
+    SANDBOX_DIRECT_EXEC: bool = Field(
+        default=True,
+        description="Enable direct subprocess for safe commands (bypass Docker)",
+    )
 
     # ---- Workspace ----------------------------------------------------------
     WORKSPACE_ROOT: str = Field(
