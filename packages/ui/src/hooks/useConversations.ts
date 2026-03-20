@@ -152,6 +152,9 @@ export function useConversations({
         if (agentIds.length === 1 && graphIds.length === 0) {
           body.agent_id = agentIds[0];
           body.supervisor_mode = false;
+        } else if (agentIds.length === 0 && graphIds.length === 1) {
+          body.graph_id = graphIds[0];
+          body.supervisor_mode = false;
         }
 
         // Raw LLM mode — no agent, no supervisor, just model_id
