@@ -78,8 +78,14 @@ interface KnowledgeState {
   graphLoading: boolean;
   graphError: string | null;
 
+  // Single collection (detail page)
+  selectedCollection: Collection | null;
+  selectedCollectionLoading: boolean;
+  selectedCollectionError: string | null;
+
   // Actions
   fetchCollections: () => Promise<void>;
+  fetchCollection: (id: string) => Promise<void>;
   createCollection: (data: {
     name: string;
     description?: string;
@@ -124,6 +130,10 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   explorerLoading: false,
   explorerFilters: { collection_id: "", document_id: "" },
 
+  selectedCollection: null,
+  selectedCollectionLoading: false,
+  selectedCollectionError: null,
+
   graphData: null,
   graphLoading: false,
   graphError: null,
@@ -139,6 +149,20 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       set({ collectionsError: err instanceof Error ? err.message : "Failed to fetch collections" });
     } finally {
       set({ collectionsLoading: false });
+    }
+  },
+
+  fetchCollection: async (id) => {
+    set({ selectedCollectionLoading: true, selectedCollectionError: null });
+    try {
+      const collection = await api.get<Collection>(`/rag/collections/${id}`);
+      set({ selectedCollection: collection });
+    } catch (err) {
+      set({
+        selectedCollectionError: err instanceof Error ? err.message : "Failed to fetch collection",
+      });
+    } finally {
+      set({ selectedCollectionLoading: false });
     }
   },
 
