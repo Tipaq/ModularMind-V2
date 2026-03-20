@@ -1,4 +1,4 @@
-"""Shell executor — run commands in Docker sandbox with timeout."""
+"""Shell executor — hybrid direct/sandbox command execution."""
 
 from __future__ import annotations
 
@@ -17,10 +17,21 @@ MAX_OUTPUT_SIZE = 1_048_576  # 1MB
 
 
 class ShellExecutor(BaseExecutor):
-    """Execute shell commands inside a sandbox container."""
+    """Execute shell commands via direct subprocess or Docker sandbox.
 
-    def __init__(self, max_execution_seconds: int = 30):
+    Safe commands (curl, grep, cat, etc.) bypass Docker for ~10ms execution.
+    Unsafe commands use the full Docker sandbox path.
+    """
+
+    def __init__(
+        self,
+        max_execution_seconds: int = 30,
+        agent_id: str = "",
+        permissions: Any = None,
+    ):
         self._timeout = max_execution_seconds
+        self._agent_id = agent_id
+        self._permissions = permissions
 
     async def execute(
         self,
@@ -37,20 +48,31 @@ class ShellExecutor(BaseExecutor):
             return "Error: command is required"
 
         try:
-            exit_code, output = await asyncio.wait_for(
-                sandbox_mgr.exec_in_sandbox(
-                    execution_id,
-                    ["sh", "-c", command],
-                ),
-                timeout=self._timeout,
-            )
+            if self._agent_id and self._permissions and hasattr(sandbox_mgr, "exec_hybrid"):
+                exit_code, output = await asyncio.wait_for(
+                    sandbox_mgr.exec_hybrid(
+                        agent_id=self._agent_id,
+                        command_str=command,
+                        execution_id=execution_id,
+                        permissions=self._permissions,
+                        timeout=self._timeout,
+                    ),
+                    timeout=self._timeout + 5,
+                )
+            else:
+                exit_code, output = await asyncio.wait_for(
+                    sandbox_mgr.exec_in_sandbox(
+                        execution_id,
+                        ["sh", "-c", command],
+                    ),
+                    timeout=self._timeout,
+                )
         except TimeoutError:
             return (
                 f"Error: command timed out after {self._timeout}s. "
                 "Consider breaking the command into smaller steps."
             )
 
-        # Truncate large output
         if len(output) > MAX_OUTPUT_SIZE:
             output = output[:MAX_OUTPUT_SIZE] + "\n... [output truncated at 1MB]"
 
