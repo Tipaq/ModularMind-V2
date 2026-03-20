@@ -9,6 +9,7 @@ import {
   Settings2,
   BookOpen,
   Wrench,
+  AppWindow,
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { name: "Models", to: "/models", icon: Layers },
   { name: "Knowledge", to: "/knowledge", icon: BookOpen },
   { name: "Tools", to: "/tools", icon: Wrench },
+  { name: "Mini Apps", to: "/mini-apps", icon: AppWindow },
   { name: "Users", to: "/users", icon: Users },
   { name: "Monitoring", to: "/monitoring", icon: Activity },
 ];
