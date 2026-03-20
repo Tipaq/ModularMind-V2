@@ -7,7 +7,7 @@ Business logic for conversation management and message handling.
 import logging
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,6 +29,7 @@ class ConversationService:
         self,
         user_id: str,
         agent_id: str | None = None,
+        graph_id: str | None = None,
         title: str | None = None,
         supervisor_mode: bool = False,
         config: dict | None = None,
@@ -37,6 +38,7 @@ class ConversationService:
         conversation = Conversation(
             id=str(uuid4()),
             agent_id=agent_id,
+            graph_id=graph_id,
             user_id=user_id,
             title=title,
             supervisor_mode=supervisor_mode,
@@ -200,6 +202,25 @@ class ConversationService:
         await self.db.delete(conversation)
         await self.db.flush()
         return True
+
+    async def delete_messages_from(
+        self,
+        conversation_id: str,
+        message_id: str,
+    ) -> int:
+        """Delete a message and all messages after it in the conversation."""
+        msg = await self.db.get(ConversationMessage, message_id)
+        if not msg or msg.conversation_id != conversation_id:
+            return 0
+
+        result = await self.db.execute(
+            delete(ConversationMessage).where(
+                ConversationMessage.conversation_id == conversation_id,
+                ConversationMessage.created_at >= msg.created_at,
+            )
+        )
+        await self.db.flush()
+        return result.rowcount
 
     async def update_conversation(
         self,

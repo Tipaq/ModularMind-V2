@@ -172,6 +172,7 @@ def build_conversation_response(
     return ConversationResponse(
         id=conv.id,
         agent_id=conv.agent_id,
+        graph_id=getattr(conv, "graph_id", None),
         user_email=user_email,
         title=conv.title,
         is_active=conv.is_active,
@@ -212,18 +213,19 @@ async def create_conversation(
     db: DbSession,
 ) -> ConversationResponse:
     """Create a new conversation."""
-    # Require agent_id, supervisor_mode, or a model_id in config (raw LLM mode)
+    # Require agent_id, graph_id, supervisor_mode, or a model_id in config (raw LLM mode)
     has_model = bool((data.config or {}).get("model_id"))
-    if not data.agent_id and not data.supervisor_mode and not has_model:
+    if not data.agent_id and not data.graph_id and not data.supervisor_mode and not has_model:
         raise HTTPException(
             status_code=400,
-            detail="Either agent_id, supervisor_mode, or model_id in config is required",
+            detail="Either agent_id, graph_id, supervisor_mode, or model_id in config is required",
         )
 
     service = ConversationService(db)
     conversation = await service.create_conversation(
         user_id=user.id,
         agent_id=data.agent_id,
+        graph_id=data.graph_id,
         title=data.title,
         supervisor_mode=data.supervisor_mode,
         config=data.config,
@@ -308,6 +310,29 @@ async def update_conversation(
 
     msg_count = await service.get_message_count(conversation_id)
     return build_conversation_response(updated, msg_count)
+
+
+@router.delete("/{conversation_id}/messages/{message_id}/after", status_code=204)
+async def delete_messages_from(
+    conversation_id: str,
+    message_id: str,
+    user: CurrentUser,
+    db: DbSession,
+) -> None:
+    """Delete a message and all messages after it."""
+    service = ConversationService(db)
+    conversation = await service.get_conversation_by_id(conversation_id)
+
+    if not conversation:
+        raise_not_found("Conversation")
+
+    check_conversation_access(conversation, user.id)
+
+    deleted = await service.delete_messages_from(conversation_id, message_id)
+    if deleted == 0:
+        raise_not_found("Message")
+
+    await db.commit()
 
 
 @router.delete("/{conversation_id}", status_code=204)
@@ -799,11 +824,17 @@ async def _handle_direct_execution(
             data=execution_data,
             user_id=user.id,
         )
+    elif conversation.graph_id:
+        execution = await exec_service.start_graph_execution(
+            graph_id=conversation.graph_id,
+            data=execution_data,
+            user_id=user.id,
+        )
     else:
-        # Raw LLM mode — no agent, use model_id from conversation config
+        # Raw LLM mode — no agent/graph, use model_id from conversation config
         model_id = conv_config.get("model_id")
         if not model_id:
-            raise ValueError("No agent and no model_id configured")
+            raise ValueError("No agent, no graph, and no model_id configured")
         execution = await exec_service.start_raw_execution(
             model_id=model_id,
             data=execution_data,
