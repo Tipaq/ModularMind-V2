@@ -6,6 +6,7 @@ export interface Conversation {
   id: string;
   title: string | null;
   agent_id: string | null;
+  graph_id: string | null;
   user_email: string | null;
   is_active: boolean;
   supervisor_mode: boolean;
@@ -50,6 +51,7 @@ export interface ConversationConfig {
 
 export interface ConversationCreate {
   agent_id?: string | null;
+  graph_id?: string | null;
   title?: string | null;
   supervisor_mode?: boolean;
   config?: Record<string, unknown> | null;
