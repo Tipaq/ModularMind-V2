@@ -78,6 +78,7 @@ class AgentConfig(BaseModel):
             "human_interaction": True,
             "image_generation": False,
             "custom_tools": False,
+            "mini_apps": False,
         },
         description="Enable/disable extended tool categories for this agent.",
     )
