@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Bot, Loader2, Pencil, RefreshCw, User } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { ExecutionActivity } from "../types/chat";
@@ -86,7 +86,7 @@ interface MessageBubbleProps {
   showTimestamp: boolean;
   attachmentBaseUrl?: string;
   onArtifactDetected?: (artifact: DetectedArtifact) => void;
-  onEditMessage?: (content: string, messageId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
   onRegenerate?: () => void;
 }
 
@@ -113,54 +113,98 @@ const MessageBubble = memo(function MessageBubble({
   const routingStrategy = metadata.routing_strategy as string | undefined;
   const delegatedTo = metadata.delegated_to as string | undefined;
 
-  // While streaming with no content yet: show activity inline next to avatar
-  const showInlineActivity = !isUser && isStreaming && isLastAssistant && !msg.content;
-  // While streaming with content building: show activity above the bubble
-  const showActivityAbove = isLastAssistant && isStreaming && !!msg.content && activities.length > 0;
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const editRef = useRef<HTMLTextAreaElement>(null);
+  const handleEditStart = useCallback(() => {
+    setEditContent(msg.content);
+    setIsEditing(true);
+    setTimeout(() => {
+      const ta = editRef.current;
+      if (!ta) return;
+      ta.style.height = "0";
+      ta.style.height = `${ta.scrollHeight}px`;
+      ta.focus();
+    }, 0);
+  }, [msg.content]);
 
+  const handleEditCancel = useCallback(() => {
+    setIsEditing(false);
+    setEditContent("");
+  }, []);
+
+  const handleEditSave = useCallback(() => {
+    if (!editContent.trim() || !onEditMessage) return;
+    setIsEditing(false);
+    onEditMessage(msg.id, editContent.trim());
+  }, [editContent, onEditMessage, msg.id]);
+
+  const showInlineActivity = !isUser && isStreaming && isLastAssistant && !msg.content;
+  const showActivityAbove = isLastAssistant && isStreaming && !!msg.content && activities.length > 0;
   const timeStr = formatTime(msg.created_at);
 
   return (
     <div>
-      {/* Messenger-style timestamp centered above the message */}
       {showTimestamp && (
         <div className="flex items-center justify-center my-3">
-          <span className="text-[10px] text-muted-foreground">
-            {timeStr}
-          </span>
+          <span className="text-[10px] text-muted-foreground">{timeStr}</span>
         </div>
       )}
 
-      {/* Activity stream above bubble — only while streaming with content */}
       {showActivityAbove && (
         <div className="mb-3 ml-9">
-          <ExecutionActivityList
-            activities={activities}
-            isStreaming={isStreaming}
-          />
+          <ExecutionActivityList activities={activities} isStreaming={isStreaming} />
         </div>
       )}
 
       <div className={cn("flex items-end gap-2", isUser ? "flex-row-reverse" : "flex-row")}>
-        {/* Avatar */}
         <div
           className={cn(
             "h-7 w-7 rounded-full flex items-center justify-center shrink-0",
-            isUser
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted-foreground/15 text-muted-foreground",
+            isUser ? "bg-primary text-primary-foreground" : "bg-muted-foreground/15 text-muted-foreground",
           )}
         >
           {isUser ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
         </div>
 
-        {/* Inline activity (streaming, no content) OR bubble */}
         {showInlineActivity ? (
           <div className="py-1 min-w-0">
-            <ExecutionActivityList
-              activities={activities}
-              isStreaming={isStreaming}
-            />
+            <ExecutionActivityList activities={activities} isStreaming={isStreaming} />
+          </div>
+        ) : isUser && isEditing ? (
+          <div className="max-w-[75%] w-full flex flex-col items-end">
+            <div className="w-full rounded-2xl rounded-br-md border-2 border-primary/50 bg-muted overflow-hidden">
+              <textarea
+                ref={editRef}
+                value={editContent}
+                onChange={(e) => {
+                  setEditContent(e.target.value);
+                  const ta = e.target;
+                  ta.style.height = "0";
+                  ta.style.height = `${ta.scrollHeight}px`;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEditSave(); }
+                  if (e.key === "Escape") handleEditCancel();
+                }}
+                className="w-full px-4 py-2.5 text-sm bg-transparent resize-none outline-none overflow-hidden"
+              />
+              <div className="flex justify-end gap-2 px-3 py-2 border-t border-border/50">
+                <button
+                  onClick={handleEditCancel}
+                  className="px-3 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditSave}
+                  disabled={!editContent.trim()}
+                  className="px-3 py-1 rounded-md text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <div className={cn("max-w-[75%] group/msg", isUser && "flex flex-col items-end")}>
@@ -179,16 +223,10 @@ const MessageBubble = memo(function MessageBubble({
                 >
                   {msg.content ? (
                     isUser ? (
-                      <div className="text-sm whitespace-pre-wrap break-words">
-                        {msg.content}
-                      </div>
+                      <div className="text-sm whitespace-pre-wrap break-words">{msg.content}</div>
                     ) : (
                       <div className="chat-markdown text-sm break-words">
-                        <MarkdownRenderer
-                          content={msg.content}
-                          messageId={msg.id}
-                          onArtifactDetected={onArtifactDetected}
-                        />
+                        <MarkdownRenderer content={msg.content} messageId={msg.id} onArtifactDetected={onArtifactDetected} />
                       </div>
                     )
                   ) : isStreaming && isLastAssistantProp ? (
@@ -223,22 +261,17 @@ const MessageBubble = memo(function MessageBubble({
             </Tooltip>
 
             {msg.content && !isStreaming && (
-              <div className={cn(
-                "flex gap-1 mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity",
-                "justify-end",
-              )}>
+              <div className="flex gap-1 mt-1 justify-end opacity-0 group-hover/msg:opacity-100 transition-opacity">
                 {isUser && onEditMessage && (
                   <button
-                    onClick={() => onEditMessage(msg.content, msg.id)}
+                    onClick={handleEditStart}
                     className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                     title="Edit message"
                   >
                     <Pencil className="h-3 w-3" />
                   </button>
                 )}
-                {isAssistant && (
-                  <CopyButton content={msg.content} />
-                )}
+                {isAssistant && <CopyButton content={msg.content} />}
                 {isLastAssistantProp && onRegenerate && (
                   <button
                     onClick={onRegenerate}
@@ -286,7 +319,7 @@ export interface ChatMessagesProps {
   /** Callback to reject the execution. */
   onReject?: (executionId: string) => Promise<void>;
   onRegenerate?: () => void;
-  onEditMessage?: (content: string, messageId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
   onArtifactDetected?: (artifact: DetectedArtifact) => void;
 }
 
