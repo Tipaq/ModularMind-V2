@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { Bot, Zap, PanelRight } from "lucide-react";
+import { Bot, Zap, PanelRight, Code2 } from "lucide-react";
 import { useChat, useConversations, useChatConfig } from "@modularmind/ui";
-import type { EngineModel } from "@modularmind/ui";
+import type { EngineModel, DetectedArtifact } from "@modularmind/ui";
 import { ChatSidebar } from "../components/ChatSidebar";
 import { ChatMessages, ChatInput, InsightsPanel, useAuthStore, DEFAULT_CHAT_CONFIG, toggleArrayItem, formatModelName } from "@modularmind/ui";
+import { ArtifactPanel } from "@modularmind/ui";
+import { useArtifacts } from "@modularmind/ui";
 import type { AttachedFile, ChatConfig } from "@modularmind/ui";
 import { chatAdapter, conversationAdapter, chatConfigAdapter } from "../lib/chat-adapter";
 
@@ -49,6 +51,8 @@ export default function Chat() {
     cancelStream,
     approveExecution,
     rejectExecution,
+    regenerateLastMessage,
+    editMessage,
   } = useChat(activeConversationId, chatAdapter);
 
   // ─── useConversations (CRUD, list, selection) ───────────────────────────
@@ -75,7 +79,16 @@ export default function Chat() {
     adapter: conversationAdapter,
   });
 
-  const [panelOpen, setPanelOpen] = useState(false);
+  type RightPanel = "insights" | "artifacts" | null;
+  const [rightPanel, setRightPanel] = useState<RightPanel>(null);
+  const {
+    artifacts,
+    selectedArtifactId,
+    selectedArtifact,
+    addArtifact,
+    selectArtifact,
+    clearArtifacts,
+  } = useArtifacts();
 
   // Debounce config persistence
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -236,6 +249,30 @@ export default function Chat() {
 
   const noOpUpdateLayer = useCallback(async () => false, []);
 
+  const handleArtifactDetected = useCallback(
+    (artifact: DetectedArtifact) => {
+      addArtifact(artifact);
+      if (!rightPanel) {
+        setRightPanel("artifacts");
+        selectArtifact(artifact.id);
+      }
+    },
+    [addArtifact, rightPanel, selectArtifact],
+  );
+
+  useEffect(() => {
+    clearArtifacts();
+  }, [activeConversationId, clearArtifacts]);
+
+  const togglePanel = useCallback((panel: "insights" | "artifacts") => {
+    setRightPanel((prev) => (prev === panel ? null : panel));
+  }, []);
+
+  const handleEditMessage = useCallback((content: string, messageId: string) => {
+    editMessage(messageId);
+    setInputValue(content);
+  }, [editMessage]);
+
   const activeConv = conversations.find((c) => c.id === activeConversationId);
   const activeTitle = activeConv?.title || "Chat";
 
@@ -278,10 +315,19 @@ export default function Chat() {
               </span>
             )}
 
-            {/* Panel toggle */}
+            {/* Artifacts panel toggle */}
             <button
-              onClick={() => setPanelOpen((prev) => !prev)}
-              className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              onClick={() => togglePanel("artifacts")}
+              className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors ${rightPanel === "artifacts" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+              title="Toggle artifacts panel"
+            >
+              <Code2 className="h-4 w-4" />
+            </button>
+
+            {/* Insights panel toggle */}
+            <button
+              onClick={() => togglePanel("insights")}
+              className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors ${rightPanel === "insights" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
               title="Toggle insights panel"
             >
               <PanelRight className="h-4 w-4" />
@@ -304,6 +350,9 @@ export default function Chat() {
           approvalDecision={approvalDecision}
           onApprove={approveExecution}
           onReject={rejectExecution}
+          onRegenerate={regenerateLastMessage}
+          onEditMessage={handleEditMessage}
+          onArtifactDetected={handleArtifactDetected}
           stickyFooter={
             <ChatInput
               value={inputValue}
@@ -330,8 +379,8 @@ export default function Chat() {
         />
       </div>
 
-      {/* Right: Insights panel */}
-      {panelOpen && (
+      {/* Right: Insights or Artifacts panel */}
+      {rightPanel === "insights" && (
         <InsightsPanel
           selectedExecution={selectedExecution}
           liveActivities={activities}
@@ -348,6 +397,15 @@ export default function Chat() {
           allAgents={agents}
           allGraphs={graphs}
           onCompact={activeConversationId ? handleCompactFromPanel : undefined}
+        />
+      )}
+      {rightPanel === "artifacts" && (
+        <ArtifactPanel
+          artifacts={artifacts}
+          selectedArtifactId={selectedArtifactId}
+          selectedArtifact={selectedArtifact}
+          onSelectArtifact={selectArtifact}
+          onClose={() => setRightPanel(null)}
         />
       )}
     </div>
