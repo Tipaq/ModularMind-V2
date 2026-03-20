@@ -39,6 +39,8 @@ export default function ChatPage() {
     cancelStream,
     approveExecution,
     rejectExecution,
+    regenerateLastMessage,
+    editMessage,
   } = useChat(activeConversationId, chatAdapter);
 
   // Auto-select the last assistant message when loading a conversation
@@ -228,6 +230,10 @@ export default function ChatPage() {
     setEnabledGraphIds((prev) => toggleArrayItem(prev, graphId));
   }, []);
 
+  const handleEditMessage = useCallback((messageId: string, newContent: string) => {
+    editMessage(messageId, newContent);
+  }, [editMessage]);
+
   return (
     <div className="flex h-full w-full">
       {/* Left: Conversation sidebar */}
@@ -273,6 +279,8 @@ export default function ChatPage() {
           approvalDecision={approvalDecision}
           onApprove={approveExecution}
           onReject={rejectExecution}
+          onRegenerate={regenerateLastMessage}
+          onEditMessage={handleEditMessage}
           stickyFooter={
             <ChatInput
               value={inputValue}
