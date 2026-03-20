@@ -1,6 +1,9 @@
-"""Sandbox manager — per-execution Docker container lifecycle.
+"""Sandbox manager — hybrid execution with direct + Docker pool.
 
-One sandbox per execution, reused across tool calls, released on completion.
+Hybride architecture for scalability:
+- Safe commands (curl, grep, cat, etc.) → direct subprocess (~10ms)
+- Unsafe commands (python, npm, etc.) → Docker sandbox (~500ms)
+
 Gateway MUST run with --workers 1 for state consistency.
 """
 
@@ -184,13 +187,16 @@ class SandboxManager:
             f"{SANDBOX_LABEL}.agent_id": agent_id,
         }
 
+        # Always bridge — SSRF protection handled at tool level, shell controlled via allow/deny
+        network = self._network or "bridge"
+
         try:
             raw_container = await asyncio.to_thread(
                 docker_client.containers.run,
                 image=self._settings.GATEWAY_SANDBOX_IMAGE,
                 name=container_name,
                 detach=True,
-                network_mode="none",  # No network by default (SSRF prevention)
+                network_mode=network,
                 environment=SANDBOX_SAFE_ENV,
                 labels=labels,
                 volumes=mounts,
@@ -280,13 +286,38 @@ class SandboxManager:
         gateway_sandboxes_active.set(len(self._active))
         return True
 
+    async def exec_hybrid(
+        self,
+        agent_id: str,
+        command_str: str,
+        execution_id: str,
+        permissions: GatewayPermissions,
+        timeout: int = 30,
+    ) -> tuple[int, str]:
+        """Execute a command via direct subprocess or Docker sandbox.
+
+        Safe commands bypass Docker entirely for ~10ms execution.
+        Unsafe commands use the full Docker sandbox path.
+
+        Returns (exit_code, output_string).
+        """
+        from src.sandbox.direct_executor import UnsafeCommandError, direct_exec, is_safe_command
+
+        if self._settings.SANDBOX_DIRECT_EXEC and is_safe_command(command_str):
+            workspace = os.path.join(self._settings.WORKSPACE_ROOT, agent_id)
+            return await direct_exec(command_str, workspace, timeout=timeout)
+
+        # Unsafe command → Docker sandbox
+        sandbox = await self.acquire_or_reuse(execution_id, agent_id, permissions)
+        return await self.exec_in_sandbox(execution_id, ["sh", "-c", command_str])
+
     async def exec_in_sandbox(
         self,
         execution_id: str,
         command: list[str],
         workdir: str = "/workspace",
     ) -> tuple[int, str]:
-        """Execute a command in a sandbox container.
+        """Execute a command in a Docker sandbox container.
 
         Returns (exit_code, output_string).
         """
