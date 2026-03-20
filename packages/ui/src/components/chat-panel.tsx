@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useRef, useCallback, useEffect } from "react";
+import { cn } from "../lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "./tabs";
 
 export interface ChatPanelTab {
@@ -13,12 +14,14 @@ export interface ChatPanelProps {
   tabs: ChatPanelTab[];
   defaultTab?: string;
   children: React.ReactNode;
+  width?: string;
 }
 
 export const ChatPanel = memo(function ChatPanel({
   tabs,
   defaultTab,
   children,
+  width = "w-[320px]",
 }: ChatPanelProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const dragState = useRef({ active: false, startX: 0, scrollLeft: 0 });
@@ -66,7 +69,7 @@ export const ChatPanel = memo(function ChatPanel({
   }, []);
 
   return (
-    <div className="w-[320px] shrink-0 border-l border-border/50 flex flex-col bg-card/30">
+    <div className={cn(width, "shrink-0 border-l border-border/50 flex flex-col bg-card/30")}>
       <Tabs defaultValue={defaultTab ?? tabs[0]?.value} className="flex-1 flex flex-col min-h-0">
         <TabsList
           ref={listRef}
