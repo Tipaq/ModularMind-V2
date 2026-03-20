@@ -441,26 +441,27 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
     setPendingApproval(null);
   }, [adapter]);
 
-  const editMessage = useCallback((messageId: string) => {
-    if (isStreaming) return;
-    setMessages((prev) => {
-      const idx = prev.findIndex((m) => m.id === messageId);
-      if (idx === -1) return prev;
-      return prev.slice(0, idx);
-    });
-  }, [isStreaming]);
+  const editMessage = useCallback(async (messageId: string, newContent: string) => {
+    if (isStreaming || !conversationId) return;
+    const msgIdx = messages.findIndex((m) => m.id === messageId);
+    if (msgIdx === -1) return;
 
-  const regenerateLastMessage = useCallback(() => {
-    if (isStreaming) return;
+    await adapter.deleteMessagesFrom(conversationId, messageId).catch(() => {});
+    setMessages((prev) => prev.slice(0, msgIdx));
+    sendMessage(newContent, conversationId, undefined, undefined, false);
+  }, [isStreaming, conversationId, messages, adapter, sendMessage]);
+
+  const regenerateLastMessage = useCallback(async () => {
+    if (isStreaming || !conversationId) return;
     const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
     if (!lastUserMsg) return;
-    setMessages((prev) => {
-      const lastAssistantIdx = prev.findLastIndex((m) => m.role === "assistant");
-      if (lastAssistantIdx === -1) return prev;
-      return prev.filter((_, idx) => idx !== lastAssistantIdx);
-    });
-    sendMessage(lastUserMsg.content, conversationId ?? undefined, undefined, undefined, true);
-  }, [isStreaming, messages, sendMessage, conversationId]);
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+    if (!lastAssistant) return;
+
+    await adapter.deleteMessagesFrom(conversationId, lastAssistant.id).catch(() => {});
+    setMessages((prev) => prev.filter((m) => m.id !== lastAssistant.id));
+    sendMessage(lastUserMsg.content, conversationId, undefined, undefined, true);
+  }, [isStreaming, conversationId, messages, adapter, sendMessage]);
 
   const streamingMessageId = isStreaming ? currentAssistantIdRef.current : null;
 
