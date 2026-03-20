@@ -934,9 +934,9 @@ export default function McpServersTab() {
                 </div>
               ) : settingsTools.length > 0 ? (
                 <div className="space-y-1">
-                  {settingsTools.map((tool) => (
+                  {settingsTools.map((tool, index) => (
                     <div
-                      key={tool.name}
+                      key={`${tool.name}-${index}`}
                       className="rounded border px-3 py-2 text-xs"
                     >
                       <p className="font-medium">{tool.name}</p>
@@ -1083,9 +1083,9 @@ export default function McpServersTab() {
                 </div>
               ) : settingsTools.length > 0 ? (
                 <div className="space-y-1">
-                  {settingsTools.map((tool) => (
+                  {settingsTools.map((tool, index) => (
                     <div
-                      key={tool.name}
+                      key={`${tool.name}-${index}`}
                       className="rounded border px-3 py-2 text-xs"
                     >
                       <p className="font-medium">{tool.name}</p>
