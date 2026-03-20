@@ -42,6 +42,10 @@ export const chatAdapter: ChatAdapter = {
   async rejectExecution(executionId) {
     await api.post(`/executions/${executionId}/reject`);
   },
+
+  async deleteMessagesFrom(conversationId, messageId) {
+    await api.delete(`/conversations/${conversationId}/messages/${messageId}/after`);
+  },
 };
 
 /**

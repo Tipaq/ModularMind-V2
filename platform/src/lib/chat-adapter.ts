@@ -66,6 +66,10 @@ export const chatAdapter: ChatAdapter = {
   async rejectExecution(executionId) {
     await proxyFetch(`/api/chat/executions/${executionId}/reject`, { method: "POST" });
   },
+
+  async deleteMessagesFrom(conversationId, messageId) {
+    await proxyFetch(`/api/chat/conversations/${conversationId}/messages/${messageId}/after`, { method: "DELETE" });
+  },
 };
 
 /**
