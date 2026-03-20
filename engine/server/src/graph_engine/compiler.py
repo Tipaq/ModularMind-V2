@@ -486,7 +486,10 @@ class GraphCompiler:
             extended_executor = None
             tool_categories = getattr(agent, "tool_categories", {})
             if tool_categories and any(tool_categories.values()):
-                from src.tools.registry import resolve_tool_definitions
+                from src.tools.registry import (
+                    resolve_registered_custom_tools,
+                    resolve_tool_definitions,
+                )
 
                 extended_defs = resolve_tool_definitions(tool_categories)
                 if extended_defs:
@@ -496,6 +499,18 @@ class GraphCompiler:
                         agent.name, len(extended_defs),
                         sum(1 for v in tool_categories.values() if v),
                     )
+
+                # Load registered custom tools from DB as callable LLM tools
+                if tool_categories.get("custom_tools"):
+                    from src.infra.database import async_session_maker as _asm
+
+                    registered_defs = await resolve_registered_custom_tools(agent.id, _asm)
+                    if registered_defs:
+                        active_tools.extend(registered_defs)
+                        logger.info(
+                            "Agent '%s': %d registered custom tools loaded",
+                            agent.name, len(registered_defs),
+                        )
 
             if user_id:
                 from src.graph_engine.builtin_tools import (
