@@ -268,9 +268,8 @@ export default function Chat() {
     setRightPanel((prev) => (prev === panel ? null : panel));
   }, []);
 
-  const handleEditMessage = useCallback((content: string, messageId: string) => {
-    editMessage(messageId);
-    setInputValue(content);
+  const handleEditMessage = useCallback((messageId: string, newContent: string) => {
+    editMessage(messageId, newContent);
   }, [editMessage]);
 
   const activeConv = conversations.find((c) => c.id === activeConversationId);
