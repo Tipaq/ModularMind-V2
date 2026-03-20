@@ -13,6 +13,7 @@ const Configuration = lazy(() => import("./pages/Configuration"));
 const Models = lazy(() => import("./pages/Models"));
 const ModelDetail = lazy(() => import("./pages/ModelDetail"));
 const Knowledge = lazy(() => import("./pages/Knowledge"));
+const CollectionDetail = lazy(() => import("./pages/CollectionDetail"));
 const Users = lazy(() => import("./pages/Users"));
 const UserDetail = lazy(() => import("./pages/UserDetail"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="/models" element={<Models />} />
           <Route path="/models/:id" element={<ModelDetail />} />
           <Route path="/knowledge" element={<Knowledge />} />
+          <Route path="/knowledge/:id" element={<CollectionDetail />} />
           <Route path="/tools" element={<Tools />} />
           <Route path="/mini-apps" element={<MiniApps />} />
           <Route path="/mini-apps/:id" element={<MiniAppDetail />} />

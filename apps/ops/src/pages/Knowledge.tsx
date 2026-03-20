@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
-  BookOpen, RefreshCw, Plus, Search, Globe, Users, User, AlertCircle, FolderKanban,
+  BookOpen, RefreshCw, Plus, Search, AlertCircle,
   BarChart3, Database, GitFork,
 } from "lucide-react";
 import {
-  Button, Input, Badge,
+  Button, Input,
   Tabs, TabsContent, TabsList, TabsTrigger,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
   PageHeader, cn,
 } from "@modularmind/ui";
 import type { Collection } from "@modularmind/api-client";
@@ -14,254 +15,120 @@ import { useKnowledgeStore } from "../stores/knowledge";
 import { useAuthStore } from "@modularmind/ui";
 import { CollectionCard } from "../components/knowledge/CollectionCard";
 import { CreateCollectionDialog } from "../components/knowledge/CreateCollectionDialog";
-import { CollectionDetailPanel } from "../components/knowledge/CollectionDetailPanel";
 import { KnowledgeOverviewTab } from "../components/knowledge/KnowledgeOverviewTab";
 import { KnowledgeExplorerTab } from "../components/knowledge/KnowledgeExplorerTab";
 import { KnowledgeGraphTab } from "../components/knowledge/KnowledgeGraphTab";
 
-function EmptyCollections({ label }: { label: string }) {
-  return (
-    <div className="rounded-xl border border-border/50 bg-card/50 p-12 text-center">
-      <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/30" />
-      <p className="mt-3 text-sm text-muted-foreground">{label}</p>
-    </div>
-  );
+type ScopeFilter = "all" | "company" | "projects" | "groups" | "personal";
+
+function isProject(collection: Collection): boolean {
+  return (collection.metadata as Record<string, unknown> | null)?.category === "project";
+}
+
+function filterByScope(collections: Collection[], scope: ScopeFilter, isAdmin: boolean, userId: string | undefined): Collection[] {
+  if (scope === "company") return collections.filter((c) => c.scope === "global");
+  if (scope === "projects") return collections.filter((c) => c.scope === "group" && isProject(c));
+  if (scope === "groups") return collections.filter((c) => c.scope === "group" && !isProject(c));
+  if (scope === "personal") return collections.filter((c) => c.scope === "agent" && (isAdmin || c.owner_user_id === userId));
+  return collections;
+}
+
+function countByScope(collections: Collection[], isAdmin: boolean, userId: string | undefined) {
+  return {
+    company: collections.filter((c) => c.scope === "global").length,
+    projects: collections.filter((c) => c.scope === "group" && isProject(c)).length,
+    groups: collections.filter((c) => c.scope === "group" && !isProject(c)).length,
+    personal: collections.filter((c) => c.scope === "agent" && (isAdmin || c.owner_user_id === userId)).length,
+  };
 }
 
 function SkeletonGrid() {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {Array.from({ length: 4 }).map((_, i) => (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="h-28 animate-pulse rounded-xl bg-muted/50" />
       ))}
     </div>
   );
 }
 
-function CollectionGrid({
-  items,
-  emptyLabel,
-  loading,
-  selectedCollectionId,
-  onSelect,
-  onDelete,
-  canDelete,
-}: {
-  items: Collection[];
-  emptyLabel: string;
-  loading: boolean;
-  selectedCollectionId: string | null;
-  onSelect: (id: string | null) => void;
-  onDelete: (id: string) => void;
-  canDelete: (c: Collection) => boolean;
-}) {
-  if (loading) return <SkeletonGrid />;
-  if (!items.length) return <EmptyCollections label={emptyLabel} />;
+function EmptyCollections() {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {items.map((col) => (
-        <CollectionCard
-          key={col.id}
-          collection={col}
-          isSelected={col.id === selectedCollectionId}
-          onClick={() => onSelect(col.id === selectedCollectionId ? null : col.id)}
-          onDelete={() => onDelete(col.id)}
-          canDelete={canDelete(col)}
-        />
-      ))}
+    <div className="rounded-xl border border-border/50 bg-card/50 p-12 text-center">
+      <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/30" />
+      <p className="mt-3 text-sm text-muted-foreground">No collections found</p>
     </div>
   );
 }
 
-// ── Collections Tab Content ──
-
 function CollectionsContent() {
-  const {
-    collections, collectionsLoading,
-    selectedCollectionId, documents, documentsLoading,
-    deleteCollection, selectCollection,
-  } = useKnowledgeStore();
-
+  const { collections, collectionsLoading, deleteCollection } = useKnowledgeStore();
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
   const isAdmin = user?.role === "admin" || user?.role === "owner";
 
   const [search, setSearch] = useState("");
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
 
-  const selectedCollection = collections.find((c) => c.id === selectedCollectionId) ?? null;
-
-  const filtered = collections.filter(
+  const searchFiltered = collections.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.description.toLowerCase().includes(search.toLowerCase()) ||
       c.allowed_groups.some((g) => g.toLowerCase().includes(search.toLowerCase())),
   );
 
-  const companyCollections  = filtered.filter((c) => c.scope === "global");
-  const isProject = (c: Collection) =>
-    (c.metadata as Record<string, unknown> | null)?.category === "project";
-  const projectCollections  = filtered.filter((c) => c.scope === "group" && isProject(c));
-  const groupCollections    = filtered.filter((c) => c.scope === "group" && !isProject(c));
-  const personalCollections = filtered.filter(
-    (c) => c.scope === "agent" && (isAdmin || c.owner_user_id === user?.id),
-  );
+  const items = filterByScope(searchFiltered, scopeFilter, isAdmin, user?.id);
+  const counts = countByScope(searchFiltered, isAdmin, user?.id);
 
   const canDelete = (c: Collection) =>
     isAdmin || (c.scope === "agent" && c.owner_user_id === user?.id);
 
   return (
-    <>
-      {/* Search */}
-      <div className="relative max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          className="pl-9"
-          placeholder="Search collections…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      {/* Grid + detail panel side by side */}
-      <div className="flex gap-4 items-start">
-        <div className="flex-1 min-w-0">
-          <Tabs defaultValue="company">
-            <TabsList>
-              <TabsTrigger value="company" className="gap-1.5">
-                <Globe className="h-3.5 w-3.5" />
-                Company
-                {companyCollections.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1.5">
-                    {companyCollections.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="projects" className="gap-1.5">
-                <FolderKanban className="h-3.5 w-3.5" />
-                Projects
-                {projectCollections.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1.5">
-                    {projectCollections.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="groups" className="gap-1.5">
-                <Users className="h-3.5 w-3.5" />
-                Groups
-                {groupCollections.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1.5">
-                    {groupCollections.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="personal" className="gap-1.5">
-                <User className="h-3.5 w-3.5" />
-                Personal
-                {personalCollections.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1.5">
-                    {personalCollections.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
-
-            <div className="mt-4">
-              <TabsContent value="company">
-                <CollectionGrid
-                  items={companyCollections}
-                  emptyLabel={
-                    isAdmin
-                      ? "No company-wide collections yet — create one to share knowledge with all users"
-                      : "No company-wide collections available"
-                  }
-                  loading={collectionsLoading}
-                  selectedCollectionId={selectedCollectionId}
-                  onSelect={selectCollection}
-                  onDelete={deleteCollection}
-                  canDelete={canDelete}
-                />
-              </TabsContent>
-
-              <TabsContent value="projects">
-                {projectCollections.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {[...new Set(projectCollections.flatMap((c) => c.allowed_groups))].map((g) => (
-                      <Badge
-                        key={g}
-                        variant="outline"
-                        className="text-[11px] cursor-pointer hover:bg-muted"
-                        onClick={() => setSearch(search === g ? "" : g)}
-                      >
-                        {g}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                <CollectionGrid
-                  items={projectCollections}
-                  emptyLabel="No project collections yet — create one and tag it as a project"
-                  loading={collectionsLoading}
-                  selectedCollectionId={selectedCollectionId}
-                  onSelect={selectCollection}
-                  onDelete={deleteCollection}
-                  canDelete={canDelete}
-                />
-              </TabsContent>
-
-              <TabsContent value="groups">
-                {groupCollections.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {[...new Set(groupCollections.flatMap((c) => c.allowed_groups))].map((g) => (
-                      <Badge
-                        key={g}
-                        variant="outline"
-                        className="text-[11px] cursor-pointer hover:bg-muted"
-                        onClick={() => setSearch(search === g ? "" : g)}
-                      >
-                        {g}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                <CollectionGrid
-                  items={groupCollections}
-                  emptyLabel="No group collections yet — create one and assign it to one or more groups"
-                  loading={collectionsLoading}
-                  selectedCollectionId={selectedCollectionId}
-                  onSelect={selectCollection}
-                  onDelete={deleteCollection}
-                  canDelete={canDelete}
-                />
-              </TabsContent>
-
-              <TabsContent value="personal">
-                <CollectionGrid
-                  items={personalCollections}
-                  emptyLabel="No personal collections yet — upload your own documents here"
-                  loading={collectionsLoading}
-                  selectedCollectionId={selectedCollectionId}
-                  onSelect={selectCollection}
-                  onDelete={deleteCollection}
-                  canDelete={canDelete}
-                />
-              </TabsContent>
-            </div>
-          </Tabs>
-        </div>
-
-        {selectedCollection && (
-          <CollectionDetailPanel
-            collection={selectedCollection}
-            documents={documents}
-            documentsLoading={documentsLoading}
-            onClose={() => selectCollection(null)}
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            className="pl-9"
+            placeholder="Search collections..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
-        )}
+        </div>
+        <Select value={scopeFilter} onValueChange={(v) => setScopeFilter(v as ScopeFilter)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All ({searchFiltered.length})</SelectItem>
+            <SelectItem value="company">Company ({counts.company})</SelectItem>
+            <SelectItem value="projects">Projects ({counts.projects})</SelectItem>
+            <SelectItem value="groups">Groups ({counts.groups})</SelectItem>
+            <SelectItem value="personal">Personal ({counts.personal})</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
-    </>
+
+      {collectionsLoading ? (
+        <SkeletonGrid />
+      ) : items.length === 0 ? (
+        <EmptyCollections />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {items.map((col) => (
+            <CollectionCard
+              key={col.id}
+              collection={col}
+              onClick={() => navigate(`/knowledge/${col.id}`)}
+              onDelete={() => deleteCollection(col.id)}
+              canDelete={canDelete(col)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
-
-// ── Main Page ──
 
 export default function Knowledge() {
   const {
@@ -272,7 +139,7 @@ export default function Knowledge() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [createOpen, setCreateOpen] = useState(false);
 
-  const topTab = searchParams.get("tab") || "collections";
+  const topTab = searchParams.get("tab") || "overview";
 
   useEffect(() => { fetchCollections(); }, [fetchCollections]);
 
@@ -316,19 +183,15 @@ export default function Knowledge() {
         </div>
       )}
 
-      {/* Top-level tabs */}
-      <Tabs
-        value={topTab}
-        onValueChange={(v) => setSearchParams({ tab: v })}
-      >
+      <Tabs value={topTab} onValueChange={(v) => setSearchParams({ tab: v })}>
         <TabsList>
-          <TabsTrigger value="collections" className="gap-1.5">
-            <BookOpen className="h-3.5 w-3.5" />
-            Collections
-          </TabsTrigger>
           <TabsTrigger value="overview" className="gap-1.5">
             <BarChart3 className="h-3.5 w-3.5" />
             Overview
+          </TabsTrigger>
+          <TabsTrigger value="collections" className="gap-1.5">
+            <BookOpen className="h-3.5 w-3.5" />
+            Collections
           </TabsTrigger>
           <TabsTrigger value="explorer" className="gap-1.5">
             <Database className="h-3.5 w-3.5" />
@@ -340,19 +203,16 @@ export default function Knowledge() {
           </TabsTrigger>
         </TabsList>
 
-        <div className="mt-4 space-y-4">
+        <div className="mt-4">
           <TabsContent value="collections">
             <CollectionsContent />
           </TabsContent>
-
           <TabsContent value="overview">
             <KnowledgeOverviewTab />
           </TabsContent>
-
           <TabsContent value="explorer">
             <KnowledgeExplorerTab />
           </TabsContent>
-
           <TabsContent value="graph">
             <KnowledgeGraphTab />
           </TabsContent>

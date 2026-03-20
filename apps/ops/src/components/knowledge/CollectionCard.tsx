@@ -1,42 +1,36 @@
 import { memo } from "react";
 import { FileText, Globe, Users, User, Trash2 } from "lucide-react";
 import type { Collection } from "@modularmind/api-client";
-import { Badge, Button, cn, relativeTime } from "@modularmind/ui";
+import { Badge, Button, relativeTime } from "@modularmind/ui";
 
 const SCOPE_CONFIG = {
   global: { label: "Company", icon: Globe, color: "text-info" },
-  group:  { label: "Group",   icon: Users, color: "text-warning" },
-  agent:  { label: "Personal", icon: User, color: "text-primary" },
+  group: { label: "Group", icon: Users, color: "text-warning" },
+  agent: { label: "Personal", icon: User, color: "text-primary" },
 } as const;
 
 interface Props {
   collection: Collection;
-  isSelected: boolean;
   onClick: () => void;
   onDelete: () => void;
   canDelete: boolean;
 }
 
-export const CollectionCard = memo(function CollectionCard({ collection, isSelected, onClick, onDelete, canDelete }: Props) {
+export const CollectionCard = memo(function CollectionCard({ collection, onClick, onDelete, canDelete }: Props) {
   const scope = SCOPE_CONFIG[collection.scope] ?? SCOPE_CONFIG.global;
   const ScopeIcon = scope.icon;
 
   return (
     <div
       onClick={onClick}
-      className={cn(
-        "rounded-xl border p-4 cursor-pointer transition-colors group",
-        isSelected
-          ? "border-primary bg-primary/5"
-          : "border-border/50 bg-card/50 hover:bg-muted/30",
-      )}
+      className="rounded-xl border border-border/50 bg-card/50 p-4 cursor-pointer transition-colors hover:bg-muted/30 group"
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-medium truncate text-sm">{collection.name}</h3>
         <div className="flex items-center gap-1 shrink-0">
           <div className="flex items-center gap-1 rounded-md bg-muted px-2 py-0.5">
             <FileText className="h-3 w-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">{collection.document_count}</span>
+            <span className="text-xs text-muted-foreground tabular-nums">{collection.document_count}</span>
           </div>
           {canDelete && (
             <Button
@@ -56,7 +50,7 @@ export const CollectionCard = memo(function CollectionCard({ collection, isSelec
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <Badge variant="outline" className={cn("text-[10px] gap-1", scope.color)}>
+        <Badge variant="outline" className={`text-[10px] gap-1 ${scope.color}`}>
           <ScopeIcon className="h-2.5 w-2.5" />
           {scope.label}
         </Badge>
