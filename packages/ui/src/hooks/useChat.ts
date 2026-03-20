@@ -96,7 +96,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
   // ── Send message ───────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
-    async (content: string, overrideConversationId?: string, files?: File[], supervisorMode?: boolean) => {
+    async (content: string, overrideConversationId?: string, files?: File[], supervisorMode?: boolean, skipUserMessage?: boolean) => {
       const targetConvId = overrideConversationId || conversationId;
       if (!targetConvId || isStreaming) return;
 
@@ -125,16 +125,19 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
         }
       }
 
-      // Optimistically add user message
-      const tempUserMsg: Message = {
-        id: `temp-${Date.now()}`,
-        role: "user",
-        content,
-        created_at: new Date().toISOString(),
-        metadata: {},
-        attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-      };
-      setMessages((prev) => [...prev, tempUserMsg]);
+      // Optimistically add user message (skip when regenerating)
+      let tempUserMsg: Message | null = null;
+      if (!skipUserMessage) {
+        tempUserMsg = {
+          id: `temp-${Date.now()}`,
+          role: "user",
+          content,
+          created_at: new Date().toISOString(),
+          metadata: {},
+          attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+        };
+        setMessages((prev) => [...prev, tempUserMsg!]);
+      }
 
       // Add placeholder assistant message
       const assistantId = `assistant-${Date.now()}`;
@@ -160,7 +163,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
         res = await adapter.sendMessage(targetConvId, body);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to send message");
-        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+        setMessages((prev) => prev.filter((m) => m.id !== assistantId && (!tempUserMsg || m.id !== tempUserMsg.id)));
         currentAssistantIdRef.current = "";
         setIsStreaming(false);
         return;
@@ -190,7 +193,9 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
       }
 
       // Replace temp user message with real one
-      setMessages((prev) => prev.map((m) => (m.id === tempUserMsg.id ? user_message : m)));
+      if (tempUserMsg) {
+        setMessages((prev) => prev.map((m) => (m.id === tempUserMsg!.id ? user_message : m)));
+      }
 
       const routingDurationMs = Date.now() - sendStartMs;
 
@@ -436,7 +441,27 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
     setPendingApproval(null);
   }, [adapter]);
 
-  // ID of the message currently being streamed (for live activity display)
+  const editMessage = useCallback((messageId: string) => {
+    if (isStreaming) return;
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === messageId);
+      if (idx === -1) return prev;
+      return prev.slice(0, idx);
+    });
+  }, [isStreaming]);
+
+  const regenerateLastMessage = useCallback(() => {
+    if (isStreaming) return;
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+    if (!lastUserMsg) return;
+    setMessages((prev) => {
+      const lastAssistantIdx = prev.findLastIndex((m) => m.role === "assistant");
+      if (lastAssistantIdx === -1) return prev;
+      return prev.filter((_, idx) => idx !== lastAssistantIdx);
+    });
+    sendMessage(lastUserMsg.content, conversationId ?? undefined, undefined, undefined, true);
+  }, [isStreaming, messages, sendMessage, conversationId]);
+
   const streamingMessageId = isStreaming ? currentAssistantIdRef.current : null;
 
   return {
@@ -455,5 +480,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
     cancelStream,
     approveExecution,
     rejectExecution,
+    regenerateLastMessage,
+    editMessage,
   };
 }
