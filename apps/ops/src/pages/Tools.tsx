@@ -1,38 +1,39 @@
 import { useEffect, useState, useMemo } from "react";
-import { Wrench } from "lucide-react";
-import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent, Badge } from "@modularmind/ui";
-import type { ToolSource } from "@modularmind/api-client";
+import { Wrench, Search } from "lucide-react";
+import {
+  PageHeader,
+  Badge,
+  Input,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@modularmind/ui";
 import { useToolsStore } from "../stores/tools";
-import { ToolCategoriesGrid } from "../components/tools/ToolCategoriesGrid";
 import { ToolsTable } from "../components/tools/ToolsTable";
-
-const SOURCE_TABS: { value: string; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "builtin", label: "Built-in" },
-  { value: "extended", label: "Extended" },
-  { value: "gateway", label: "Gateway" },
-  { value: "mcp", label: "MCP" },
-];
 
 export default function Tools() {
   const { tools, categories, totalCount, loading, fetchTools } = useToolsStore();
-  const [activeTab, setActiveTab] = useState("all");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchTools();
   }, [fetchTools]);
 
+  const activeCategories = useMemo(
+    () => categories.filter((cat) => cat.tool_count > 0),
+    [categories],
+  );
+
   const filteredTools = useMemo(() => {
     let filtered = tools;
 
-    if (activeTab !== "all") {
-      filtered = filtered.filter((t) => t.source === (activeTab as ToolSource));
-    }
-
-    if (selectedCategory) {
-      filtered = filtered.filter((t) => t.category === selectedCategory || t.category.startsWith(`${selectedCategory}:`));
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter(
+        (t) => t.category === selectedCategory || t.category.startsWith(`${selectedCategory}:`),
+      );
     }
 
     if (search.trim()) {
@@ -43,12 +44,7 @@ export default function Tools() {
     }
 
     return filtered;
-  }, [tools, activeTab, selectedCategory, search]);
-
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    setSelectedCategory(null);
-  };
+  }, [tools, selectedCategory, search]);
 
   return (
     <div className="space-y-6">
@@ -64,36 +60,32 @@ export default function Tools() {
         }
       />
 
-      <ToolCategoriesGrid
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
-      />
-
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <div className="flex items-center justify-between gap-4">
-          <TabsList>
-            {SOURCE_TABS.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value}>
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <input
-            type="text"
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            className="pl-9"
+            placeholder="Search tools..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tools..."
-            className="h-9 w-64 rounded-md border border-border bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
+        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories ({totalCount})</SelectItem>
+            {activeCategories.map((cat) => (
+              <SelectItem key={cat.id} value={cat.id}>
+                {cat.label} ({cat.tool_count})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-        {SOURCE_TABS.map((tab) => (
-          <TabsContent key={tab.value} value={tab.value}>
-            <ToolsTable tools={filteredTools} loading={loading} />
-          </TabsContent>
-        ))}
-      </Tabs>
+      <ToolsTable tools={filteredTools} loading={loading} />
     </div>
   );
 }
