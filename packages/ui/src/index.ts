@@ -138,3 +138,20 @@ export { ConfigTab } from "./components/insights";
 export type { ConfigTabProps, ExecutionMetrics } from "./components/insights";
 export { MemoryTab } from "./components/insights";
 export type { MemoryTabProps } from "./components/insights";
+
+// Mini-app system
+export { MiniAppViewer } from "./components/mini-app";
+export { MiniAppCard } from "./components/mini-app";
+
+// Code & copy components
+export { CopyButton } from "./components/copy-button";
+export { CodeBlock } from "./components/code-block";
+export { MarkdownRenderer } from "./components/markdown-renderer";
+
+// Artifact system
+export type { DetectedArtifact, ArtifactType } from "./types/artifact";
+export { extractCodeArtifacts, extractToolArtifact } from "./lib/artifact-detection";
+export { useArtifacts } from "./hooks/useArtifacts";
+export { ArtifactPanel } from "./components/artifact-panel";
+export { ArtifactViewer } from "./components/artifact-panel";
+export { ArtifactList } from "./components/artifact-panel";
