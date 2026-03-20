@@ -37,6 +37,7 @@ def _get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
     )
     from src.tools.categories.knowledge import get_knowledge_tool_definitions
     from src.tools.categories.memory import get_memory_tool_definitions
+    from src.tools.categories.mini_apps import get_mini_app_tool_definitions
 
     return {
         "memory": get_memory_tool_definitions,
@@ -46,6 +47,7 @@ def _get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
         "human_interaction": get_human_interaction_tool_definitions,
         "image_generation": get_image_generation_tool_definitions,
         "custom_tools": get_custom_tool_definitions,
+        "mini_apps": get_mini_app_tool_definitions,
     }
 
 
@@ -73,3 +75,49 @@ def resolve_tool_definitions(tool_categories: dict[str, bool]) -> list[dict[str,
         logger.debug("Category '%s': %d tools", category, len(category_tools))
 
     return tools
+
+
+async def resolve_registered_custom_tools(agent_id: str, session_maker: Callable) -> list[dict[str, Any]]:
+    """Load agent's registered custom tools from DB and return as LLM tool definitions.
+
+    Each registered custom tool becomes a callable tool for the LLM,
+    routed through custom_tool_run internally.
+    """
+    from sqlalchemy import select
+
+    from src.tools.models import CustomTool
+
+    try:
+        async with session_maker() as session:
+            result = await session.execute(
+                select(CustomTool)
+                .where(CustomTool.agent_id == agent_id, CustomTool.is_active.is_(True))
+            )
+            tools = list(result.scalars().all())
+
+        if not tools:
+            return []
+
+        definitions = []
+        for tool in tools:
+            parameters = tool.parameters if isinstance(tool.parameters, dict) and tool.parameters else {
+                "type": "object", "properties": {}, "required": [],
+            }
+            if "type" not in parameters:
+                parameters = {"type": "object", "properties": parameters, "required": []}
+
+            definitions.append({
+                "type": "function",
+                "function": {
+                    "name": f"custom__{tool.name}",
+                    "description": f"[Custom Tool] {tool.description}",
+                    "parameters": parameters,
+                },
+            })
+
+        logger.info("Agent '%s': loaded %d registered custom tools", agent_id, len(definitions))
+        return definitions
+
+    except Exception:
+        logger.exception("Failed to load custom tools for agent '%s'", agent_id)
+        return []

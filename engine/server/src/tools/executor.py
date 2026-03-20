@@ -22,6 +22,8 @@ _CATEGORY_PREFIXES = (
     "human_",
     "image_",
     "custom_tool_",
+    "custom__",
+    "mini_app_",
 )
 
 
@@ -65,6 +67,10 @@ class ExtendedToolExecutor:
                 return await self._handle_image_generation(name, args)
             if name.startswith("custom_tool_"):
                 return await self._handle_custom_tools(name, args)
+            if name.startswith("custom__"):
+                return await self._handle_registered_custom_tool(name, args)
+            if name.startswith("mini_app_"):
+                return await self._handle_mini_app(name, args)
             return f"Error: unknown extended tool '{name}'"
         except Exception as e:
             logger.exception("Extended tool '%s' failed", name)
@@ -125,6 +131,36 @@ class ExtendedToolExecutor:
         async with self._session_maker() as session:
             return await execute_custom_tool(
                 name, args,
+                agent_id=self._agent_id,
+                session=session,
+                gateway_executor=self._gateway_executor,
+            )
+
+    async def _handle_mini_app(self, name: str, args: dict[str, Any]) -> str:
+        from src.infra.config import get_settings
+
+        from src.tools.categories.mini_apps import execute_mini_app_tool
+
+        settings = get_settings()
+        if not settings.PLATFORM_URL or not settings.ENGINE_API_KEY:
+            return "Error: mini-apps require PLATFORM_URL and ENGINE_API_KEY."
+
+        return await execute_mini_app_tool(
+            name, args,
+            agent_id=self._agent_id,
+            platform_url=settings.PLATFORM_URL,
+            engine_api_key=settings.ENGINE_API_KEY,
+        )
+
+    async def _handle_registered_custom_tool(self, name: str, args: dict[str, Any]) -> str:
+        """Execute a registered custom tool (custom__<name> → custom_tool_run)."""
+        from src.tools.categories.custom_tools import execute_custom_tool
+
+        tool_name = name.removeprefix("custom__")
+        async with self._session_maker() as session:
+            return await execute_custom_tool(
+                "custom_tool_run",
+                {"tool_name": tool_name, "args": args},
                 agent_id=self._agent_id,
                 session=session,
                 gateway_executor=self._gateway_executor,
