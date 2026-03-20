@@ -46,4 +46,7 @@ export interface ChatAdapter {
 
   /** Reject a human-in-the-loop gate. */
   rejectExecution(executionId: string): Promise<void>;
+
+  /** Delete a message and all messages after it in a conversation. */
+  deleteMessagesFrom(conversationId: string, messageId: string): Promise<void>;
 }
