@@ -47,7 +47,7 @@ dev-worker: ## Start Worker process (auto-reload)
 dev-gateway: ## Start Gateway service (uvicorn --reload)
 	cd gateway && uvicorn src.main:app --reload --host 0.0.0.0 --port 8200
 
-dev-infra: ## Start infra only (db, redis, qdrant, ollama)
+dev-infra: build-sandbox ## Start infra only (db, redis, qdrant, ollama) + ensure sandbox image
 	docker compose -f docker/docker-compose.dev.yml up db redis qdrant ollama
 
 dev-monitoring: ## Start monitoring (Prometheus + Grafana + exporters)
