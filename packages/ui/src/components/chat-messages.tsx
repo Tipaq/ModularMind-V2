@@ -1,14 +1,16 @@
 "use client";
 
 import { memo, useEffect, useRef } from "react";
-import Markdown from "react-markdown";
-import { ArrowRight, Bot, Loader2, User } from "lucide-react";
+import { ArrowRight, Bot, Loader2, Pencil, RefreshCw, User } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { ExecutionActivity } from "../types/chat";
+import type { DetectedArtifact } from "../types/artifact";
 import { ExecutionActivityList } from "./execution-activity";
 import { AttachmentChip, type AttachmentChipData } from "./attachment-chip";
 import { ApprovalCard, type ApprovalRequest } from "./approval-card";
 import { ChatEmptyState } from "./chat-empty-state";
+import { CopyButton } from "./copy-button";
+import { MarkdownRenderer } from "./markdown-renderer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 const EMPTY_ACTIVITIES: ExecutionActivity[] = [];
@@ -74,16 +76,18 @@ function shouldShowTimestamp(prevIso: string | null, currentIso: string): boolea
 interface MessageBubbleProps {
   msg: ChatMessage;
   isLast: boolean;
+  isLastAssistant: boolean;
   isStreaming: boolean;
   activities: ExecutionActivity[];
   showRoutingMetadata?: boolean;
   selected?: boolean;
   selectable?: boolean;
   onSelect?: () => void;
-  /** Whether to show the Messenger-style timestamp above the bubble. */
   showTimestamp: boolean;
-  /** Base URL for attachment download links. */
   attachmentBaseUrl?: string;
+  onArtifactDetected?: (artifact: DetectedArtifact) => void;
+  onEditMessage?: (content: string, messageId: string) => void;
+  onRegenerate?: () => void;
 }
 
 const MessageBubble = memo(function MessageBubble({
@@ -97,6 +101,10 @@ const MessageBubble = memo(function MessageBubble({
   onSelect,
   showTimestamp,
   attachmentBaseUrl,
+  onArtifactDetected,
+  onEditMessage,
+  onRegenerate,
+  isLastAssistant: isLastAssistantProp,
 }: MessageBubbleProps) {
   const isUser = msg.role === "user";
   const isAssistant = msg.role === "assistant";
@@ -155,61 +163,94 @@ const MessageBubble = memo(function MessageBubble({
             />
           </div>
         ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                className={cn(
-                  "max-w-[75%] px-4 py-2.5 transition-all",
-                  isUser
-                    ? "rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-secondary text-primary-foreground"
-                    : "rounded-2xl rounded-bl-md bg-muted",
-                  selectable && "cursor-pointer hover:ring-2 hover:ring-primary/20",
-                  selected && "ring-2 ring-primary/50 shadow-sm",
-                )}
-                onClick={selectable ? onSelect : undefined}
-              >
-                {msg.content ? (
-                  isUser ? (
-                    <div className="text-sm whitespace-pre-wrap break-words">
-                      {msg.content}
+          <div className={cn("max-w-[75%] group/msg", isUser && "flex flex-col items-end")}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className={cn(
+                    "px-4 py-2.5 transition-all",
+                    isUser
+                      ? "rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-secondary text-primary-foreground"
+                      : "rounded-2xl rounded-bl-md bg-muted",
+                    selectable && "cursor-pointer hover:ring-2 hover:ring-primary/20",
+                    selected && "ring-2 ring-primary/50 shadow-sm",
+                  )}
+                  onClick={selectable ? onSelect : undefined}
+                >
+                  {msg.content ? (
+                    isUser ? (
+                      <div className="text-sm whitespace-pre-wrap break-words">
+                        {msg.content}
+                      </div>
+                    ) : (
+                      <div className="chat-markdown text-sm break-words">
+                        <MarkdownRenderer
+                          content={msg.content}
+                          messageId={msg.id}
+                          onArtifactDetected={onArtifactDetected}
+                        />
+                      </div>
+                    )
+                  ) : isStreaming && isLastAssistantProp ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Thinking...
                     </div>
-                  ) : (
-                    <div className="chat-markdown text-sm break-words">
-                      <Markdown>{msg.content}</Markdown>
+                  ) : null}
+
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {msg.attachments.map((att) => (
+                        <AttachmentChip key={att.id} attachment={att} downloadBaseUrl={attachmentBaseUrl} />
+                      ))}
                     </div>
-                  )
-                ) : isStreaming && isLastAssistant ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Thinking...
-                  </div>
-                ) : null}
+                  )}
 
-                {/* Attachments */}
-                {msg.attachments && msg.attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {msg.attachments.map((att) => (
-                      <AttachmentChip key={att.id} attachment={att} downloadBaseUrl={attachmentBaseUrl} />
-                    ))}
-                  </div>
+                  {msg.content && showRoutingMetadata && !isUser && routingStrategy && (
+                    <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <ArrowRight className="h-2.5 w-2.5" />
+                        {routingStrategy}
+                        {delegatedTo && ` \u2192 ${delegatedTo}`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side={isUser ? "left" : "right"} align="center" className="text-[10px]">
+                {formatTooltipTime(msg.created_at)}
+              </TooltipContent>
+            </Tooltip>
+
+            {msg.content && !isStreaming && (
+              <div className={cn(
+                "flex gap-1 mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity",
+                "justify-end",
+              )}>
+                {isUser && onEditMessage && (
+                  <button
+                    onClick={() => onEditMessage(msg.content, msg.id)}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Edit message"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
                 )}
-
-                {/* Routing metadata — stays inside the bubble */}
-                {msg.content && showRoutingMetadata && !isUser && routingStrategy && (
-                  <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <ArrowRight className="h-2.5 w-2.5" />
-                      {routingStrategy}
-                      {delegatedTo && ` \u2192 ${delegatedTo}`}
-                    </span>
-                  </div>
+                {isAssistant && (
+                  <CopyButton content={msg.content} />
+                )}
+                {isLastAssistantProp && onRegenerate && (
+                  <button
+                    onClick={onRegenerate}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Regenerate response"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </button>
                 )}
               </div>
-            </TooltipTrigger>
-            <TooltipContent side={isUser ? "left" : "right"} align="center" className="text-[10px]">
-              {formatTooltipTime(msg.created_at)}
-            </TooltipContent>
-          </Tooltip>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -244,6 +285,9 @@ export interface ChatMessagesProps {
   onApprove?: (executionId: string) => Promise<void>;
   /** Callback to reject the execution. */
   onReject?: (executionId: string) => Promise<void>;
+  onRegenerate?: () => void;
+  onEditMessage?: (content: string, messageId: string) => void;
+  onArtifactDetected?: (artifact: DetectedArtifact) => void;
 }
 
 export const ChatMessages = memo(function ChatMessages({
@@ -261,6 +305,9 @@ export const ChatMessages = memo(function ChatMessages({
   approvalDecision,
   onApprove,
   onReject,
+  onRegenerate,
+  onEditMessage,
+  onArtifactDetected,
 }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastMsg = messages[messages.length - 1];
@@ -285,13 +332,13 @@ export const ChatMessages = memo(function ChatMessages({
                   const isLast = i === messages.length - 1;
                   const isUser = msg.role === "user";
                   const isAssistant = msg.role === "assistant";
+                  const isLastAssistant = isAssistant && !messages.slice(i + 1).some((m) => m.role === "assistant");
                   const prevMsg = i > 0 ? messages[i - 1] : null;
                   const showDate = !prevMsg || !isSameDay(prevMsg.created_at, msg.created_at);
                   const showTimestamp = shouldShowTimestamp(
                     prevMsg?.created_at ?? null,
                     msg.created_at,
                   );
-                  // Same sender → tight spacing, different sender → more breathing room
                   const sameSender = prevMsg && prevMsg.role === msg.role;
                   const gap = i === 0 ? "" : sameSender ? "mt-1" : "mt-4";
 
@@ -307,6 +354,7 @@ export const ChatMessages = memo(function ChatMessages({
                       <MessageBubble
                         msg={msg}
                         isLast={isLast}
+                        isLastAssistant={isLastAssistant}
                         isStreaming={isStreaming}
                         activities={isLast && !isUser ? activities : EMPTY_ACTIVITIES}
                         showRoutingMetadata={showRoutingMetadata}
@@ -315,6 +363,9 @@ export const ChatMessages = memo(function ChatMessages({
                         onSelect={isAssistant && onSelectMessage ? () => onSelectMessage(msg.id) : undefined}
                         showTimestamp={showTimestamp}
                         attachmentBaseUrl={attachmentBaseUrl}
+                        onArtifactDetected={onArtifactDetected}
+                        onEditMessage={onEditMessage}
+                        onRegenerate={onRegenerate}
                       />
                     </div>
                   );
