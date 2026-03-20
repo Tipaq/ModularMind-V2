@@ -24,7 +24,7 @@ def _transform_agent(raw: dict[str, Any]) -> dict[str, Any]:
     Engine expects:  id, name, description, model_id, system_prompt, capabilities, version
     """
     config_block = raw.get("config") or {}
-    return {
+    result: dict[str, Any] = {
         "id": raw["id"],
         "name": raw.get("name", ""),
         "description": raw.get("description", ""),
@@ -36,6 +36,12 @@ def _transform_agent(raw: dict[str, Any]) -> dict[str, Any]:
         "memory_enabled": config_block.get("memory_enabled", True),
         "gateway_permissions": config_block.get("gateway_permissions"),
     }
+    # Pass through tool_categories and rag_config if set on Platform
+    if config_block.get("tool_categories"):
+        result["tool_categories"] = config_block["tool_categories"]
+    if config_block.get("rag_config"):
+        result["rag_config"] = config_block["rag_config"]
+    return result
 
 
 def _transform_graph_node(raw: dict[str, Any]) -> dict[str, Any]:
