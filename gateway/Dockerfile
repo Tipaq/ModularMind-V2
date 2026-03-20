@@ -28,7 +28,8 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 COPY gateway/src ./src
 
 RUN useradd -u 1000 -m -s /bin/bash appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \
+    && mkdir -p /data/workspaces && chown -R appuser:root /data/workspaces && chmod 775 /data/workspaces
 USER appuser
 
 EXPOSE 8200

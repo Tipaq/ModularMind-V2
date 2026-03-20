@@ -5,7 +5,7 @@
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    coreutils git curl jq \
+    ca-certificates coreutils git curl wget jq dnsutils net-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # CRITICAL: UID 1000 matches workspace chown in SandboxManager

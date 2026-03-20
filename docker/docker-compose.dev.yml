@@ -147,6 +147,8 @@ services:
       dockerfile: gateway/Dockerfile
     ports:
       - "8200:8200"
+    # Run as appuser (1000) with root group (0) for Docker socket + workspace access
+    user: "1000:0"
     volumes:
       - ../gateway/src:/app/src
       - /var/run/docker.sock:/var/run/docker.sock
