@@ -34,6 +34,7 @@ class Conversation(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     agent_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    graph_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
 

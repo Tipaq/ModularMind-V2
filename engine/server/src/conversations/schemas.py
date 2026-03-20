@@ -32,6 +32,7 @@ class ConversationCreate(BaseModel):
     """Conversation creation request."""
 
     agent_id: str | None = None
+    graph_id: str | None = None
     title: str | None = None
     supervisor_mode: bool = False
     config: dict[str, Any] | None = None
@@ -72,6 +73,7 @@ class ConversationResponse(BaseModel):
 
     id: str
     agent_id: str | None = None
+    graph_id: str | None = None
     user_email: str | None = None
     title: str | None
     is_active: bool
