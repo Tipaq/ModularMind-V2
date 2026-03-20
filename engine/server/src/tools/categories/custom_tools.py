@@ -93,6 +93,43 @@ def get_custom_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
+                "name": "custom_tool_update",
+                "description": (
+                    "Update an existing custom tool's configuration. "
+                    "Only provide the fields you want to change."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tool_name": {
+                            "type": "string",
+                            "description": "Name of the tool to update.",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "New description.",
+                        },
+                        "executor_type": {
+                            "type": "string",
+                            "enum": ["shell", "http", "python"],
+                            "description": "New executor type.",
+                        },
+                        "executor_config": {
+                            "type": "object",
+                            "description": "New executor config.",
+                        },
+                        "parameters": {
+                            "type": "object",
+                            "description": "New parameter JSON Schema.",
+                        },
+                    },
+                    "required": ["tool_name"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "custom_tool_delete",
                 "description": "Delete a registered custom tool.",
                 "parameters": {
@@ -124,6 +161,8 @@ async def execute_custom_tool(
         return await _run(args, agent_id, session, gateway_executor)
     if name == "custom_tool_list":
         return await _list(agent_id, session)
+    if name == "custom_tool_update":
+        return await _update(args, agent_id, session)
     if name == "custom_tool_delete":
         return await _delete(args, agent_id, session)
     return f"Error: unknown custom tool command '{name}'"
@@ -135,7 +174,7 @@ async def _register(args: dict, agent_id: str, session: AsyncSession) -> str:
 
     from src.tools.models import CustomTool
 
-    tool_name = args.get("name", "").strip().lower()
+    tool_name = args.get("name", "").strip().lower().removeprefix("custom__")
     if not tool_name or not re.match(r"^[a-z][a-z0-9_]{0,63}$", tool_name):
         return "Error: name must be lowercase alphanumeric with underscores, 1-64 chars."
 
@@ -157,12 +196,20 @@ async def _register(args: dict, agent_id: str, session: AsyncSession) -> str:
     if executor_type == "python" and not executor_config.get("code"):
         return "Error: python executor requires 'code' in executor_config."
 
-    existing = await session.execute(
+    existing_result = await session.execute(
         select(CustomTool)
         .where(CustomTool.agent_id == agent_id, CustomTool.name == tool_name)
     )
-    if existing.scalar_one_or_none():
-        return f"Error: tool '{tool_name}' already exists. Delete it first to re-register."
+    existing_tool = existing_result.scalar_one_or_none()
+
+    if existing_tool:
+        existing_tool.description = description
+        existing_tool.parameters = parameters
+        existing_tool.executor_type = executor_type
+        existing_tool.executor_config = executor_config
+        existing_tool.is_active = True
+        await session.commit()
+        return f"Custom tool '{tool_name}' updated ({executor_type} executor)."
 
     tool = CustomTool(
         agent_id=agent_id,
@@ -186,7 +233,7 @@ async def _run(
     """Execute a custom tool."""
     from src.tools.models import CustomTool
 
-    tool_name = args.get("tool_name", "").strip().lower()
+    tool_name = args.get("tool_name", "").strip().lower().removeprefix("custom__")
     if not tool_name:
         return "Error: tool_name is required."
 
@@ -232,14 +279,23 @@ async def _run_http(tool: Any, tool_args: dict) -> str:
     headers = config.get("headers", {})
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.request(
-                method, url, headers=headers, json=tool_args,
+                method, url, headers=headers, json=tool_args if tool_args else None,
             )
-            response.raise_for_status()
-            return response.text[:10000]
+            status = response.status_code
+            body = response.text[:5000]
+
+            if status < 400:
+                return (
+                    f"HTTP {status} OK — {method} {url}\n"
+                    f"Content-Type: {response.headers.get('content-type', 'unknown')}\n"
+                    f"Content-Length: {len(response.content)} bytes\n"
+                    f"Response (first 5000 chars):\n{body}"
+                )
+            return f"HTTP {status} Error — {method} {url}\nBody: {body}"
     except Exception as e:
-        return f"Error: HTTP request failed: {e}"
+        return f"Error: HTTP request to {url} failed: {e}"
 
 
 async def _run_python(tool: Any, tool_args: dict, gateway_executor: Any | None) -> str:
@@ -261,6 +317,43 @@ async def _run_python(tool: Any, tool_args: dict, gateway_executor: Any | None) 
     encoded = base64.b64encode(wrapper.encode()).decode()
     command = f"echo {encoded} | base64 -d | python3"
     return await gateway_executor.execute("gateway__shell_exec", {"command": command})
+
+
+async def _update(args: dict, agent_id: str, session: AsyncSession) -> str:
+    """Update an existing custom tool."""
+    from src.tools.models import CustomTool
+
+    tool_name = args.get("tool_name", "").strip().lower().removeprefix("custom__")
+    if not tool_name:
+        return "Error: tool_name is required."
+
+    result = await session.execute(
+        select(CustomTool)
+        .where(CustomTool.agent_id == agent_id, CustomTool.name == tool_name)
+    )
+    tool = result.scalar_one_or_none()
+    if not tool:
+        return f"Error: tool '{tool_name}' not found."
+
+    updated_fields = []
+    if "description" in args:
+        tool.description = args["description"]
+        updated_fields.append("description")
+    if "executor_type" in args:
+        tool.executor_type = args["executor_type"]
+        updated_fields.append("executor_type")
+    if "executor_config" in args:
+        tool.executor_config = args["executor_config"]
+        updated_fields.append("executor_config")
+    if "parameters" in args:
+        tool.parameters = args["parameters"]
+        updated_fields.append("parameters")
+
+    if not updated_fields:
+        return f"No changes provided for tool '{tool_name}'."
+
+    await session.commit()
+    return f"Custom tool '{tool_name}' updated: {', '.join(updated_fields)}."
 
 
 async def _list(agent_id: str, session: AsyncSession) -> str:
@@ -290,7 +383,7 @@ async def _delete(args: dict, agent_id: str, session: AsyncSession) -> str:
     """Delete a custom tool."""
     from src.tools.models import CustomTool
 
-    tool_name = args.get("tool_name", "").strip().lower()
+    tool_name = args.get("tool_name", "").strip().lower().removeprefix("custom__")
     if not tool_name:
         return "Error: tool_name is required."
 
