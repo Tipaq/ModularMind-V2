@@ -266,7 +266,22 @@ async def _execute_in_sandbox(
             execution_id=request.execution_id,
         )
 
-    # Filesystem and shell require a sandbox container
+    # Shell uses hybrid execution (direct subprocess for safe commands)
+    if request.category == "shell":
+        timeout = perms.shell.max_execution_seconds if perms else 30
+        executor = ShellExecutor(
+            max_execution_seconds=timeout,
+            agent_id=request.agent_id,
+            permissions=perms,
+        )
+        return await executor.execute(
+            action=request.action,
+            args=request.args,
+            sandbox_mgr=sandbox_mgr,
+            execution_id=request.execution_id,
+        )
+
+    # Filesystem and code_search require a sandbox container
     await sandbox_mgr.acquire_or_reuse(
         execution_id=request.execution_id,
         agent_id=request.agent_id,
@@ -275,15 +290,6 @@ async def _execute_in_sandbox(
 
     if request.category == "filesystem":
         executor = FilesystemExecutor()
-        return await executor.execute(
-            action=request.action,
-            args=request.args,
-            sandbox_mgr=sandbox_mgr,
-            execution_id=request.execution_id,
-        )
-    elif request.category == "shell":
-        timeout = perms.shell.max_execution_seconds if perms else 30
-        executor = ShellExecutor(max_execution_seconds=timeout)
         return await executor.execute(
             action=request.action,
             args=request.args,
