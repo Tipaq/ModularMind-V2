@@ -1,11 +1,7 @@
-export type ToolSource = "builtin" | "extended" | "gateway" | "mcp";
-
 export interface ToolDefinition {
   name: string;
   description: string;
   category: string;
-  source: ToolSource;
-  server_name: string | null;
   parameters: Record<string, unknown>;
 }
 
