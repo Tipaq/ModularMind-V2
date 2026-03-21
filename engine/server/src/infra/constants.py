@@ -65,5 +65,5 @@ RATE_LIMIT_WEBHOOK: int = 30
 RATE_LIMIT_INTERNAL: int = 6
 
 # ── Concurrency ───────────────────────────────────────────────────────────────
-DISCORD_MAX_CONCURRENT: int = 10
-"""Max concurrent Discord agent background tasks."""
+WEBHOOK_BACKGROUND_MAX_CONCURRENT: int = 10
+"""Max concurrent webhook background agent tasks (deferred-execution platforms)."""
