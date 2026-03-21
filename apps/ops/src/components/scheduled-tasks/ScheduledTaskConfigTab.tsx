@@ -165,7 +165,7 @@ export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabP
   const addPostAction = () => {
     setEditValues((v) => ({
       ...v,
-      post_actions: [...v.post_actions, { type: "github_comment", on: "always" as const }],
+      post_actions: [...v.post_actions, { type: "github_comment", on: "always" as const, method: undefined, url: undefined }],
     }));
   };
 
@@ -211,7 +211,7 @@ export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabP
             <PropRow label="Type">
               <Select
                 value={editValues.trigger_type}
-                onValueChange={(v) => setEditValues((prev) => ({ ...prev, trigger_type: v }))}
+                onValueChange={(v) => setEditValues((prev) => ({ ...prev, trigger_type: v as "cron" | "manual" }))}
               >
                 <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>

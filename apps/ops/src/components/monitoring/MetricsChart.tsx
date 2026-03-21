@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -68,7 +69,7 @@ export function MetricsChart({
   height = 220,
   unit,
 }: MetricsChartProps) {
-  const merged = mergeSeriesData(series);
+  const merged = useMemo(() => mergeSeriesData(series), [series]);
   const hasData = merged.length > 0;
 
   return (
