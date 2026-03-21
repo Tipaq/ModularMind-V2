@@ -6,7 +6,7 @@ Shared query helpers for admin user management.
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.models import User
@@ -20,18 +20,20 @@ async def compute_user_cost(db: AsyncSession, user_id: str) -> float | None:
     result = await db.execute(
         select(
             ExecutionRun.model,
-            ExecutionRun.tokens_prompt,
-            ExecutionRun.tokens_completion,
-        ).where(
+            func.sum(ExecutionRun.tokens_prompt),
+            func.sum(ExecutionRun.tokens_completion),
+        )
+        .where(
             ExecutionRun.user_id == user_id,
             ExecutionRun.status == ExecutionStatus.COMPLETED,
             ExecutionRun.model.isnot(None),
         )
+        .group_by(ExecutionRun.model)
     )
     total = 0.0
     has_cloud = False
     for model_id, prompt_tokens, completion_tokens in result:
-        cost = estimate_cost(model_id, prompt_tokens, completion_tokens)
+        cost = estimate_cost(model_id, prompt_tokens or 0, completion_tokens or 0)
         if cost is not None:
             total += cost
             has_cloud = True
