@@ -188,6 +188,15 @@ async def lifespan(app: FastAPI):
     except (OSError, ConnectionError) as exc:
         logger.warning("Error closing Qdrant client: %s", exc)
 
+    # Close cached embedding provider HTTP clients
+    from src.embedding import shutdown_embedding_providers
+
+    try:
+        await shutdown_embedding_providers()
+        logger.info("Embedding providers shut down")
+    except Exception as exc:
+        logger.warning("Error shutting down embedding providers: %s", exc)
+
     logger.info("ModularMind Engine shut down")
 
 
