@@ -469,15 +469,6 @@ MCP_CATALOG: list[MCPCatalogEntry] = [
     ),
     # --- Phase 3: Free MCPs for agent capabilities (verified on npmjs.com 2026-02-17) ---
     MCPCatalogEntry(
-        id="fetch",
-        name="Fetch",
-        description="Fetch any URL and extract content as clean markdown — no API key required",
-        category="utility",
-        icon="globe",
-        npm_package="@kazuph/mcp-fetch",
-        documentation_url="https://github.com/kazuph/mcp-fetch",
-    ),
-    MCPCatalogEntry(
         id="sequential-thinking",
         name="Sequential Thinking",
         description="Structured step-by-step reasoning with revision and branching — no API key required",
@@ -494,16 +485,6 @@ MCP_CATALOG: list[MCPCatalogEntry] = [
         icon="database",
         npm_package="@modelcontextprotocol/server-memory",
         documentation_url="https://github.com/modelcontextprotocol/servers",
-    ),
-    MCPCatalogEntry(
-        id="git",
-        name="Git",
-        description="Read, search, diff, and manage Git repositories — clone, commit, branch, merge, and more",
-        category="development",
-        icon="git-branch",
-        npm_package="@mseep/git-mcp-server",
-        volumes={"mm-projects": {"bind": "/data/projects", "mode": "rw"}},
-        documentation_url="https://github.com/mseep/git-mcp-server",
     ),
     MCPCatalogEntry(
         id="whatsapp",
