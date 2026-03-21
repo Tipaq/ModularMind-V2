@@ -20,6 +20,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
   const [executionDataMap, setExecutionDataMap] = useState<Record<string, MessageExecutionData>>({});
   const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null);
   const [approvalDecision, setApprovalDecision] = useState<"approved" | "rejected" | null>(null);
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef("");
 
@@ -152,6 +153,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
       // Add placeholder assistant message
       const assistantId = `assistant-${Date.now()}`;
       currentAssistantIdRef.current = assistantId;
+      setStreamingMsgId(assistantId);
       setSelectedMessageId(assistantId);
       setMessages((prev) => [
         ...prev,
@@ -242,6 +244,24 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
         }
       }
 
+      // Debounced flush for live knowledge/context updates during streaming.
+      // Batches rapid trace events into a single state update.
+      let liveFlushTimer: ReturnType<typeof setTimeout> | null = null;
+      const scheduleLiveFlush = () => {
+        if (liveFlushTimer) return;
+        liveFlushTimer = setTimeout(() => {
+          liveFlushTimer = null;
+          setExecutionDataMap((prev) => ({
+            ...prev,
+            [assistantId]: {
+              ...(prev[assistantId] || { activities: [], knowledgeData: null, tokenUsage: null, contextData: null }),
+              knowledgeData: currentKnowledgeRef.current,
+              contextData: currentContextDataRef.current,
+            },
+          }));
+        }, 150);
+      };
+
       // Connect to SSE stream
       if (sourceRef.current) {
         sourceRef.current.close();
@@ -253,6 +273,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
       sourceRef.current = source;
 
       const cleanup = () => {
+        if (liveFlushTimer) { clearTimeout(liveFlushTimer); liveFlushTimer = null; }
         source.removeEventListener("tokens", onEvent);
         source.removeEventListener("trace", onEvent);
         source.removeEventListener("step", onEvent);
@@ -303,26 +324,12 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
 
           if (eventType === "trace:knowledge") {
             currentKnowledgeRef.current = mapKnowledgeData(data);
-            // Flush live knowledge data so UI updates during streaming
-            setExecutionDataMap((prev) => ({
-              ...prev,
-              [assistantId]: {
-                ...(prev[assistantId] || { activities: [], knowledgeData: null, tokenUsage: null, contextData: null }),
-                knowledgeData: currentKnowledgeRef.current,
-              },
-            }));
+            scheduleLiveFlush();
           }
 
           if (eventType === "trace:memory") {
             currentContextDataRef.current = mapContextData(data);
-            // Flush live context data so UI updates during streaming
-            setExecutionDataMap((prev) => ({
-              ...prev,
-              [assistantId]: {
-                ...(prev[assistantId] || { activities: [], knowledgeData: null, tokenUsage: null, contextData: null }),
-                contextData: currentContextDataRef.current,
-              },
-            }));
+            scheduleLiveFlush();
           }
 
           if (eventType === "tokens") {
@@ -463,9 +470,15 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
 
   const regenerateLastMessage = useCallback(async () => {
     if (isStreaming || !conversationId) return;
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+    let lastUserMsg: Message | undefined;
+    let lastAssistant: Message | undefined;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (!lastAssistant && messages[i].role === "assistant") lastAssistant = messages[i];
+      if (!lastUserMsg && messages[i].role === "user") lastUserMsg = messages[i];
+      if (lastUserMsg && lastAssistant) break;
+    }
     if (!lastUserMsg) return;
-    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+    if (!lastAssistant) return;
     if (!lastAssistant) return;
 
     await adapter.deleteMessagesFrom(conversationId, lastAssistant.id).catch(() => {});
@@ -473,7 +486,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
     sendMessage(lastUserMsg.content, conversationId, undefined, undefined, true);
   }, [isStreaming, conversationId, messages, adapter, sendMessage]);
 
-  const streamingMessageId = isStreaming ? currentAssistantIdRef.current : null;
+  const streamingMessageId = isStreaming ? streamingMsgId : null;
 
   return {
     messages,
