@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import BigInteger, Boolean, DateTime, Index, String, Text, func, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infra.database import Base
@@ -32,6 +32,30 @@ class CustomTool(Base):
     __table_args__ = (
         Index("ix_custom_tools_agent_id", "agent_id"),
         Index("uq_custom_tools_agent_name", "agent_id", "name", unique=True),
+    )
+
+
+class GitHubToken(Base):
+    """GitHub Personal Access Token for API integration."""
+
+    __tablename__ = "github_tokens"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid4()),
+    )
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(String), server_default=text("'{}'"))
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        Index("ix_github_tokens_is_default", "is_default"),
     )
 
 
