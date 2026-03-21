@@ -29,7 +29,7 @@ _SEARCH_SEMAPHORE: asyncio.Semaphore | None = None
 def _get_search_semaphore() -> asyncio.Semaphore:
     global _SEARCH_SEMAPHORE
     if _SEARCH_SEMAPHORE is None:
-        _SEARCH_SEMAPHORE = asyncio.Semaphore(3)
+        _SEARCH_SEMAPHORE = asyncio.Semaphore(5)
     return _SEARCH_SEMAPHORE
 
 
@@ -47,6 +47,20 @@ def get_http_client() -> httpx.AsyncClient:
             },
         )
     return _http_client
+
+
+async def close_http_client() -> None:
+    global _http_client
+    if _http_client and not _http_client.is_closed:
+        await _http_client.aclose()
+    _http_client = None
+
+# Tags whose content should be removed entirely
+BLOCK_TAG_PATTERNS = {
+    tag: re.compile(rf"<{tag}[^>]*>", re.IGNORECASE)
+    for tag in ("p", "div", "br", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr", "dt", "dd")
+}
+HR_PATTERN = re.compile(r"<hr[^>]*>", re.IGNORECASE)
 
 # Tags whose content should be removed entirely
 STRIP_TAGS = re.compile(
@@ -207,11 +221,11 @@ def _extract_text(html: str) -> str:
     text = STRIP_TAGS.sub("", text)
 
     # Convert common block elements to newlines
-    for tag in ("p", "div", "br", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr", "dt", "dd"):
-        text = re.sub(rf"<{tag}[^>]*>", "\n", text, flags=re.IGNORECASE)
+    for tag, pattern in BLOCK_TAG_PATTERNS.items():
+        text = pattern.sub("\n", text)
 
     # Convert hr to separator
-    text = re.sub(r"<hr[^>]*>", "\n---\n", text, flags=re.IGNORECASE)
+    text = HR_PATTERN.sub("\n---\n", text)
 
     # Strip remaining HTML tags
     text = HTML_TAGS.sub("", text)

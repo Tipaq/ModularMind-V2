@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 MAX_RESPONSE_SIZE = 1_048_576  # 1MB
 ALLOWED_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"}
 REQUEST_TIMEOUT = 30.0
+DNS_CACHE_TTL = 300  # 5 minutes
 
 _http_client: httpx.AsyncClient | None = None
 
@@ -32,6 +33,13 @@ def get_http_client() -> httpx.AsyncClient:
             timeout=REQUEST_TIMEOUT,
         )
     return _http_client
+
+
+async def close_http_client() -> None:
+    global _http_client
+    if _http_client and not _http_client.is_closed:
+        await _http_client.aclose()
+    _http_client = None
 
 
 class NetworkExecutor(BaseExecutor):
@@ -96,7 +104,8 @@ class NetworkExecutor(BaseExecutor):
             else:
                 body_text = body_bytes.decode("utf-8", errors="replace")
 
-            resp_headers = {k: v for k, v in response.headers.items() if k.lower() != "set-cookie"}
+            resp_headers = dict(response.headers)
+            resp_headers.pop("set-cookie", None)
 
             return (
                 f"HTTP {response.status_code} {response.reason_phrase}\n"
@@ -112,27 +121,56 @@ class NetworkExecutor(BaseExecutor):
             return f"Error: request failed — {e}"
 
 
+import ipaddress
+import time
+
+MAX_DNS_CACHE_SIZE = 1024
+_dns_cache: dict[str, tuple[str | None, float]] = {}
+_dns_lock: asyncio.Lock | None = None
+
+
+def _get_dns_lock() -> asyncio.Lock:
+    global _dns_lock
+    if _dns_lock is None:
+        _dns_lock = asyncio.Lock()
+    return _dns_lock
+
+
 async def check_ssrf(hostname: str) -> str | None:
     """Block requests to private/internal addresses (SSRF protection)."""
-    import ipaddress
-
-    # Block obvious internal hostnames
     lower = hostname.lower()
+
+    async with _get_dns_lock():
+        cached = _dns_cache.get(lower)
+        if cached is not None:
+            result, expiry = cached
+            if time.monotonic() < expiry:
+                return result
+
+        result = await _resolve_and_check(lower, hostname)
+        if len(_dns_cache) >= MAX_DNS_CACHE_SIZE:
+            _dns_cache.clear()
+        _dns_cache[lower] = (result, time.monotonic() + DNS_CACHE_TTL)
+        return result
+
+
+async def _resolve_and_check(lower: str, hostname: str) -> str | None:
+    """Resolve hostname and validate against private/internal ranges."""
     if lower in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
         return f"Error: requests to '{hostname}' are blocked (internal address)"
 
     if lower.endswith(".local") or lower.endswith(".internal"):
         return f"Error: requests to '{hostname}' are blocked (internal domain)"
 
-    # Resolve hostname asynchronously and check for private IPs
     try:
-        loop = asyncio.get_event_loop()
-        results = await loop.getaddrinfo(hostname, None)
+        results = await asyncio.wait_for(
+            asyncio.get_event_loop().getaddrinfo(hostname, None),
+            timeout=5,
+        )
         for _family, _type, _proto, _canonname, sockaddr in results:
             ip = ipaddress.ip_address(sockaddr[0])
             if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
                 return f"Error: '{hostname}' resolves to private IP {ip} (blocked)"
-            # Block cloud metadata endpoint (AWS/GCP/Azure)
             if str(ip) == "169.254.169.254":
                 return f"Error: '{hostname}' resolves to cloud metadata IP (blocked)"
     except OSError:
