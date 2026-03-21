@@ -62,9 +62,13 @@ async def document_embed_handler(data: dict) -> None:
             batch_embeddings = await embedding_provider.embed_texts(batch)
             all_embeddings.extend(batch_embeddings)
 
-        # Store embeddings in PG embedding_cache column
-        for j, chunk_id in enumerate(id_list):
-            chunk = await session.get(RAGChunk, chunk_id)
+        # Store embeddings in PG embedding_cache column (batch load)
+        chunk_result = await session.execute(
+            select(RAGChunk).where(RAGChunk.id.in_(id_list))
+        )
+        chunk_map = {c.id: c for c in chunk_result.scalars().all()}
+        for j, cid in enumerate(id_list):
+            chunk = chunk_map.get(cid)
             if chunk:
                 chunk.embedding_cache = {"embedding": all_embeddings[j]}
 
@@ -77,12 +81,9 @@ async def document_embed_handler(data: dict) -> None:
         )
 
     # Publish to next stage
-    import redis.asyncio as aioredis
+    from src.infra.publish import get_event_bus
 
-    from src.infra.redis import get_redis_pool
-    from src.infra.redis_streams import RedisStreamBus
-
-    bus = RedisStreamBus(aioredis.Redis(connection_pool=get_redis_pool()))
+    bus = await get_event_bus()
     await bus.publish(
         "rag:embedded",
         {
