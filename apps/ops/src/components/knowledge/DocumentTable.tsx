@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   CheckCircle, AlertCircle, Loader2, Clock,
   RefreshCw, Trash2, FileText,
@@ -88,16 +88,23 @@ interface Props {
 export function DocumentTable({ collectionId, documents, isLoading }: Props) {
   const { refreshDocument, deleteDocument } = useKnowledgeStore();
 
+  const processingIds = useMemo(
+    () => documents
+      .filter((d) => d.status === "processing" || d.status === "pending")
+      .map((d) => d.id),
+    [documents],
+  );
+  const processingKey = processingIds.join(",");
+  const processingIdsRef = useRef(processingIds);
+  useEffect(() => { processingIdsRef.current = processingIds; }, [processingIds]);
+
   useEffect(() => {
-    const processing = documents.filter(
-      (d) => d.status === "processing" || d.status === "pending",
-    );
-    if (!processing.length) return;
+    if (!processingKey) return;
     const intervalId = setInterval(() => {
-      processing.forEach((d) => refreshDocument(d.id));
+      processingIdsRef.current.forEach((id) => refreshDocument(id));
     }, 3000);
     return () => clearInterval(intervalId);
-  }, [documents, refreshDocument]);
+  }, [processingKey, refreshDocument]);
 
   const pagination: PaginationState = {
     page: 1,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   BookOpen, RefreshCw, Plus, Search, AlertCircle,
@@ -25,21 +25,22 @@ function isProject(collection: Collection): boolean {
   return (collection.metadata as Record<string, unknown> | null)?.category === "project";
 }
 
-function filterByScope(collections: Collection[], scope: ScopeFilter, isAdmin: boolean, userId: string | undefined): Collection[] {
-  if (scope === "company") return collections.filter((c) => c.scope === "global");
-  if (scope === "projects") return collections.filter((c) => c.scope === "group" && isProject(c));
-  if (scope === "groups") return collections.filter((c) => c.scope === "group" && !isProject(c));
-  if (scope === "personal") return collections.filter((c) => c.scope === "agent" && (isAdmin || c.owner_user_id === userId));
-  return collections;
+interface ScopeBuckets {
+  company: Collection[];
+  projects: Collection[];
+  groups: Collection[];
+  personal: Collection[];
 }
 
-function countByScope(collections: Collection[], isAdmin: boolean, userId: string | undefined) {
-  return {
-    company: collections.filter((c) => c.scope === "global").length,
-    projects: collections.filter((c) => c.scope === "group" && isProject(c)).length,
-    groups: collections.filter((c) => c.scope === "group" && !isProject(c)).length,
-    personal: collections.filter((c) => c.scope === "agent" && (isAdmin || c.owner_user_id === userId)).length,
-  };
+function bucketByScope(collections: Collection[], isAdmin: boolean, userId: string | undefined): ScopeBuckets {
+  const buckets: ScopeBuckets = { company: [], projects: [], groups: [], personal: [] };
+  for (const c of collections) {
+    if (c.scope === "global") buckets.company.push(c);
+    else if (c.scope === "group" && isProject(c)) buckets.projects.push(c);
+    else if (c.scope === "group") buckets.groups.push(c);
+    else if (c.scope === "agent" && (isAdmin || c.owner_user_id === userId)) buckets.personal.push(c);
+  }
+  return buckets;
 }
 
 function SkeletonGrid() {
@@ -70,15 +71,28 @@ function CollectionsContent() {
   const [search, setSearch] = useState("");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
 
-  const searchFiltered = collections.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.description.toLowerCase().includes(search.toLowerCase()) ||
-      c.allowed_groups.some((g) => g.toLowerCase().includes(search.toLowerCase())),
-  );
+  const searchFiltered = useMemo(() => {
+    if (!search) return collections;
+    const lower = search.toLowerCase();
+    return collections.filter(
+      (c) =>
+        c.name.toLowerCase().includes(lower) ||
+        c.description.toLowerCase().includes(lower) ||
+        c.allowed_groups.some((g) => g.toLowerCase().includes(lower)),
+    );
+  }, [collections, search]);
 
-  const items = filterByScope(searchFiltered, scopeFilter, isAdmin, user?.id);
-  const counts = countByScope(searchFiltered, isAdmin, user?.id);
+  const buckets = useMemo(() => bucketByScope(searchFiltered, isAdmin, user?.id), [searchFiltered, isAdmin, user?.id]);
+  const items = useMemo(() => {
+    if (scopeFilter === "all") return searchFiltered;
+    return buckets[scopeFilter];
+  }, [searchFiltered, buckets, scopeFilter]);
+  const counts = useMemo(() => ({
+    company: buckets.company.length,
+    projects: buckets.projects.length,
+    groups: buckets.groups.length,
+    personal: buckets.personal.length,
+  }), [buckets]);
 
   const canDelete = (c: Collection) =>
     isAdmin || (c.scope === "agent" && c.owner_user_id === user?.id);
