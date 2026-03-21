@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Activity, AlertCircle, Cpu, DollarSign, Gauge, HardDrive, MemoryStick, Monitor, Zap } from "lucide-react";
 import { cn } from "@modularmind/ui";
 import type { AgentMetrics, LiveExecutionsData, MonitoringData, LlmGpuData } from "@modularmind/api-client";
@@ -69,17 +70,22 @@ export function KpiStrip({ monitoring, llmGpu, agentMetrics, liveExecutions }: K
   const hasGpu = vramTotal > 0;
 
   // Global error rate from agent metrics
-  const totalRuns = agentMetrics?.reduce((s, a) => s + a.total_executions, 0) ?? 0;
-  const totalErrors = agentMetrics?.reduce((s, a) => s + a.error_count, 0) ?? 0;
-  const errorRate = totalRuns > 0 ? (totalErrors / totalRuns) * 100 : 0;
-  const hasAgentData = (agentMetrics?.length ?? 0) > 0 && totalRuns > 0;
+  const { totalRuns, totalErrors, errorRate, hasAgentData } = useMemo(() => {
+    const runs = agentMetrics?.reduce((s, a) => s + a.total_executions, 0) ?? 0;
+    const errors = agentMetrics?.reduce((s, a) => s + a.error_count, 0) ?? 0;
+    const rate = runs > 0 ? (errors / runs) * 100 : 0;
+    const hasData = (agentMetrics?.length ?? 0) > 0 && runs > 0;
+    return { totalRuns: runs, totalErrors: errors, errorRate: rate, hasAgentData: hasData };
+  }, [agentMetrics]);
 
   // Estimated cost from recent executions (last hour)
-  const recentCost = (liveExecutions?.recent ?? []).reduce((sum, exec) => {
-    if (!exec.model) return sum;
-    const cost = estimateCost(exec.model, exec.tokens_prompt, exec.tokens_completion);
-    return sum + (cost ?? 0);
-  }, 0);
+  const recentCost = useMemo(() => {
+    return (liveExecutions?.recent ?? []).reduce((sum, exec) => {
+      if (!exec.model) return sum;
+      const cost = estimateCost(exec.model, exec.tokens_prompt, exec.tokens_completion);
+      return sum + (cost ?? 0);
+    }, 0);
+  }, [liveExecutions]);
   const hasRecentCost = recentCost > 0;
 
   return (

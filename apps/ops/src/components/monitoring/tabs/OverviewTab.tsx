@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import type { MonitoringDataResult } from "../../../hooks/useMonitoringData";
 import { extractSeries } from "../../../hooks/useMonitoringData";
 import { KpiStrip } from "../KpiStrip";
@@ -15,18 +16,18 @@ interface OverviewTabProps {
 export function OverviewTab({ data }: OverviewTabProps) {
   const { monitoring, llmGpu, agentMetrics, liveExecutions, metricsHistory, timeRange, setTimeRange } = data;
 
-  const systemSeries = [
+  const systemSeries = useMemo(() => [
     { name: "CPU", data: extractSeries(metricsHistory, "cpu"), color: "hsl(var(--info))" },
     { name: "RAM", data: extractSeries(metricsHistory, "memory"), color: "hsl(var(--primary))" },
     { name: "GPU VRAM", data: extractSeries(metricsHistory, "vram"), color: "hsl(var(--success))" },
     { name: "Disk", data: extractSeries(metricsHistory, "disk"), color: "hsl(var(--warning))" },
-  ];
+  ], [metricsHistory]);
 
-  const llmSeries = [
+  const llmSeries = useMemo(() => [
     { name: "Latency", data: extractSeries(metricsHistory, "llm_latency"), color: "hsl(var(--warning))" },
     { name: "Tokens/s", data: extractSeries(metricsHistory, "llm_tps"), color: "hsl(var(--success))" },
     { name: "TTFT", data: extractSeries(metricsHistory, "llm_ttft"), color: "hsl(var(--info))" },
-  ];
+  ], [metricsHistory]);
 
   const alerts = monitoring?.alerts.active_alerts ?? [];
 
