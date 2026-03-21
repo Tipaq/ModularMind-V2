@@ -19,7 +19,7 @@ export function useChatConfig(adapter: ChatConfigAdapter) {
   const adapterRef = useRef(adapter);
   adapterRef.current = adapter;
 
-  const _fetchConfig = useCallback(async () => {
+  const fetchConfig = useCallback(async () => {
     loadingRef.current = true;
     setLoading(true);
     try {
@@ -43,14 +43,14 @@ export function useChatConfig(adapter: ChatConfigAdapter) {
 
   const load = useCallback(async () => {
     if (loadedRef.current || loadingRef.current) return;
-    await _fetchConfig();
-  }, [_fetchConfig]);
+    await fetchConfig();
+  }, [fetchConfig]);
 
   const reload = useCallback(async () => {
     loadedRef.current = false;
     setLoaded(false);
-    await _fetchConfig();
-  }, [_fetchConfig]);
+    await fetchConfig();
+  }, [fetchConfig]);
 
   const updateSupervisorLayer = useCallback(async (key: string, content: string) => {
     if (!adapterRef.current.updateSupervisorLayer) return false;
