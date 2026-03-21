@@ -24,6 +24,11 @@ _CATEGORY_PREFIXES = (
     "custom__",
     "mini_app_",
     "github_",
+    "web_",
+    "browse_",
+    "screenshot_",
+    "extract_",
+    "git_",
 )
 
 
@@ -71,6 +76,10 @@ class ExtendedToolExecutor:
                 return await self._handle_mini_app(name, args)
             if name.startswith("github_"):
                 return await self._handle_github(name, args)
+            if name in ("web_search", "browse_url", "screenshot_url", "extract_links"):
+                return await self._handle_web(name, args)
+            if name.startswith("git_"):
+                return await self._handle_git(name, args)
             return f"Error: unknown extended tool '{name}'"
         except Exception as e:
             logger.exception("Extended tool '%s' failed", name)
@@ -137,6 +146,39 @@ class ExtendedToolExecutor:
                 agent_id=self._agent_id,
                 session=session,
             )
+
+    async def _handle_web(self, name: str, args: dict[str, Any]) -> str:
+        from src.tools.categories.web import execute_web_tool
+
+        search_keys = await self._get_search_api_keys()
+        return await execute_web_tool(
+            name, args, search_api_keys=search_keys,
+        )
+
+    async def _get_search_api_keys(self) -> dict[str, str]:
+        """Load search API keys from settings."""
+        try:
+            from src.infra.secrets import secrets_store
+            return {
+                "brave": secrets_store.get("SEARCH_BRAVE_API_KEY", ""),
+                "tavily": secrets_store.get("SEARCH_TAVILY_API_KEY", ""),
+                "serper": secrets_store.get("SEARCH_SERPER_API_KEY", ""),
+            }
+        except Exception:
+            return {}
+
+    async def _handle_git(self, name: str, args: dict[str, Any]) -> str:
+        from src.tools.categories.git import execute_git_tool
+
+        github_token = None
+        try:
+            keys = await self._get_search_api_keys()
+            async with self._session_maker() as session:
+                from src.tools.categories.github import _resolve_token
+                github_token = await _resolve_token(session, self._agent_id)
+        except Exception:
+            pass
+        return await execute_git_tool(name, args, github_token=github_token)
 
     async def _handle_github(self, name: str, args: dict[str, Any]) -> str:
         from src.tools.categories.github import execute_github_tool
