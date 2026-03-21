@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { ExecutionActivity } from "../../types/chat";
@@ -115,17 +116,20 @@ export function ExecutionTimeline(props: {
   // Flatten activities with children for rendering.
   // graph_execution: children rendered inside the card (not flattened).
   // agent_execution: skip LLM children (shown inside the agent card).
-  const items: { activity: ExecutionActivity; depth: number }[] = [];
-  for (const activity of activities) {
-    items.push({ activity, depth: 0 });
-    if (activity.type === "graph_execution") continue; // children inside card
-    if (activity.children?.length) {
-      for (const child of activity.children) {
-        if (activity.type === "agent_execution" && child.type === "llm") continue;
-        items.push({ activity: child, depth: 1 });
+  const items = useMemo(() => {
+    const result: { activity: ExecutionActivity; depth: number }[] = [];
+    for (const activity of activities) {
+      result.push({ activity, depth: 0 });
+      if (activity.type === "graph_execution") continue; // children inside card
+      if (activity.children?.length) {
+        for (const child of activity.children) {
+          if (activity.type === "agent_execution" && child.type === "llm") continue;
+          result.push({ activity: child, depth: 1 });
+        }
       }
     }
-  }
+    return result;
+  }, [activities]);
 
   return (
     <div className="px-4 py-2">
