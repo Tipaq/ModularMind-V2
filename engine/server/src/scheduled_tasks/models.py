@@ -28,6 +28,25 @@ class ScheduledTask(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Scheduling
+    schedule_type: Mapped[str] = mapped_column(
+        String(20), default="manual",
+    )  # "interval" | "one_shot" | "manual"
+    interval_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    interval_unit: Mapped[str | None] = mapped_column(
+        String(20), nullable=True,
+    )  # "minutes" | "hours" | "days"
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Execution target
+    target_type: Mapped[str] = mapped_column(String(20), default="agent")
+    target_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    input_text: Mapped[str] = mapped_column(Text, default="")
+
+    # Extra config (source handlers, post-actions, triage, settings)
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     version: Mapped[int] = mapped_column(Integer, default=1)
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
