@@ -55,26 +55,6 @@ async def search_conversations(
     """Search across conversations via hybrid search (dense + BM25)."""
     from .search import ConversationSearchService
 
-    if request.include_group:
-        from sqlalchemy import select
-
-        from src.groups.models import UserGroup, UserGroupMember
-
-        # Single query: find all user_ids in groups that (a) current user belongs to
-        # and (b) allow cross-conversation search.
-        group_members_query = (
-            select(UserGroupMember.user_id)
-            .join(UserGroup, UserGroup.id == UserGroupMember.group_id)
-            .where(
-                UserGroup.allow_cross_conversation_search == True,  # noqa: E712
-                UserGroup.id.in_(
-                    select(UserGroupMember.group_id).where(UserGroupMember.user_id == user.id)
-                ),
-            )
-        )
-        result = await db.execute(group_members_query)
-        [r[0] for r in result.all()]
-
     service = ConversationSearchService(db)
     results = await service.search(
         query=request.query,
