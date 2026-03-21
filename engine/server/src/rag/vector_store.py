@@ -74,7 +74,7 @@ class QdrantRAGVectorStore(BaseHybridVectorStore):
         if not chunks:
             return 0
 
-        client = await self._get_client()
+        client = await self.get_client()
         points: list[models.PointStruct] = []
         for chunk in chunks:
             sparse = tokenize_bm25(chunk.content)
@@ -217,7 +217,7 @@ class QdrantRAGVectorStore(BaseHybridVectorStore):
 
     async def get_collection_stats(self) -> dict:
         """Return point count and index status."""
-        client = await self._get_client()
+        client = await self.get_client()
         info = await client.get_collection(self._collection)
         return {
             "points_count": info.points_count,

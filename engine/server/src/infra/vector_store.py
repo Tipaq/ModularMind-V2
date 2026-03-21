@@ -42,7 +42,7 @@ class BaseHybridVectorStore:
         self._collection = collection_name
         self.last_search_degraded = False
 
-    async def _get_client(self):
+    async def get_client(self):
         """Get the shared Qdrant async client."""
         return await qdrant_factory.get_client()
 
@@ -61,7 +61,7 @@ class BaseHybridVectorStore:
         """
         self.last_search_degraded = False
         try:
-            client = await self._get_client()
+            client = await self.get_client()
         except (ConnectionError, OSError, TimeoutError):
             logger.error("Qdrant unavailable for %s search", self._collection, exc_info=True)
             self.last_search_degraded = True
@@ -105,7 +105,7 @@ class BaseHybridVectorStore:
         """Delete points matching filter conditions. Returns True on success."""
         from qdrant_client.models import UpdateStatus
 
-        client = await self._get_client()
+        client = await self.get_client()
         result = await client.delete(
             collection_name=self._collection,
             points_selector=models.FilterSelector(filter=models.Filter(must=filter_conditions)),

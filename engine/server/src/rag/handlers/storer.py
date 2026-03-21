@@ -46,7 +46,7 @@ async def document_store_handler(data: dict) -> None:
         from src.rag.vector_store import ChunkData, QdrantRAGVectorStore
 
         vector_store = QdrantRAGVectorStore()
-        client = await vector_store._get_client()
+        client = await vector_store.get_client()
 
         # Fetch collection scope info for Qdrant payloads
         coll_result = await session.execute(

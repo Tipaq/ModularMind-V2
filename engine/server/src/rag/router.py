@@ -734,7 +734,7 @@ async def search_rag(
     )
 
     # Check if Qdrant was degraded during search
-    degraded = repo._vector_store.last_search_degraded
+    degraded = repo.vector_store.last_search_degraded
     if degraded and response:
         response.headers["X-Search-Degraded"] = "true"
 

@@ -56,7 +56,7 @@ class RAGRepository:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-        self._vector_store = QdrantRAGVectorStore()
+        self.vector_store = QdrantRAGVectorStore()
 
     async def get_collection(self, collection_id: str) -> RAGCollection | None:
         """Get collection by ID."""
@@ -185,7 +185,7 @@ class RAGRepository:
             ]
         )
 
-        qdrant_results = await self._vector_store.search(
+        qdrant_results = await self.vector_store.search(
             query_embedding=query_embedding,
             query_text=query_text,
             filters=payload_filter,
