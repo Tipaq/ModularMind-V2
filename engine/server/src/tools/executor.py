@@ -29,6 +29,7 @@ _CATEGORY_PREFIXES = (
     "screenshot_",
     "extract_",
     "git_",
+    "scheduling_",
 )
 
 
@@ -80,6 +81,8 @@ class ExtendedToolExecutor:
                 return await self._handle_web(name, args)
             if name.startswith("git_"):
                 return await self._handle_git(name, args)
+            if name.startswith("scheduling_"):
+                return await self._handle_scheduling(name, args)
             return f"Error: unknown extended tool '{name}'"
         except Exception as e:
             logger.exception("Extended tool '%s' failed", name)
@@ -186,6 +189,17 @@ class ExtendedToolExecutor:
         async with self._session_maker() as session:
             return await execute_github_tool(
                 name, args, session=session, agent_id=self._agent_id,
+            )
+
+    async def _handle_scheduling(self, name: str, args: dict[str, Any]) -> str:
+        from src.tools.categories.scheduling import execute_scheduling_tool
+
+        async with self._session_maker() as session:
+            return await execute_scheduling_tool(
+                name, args,
+                user_id=self._user_id,
+                agent_id=self._agent_id,
+                session=session,
             )
 
     async def _handle_registered_custom_tool(self, name: str, args: dict[str, Any]) -> str:

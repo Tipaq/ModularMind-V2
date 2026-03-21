@@ -23,6 +23,7 @@ DEFAULT_TOOL_CATEGORIES: dict[str, bool] = {
     "github": False,
     "web": False,
     "git": False,
+    "scheduling": False,
 }
 
 
@@ -41,6 +42,7 @@ def get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
     from src.tools.categories.knowledge import get_knowledge_tool_definitions
     from src.tools.categories.git import get_git_tool_definitions
     from src.tools.categories.mini_apps import get_mini_app_tool_definitions
+    from src.tools.categories.scheduling import get_scheduling_tool_definitions
     from src.tools.categories.web import get_web_tool_definitions
 
     return {
@@ -54,6 +56,7 @@ def get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
         "github": get_github_tool_definitions,
         "web": get_web_tool_definitions,
         "git": get_git_tool_definitions,
+        "scheduling": get_scheduling_tool_definitions,
     }
 
 
