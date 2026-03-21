@@ -326,6 +326,8 @@ async def _synthesize_one(synthesizer, user_id: str) -> bool:
 
 async def rag_consolidation() -> None:
     """Periodic RAG data maintenance: decay unused chunks, detect obsolete documents."""
+    import asyncio
+
     from sqlalchemy import select
 
     from src.infra.database import async_session_maker
@@ -341,14 +343,25 @@ async def rag_consolidation() -> None:
             if decayed:
                 logger.info("RAG consolidation: %d chunks decayed", decayed)
 
-            # Step 2: Detect obsolete documents per collection
+            # Step 2: Detect obsolete documents per collection (parallelized)
             collections = await session.execute(select(RAGCollection.id))
             coll_ids = [row[0] for row in collections.all()]
 
-            total_obsolete = 0
-            for coll_id in coll_ids:
-                obsolete = await consolidator.detect_obsolete_documents(coll_id, session)
-                total_obsolete += len(obsolete)
+            semaphore = asyncio.Semaphore(5)
+
+            async def _check_collection(cid: str) -> int:
+                async with semaphore:
+                    async with async_session_maker() as coll_session:
+                        obsolete = await consolidator.detect_obsolete_documents(
+                            cid, coll_session
+                        )
+                        return len(obsolete)
+
+            results = await asyncio.gather(
+                *[_check_collection(cid) for cid in coll_ids],
+                return_exceptions=True,
+            )
+            total_obsolete = sum(r for r in results if isinstance(r, int))
 
             if total_obsolete:
                 logger.info("RAG consolidation: %d obsolete documents found", total_obsolete)
