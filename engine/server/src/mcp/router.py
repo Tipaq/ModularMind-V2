@@ -31,13 +31,13 @@ MAX_LOG_TAIL = 500
 # --- Helpers ---
 
 
-def _get_registry():
+def get_registry():
     from src.mcp.service import get_mcp_registry
 
     return get_mcp_registry()
 
 
-def _get_sidecar_manager():
+def get_sidecar_manager_dep():
     from src.mcp.service import get_sidecar_manager
 
     return get_sidecar_manager()
@@ -116,7 +116,7 @@ async def deploy_from_catalog(
         )
 
     # Duplicate check
-    registry = _get_registry()
+    registry = get_registry()
     for s in registry.list_servers():
         if s.catalog_id == body.catalog_id:
             raise HTTPException(
@@ -128,7 +128,7 @@ async def deploy_from_catalog(
 
     if entry.docker_image:
         # Docker sidecar path
-        manager = _get_sidecar_manager()
+        manager = get_sidecar_manager_dep()
         if not manager.is_available:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -197,7 +197,7 @@ async def deploy_from_catalog(
 @router.get("/sidecar-status", dependencies=[RequireOwner])
 async def get_sidecar_availability(user: CurrentUser) -> dict[str, Any]:
     """Check if Docker sidecar auto-provisioning is available."""
-    manager = _get_sidecar_manager()
+    manager = get_sidecar_manager_dep()
     return {
         "docker_available": manager.is_available,
         "tracked_sidecars": len(manager.tracked_sidecars),
@@ -220,7 +220,7 @@ async def get_server_logs(
     """
     import asyncio
 
-    registry = _get_registry()
+    registry = get_registry()
     config = registry.get_server(server_id)
     if not config:
         raise HTTPException(status_code=404, detail="MCP server not found")
@@ -230,7 +230,7 @@ async def get_server_logs(
             detail="Logs are only available for managed sidecar servers",
         )
 
-    manager = _get_sidecar_manager()
+    manager = get_sidecar_manager_dep()
     info = manager.tracked_sidecars.get(server_id)
     if not info:
         raise HTTPException(
@@ -280,7 +280,7 @@ async def list_mcp_servers(
     user: CurrentUser, project_id: str | None = None
 ) -> list[MCPServerResponse]:
     """List all configured MCP servers with status."""
-    registry = _get_registry()
+    registry = get_registry()
     servers = registry.list_servers(project_id)
     statuses = await registry.get_all_statuses()
     status_map = {s.server_id: s for s in statuses}
@@ -334,7 +334,7 @@ async def create_mcp_server(body: MCPServerCreateRequest, user: CurrentUser) -> 
         project_id=body.project_id,
     )
 
-    registry = _get_registry()
+    registry = get_registry()
     registry.register(config)
     registry.persist_config(config)
 
@@ -349,7 +349,7 @@ async def update_mcp_server(
     """Update an MCP server configuration."""
     from src.infra.secrets import secrets_store
 
-    registry = _get_registry()
+    registry = get_registry()
     existing = registry.get_server(server_id)
     if not existing:
         raise HTTPException(status_code=404, detail="MCP server not found")
@@ -389,7 +389,7 @@ async def delete_mcp_server(server_id: str, user: CurrentUser) -> dict[str, str]
     """Remove an MCP server. If managed, also removes the sidecar container."""
     from src.infra.secrets import secrets_store
 
-    registry = _get_registry()
+    registry = get_registry()
     config = registry.get_server(server_id)
     if not config:
         raise HTTPException(status_code=404, detail="MCP server not found")
@@ -401,7 +401,7 @@ async def delete_mcp_server(server_id: str, user: CurrentUser) -> dict[str, str]
 
     # If managed sidecar, remove the Docker container
     if config.managed:
-        manager = _get_sidecar_manager()
+        manager = get_sidecar_manager_dep()
         await manager.undeploy(server_id)
 
     registry.unregister(server_id)
@@ -415,7 +415,7 @@ async def delete_mcp_server(server_id: str, user: CurrentUser) -> dict[str, str]
 @router.post("/servers/{server_id}/test", dependencies=[RequireOwner])
 async def test_mcp_connection(server_id: str, user: CurrentUser) -> dict[str, Any]:
     """Test connectivity to an MCP server."""
-    registry = _get_registry()
+    registry = get_registry()
     if not registry.get_server(server_id):
         raise HTTPException(status_code=404, detail="MCP server not found")
 
@@ -431,7 +431,7 @@ async def test_mcp_connection(server_id: str, user: CurrentUser) -> dict[str, An
 @router.get("/servers/{server_id}/tools", dependencies=[RequireOwner])
 async def list_server_tools(server_id: str, user: CurrentUser) -> list[dict[str, Any]]:
     """Discover tools available on an MCP server."""
-    registry = _get_registry()
+    registry = get_registry()
     if not registry.get_server(server_id):
         raise HTTPException(status_code=404, detail="MCP server not found")
 

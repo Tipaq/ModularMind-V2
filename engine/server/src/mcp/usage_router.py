@@ -26,7 +26,7 @@ MCPToolResponse = MCPToolDefinition
 # --- Helpers ---
 
 
-def _get_registry():
+def get_registry():
     from src.mcp.service import get_mcp_registry
 
     return get_mcp_registry()
@@ -38,7 +38,7 @@ def _get_registry():
 @usage_router.get("/servers/{server_id}/tools")
 async def list_server_tools(server_id: str, user: CurrentUser) -> list[MCPToolResponse]:
     """Discover tools available on an MCP server."""
-    registry = _get_registry()
+    registry = get_registry()
     if not registry.get_server(server_id):
         raise HTTPException(status_code=404, detail="MCP server not found")
 
@@ -61,7 +61,7 @@ async def call_server_tool(
     """Call a tool on an MCP server."""
     from src.mcp import MCPToolCallRequest
 
-    registry = _get_registry()
+    registry = get_registry()
     if not registry.get_server(server_id):
         raise HTTPException(status_code=404, detail="MCP server not found")
 
@@ -84,7 +84,7 @@ async def call_server_tool(
 @usage_router.post("/servers/{server_id}/test")
 async def test_mcp_connection(server_id: str, user: CurrentUser) -> dict[str, Any]:
     """Test connectivity to an MCP server."""
-    registry = _get_registry()
+    registry = get_registry()
     if not registry.get_server(server_id):
         raise HTTPException(status_code=404, detail="MCP server not found")
 
