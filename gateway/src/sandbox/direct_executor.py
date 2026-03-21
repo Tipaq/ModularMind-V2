@@ -129,6 +129,7 @@ async def direct_exec(
         logger.warning("[direct_exec] timed out after %ds: %s", timeout, command[:100])
         try:
             proc.kill()
+            await proc.wait()
         except ProcessLookupError:
             pass
         return 124, f"Command timed out after {timeout}s"
