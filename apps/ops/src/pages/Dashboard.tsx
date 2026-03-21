@@ -10,6 +10,7 @@ import {
   Clock,
   type LucideIcon,
 } from "lucide-react";
+import { memo } from "react";
 import { Link } from "react-router-dom";
 import { cn, formatDuration, PageHeader } from "@modularmind/ui";
 import { useApi } from "../hooks/useApi";
@@ -44,7 +45,7 @@ interface PipelineResponse {
   dlq: { length: number; consumers: number; lag: number };
 }
 
-function MetricCard({
+const MetricCard = memo(function MetricCard({
   label,
   value,
   sub,
@@ -69,7 +70,7 @@ function MetricCard({
       {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
-}
+});
 
 function StatusDot({ ok }: { ok: boolean }) {
   return (

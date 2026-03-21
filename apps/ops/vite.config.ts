@@ -37,6 +37,9 @@ export default defineConfig({
           if (id.includes("node_modules/@xyflow")) {
             return "graph";
           }
+          if (id.includes("node_modules/graphology") || id.includes("node_modules/sigma")) {
+            return "graph-viz";
+          }
         },
       },
     },

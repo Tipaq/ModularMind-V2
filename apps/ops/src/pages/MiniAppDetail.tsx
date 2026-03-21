@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, ExternalLink, FileCode, Database, History, Trash2, RotateCcw } from "lucide-react";
 import { MiniAppViewer } from "@modularmind/ui";
-import type { MiniApp, MiniAppFile, StorageKey, StorageValue, MiniAppSnapshot } from "@modularmind/api-client";
+import type { MiniApp, StorageKey, StorageValue, MiniAppSnapshot } from "@modularmind/api-client";
 import { api } from "../lib/api";
 
 interface StorageEntry extends StorageKey {

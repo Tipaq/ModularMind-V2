@@ -120,9 +120,17 @@ export function useMonitoringData(): MonitoringDataResult {
 
   useEffect(() => {
     const id = setInterval(() => {
-      if (!sessionExpired.current) refetchAll();
+      if (!sessionExpired.current && !document.hidden) refetchAll();
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
+  }, [refetchAll]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden && !sessionExpired.current) refetchAll();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [refetchAll]);
 
   return {
