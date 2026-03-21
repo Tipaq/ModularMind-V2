@@ -18,14 +18,13 @@ router = APIRouter(prefix="/tools", tags=["Tools"])
 
 CATEGORY_META: dict[str, dict[str, str]] = {
     "builtin": {"label": "Built-in", "description": "Core tools always available to agents"},
-    "memory": {"label": "Memory", "description": "Search past conversations and user facts"},
     "knowledge": {
         "label": "Knowledge",
         "description": "Search uploaded document collections (RAG)",
     },
-    "code_search": {
-        "label": "Code Search",
-        "description": "Search and analyze code in workspace",
+    "filesystem": {
+        "label": "Filesystem",
+        "description": "Read, write, search, and manage workspace files",
     },
     "file_storage": {
         "label": "File Storage",
@@ -43,9 +42,17 @@ CATEGORY_META: dict[str, dict[str, str]] = {
         "label": "Custom Tools",
         "description": "Agent-defined shell, HTTP, or Python tools",
     },
+    "github": {
+        "label": "GitHub",
+        "description": "GitHub repos, issues, PRs, code search via API",
+    },
+    "web": {
+        "label": "Web",
+        "description": "Search, browse, screenshot, and extract links from the web",
+    },
     "gateway": {
         "label": "Gateway",
-        "description": "System access: filesystem, shell, browser, network",
+        "description": "System access: shell, browser, network",
     },
 }
 
@@ -95,10 +102,8 @@ def _collect_gateway_tools() -> list[ToolDefinitionResponse]:
     from src.gateway.tool_definitions import get_gateway_tool_definitions
 
     all_enabled_permissions = {
-        "filesystem": {"read": ["**"], "write": ["**"]},
         "shell": {"enabled": True},
         "browser": {"enabled": True},
-        "code_search": {"enabled": True},
         "network": {"enabled": True},
     }
     raw = get_gateway_tool_definitions(all_enabled_permissions)
