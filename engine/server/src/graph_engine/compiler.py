@@ -443,9 +443,12 @@ class GraphCompiler:
             active_tools = list(_lc_tools)
             unified_executor = _mcp_executor
 
-            # Gateway tool executor — created lazily with runtime execution_id
+            # Gateway tool executor — needed for gateway_permissions tools
+            # AND for filesystem category tools (which use gateway__ prefix).
             gateway_executor = None
-            if agent.gateway_permissions:
+            _tool_cats = getattr(agent, "tool_categories", {})
+            _needs_gateway = bool(agent.gateway_permissions) or _tool_cats.get("filesystem")
+            if _needs_gateway:
                 from src.infra.config import get_settings as _get_settings
 
                 _settings = _get_settings()
@@ -454,8 +457,11 @@ class GraphCompiler:
                     from src.gateway.tool_definitions import get_gateway_tool_definitions
                     from src.internal.auth import get_internal_bearer_token
 
-                    gateway_tool_defs = get_gateway_tool_definitions(agent.gateway_permissions)
-                    active_tools.extend(gateway_tool_defs)
+                    if agent.gateway_permissions:
+                        gateway_tool_defs = get_gateway_tool_definitions(
+                            agent.gateway_permissions
+                        )
+                        active_tools.extend(gateway_tool_defs)
                     gateway_executor = GatewayToolExecutor(
                         gateway_url=_settings.GATEWAY_URL,
                         agent_id=agent.id,
@@ -464,23 +470,16 @@ class GraphCompiler:
                         internal_token=get_internal_bearer_token(),
                     )
 
-            # Automation tool executor — for agents with automation-manager capability
-            automation_executor = None
-            if "automation-manager" in (agent.capabilities or []):
-                from src.infra.config import get_settings as _get_auto_settings
+            # Scheduled task tool executor — for agents with scheduled-task-manager capability
+            scheduled_task_executor = None
+            if "scheduled-task-manager" in (agent.capabilities or []):
+                from src.scheduled_tasks.tool_definitions import (
+                    get_scheduled_task_tool_definitions,
+                )
+                from src.scheduled_tasks.tool_executor import ScheduledTaskToolExecutor
 
-                _auto_settings = _get_auto_settings()
-                if _auto_settings.PLATFORM_URL and _auto_settings.ENGINE_API_KEY:
-                    from src.automations.tool_definitions import (
-                        get_automation_tool_definitions,
-                    )
-                    from src.automations.tool_executor import AutomationToolExecutor
-
-                    active_tools.extend(get_automation_tool_definitions())
-                    automation_executor = AutomationToolExecutor(
-                        platform_url=_auto_settings.PLATFORM_URL,
-                        engine_api_key=_auto_settings.ENGINE_API_KEY,
-                    )
+                active_tools.extend(get_scheduled_task_tool_definitions())
+                scheduled_task_executor = ScheduledTaskToolExecutor()
 
             # Extended tools (memory, knowledge, file_storage, etc.)
             extended_executor = None
@@ -537,7 +536,7 @@ class GraphCompiler:
                     _mcp_executor,
                     BUILTIN_TOOL_NAMES,
                     gateway_executor=gateway_executor,
-                    automation_executor=automation_executor,
+                    scheduled_task_executor=scheduled_task_executor,
                     extended_executor=extended_executor,
                 )
             else:
@@ -548,8 +547,8 @@ class GraphCompiler:
                     if t.get("function", {}).get("name") not in BUILTIN_TOOL_NAMES
                 ]
                 logger.debug("No user_id in state.metadata — built-in tools disabled")
-                # Still create UnifiedToolExecutor for gateway/automation tools
-                if gateway_executor or automation_executor:
+                # Still create UnifiedToolExecutor for gateway/scheduled task tools
+                if gateway_executor or scheduled_task_executor:
                     from src.graph_engine.builtin_tools import UnifiedToolExecutor
 
                     unified_executor = UnifiedToolExecutor(
@@ -557,7 +556,7 @@ class GraphCompiler:
                         _mcp_executor,
                         set(),
                         gateway_executor=gateway_executor,
-                        automation_executor=automation_executor,
+                        scheduled_task_executor=scheduled_task_executor,
                     )
 
             try:

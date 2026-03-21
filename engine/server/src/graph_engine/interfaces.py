@@ -71,9 +71,8 @@ class AgentConfig(BaseModel):
     )
     tool_categories: dict[str, bool] = Field(
         default_factory=lambda: {
-            "memory": True,
             "knowledge": True,
-            "code_search": False,
+            "filesystem": False,
             "file_storage": False,
             "human_interaction": True,
             "image_generation": False,
@@ -117,27 +116,6 @@ class GraphConfig(BaseModel):
     entry_node_id: str | None = None
     nodes: list[NodeConfig] = Field(default_factory=list)
     edges: list[EdgeConfig] = Field(default_factory=list)
-
-    @field_validator("version", mode="before")
-    @classmethod
-    def coerce_version(cls, v: Any) -> int:
-        return _coerce_version(v)
-
-
-class AutomationConfig(BaseModel):
-    """Automation configuration model (synced from Platform)."""
-
-    id: str
-    name: str = ""
-    description: str = ""
-    enabled: bool = False
-    trigger: dict[str, Any] = Field(default_factory=dict)
-    triage: dict[str, Any] | None = None
-    execution: dict[str, Any] = Field(default_factory=dict)
-    post_actions: list[dict[str, Any]] = Field(default_factory=list)
-    settings: dict[str, Any] = Field(default_factory=dict)
-    version: int = 1
-    tags: list[str] = Field(default_factory=list)
 
     @field_validator("version", mode="before")
     @classmethod
