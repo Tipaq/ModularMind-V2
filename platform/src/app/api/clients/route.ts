@@ -32,7 +32,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     take: pageSize,
   });
 
-  return paginatedResponse(clients, total, page, pageSize);
+  const response = paginatedResponse(clients, total, page, pageSize);
+  response.headers.set("Cache-Control", "private, max-age=10");
+  return response;
 }
 
 // POST /api/clients — Create a new client (auto-generates first engine + API key)

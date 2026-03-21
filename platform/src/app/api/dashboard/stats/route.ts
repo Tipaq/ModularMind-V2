@@ -26,7 +26,7 @@ export async function GET(): Promise<NextResponse> {
     enginesByStatus[group.status] = group._count;
   }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     clients: clientCount,
     engines: {
       total: engineTotal,
@@ -38,4 +38,6 @@ export async function GET(): Promise<NextResponse> {
     graphs: graphCount,
     recentEngines,
   });
+  response.headers.set("Cache-Control", "private, max-age=30");
+  return response;
 }

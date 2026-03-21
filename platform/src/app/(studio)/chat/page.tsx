@@ -220,7 +220,7 @@ export default function ChatPage() {
     sendMessage(inputValue, convId ?? undefined, files, effectiveChatConfig.supervisorMode);
     setInputValue("");
     setAttachedFiles([]);
-  }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, effectiveChatConfig, sendMessage, conversations, messages.length]);
+  }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, effectiveChatConfig, sendMessage, conversations, messages.length, setConversations]);
 
   const handleToggleAgent = useCallback((agentId: string) => {
     setEnabledAgentIds((prev) => toggleArrayItem(prev, agentId));

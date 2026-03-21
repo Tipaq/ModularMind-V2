@@ -72,15 +72,20 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
     async function load() {
       try {
-        const res = await fetch("/api/dashboard/stats");
+        const res = await fetch("/api/dashboard/stats", { signal: controller.signal });
         if (res.ok) setStats(await res.json());
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        throw err;
       } finally {
         setLoading(false);
       }
     }
     load();
+    return () => controller.abort();
   }, []);
 
   if (loading) {

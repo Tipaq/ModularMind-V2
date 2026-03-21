@@ -16,7 +16,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     ["name", "description"],
   );
 
-  return paginatedResponse(items, total, page, pageSize);
+  const response = paginatedResponse(items, total, page, pageSize);
+  response.headers.set("Cache-Control", "private, max-age=10");
+  return response;
 }
 
 // POST /api/agents — Create a new agent

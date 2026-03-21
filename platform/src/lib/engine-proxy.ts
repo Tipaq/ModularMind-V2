@@ -11,6 +11,7 @@
 import { createHmac } from "crypto";
 
 const ENGINE_URL = process.env.ENGINE_URL || "http://localhost:8000";
+const DEFAULT_ENGINE_TIMEOUT_MS = 30_000;
 const ENGINE_SECRET_KEY = process.env.ENGINE_SECRET_KEY || "";
 
 /**
@@ -70,8 +71,16 @@ export async function engineFetch(
     headers["Content-Type"] = "application/json";
   }
 
-  return fetch(url, {
-    ...init,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_ENGINE_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
