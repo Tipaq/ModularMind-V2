@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -20,6 +21,32 @@ MAX_CONTENT_SIZE = 2_097_152  # 2MB raw HTML
 MAX_TEXT_OUTPUT = 50_000  # ~50k chars of extracted text
 MAX_SEARCH_RESULTS = 25
 DEFAULT_TIMEOUT = 30.0
+
+_http_client: httpx.AsyncClient | None = None
+_SEARCH_SEMAPHORE: asyncio.Semaphore | None = None
+
+
+def _get_search_semaphore() -> asyncio.Semaphore:
+    global _SEARCH_SEMAPHORE
+    if _SEARCH_SEMAPHORE is None:
+        _SEARCH_SEMAPHORE = asyncio.Semaphore(3)
+    return _SEARCH_SEMAPHORE
+
+
+def get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            follow_redirects=True,
+            max_redirects=5,
+            timeout=DEFAULT_TIMEOUT,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+            },
+        )
+    return _http_client
 
 # Tags whose content should be removed entirely
 STRIP_TAGS = re.compile(
@@ -76,17 +103,8 @@ class BrowserExecutor(BaseExecutor):
             return ssrf_error
 
         try:
-            async with httpx.AsyncClient(
-                follow_redirects=True,
-                max_redirects=5,
-                timeout=DEFAULT_TIMEOUT,
-                headers={
-                    "User-Agent": USER_AGENT,
-                    "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-                    "Accept-Language": "en-US,en;q=0.5",
-                },
-            ) as client:
-                response = await client.get(url)
+            client = get_http_client()
+            response = await client.get(url)
 
             content_type = response.headers.get("content-type", "")
             status = response.status_code
@@ -127,8 +145,6 @@ class BrowserExecutor(BaseExecutor):
 
     async def _search_duckduckgo(self, args: dict[str, Any]) -> str:
         """Search the web via DuckDuckGo and return formatted results."""
-        import asyncio
-
         from ddgs import DDGS
 
         query = args.get("query", "").strip()
@@ -150,7 +166,8 @@ class BrowserExecutor(BaseExecutor):
                         )
                     )
 
-            results = await asyncio.to_thread(_do_search)
+            async with _get_search_semaphore():
+                results = await asyncio.to_thread(_do_search)
 
             if not results:
                 return f"No results found for: {query}"

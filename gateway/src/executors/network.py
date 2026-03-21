@@ -20,6 +20,19 @@ MAX_RESPONSE_SIZE = 1_048_576  # 1MB
 ALLOWED_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"}
 REQUEST_TIMEOUT = 30.0
 
+_http_client: httpx.AsyncClient | None = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            follow_redirects=True,
+            max_redirects=5,
+            timeout=REQUEST_TIMEOUT,
+        )
+    return _http_client
+
 
 class NetworkExecutor(BaseExecutor):
     """Execute HTTP requests with domain allow/deny enforcement.
@@ -67,17 +80,13 @@ class NetworkExecutor(BaseExecutor):
             headers.pop(h.title(), None)
 
         try:
-            async with httpx.AsyncClient(
-                follow_redirects=True,
-                max_redirects=5,
-                timeout=REQUEST_TIMEOUT,
-            ) as client:
-                response = await client.request(
-                    method=method,
-                    url=url,
-                    content=body.encode() if body else None,
-                    headers=headers,
-                )
+            client = get_http_client()
+            response = await client.request(
+                method=method,
+                url=url,
+                content=body.encode() if body else None,
+                headers=headers,
+            )
 
             # Build result
             body_bytes = response.content
