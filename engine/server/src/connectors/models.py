@@ -1,8 +1,4 @@
-"""
-Connector models.
-
-SQLAlchemy models for webhook-based connectors (Slack, Teams, Email, Discord).
-"""
+"""Connector models — webhook-based integrations with execution mode support."""
 
 from datetime import datetime
 from enum import StrEnum
@@ -36,7 +32,11 @@ class Connector(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(200))
     connector_type: Mapped[str] = mapped_column(String(20))
-    agent_id: Mapped[str] = mapped_column(String(36), index=True)
+
+    agent_id: Mapped[str | None] = mapped_column(String(36), nullable=True, default=None)
+    graph_id: Mapped[str | None] = mapped_column(String(36), nullable=True, default=None)
+    supervisor_mode: Mapped[bool] = mapped_column(default=False)
+
     webhook_secret: Mapped[str] = mapped_column(String(64), default=lambda: token_urlsafe(32))
     is_enabled: Mapped[bool] = mapped_column(default=True)
     config: Mapped[dict] = mapped_column(JSONB, default=dict)

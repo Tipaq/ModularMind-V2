@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
 from src.auth import CurrentUser, RequireAdmin
-from src.connectors.registry import get_adapter, all_connector_types, registered_type_ids
+from src.connectors.registry import all_connector_types, get_adapter, registered_type_ids
 from src.connectors.schemas import (
     ConnectorCreate,
     ConnectorCreateResponse,
@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/connectors", tags=["Connectors"])
 
+EXECUTION_CONFIG_KEYS = frozenset({"model_id", "enabled_agent_ids", "enabled_graph_ids"})
+
 
 async def _verify_agent_exists(agent_id: str) -> None:
     config_provider = get_config_provider()
@@ -36,11 +38,18 @@ async def _verify_agent_exists(agent_id: str) -> None:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
 
+async def _verify_graph_exists(graph_id: str) -> None:
+    config_provider = get_config_provider()
+    graph = await config_provider.get_graph_config(graph_id)
+    if not graph:
+        raise HTTPException(status_code=404, detail=f"Graph {graph_id} not found")
+
+
 def _validate_connector_config(connector_type: str, config: dict) -> None:
     adapter = get_adapter(connector_type)
     if not adapter:
         raise HTTPException(status_code=422, detail=f"Unknown connector type: {connector_type}")
-    allowed = adapter.allowed_config_keys()
+    allowed = adapter.allowed_config_keys() | EXECUTION_CONFIG_KEYS
     unexpected = set(config.keys()) - allowed
     if unexpected:
         raise HTTPException(
@@ -54,12 +63,31 @@ def _validate_connector_type(connector_type: str) -> None:
         raise HTTPException(status_code=422, detail=f"Unknown connector type: {connector_type}")
 
 
+def _validate_execution_target(data: ConnectorCreate) -> None:
+    has_model = bool((data.config or {}).get("model_id"))
+    if not data.agent_id and not data.graph_id and not data.supervisor_mode and not has_model:
+        raise HTTPException(
+            status_code=422,
+            detail="At least one execution target required: "
+            "agent_id, graph_id, supervisor_mode, or model_id in config",
+        )
+
+
+async def _verify_execution_target(data: ConnectorCreate) -> None:
+    if data.agent_id:
+        await _verify_agent_exists(data.agent_id)
+    if data.graph_id:
+        await _verify_graph_exists(data.graph_id)
+
+
 def to_response(connector: Connector) -> ConnectorResponse:
     return ConnectorResponse(
         id=connector.id,
         name=connector.name,
         connector_type=connector.connector_type,
         agent_id=connector.agent_id,
+        graph_id=connector.graph_id,
+        supervisor_mode=connector.supervisor_mode,
         webhook_url=f"/webhooks/{connector.id}",
         is_enabled=connector.is_enabled,
         config=connector.config or {},
@@ -74,6 +102,8 @@ def to_create_response(connector: Connector) -> ConnectorCreateResponse:
         name=connector.name,
         connector_type=connector.connector_type,
         agent_id=connector.agent_id,
+        graph_id=connector.graph_id,
+        supervisor_mode=connector.supervisor_mode,
         webhook_secret=connector.webhook_secret,
         webhook_url=f"/webhooks/{connector.id}",
         is_enabled=connector.is_enabled,
@@ -85,7 +115,6 @@ def to_create_response(connector: Connector) -> ConnectorCreateResponse:
 
 @router.get("/types", response_model=ConnectorTypesListResponse)
 async def list_connector_types() -> ConnectorTypesListResponse:
-    """Return metadata for all registered connector types."""
     metas = all_connector_types()
     items = [
         ConnectorTypeResponse(
@@ -135,13 +164,16 @@ async def create_connector(
 ) -> ConnectorCreateResponse:
     _validate_connector_type(data.connector_type)
     _validate_connector_config(data.connector_type, data.config)
-    await _verify_agent_exists(data.agent_id)
+    _validate_execution_target(data)
+    await _verify_execution_target(data)
 
     connector = Connector(
         id=str(uuid4()),
         name=data.name,
         connector_type=data.connector_type,
         agent_id=data.agent_id,
+        graph_id=data.graph_id,
+        supervisor_mode=data.supervisor_mode,
         config=data.config,
     )
     db.add(connector)
@@ -180,6 +212,11 @@ async def update_connector(
     if data.agent_id is not None:
         await _verify_agent_exists(data.agent_id)
         connector.agent_id = data.agent_id
+    if data.graph_id is not None:
+        await _verify_graph_exists(data.graph_id)
+        connector.graph_id = data.graph_id
+    if data.supervisor_mode is not None:
+        connector.supervisor_mode = data.supervisor_mode
     if data.is_enabled is not None:
         connector.is_enabled = data.is_enabled
     if data.config is not None:

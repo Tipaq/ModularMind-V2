@@ -10,7 +10,9 @@ class ConnectorCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     connector_type: str = Field(min_length=1, max_length=20)
-    agent_id: str
+    agent_id: str | None = None
+    graph_id: str | None = None
+    supervisor_mode: bool = False
     config: dict = Field(default_factory=dict)
 
 
@@ -19,6 +21,8 @@ class ConnectorUpdate(BaseModel):
 
     name: str | None = None
     agent_id: str | None = None
+    graph_id: str | None = None
+    supervisor_mode: bool | None = None
     is_enabled: bool | None = None
     config: dict | None = None
 
@@ -29,7 +33,9 @@ class ConnectorResponse(BaseModel):
     id: str
     name: str
     connector_type: str
-    agent_id: str
+    agent_id: str | None = None
+    graph_id: str | None = None
+    supervisor_mode: bool = False
     webhook_url: str
     is_enabled: bool
     config: dict
