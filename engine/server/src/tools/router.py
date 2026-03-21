@@ -9,7 +9,7 @@ from fastapi import APIRouter
 
 from src.auth import RequireOwner
 
-from .registry import DEFAULT_TOOL_CATEGORIES, _get_category_registry
+from .registry import DEFAULT_TOOL_CATEGORIES, get_category_registry
 from .schemas import ToolCategoryResponse, ToolDefinitionResponse, ToolsOverviewResponse
 
 logger = logging.getLogger(__name__)
@@ -50,6 +50,10 @@ CATEGORY_META: dict[str, dict[str, str]] = {
         "label": "Web",
         "description": "Search, browse, screenshot, and extract links from the web",
     },
+    "git": {
+        "label": "Git",
+        "description": "Clone, commit, push, pull, and manage local repositories",
+    },
     "gateway": {
         "label": "Gateway",
         "description": "System access: shell, browser, network",
@@ -86,7 +90,7 @@ def _collect_builtin_tools() -> list[ToolDefinitionResponse]:
 
 
 def _collect_extended_tools() -> dict[str, list[ToolDefinitionResponse]]:
-    registry = _get_category_registry()
+    registry = get_category_registry()
     by_category: dict[str, list[ToolDefinitionResponse]] = {}
     for category_name, definition_fn in registry.items():
         try:
