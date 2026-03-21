@@ -62,6 +62,7 @@ class SandboxManager:
         self._active: dict[str, SandboxContainer] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._docker = None
+        self._docker_sem = asyncio.Semaphore(1)
         self._network: str | None = None
         self._host_workspace_root: str | None = None
         self._settings = get_settings()
@@ -284,14 +285,15 @@ class SandboxManager:
             return False
 
         try:
-            await asyncio.wait_for(
-                asyncio.to_thread(container.container.stop, timeout=5),
-                timeout=DOCKER_STOP_TIMEOUT,
-            )
-            await asyncio.wait_for(
-                asyncio.to_thread(container.container.remove),
-                timeout=DOCKER_STOP_TIMEOUT,
-            )
+            async with self._docker_sem:
+                try:
+                    await asyncio.to_thread(container.container.kill)
+                except Exception:
+                    pass
+                await asyncio.wait_for(
+                    asyncio.to_thread(container.container.remove, force=True),
+                    timeout=DOCKER_STOP_TIMEOUT,
+                )
             logger.info("Released sandbox %s", container.container_name)
         except Exception:
             logger.warning(
@@ -342,15 +344,16 @@ class SandboxManager:
 
         sandbox.last_used = time.time()
 
-        result = await asyncio.wait_for(
-            asyncio.to_thread(
-                sandbox.container.exec_run,
-                command,
-                workdir=workdir,
-                user="sandbox",
-            ),
-            timeout=DOCKER_EXEC_TIMEOUT,
-        )
+        async with self._docker_sem:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    sandbox.container.exec_run,
+                    command,
+                    workdir=workdir,
+                    user="sandbox",
+                ),
+                timeout=DOCKER_EXEC_TIMEOUT,
+            )
 
         exit_code = result.exit_code
         output = result.output.decode("utf-8", errors="replace") if result.output else ""
@@ -367,6 +370,10 @@ class SandboxManager:
 
         for eid in stale:
             await self.release(eid)
+
+        orphaned_locks = [eid for eid in self._locks if eid not in self._active]
+        for eid in orphaned_locks:
+            del self._locks[eid]
 
         if stale:
             logger.info("Cleaned up %d stale sandbox(es)", len(stale))

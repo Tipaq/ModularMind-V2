@@ -1,5 +1,6 @@
 """Sandbox cleanup scheduler — removes stale containers and old workspaces."""
 
+import asyncio
 import logging
 import os
 import shutil
@@ -11,10 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 async def cleanup_stale_sandboxes(sandbox_manager) -> None:
-    """Periodic task to clean up idle sandboxes.
-
-    Called by APScheduler in main.py lifespan.
-    """
+    """Periodic task to clean up idle sandboxes."""
     try:
         count = await sandbox_manager.cleanup_stale()
         if count:
@@ -23,39 +21,39 @@ async def cleanup_stale_sandboxes(sandbox_manager) -> None:
         logger.warning("Sandbox cleanup error", exc_info=True)
 
 
-async def cleanup_stale_workspaces() -> None:
-    """Daily task to remove workspace directories older than retention period.
+def _scan_and_remove_workspaces(root: str, retention_seconds: float) -> int:
+    """Blocking scan-and-remove for stale workspace directories."""
+    now = time.time()
+    removed = 0
+    for entry in os.scandir(root):
+        if not entry.is_dir() or entry.name == "shared":
+            continue
+        try:
+            mtime = entry.stat().st_mtime
+        except OSError:
+            continue
+        if now - mtime > retention_seconds:
+            try:
+                shutil.rmtree(entry.path)
+                removed += 1
+            except OSError:
+                logger.warning("Failed to remove workspace %s", entry.path)
+    return removed
 
-    Scans WORKSPACE_ROOT for agent workspace dirs, removes those not modified
-    within WORKSPACE_RETENTION_DAYS.
-    """
+
+async def cleanup_stale_workspaces() -> None:
+    """Daily task to remove workspace directories older than retention period."""
     settings = get_settings()
     root = settings.WORKSPACE_ROOT
     retention_seconds = settings.WORKSPACE_RETENTION_DAYS * 86400
-    now = time.time()
-    removed = 0
 
     if not os.path.isdir(root):
         return
 
     try:
-        for entry in os.scandir(root):
-            if not entry.is_dir() or entry.name == "shared":
-                continue
-
-            # Check last modification time
-            try:
-                mtime = entry.stat().st_mtime
-            except OSError:
-                continue
-
-            if now - mtime > retention_seconds:
-                try:
-                    shutil.rmtree(entry.path)
-                    removed += 1
-                except OSError:
-                    logger.warning("Failed to remove workspace %s", entry.path)
-
+        removed = await asyncio.to_thread(
+            _scan_and_remove_workspaces, root, retention_seconds
+        )
         if removed:
             logger.info("Workspace cleanup: removed %d stale workspace(s)", removed)
     except Exception:
