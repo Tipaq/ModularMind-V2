@@ -197,36 +197,6 @@ MCP_CATALOG: list[MCPCatalogEntry] = [
         ],
         documentation_url="https://github.com/aashari/mcp-server-atlassian-jira",
     ),
-    MCPCatalogEntry(
-        id="github",
-        name="GitHub",
-        description="Access GitHub repos, issues, PRs via tiered access (read/write/admin)",
-        category="development",
-        icon="github",
-        npm_package="@modelcontextprotocol/server-github",
-        required_secrets=[
-            CatalogSecret(
-                key="GITHUB_TOKEN_READ",
-                label="Read Token",
-                placeholder="ghp_...",
-                required=False,
-            ),
-            CatalogSecret(
-                key="GITHUB_TOKEN_WRITE",
-                label="Write Token",
-                placeholder="ghp_...",
-                required=False,
-            ),
-            CatalogSecret(
-                key="GITHUB_TOKEN_ADMIN",
-                label="Admin Token",
-                placeholder="ghp_...",
-                required=False,
-            ),
-        ],
-        setup_flow="github_tiered",
-        documentation_url="https://github.com/modelcontextprotocol/servers/tree/main/src/github",
-    ),
     # --- New npm-based entries ---
     MCPCatalogEntry(
         id="firecrawl",
@@ -246,20 +216,6 @@ MCP_CATALOG: list[MCPCatalogEntry] = [
             ),
         ],
         documentation_url="https://github.com/mendableai/firecrawl-mcp-server",
-    ),
-    MCPCatalogEntry(
-        id="filesystem",
-        name="Filesystem",
-        description="Local file access — read, write, search, and manage files (sandboxed to /data/files and /data/projects)",
-        category="utility",
-        icon="folder",
-        npm_package="@modelcontextprotocol/server-filesystem",
-        default_args=["/data/files", "/data/projects"],
-        volumes={
-            "/data/files": {"bind": "/data/files", "mode": "rw"},
-            "mm-projects": {"bind": "/data/projects", "mode": "rw"},
-        },
-        documentation_url="https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
     ),
     MCPCatalogEntry(
         id="telegram",
@@ -563,16 +519,6 @@ MCP_CATALOG: list[MCPCatalogEntry] = [
         ],
         documentation_url="https://github.com/jlucaso1/whatsapp-mcp-ts",
         setup_flow="qr-code",
-    ),
-    MCPCatalogEntry(
-        id="shell-commands",
-        name="Shell Commands",
-        description="Execute shell commands and processes — run scripts, install packages, build projects — no API key required",
-        category="development",
-        icon="terminal",
-        npm_package="mcp-server-commands",
-        volumes={"mm-projects": {"bind": "/data/projects", "mode": "rw"}},
-        documentation_url="https://github.com/g0t4/mcp-server-commands",
     ),
 ]
 
