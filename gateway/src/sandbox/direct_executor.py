@@ -99,7 +99,7 @@ async def direct_exec(
     if binary not in allowed:
         raise UnsafeCommandError(binary)
 
-    os.makedirs(workdir, exist_ok=True)
+    await asyncio.to_thread(os.makedirs, workdir, exist_ok=True)
 
     logger.info("[direct_exec] %s (workdir=%s)", command[:200], workdir)
 
