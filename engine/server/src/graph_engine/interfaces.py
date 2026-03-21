@@ -81,6 +81,7 @@ class AgentConfig(BaseModel):
             "github": False,
             "web": False,
             "git": False,
+            "scheduling": False,
         },
         description="Enable/disable extended tool categories for this agent.",
     )
