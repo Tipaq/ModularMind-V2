@@ -78,6 +78,8 @@ class AgentConfig(BaseModel):
             "image_generation": False,
             "custom_tools": False,
             "mini_apps": False,
+            "github": False,
+            "web": False,
         },
         description="Enable/disable extended tool categories for this agent.",
     )
