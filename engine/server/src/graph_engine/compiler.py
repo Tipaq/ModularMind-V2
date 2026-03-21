@@ -43,26 +43,14 @@ def _filter_mcp_for_agent(
     """Filter MCP server IDs based on agent's gateway_permissions.
 
     Only includes servers whose catalog matches a permission the agent has:
-    - github.access_level → catalog_id "github" (tiered: match access_level)
-    - browser.enabled → catalog_id in ("puppeteer", "brave-search", ...)
-    - Non-tiered GitHub servers are included for any github access level.
+    - browser.enabled → catalog_id in ("puppeteer", "brave-search")
+    - GitHub and filesystem are now handled natively (not via MCP).
 
     Agents with no gateway_permissions get no MCP servers.
     """
     perms = agent.gateway_permissions or {}
     if not perms:
         return []
-
-    github_level = perms.get("github", {}).get("access_level")
-
-    # Pre-scan: if tiered GitHub servers exist, skip untiered ones (avoids duplicates)
-    has_tiered_github = False
-    if github_level:
-        for sid in server_ids:
-            srv = registry.get_server(sid) if hasattr(registry, "get_server") else None
-            if srv and getattr(srv, "catalog_id", None) == "github" and getattr(srv, "access_tier", None):
-                has_tiered_github = True
-                break
 
     filtered = []
     for sid in server_ids:
@@ -71,21 +59,12 @@ def _filter_mcp_for_agent(
             continue
 
         catalog = getattr(server, "catalog_id", None) or ""
-        tier = getattr(server, "access_tier", None)
 
-        if catalog == "github":
-            if not github_level:
-                continue  # Agent has no github permission
-            if not tier and has_tiered_github:
-                continue  # Skip untiered when tiered servers exist
-            if tier and tier != github_level:
-                continue  # Tiered server doesn't match agent's level
-            filtered.append(sid)
-        elif catalog in ("brave-search", "puppeteer", "fetch"):
+        if catalog in ("brave-search", "puppeteer"):
             if perms.get("browser", {}).get("enabled"):
                 filtered.append(sid)
-        # Skip non-matching servers (filesystem, git, memory, shell, etc.)
-        # These are general-purpose and handled by gateway, not graph agents
+        # Skip all other servers (github, filesystem, git, memory, shell)
+        # These are handled natively by tool categories or gateway
 
     return filtered
 
@@ -792,7 +771,12 @@ class GraphCompiler:
             unified_executor = mcp_executor
 
             gateway_executor = None
-            if agent and agent.gateway_permissions:
+            _graph_tool_cats = getattr(agent, "tool_categories", {}) if agent else {}
+            _graph_needs_gw = (
+                bool(agent and agent.gateway_permissions)
+                or _graph_tool_cats.get("filesystem")
+            )
+            if _graph_needs_gw:
                 from src.infra.config import get_settings as _get_settings
 
                 _settings = _get_settings()
@@ -801,14 +785,15 @@ class GraphCompiler:
                     from src.gateway.tool_definitions import get_gateway_tool_definitions
                     from src.internal.auth import get_internal_bearer_token
 
-                    gateway_tool_defs = get_gateway_tool_definitions(
-                        agent.gateway_permissions
-                    )
-                    active_tools.extend(gateway_tool_defs)
+                    if agent and agent.gateway_permissions:
+                        gateway_tool_defs = get_gateway_tool_definitions(
+                            agent.gateway_permissions
+                        )
+                        active_tools.extend(gateway_tool_defs)
                     user_id = (state.get("metadata") or {}).get("user_id")
                     gateway_executor = GatewayToolExecutor(
                         gateway_url=_settings.GATEWAY_URL,
-                        agent_id=agent.id,
+                        agent_id=agent.id if agent else "",
                         execution_id=_exec_id or "",
                         user_id=user_id or "",
                         internal_token=get_internal_bearer_token(),
