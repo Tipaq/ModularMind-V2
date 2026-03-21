@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 from src.admin.user_router import admin_user_router
 from src.agents.router import router as agents_router
 from src.auth.router import router as auth_router
-from src.automations.router import router as automations_router
+from src.scheduled_tasks.router import router as scheduled_tasks_router
 from src.connectors.router import router as connectors_router
 from src.connectors.webhook_router import webhook_router
 from src.conversations.router import admin_router as conversations_admin_router
@@ -46,6 +46,7 @@ from src.report.router import router as report_router
 from src.setup.router import router as setup_router
 from src.supervisor.router import router as supervisor_router
 from src.sync.router import router as sync_router
+from src.mini_apps.router import router as mini_apps_router
 from src.tools.router import router as tools_admin_router
 
 # ---------------------------------------------------------------------------
@@ -259,15 +260,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         response = await call_next(request)
+        path = request.url.path
+        is_mini_app_serve = "/mini-apps/" in path and path.endswith("/serve")
+
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        path = request.url.path
-        if path.startswith("/api/") or path.startswith("/health") or path.startswith("/metrics"):
-            response.headers["Content-Security-Policy"] = self._API_CSP
+
+        if is_mini_app_serve:
+            response.headers.pop("X-Frame-Options", None)
         else:
-            response.headers["Content-Security-Policy"] = self._SPA_CSP
+            response.headers["X-Frame-Options"] = "DENY"
+
+        if not is_mini_app_serve:
+            if path.startswith("/api/") or path.startswith("/health") or path.startswith("/metrics"):
+                response.headers["Content-Security-Policy"] = self._API_CSP
+            else:
+                response.headers["Content-Security-Policy"] = self._SPA_CSP
+
         return response
 
 
@@ -343,7 +353,8 @@ app.include_router(sync_router, prefix=API_PREFIX)
 app.include_router(recall_router, prefix=API_PREFIX)
 app.include_router(supervisor_router, prefix=API_PREFIX)
 app.include_router(groups_router, prefix=API_PREFIX)
-app.include_router(automations_router)
+app.include_router(scheduled_tasks_router)
+app.include_router(mini_apps_router, prefix=API_PREFIX)
 
 # ── Admin routers ────────────────────────────────────────────────────────
 app.include_router(internal_router, prefix=f"{API_PREFIX}/internal")

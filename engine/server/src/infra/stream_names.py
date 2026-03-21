@@ -14,8 +14,8 @@ STREAM_MEMORY_SCORED = "memory:scored"
 STREAM_RAG_EXTRACTED = "rag:extracted"
 STREAM_RAG_EMBEDDED = "rag:embedded"
 
-# Automation
-STREAM_AUTOMATION_TRIGGER = "tasks:automation_trigger"
+# Scheduled tasks
+STREAM_SCHEDULED_TASK_TRIGGER = "tasks:scheduled_task_trigger"
 
 # Dead letter queue
 STREAM_DLQ = "dead_letter"
