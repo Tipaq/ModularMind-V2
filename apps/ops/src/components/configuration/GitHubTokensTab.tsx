@@ -72,7 +72,9 @@ export function GitHubTokensTab() {
   };
 
   useEffect(() => {
-    loadTokens();
+    (async () => {
+      await loadTokens();
+    })();
   }, []);
 
   const handleAdd = async () => {

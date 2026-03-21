@@ -88,6 +88,9 @@ interface Props {
 export function DocumentTable({ collectionId, documents, isLoading }: Props) {
   const { refreshDocument, deleteDocument } = useKnowledgeStore();
 
+  const refreshDocumentRef = useRef(refreshDocument);
+  useEffect(() => { refreshDocumentRef.current = refreshDocument; }, [refreshDocument]);
+
   const processingIds = useMemo(
     () => documents
       .filter((d) => d.status === "processing" || d.status === "pending")
@@ -101,10 +104,10 @@ export function DocumentTable({ collectionId, documents, isLoading }: Props) {
   useEffect(() => {
     if (!processingKey) return;
     const intervalId = setInterval(() => {
-      processingIdsRef.current.forEach((id) => refreshDocument(id));
+      processingIdsRef.current.forEach((id) => refreshDocumentRef.current(id));
     }, 3000);
     return () => clearInterval(intervalId);
-  }, [processingKey, refreshDocument]);
+  }, [processingKey]);
 
   const pagination: PaginationState = {
     page: 1,

@@ -1,12 +1,16 @@
 "use client";
 
+import { useMemo } from "react";
 import { cn } from "@modularmind/ui";
 import type { AgentMetrics } from "@modularmind/api-client";
 import { thresholdColor, thresholdBarColor } from "../../lib/monitoringUtils";
 import { formatTokensShort, formatDurationMs } from "./ExecutionTable";
 
 export function AgentPerformanceTable({ agents }: { agents: AgentMetrics[] }) {
-  const sorted = [...agents].sort((a, b) => b.total_executions - a.total_executions);
+  const sorted = useMemo(
+    () => [...agents].sort((a, b) => b.total_executions - a.total_executions),
+    [agents],
+  );
 
   if (sorted.length === 0) {
     return (

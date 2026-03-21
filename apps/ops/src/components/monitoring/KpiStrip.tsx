@@ -70,7 +70,7 @@ export function KpiStrip({ monitoring, llmGpu, agentMetrics, liveExecutions }: K
   const hasGpu = vramTotal > 0;
 
   // Global error rate from agent metrics
-  const { totalRuns, totalErrors, errorRate, hasAgentData } = useMemo(() => {
+  const { errorRate, hasAgentData } = useMemo(() => {
     const runs = agentMetrics?.reduce((s, a) => s + a.total_executions, 0) ?? 0;
     const errors = agentMetrics?.reduce((s, a) => s + a.error_count, 0) ?? 0;
     const rate = runs > 0 ? (errors / runs) * 100 : 0;

@@ -8,7 +8,6 @@ import {
   Loader2,
   RotateCcw,
 } from "lucide-react";
-import { cn } from "@modularmind/ui";
 import type { DLQMessage } from "@modularmind/api-client";
 import { filterDLQByDomain, type DLQDomain, DLQ_DOMAIN_LABELS } from "../../../lib/dlqDomains";
 

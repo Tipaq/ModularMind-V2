@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { RefreshCw } from "lucide-react";
 import { cn, formatDuration } from "@modularmind/ui";
 import type { MonitoringData, LiveExecutionsData } from "@modularmind/api-client";
@@ -49,7 +50,7 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ monitoring, liveExecutions, lastUpdated, onRefresh }: StatusBarProps) {
-  const health = monitoring ? computeHealth(monitoring) : null;
+  const health = useMemo(() => monitoring ? computeHealth(monitoring) : null, [monitoring]);
   const config = health ? HEALTH_CONFIG[health] : null;
   const alertCount = monitoring?.alerts.active_count ?? 0;
   const activeCount = liveExecutions?.total_active ?? 0;
