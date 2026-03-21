@@ -361,11 +361,16 @@ export const ChatMessages = memo(function ChatMessages({
               />
             ) : (
               <div className="px-4 py-6 pb-32">
-                {messages.map((msg, i) => {
+                {(() => {
+                  let lastAssistantIdx = -1;
+                  for (let j = messages.length - 1; j >= 0; j--) {
+                    if (messages[j].role === "assistant") { lastAssistantIdx = j; break; }
+                  }
+                  return messages.map((msg, i) => {
                   const isLast = i === messages.length - 1;
                   const isUser = msg.role === "user";
                   const isAssistant = msg.role === "assistant";
-                  const isLastAssistant = isAssistant && !messages.slice(i + 1).some((m) => m.role === "assistant");
+                  const isLastAssistant = isAssistant && i === lastAssistantIdx;
                   const prevMsg = i > 0 ? messages[i - 1] : null;
                   const showDate = !prevMsg || !isSameDay(prevMsg.created_at, msg.created_at);
                   const showTimestamp = shouldShowTimestamp(
@@ -402,7 +407,8 @@ export const ChatMessages = memo(function ChatMessages({
                       />
                     </div>
                   );
-                })}
+                });
+                })()}
                 {pendingApproval && onApprove && onReject && (
                   <div className="mt-4 max-w-2xl">
                     <ApprovalCard

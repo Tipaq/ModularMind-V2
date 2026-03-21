@@ -73,7 +73,7 @@ export interface ChatInputProps {
   contextPercent?: number | null;
 }
 
-function ContextMiniDonut({ percent }: { percent: number }) {
+const ContextMiniDonut = memo(function ContextMiniDonut({ percent }: { percent: number }) {
   const size = 18;
   const strokeWidth = 2.5;
   const radius = (size - strokeWidth) / 2;
@@ -96,7 +96,7 @@ function ContextMiniDonut({ percent }: { percent: number }) {
       />
     </svg>
   );
-}
+});
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes}B`;
