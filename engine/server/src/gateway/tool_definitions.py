@@ -52,60 +52,8 @@ def get_gateway_tool_definitions(permissions: dict[str, Any]) -> list[dict]:
             }
         )
 
-    # Browser tools (Phase 6)
-    browser = permissions.get("browser", {})
-    if browser.get("enabled"):
-        tools.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": "gateway__browser_browse",
-                    "description": "Browse a URL and return page content as text.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "url": {
-                                "type": "string",
-                                "description": "URL to browse",
-                            },
-                        },
-                        "required": ["url"],
-                    },
-                },
-            }
-        )
-
-        tools.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": "gateway__browser_search",
-                    "description": (
-                        "Search the web using DuckDuckGo and return results "
-                        "with titles, URLs, and snippets."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search query",
-                            },
-                            "max_results": {
-                                "type": "integer",
-                                "description": "Max results to return (default: 10, max: 25)",
-                            },
-                            "safesearch": {
-                                "type": "string",
-                                "enum": ["strict", "moderate", "off"],
-                                "description": "SafeSearch filtering level (default: moderate)",
-                            },
-                        },
-                        "required": ["query"],
-                    },
-                },
-            }
-        )
+    # Browser/web tools are now in tool_categories.web
+    # (see tools/categories/web.py)
 
     # Network tools
     network = permissions.get("network", {})
