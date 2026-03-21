@@ -28,7 +28,6 @@ from src.audit.models import GatewayAuditLog
 from src.auth import AdminUser, InternalAuth
 from src.config import get_settings
 from src.executors.browser import BrowserExecutor
-from src.executors.code_search import CodeSearchExecutor
 from src.executors.filesystem import FilesystemExecutor
 from src.executors.network import NetworkExecutor
 from src.executors.shell import ShellExecutor
@@ -281,31 +280,30 @@ async def _execute_in_sandbox(
             execution_id=request.execution_id,
         )
 
-    # Filesystem and code_search require a sandbox container
-    await sandbox_mgr.acquire_or_reuse(
-        execution_id=request.execution_id,
-        agent_id=request.agent_id,
-        permissions=perms,
-    )
-
+    # Filesystem: safe actions use hybrid (direct), critical use sandbox
     if request.category == "filesystem":
-        executor = FilesystemExecutor()
+        from src.executors.filesystem import SAFE_ACTIONS
+
+        is_safe = request.action in SAFE_ACTIONS
+        if not is_safe:
+            await sandbox_mgr.acquire_or_reuse(
+                execution_id=request.execution_id,
+                agent_id=request.agent_id,
+                permissions=perms,
+            )
+
+        executor = FilesystemExecutor(
+            agent_id=request.agent_id,
+            permissions=perms,
+        )
         return await executor.execute(
             action=request.action,
             args=request.args,
             sandbox_mgr=sandbox_mgr,
             execution_id=request.execution_id,
         )
-    elif request.category == "code_search":
-        executor = CodeSearchExecutor()
-        return await executor.execute(
-            action=request.action,
-            args=request.args,
-            sandbox_mgr=sandbox_mgr,
-            execution_id=request.execution_id,
-        )
-    else:
-        return f"Executor for category '{request.category}' not yet implemented"
+
+    return f"Executor for category '{request.category}' not yet implemented"
 
 
 # =============================================================================
