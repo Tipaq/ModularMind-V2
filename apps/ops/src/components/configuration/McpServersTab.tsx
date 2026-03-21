@@ -133,14 +133,6 @@ export default function McpServersTab() {
   const [settingsTools, setSettingsTools] = useState<MCPTool[]>([]);
   const [settingsToolsLoading, setSettingsToolsLoading] = useState(false);
 
-  // GitHub unified settings state
-  const [githubTokens, setGithubTokens] = useState({
-    read: "",
-    write: "",
-    admin: "",
-  });
-  const [githubSaving, setGithubSaving] = useState(false);
-
   useEffect(() => {
     (async () => {
       try {
@@ -212,23 +204,11 @@ export default function McpServersTab() {
     if (!selectedCatalogEntry) return;
     setDeployingId(selectedCatalogEntry.id);
     try {
-      if (selectedCatalogEntry.setup_flow === "github_tiered") {
-        // Tiered deploy — creates multiple servers
-        const data = await api.post<MCPServer[]>(
-          "/internal/mcp/deploy/github",
-          {
-            catalog_id: selectedCatalogEntry.id,
-            secrets: catalogSecrets,
-          },
-        );
-        setMcpServers((prev) => [...prev, ...data]);
-      } else {
-        const data = await api.post<MCPServer>("/internal/mcp/deploy", {
-          catalog_id: selectedCatalogEntry.id,
-          secrets: catalogSecrets,
-        });
-        setMcpServers((prev) => [...prev, data]);
-      }
+      const data = await api.post<MCPServer>("/internal/mcp/deploy", {
+        catalog_id: selectedCatalogEntry.id,
+        secrets: catalogSecrets,
+      });
+      setMcpServers((prev) => [...prev, data]);
       setSelectedCatalogEntry(null);
       setCatalogSecrets({});
       setSaveSuccess(true);
@@ -291,57 +271,6 @@ export default function McpServersTab() {
       }
       setSettingsToolsLoading(false);
     }
-  };
-
-  const handleSaveGithubTokens = async () => {
-    setGithubSaving(true);
-    try {
-      // Update existing tier tokens via PATCH
-      const githubServers = mcpServers.filter(
-        (s) => s.catalog_id === "github",
-      );
-      for (const gs of githubServers) {
-        const token = githubTokens[gs.access_tier as keyof typeof githubTokens];
-        if (token?.trim()) {
-          const updated = await api.patch<MCPServer>(
-            `/internal/mcp/servers/${gs.id}`,
-            { api_key: token },
-          );
-          setMcpServers((prev) =>
-            prev.map((s) => (s.id === gs.id ? updated : s)),
-          );
-        }
-      }
-      // Deploy new tiers that don't exist yet
-      const existingTiers = new Set(
-        githubServers.map((s) => s.access_tier),
-      );
-      const newSecrets: Record<string, string> = {};
-      if (githubTokens.read.trim() && !existingTiers.has("read"))
-        newSecrets.GITHUB_TOKEN_READ = githubTokens.read;
-      if (githubTokens.write.trim() && !existingTiers.has("write"))
-        newSecrets.GITHUB_TOKEN_WRITE = githubTokens.write;
-      if (githubTokens.admin.trim() && !existingTiers.has("admin"))
-        newSecrets.GITHUB_TOKEN_ADMIN = githubTokens.admin;
-
-      if (Object.keys(newSecrets).length > 0) {
-        const created = await api.post<MCPServer[]>(
-          "/internal/mcp/deploy/github",
-          { catalog_id: "github", secrets: newSecrets },
-        );
-        setMcpServers((prev) => [...prev, ...created]);
-      }
-
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-      setGithubTokens({ read: "", write: "", admin: "" });
-    } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Failed to save GitHub tokens",
-      );
-      setTimeout(() => setSaveError(null), 5000);
-    }
-    setGithubSaving(false);
   };
 
   const handleSaveSettings = async () => {
@@ -727,11 +656,9 @@ export default function McpServersTab() {
                       onClick={handleDeployFromCatalog}
                       disabled={
                         deployingId === selectedCatalogEntry.id ||
-                        (selectedCatalogEntry.setup_flow === "github_tiered"
-                          ? !Object.values(catalogSecrets).some((v) => v?.trim())
-                          : (selectedCatalogEntry.required_secrets ?? []).some(
-                              (s) => s.required && !catalogSecrets[s.key]?.trim(),
-                            ))
+                        (selectedCatalogEntry.required_secrets ?? []).some(
+                          (s) => s.required && !catalogSecrets[s.key]?.trim(),
+                        )
                       }
                     >
                       {deployingId === selectedCatalogEntry.id ? (
@@ -815,173 +742,7 @@ export default function McpServersTab() {
       </Card>
 
       {/* Settings Dialog (inline panel) */}
-      {settingsServer && settingsServer.catalog_id === "github" && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Github className="h-5 w-5" />
-                <CardTitle className="text-base">
-                  GitHub Integration
-                </CardTitle>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSettingsServer(null)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <CardDescription>
-              Configure access tokens for each permission tier. Agents are
-              assigned a tier based on their permissions.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Active tiers summary */}
-            <div className="flex gap-2 flex-wrap">
-              {(["read", "write", "admin"] as const).map((tier) => {
-                const gs = mcpServers.find(
-                  (s) => s.catalog_id === "github" && s.access_tier === tier,
-                );
-                return (
-                  <Badge
-                    key={tier}
-                    variant={gs ? (gs.connected ? "success" : "secondary") : "outline"}
-                    className="text-xs"
-                  >
-                    {tier.charAt(0).toUpperCase() + tier.slice(1)}
-                    {gs ? (gs.connected ? " — Connected" : " — Offline") : " — Not configured"}
-                  </Badge>
-                );
-              })}
-            </div>
-
-            {/* Token inputs */}
-            <div className="space-y-3">
-              {(
-                [
-                  { tier: "read", label: "Read Token", desc: "repo:status, public_repo, read:org" },
-                  { tier: "write", label: "Write Token", desc: "repo, write:org, gist" },
-                  { tier: "admin", label: "Admin Token", desc: "repo, admin:org, admin:repo_hook, workflow" },
-                ] as const
-              ).map(({ tier, label, desc }) => {
-                const gs = mcpServers.find(
-                  (s) => s.catalog_id === "github" && s.access_tier === tier,
-                );
-                return (
-                  <div key={tier} className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs font-medium">{label}</Label>
-                      {gs && (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] px-1.5 py-0 font-normal"
-                        >
-                          {gs.connected
-                            ? `${gs.tools_count} tools`
-                            : "offline"}
-                        </Badge>
-                      )}
-                    </div>
-                    <Input
-                      type="password"
-                      placeholder={
-                        gs ? "Leave blank to keep current" : "ghp_..."
-                      }
-                      value={githubTokens[tier]}
-                      onChange={(e) =>
-                        setGithubTokens((prev) => ({
-                          ...prev,
-                          [tier]: e.target.value,
-                        }))
-                      }
-                      className="text-xs h-8"
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      Scopes: {desc}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Tools list */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Available Tools
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRefreshTools}
-                  disabled={settingsToolsLoading}
-                >
-                  <RefreshCw
-                    className={cn(
-                      "h-3 w-3 mr-1",
-                      settingsToolsLoading && "animate-spin",
-                    )}
-                  />
-                  Refresh
-                </Button>
-              </div>
-              {settingsToolsLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              ) : settingsTools.length > 0 ? (
-                <div className="space-y-1">
-                  {settingsTools.map((tool, index) => (
-                    <div
-                      key={`${tool.name}-${index}`}
-                      className="rounded border px-3 py-2 text-xs"
-                    >
-                      <p className="font-medium">{tool.name}</p>
-                      {tool.description && (
-                        <p className="text-muted-foreground mt-0.5">
-                          {tool.description}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground text-center py-2">
-                  Connect at least one tier to discover tools
-                </p>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <Button
-                variant="ghost"
-                onClick={() => setSettingsServer(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveGithubTokens}
-                disabled={
-                  githubSaving ||
-                  !Object.values(githubTokens).some((v) => v.trim())
-                }
-              >
-                {githubSaving ? (
-                  <RefreshCw className="h-3 w-3 animate-spin mr-1" />
-                ) : (
-                  <Check className="h-3 w-3 mr-1" />
-                )}
-                Save Tokens
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {settingsServer && settingsServer.catalog_id !== "github" && (
+      {settingsServer && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
