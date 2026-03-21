@@ -74,9 +74,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     DEFAULT_LIMIT = 120     # requests per window
     WINDOW_SECONDS = 60
 
+    CLEANUP_INTERVAL = 100
+
     def __init__(self, app):
         super().__init__(app)
         self._buckets: dict[str, list[float]] = {}
+        self._request_count: int = 0
 
     async def dispatch(self, request: Request, call_next) -> Response:
         # Skip rate limiting for health/metrics
@@ -111,8 +114,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         timestamps.append(now)
         self._buckets[bucket_key] = timestamps
 
-        # Periodic cleanup of stale buckets (every ~100 requests)
-        if len(self._buckets) > 1000:
+        # Periodic cleanup of stale buckets
+        self._request_count += 1
+        if self._request_count % self.CLEANUP_INTERVAL == 0:
             self._cleanup_buckets(window_start)
 
         response = await call_next(request)
