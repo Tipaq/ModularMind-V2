@@ -33,7 +33,7 @@ from src.infra.database import Base, get_db, get_db_readonly
 # ---------------------------------------------------------------------------
 
 _engine = create_async_engine(os.environ["DATABASE_URL"], echo=False, poolclass=NullPool)
-_Session = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
+TestSession = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
 
 _tables_created = False
 
@@ -89,7 +89,7 @@ def owner():
 
 async def persist_user(u: User) -> None:
     """Insert a user into the test DB (idempotent)."""
-    async with _Session() as s:
+    async with TestSession() as s:
         if not await s.get(User, u.id):
             s.add(u)
             await s.commit()
@@ -105,7 +105,7 @@ def _build_app(current_user: User, groups: list[str] | None = None):
 
     # DB dependency overrides
     async def _db():
-        async with _Session() as session:
+        async with TestSession() as session:
             try:
                 yield session
                 await session.commit()
@@ -114,7 +114,7 @@ def _build_app(current_user: User, groups: list[str] | None = None):
                 raise
 
     async def _db_ro():
-        async with _Session() as session:
+        async with TestSession() as session:
             yield session
 
     app.dependency_overrides[get_db] = _db

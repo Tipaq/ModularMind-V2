@@ -13,7 +13,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import _Session
+from tests.conftest import TestSession
 
 
 # ---------------------------------------------------------------------------
