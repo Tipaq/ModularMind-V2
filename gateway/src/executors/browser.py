@@ -69,9 +69,9 @@ class BrowserExecutor(BaseExecutor):
             return "Error: invalid URL — no hostname"
 
         # SSRF protection (reuse from network executor)
-        from src.executors.network import _check_ssrf
+        from src.executors.network import check_ssrf
 
-        ssrf_error = _check_ssrf(parsed.hostname)
+        ssrf_error = check_ssrf(parsed.hostname)
         if ssrf_error:
             return ssrf_error
 

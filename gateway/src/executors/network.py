@@ -50,7 +50,7 @@ class NetworkExecutor(BaseExecutor):
             return "Error: invalid URL — no hostname"
 
         # Block private/internal addresses
-        error = await _check_ssrf(parsed.hostname)
+        error = await check_ssrf(parsed.hostname)
         if error:
             return error
 
@@ -103,7 +103,7 @@ class NetworkExecutor(BaseExecutor):
             return f"Error: request failed — {e}"
 
 
-async def _check_ssrf(hostname: str) -> str | None:
+async def check_ssrf(hostname: str) -> str | None:
     """Block requests to private/internal addresses (SSRF protection)."""
     import ipaddress
 
