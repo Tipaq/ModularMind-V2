@@ -297,11 +297,6 @@ class Settings(BaseSettings):
     )
     AB_TESTING_ENABLED: bool = True
 
-    # ---- GitHub (tiered MCP tokens) -----------------------------------------
-    GITHUB_TOKEN_READ: str = Field(default="", description="GitHub PAT for read-only MCP access")
-    GITHUB_TOKEN_WRITE: str = Field(default="", description="GitHub PAT for read+write MCP access")
-    GITHUB_TOKEN_ADMIN: str = Field(default="", description="GitHub PAT for admin MCP access")
-
     # ---- MCP ----------------------------------------------------------------
     MCP_BOOTSTRAP_SERVERS: str = Field(
         default="",
