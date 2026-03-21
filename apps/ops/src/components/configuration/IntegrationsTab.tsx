@@ -1,8 +1,12 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import {
   Hash,
   MessageSquare,
+  MessageCircle,
   Mail,
+  Send,
   RefreshCw,
   Trash2,
   Copy,
@@ -28,10 +32,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@modularmind/ui";
-import type { ConnectorData, Agent } from "@modularmind/api-client";
+import type {
+  ConnectorData,
+  ConnectorTypeDef,
+  Agent,
+  GraphListItem,
+  EngineModel,
+} from "@modularmind/api-client";
 import { api } from "../../lib/api";
 
-// ─── Discord icon (lucide doesn't include it) ──────────────────────────────
+// ─── Custom icons (not in lucide) ───────────────────────────────────────────
 
 function DiscordIcon({ className }: { className?: string }) {
   return (
@@ -41,220 +51,106 @@ function DiscordIcon({ className }: { className?: string }) {
   );
 }
 
-// ─── Field / connector definitions ──────────────────────────────────────────
-
-interface FieldDef {
-  key: string;
-  label: string;
-  placeholder: string;
-  type: "text" | "password";
-  required: boolean;
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z" />
+    </svg>
+  );
 }
 
-interface ConnectorTypeDef {
-  type: "discord" | "slack" | "teams" | "email";
-  name: string;
-  icon: React.FC<{ className?: string }>;
-  color: string;
-  description: string;
-  docUrl: string;
-  setupSteps: string[];
-  fields: FieldDef[];
+// ─── Icon resolver ──────────────────────────────────────────────────────────
+
+type IconComponent = React.FC<{ className?: string }>;
+
+const ICON_MAP: Record<string, IconComponent> = {
+  discord: DiscordIcon,
+  hash: Hash,
+  "message-square": MessageSquare,
+  "message-circle": MessageCircle,
+  mail: Mail,
+  send: Send,
+  whatsapp: WhatsAppIcon,
+};
+
+function resolveIcon(iconName: string): IconComponent {
+  return ICON_MAP[iconName] ?? MessageCircle;
 }
 
-const CONNECTOR_TYPES: ConnectorTypeDef[] = [
-  {
-    type: "discord",
-    name: "Discord",
-    icon: DiscordIcon,
-    color: "bg-accent",
-    description: "Connect your bot to a Discord server via slash commands",
-    docUrl: "https://discord.com/developers/docs/getting-started",
-    setupSteps: [
-      "Create an application at discord.com/developers/applications",
-      'Under "Bot", click Reset Token and copy the Bot Token',
-      'Under "General Information", copy Application ID and Public Key',
-      'Under "OAuth2 > URL Generator", select bot + applications.commands scopes, then invite to your server',
-      "Fill in the credentials below and click Connect",
-      'Copy the Webhook URL below and paste it in "Interactions Endpoint URL" in your Discord app settings',
-    ],
-    fields: [
-      {
-        key: "bot_token",
-        label: "Bot Token",
-        placeholder: "MTI3...",
-        type: "password",
-        required: true,
-      },
-      {
-        key: "application_id",
-        label: "Application ID",
-        placeholder: "1234567890",
-        type: "text",
-        required: true,
-      },
-      {
-        key: "public_key",
-        label: "Public Key",
-        placeholder: "abc123def456...",
-        type: "text",
-        required: true,
-      },
-      {
-        key: "guild_id",
-        label: "Guild (Server) ID",
-        placeholder: "9876543210 (optional)",
-        type: "text",
-        required: false,
-      },
-    ],
-  },
-  {
-    type: "slack",
-    name: "Slack",
-    icon: Hash,
-    color: "bg-secondary",
-    description: "Receive messages from Slack channels via Events API",
-    docUrl: "https://api.slack.com/start/building",
-    setupSteps: [
-      "Create a Slack app at api.slack.com/apps",
-      "Under OAuth & Permissions, add chat:write and channels:history scopes",
-      "Install the app to your workspace and copy the Bot Token",
-      'Under "Basic Information", copy the Signing Secret',
-      "Fill in the credentials below and click Connect",
-      'Copy the Webhook URL and add it as "Event Subscriptions" Request URL',
-    ],
-    fields: [
-      {
-        key: "bot_token",
-        label: "Bot Token",
-        placeholder: "xoxb-...",
-        type: "password",
-        required: true,
-      },
-      {
-        key: "signing_secret",
-        label: "Signing Secret",
-        placeholder: "abc123...",
-        type: "password",
-        required: true,
-      },
-      {
-        key: "channel",
-        label: "Channel ID",
-        placeholder: "C01ABCDEF (optional)",
-        type: "text",
-        required: false,
-      },
-    ],
-  },
-  {
-    type: "teams",
-    name: "Microsoft Teams",
-    icon: MessageSquare,
-    color: "bg-info",
-    description: "Receive messages from Teams via Bot Framework",
-    docUrl: "https://learn.microsoft.com/en-us/microsoftteams/platform/bots/how-to/create-a-bot-for-teams",
-    setupSteps: [
-      "Register a Bot Channel in Azure Portal (Bot Framework)",
-      "Note down the App ID and App Secret from Azure AD",
-      "Copy the Tenant ID from Azure AD",
-      "Fill in the credentials below and click Connect",
-      "Copy the Webhook URL and set it as the Messaging Endpoint in Azure",
-    ],
-    fields: [
-      {
-        key: "app_id",
-        label: "App ID",
-        placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        type: "text",
-        required: true,
-      },
-      {
-        key: "app_secret",
-        label: "App Secret",
-        placeholder: "...",
-        type: "password",
-        required: true,
-      },
-      {
-        key: "tenant_id",
-        label: "Tenant ID",
-        placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        type: "text",
-        required: true,
-      },
-    ],
-  },
-  {
-    type: "email",
-    name: "Email",
-    icon: Mail,
-    color: "bg-success",
-    description: "Receive emails via SMTP/IMAP webhook forwarding",
-    docUrl: "https://support.google.com/mail/answer/7126229",
-    setupSteps: [
-      "Set up an email account with SMTP access",
-      "Note the SMTP host and port (e.g., smtp.gmail.com:587)",
-      "Fill in the credentials below and click Connect",
-    ],
-    fields: [
-      {
-        key: "address",
-        label: "Email Address",
-        placeholder: "bot@example.com",
-        type: "text",
-        required: true,
-      },
-      {
-        key: "smtp_host",
-        label: "SMTP Host",
-        placeholder: "smtp.gmail.com",
-        type: "text",
-        required: true,
-      },
-      {
-        key: "smtp_port",
-        label: "SMTP Port",
-        placeholder: "587",
-        type: "text",
-        required: false,
-      },
-    ],
-  },
-];
+// ─── Execution mode types ───────────────────────────────────────────────────
+
+type ExecutionMode = "agent" | "graph" | "supervisor" | "model";
+
+const EXECUTION_MODE_LABELS: Record<ExecutionMode, string> = {
+  agent: "Agent",
+  graph: "Graph",
+  supervisor: "Supervisor",
+  model: "Direct LLM",
+};
+
+function getConnectorExecutionLabel(connector: ConnectorData): string {
+  if (connector.supervisor_mode) return "Supervisor";
+  if (connector.graph_id) return "Graph";
+  if (connector.agent_id) return "Agent";
+  if (connector.config?.model_id) return "LLM";
+  return "—";
+}
+
+function getConnectorTargetName(
+  connector: ConnectorData,
+  agents: Agent[],
+  graphs: GraphListItem[],
+  models: EngineModel[],
+): string {
+  if (connector.supervisor_mode) return "Auto-routing";
+  if (connector.agent_id) {
+    return agents.find((a) => a.id === connector.agent_id)?.name
+      ?? connector.agent_id.slice(0, 8);
+  }
+  if (connector.graph_id) {
+    return graphs.find((g) => g.id === connector.graph_id)?.name
+      ?? connector.graph_id.slice(0, 8);
+  }
+  if (connector.config?.model_id) {
+    const model = models.find((m) => m.model_id === connector.config.model_id);
+    return model?.display_name ?? connector.config.model_id;
+  }
+  return "—";
+}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function IntegrationsTab() {
+  const [connectorTypes, setConnectorTypes] = useState<ConnectorTypeDef[]>([]);
   const [connectors, setConnectors] = useState<ConnectorData[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [graphs, setGraphs] = useState<GraphListItem[]>([]);
+  const [models, setModels] = useState<EngineModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedType, setExpandedType] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [visibleSecrets, setVisibleSecrets] = useState<Set<string>>(new Set());
-
-  // Form state per connector type
-  const [formData, setFormData] = useState<
-    Record<string, Record<string, string>>
-  >({});
-  const [selectedAgentId, setSelectedAgentId] = useState<
-    Record<string, string>
-  >({});
-  const [connectorName, setConnectorName] = useState<Record<string, string>>(
-    {},
-  );
+  const [formData, setFormData] = useState<Record<string, Record<string, string>>>({});
+  const [executionMode, setExecutionMode] = useState<Record<string, ExecutionMode>>({});
+  const [selectedTargetId, setSelectedTargetId] = useState<Record<string, string>>({});
+  const [connectorName, setConnectorName] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const [connRes, agentRes] = await Promise.all([
+        const [typesRes, connRes, agentRes, graphRes, modelRes] = await Promise.all([
+          api.get<{ items: ConnectorTypeDef[] }>("/connectors/types"),
           api.get<{ items: ConnectorData[] }>("/connectors"),
           api.get<{ items: Agent[] }>("/agents"),
+          api.get<{ items: GraphListItem[] }>("/graphs"),
+          api.get<{ items: EngineModel[] }>("/models"),
         ]);
+        setConnectorTypes(typesRes.items);
         setConnectors(connRes.items);
         setAgents(agentRes.items);
+        setGraphs(graphRes.items ?? []);
+        setModels((modelRes.items ?? []).filter((m) => !m.is_embedding && m.is_available));
       } catch (err) {
         console.warn("[IntegrationsTab] endpoints not available:", err);
       }
@@ -277,41 +173,50 @@ export default function IntegrationsTab() {
     });
   };
 
-  const updateField = (type: string, key: string, value: string) => {
+  const updateField = (typeId: string, key: string, value: string) => {
     setFormData((prev) => ({
       ...prev,
-      [type]: { ...prev[type], [key]: value },
+      [typeId]: { ...prev[typeId], [key]: value },
     }));
   };
 
   const handleConnect = async (typeDef: ConnectorTypeDef) => {
-    const fields = formData[typeDef.type] || {};
-    const agentId = selectedAgentId[typeDef.type];
-    const name =
-      connectorName[typeDef.type] || `${typeDef.name} Connector`;
+    const fields = formData[typeDef.type_id] || {};
+    const mode = executionMode[typeDef.type_id] || "agent";
+    const targetId = selectedTargetId[typeDef.type_id];
+    const name = connectorName[typeDef.type_id] || `${typeDef.name} Connector`;
 
     for (const f of typeDef.fields) {
-      if (f.required && !fields[f.key]?.trim()) {
+      if (f.is_required && !fields[f.key]?.trim()) {
         alert(`Please fill in: ${f.label}`);
         return;
       }
     }
-    if (!agentId) {
-      alert("Please select an agent");
+
+    if (mode !== "supervisor" && !targetId) {
+      alert(`Please select a target ${EXECUTION_MODE_LABELS[mode]}`);
       return;
     }
 
-    setCreating(typeDef.type);
+    setCreating(typeDef.type_id);
     try {
-      const data = await api.post<ConnectorData>("/connectors", {
+      const config = { ...fields };
+      const payload: Record<string, unknown> = {
         name,
-        connector_type: typeDef.type,
-        agent_id: agentId,
-        config: fields,
-      });
+        connector_type: typeDef.type_id,
+        supervisor_mode: mode === "supervisor",
+        config,
+      };
+
+      if (mode === "agent") payload.agent_id = targetId;
+      else if (mode === "graph") payload.graph_id = targetId;
+      else if (mode === "model") config.model_id = targetId;
+
+      const data = await api.post<ConnectorData>("/connectors", payload);
       setConnectors((prev) => [data, ...prev]);
-      setFormData((prev) => ({ ...prev, [typeDef.type]: {} }));
-      setConnectorName((prev) => ({ ...prev, [typeDef.type]: "" }));
+      setFormData((prev) => ({ ...prev, [typeDef.type_id]: {} }));
+      setConnectorName((prev) => ({ ...prev, [typeDef.type_id]: "" }));
+      setSelectedTargetId((prev) => ({ ...prev, [typeDef.type_id]: "" }));
     } catch (err) {
       alert(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
     }
@@ -324,9 +229,7 @@ export default function IntegrationsTab() {
         `/connectors/${connector.id}`,
         { is_enabled: !connector.is_enabled },
       );
-      setConnectors((prev) =>
-        prev.map((c) => (c.id === connector.id ? data : c)),
-      );
+      setConnectors((prev) => prev.map((c) => (c.id === connector.id ? data : c)));
     } catch (err) {
       console.error("[Integrations] toggle:", err);
     }
@@ -350,49 +253,80 @@ export default function IntegrationsTab() {
     );
   }
 
-  const getTypeConnectors = (type: string) =>
-    connectors.filter((c) => c.connector_type === type);
+  const getTypeConnectors = (typeId: string) =>
+    connectors.filter((c) => c.connector_type === typeId);
 
   const getWebhookUrl = (connector: ConnectorData) => {
     const base = typeof window !== "undefined" ? window.location.origin : "";
     return `${base}/api/v1/webhooks/${connector.id}`;
   };
 
+  const renderTargetSelector = (typeId: string) => {
+    const mode = executionMode[typeId] || "agent";
+
+    if (mode === "supervisor") return null;
+
+    const targetOptions =
+      mode === "agent"
+        ? agents.map((a) => ({ id: a.id, label: a.name }))
+        : mode === "graph"
+          ? graphs.map((g) => ({ id: g.id, label: g.name }))
+          : models.map((m) => ({
+              id: m.model_id,
+              label: m.display_name ?? m.model_id,
+            }));
+
+    return (
+      <div className="space-y-1">
+        <Label className="text-xs">
+          {EXECUTION_MODE_LABELS[mode]} <span className="text-destructive">*</span>
+        </Label>
+        <Select
+          value={selectedTargetId[typeId] || ""}
+          onValueChange={(value) =>
+            setSelectedTargetId((prev) => ({ ...prev, [typeId]: value }))
+          }
+        >
+          <SelectTrigger className="text-xs h-8">
+            <SelectValue placeholder={`Select ${EXECUTION_MODE_LABELS[mode].toLowerCase()}...`} />
+          </SelectTrigger>
+          <SelectContent>
+            {targetOptions.map((opt) => (
+              <SelectItem key={opt.id} value={opt.id}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
-      {CONNECTOR_TYPES.map((typeDef) => {
-        const {
-          type,
-          name,
-          icon: Icon,
-          color,
-          description,
-          docUrl,
-          setupSteps,
-          fields,
-        } = typeDef;
-        const isExpanded = expandedType === type;
-        const typeConnectors = getTypeConnectors(type);
+      {connectorTypes.map((typeDef) => {
+        const Icon = resolveIcon(typeDef.icon);
+        const isExpanded = expandedType === typeDef.type_id;
+        const typeConnectors = getTypeConnectors(typeDef.type_id);
         const hasConnectors = typeConnectors.length > 0;
 
         return (
-          <Card key={type} className="overflow-hidden">
-            {/* Card header */}
+          <Card key={typeDef.type_id} className="overflow-hidden">
             <button
               className="w-full text-left"
-              onClick={() => setExpandedType(isExpanded ? null : type)}
+              onClick={() => setExpandedType(isExpanded ? null : typeDef.type_id)}
             >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}
+                      className={`flex h-10 w-10 items-center justify-center rounded-lg ${typeDef.color}`}
                     >
                       <Icon className="h-5 w-5 text-white" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-medium">{name}</p>
+                        <p className="font-medium">{typeDef.name}</p>
                         {hasConnectors ? (
                           <Badge variant="success">
                             {typeConnectors.length} connected
@@ -402,7 +336,7 @@ export default function IntegrationsTab() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {description}
+                        {typeDef.description}
                       </p>
                     </div>
                   </div>
@@ -415,10 +349,8 @@ export default function IntegrationsTab() {
               </CardContent>
             </button>
 
-            {/* Expanded panel */}
             {isExpanded && (
               <div className="border-t px-4 pb-4">
-                {/* Existing connectors */}
                 {typeConnectors.length > 0 && (
                   <div className="mt-4 space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">
@@ -437,20 +369,17 @@ export default function IntegrationsTab() {
                                 {connector.name}
                               </p>
                               <Badge
-                                variant={
-                                  connector.is_enabled
-                                    ? "success"
-                                    : "secondary"
-                                }
+                                variant={connector.is_enabled ? "success" : "secondary"}
                                 className="text-[10px]"
                               >
                                 {connector.is_enabled ? "Active" : "Disabled"}
                               </Badge>
+                              <Badge variant="outline" className="text-[10px]">
+                                {getConnectorExecutionLabel(connector)}
+                              </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                              Agent:{" "}
-                              {agents.find((a) => a.id === connector.agent_id)
-                                ?.name || connector.agent_id.slice(0, 8)}
+                              {getConnectorTargetName(connector, agents, graphs, models)}
                             </p>
                             <div className="flex items-center gap-1 mt-1">
                               <code className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded truncate max-w-[400px]">
@@ -460,10 +389,7 @@ export default function IntegrationsTab() {
                                 className="text-muted-foreground hover:text-foreground"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleCopy(
-                                    webhookUrl,
-                                    `wh-${connector.id}`,
-                                  );
+                                  handleCopy(webhookUrl, `wh-${connector.id}`);
                                 }}
                               >
                                 {copiedId === `wh-${connector.id}` ? (
@@ -482,9 +408,7 @@ export default function IntegrationsTab() {
                                 e.stopPropagation();
                                 handleToggle(connector);
                               }}
-                              title={
-                                connector.is_enabled ? "Disable" : "Enable"
-                              }
+                              title={connector.is_enabled ? "Disable" : "Enable"}
                             >
                               {connector.is_enabled ? (
                                 <PowerOff className="h-4 w-4 text-muted-foreground" />
@@ -510,16 +434,13 @@ export default function IntegrationsTab() {
                   </div>
                 )}
 
-                {/* Setup / New connection form */}
                 <div className="mt-4 rounded-lg border border-dashed p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">
-                      {hasConnectors
-                        ? "Add another connection"
-                        : "Setup guide"}
+                      {hasConnectors ? "Add another connection" : "Setup guide"}
                     </p>
                     <a
-                      href={docUrl}
+                      href={typeDef.doc_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
@@ -531,37 +452,32 @@ export default function IntegrationsTab() {
                   </div>
 
                   <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
-                    {setupSteps.map((step, i) => (
+                    {typeDef.setup_steps.map((step, i) => (
                       <li key={i}>{step}</li>
                     ))}
                   </ol>
 
-                  {/* Credential fields */}
                   <div className="grid grid-cols-2 gap-3">
-                    {fields.map((field) => {
-                      const secretKey = `${type}-${field.key}`;
-                      const isPassword = field.type === "password";
+                    {typeDef.fields.map((field) => {
+                      const secretKey = `${typeDef.type_id}-${field.key}`;
+                      const isPassword = field.is_secret;
                       const isVisible = visibleSecrets.has(secretKey);
 
                       return (
                         <div key={field.key} className="space-y-1">
                           <Label className="text-xs">
                             {field.label}
-                            {field.required && (
-                              <span className="text-destructive ml-0.5">
-                                *
-                              </span>
+                            {field.is_required && (
+                              <span className="text-destructive ml-0.5">*</span>
                             )}
                           </Label>
                           <div className="relative">
                             <Input
-                              type={
-                                isPassword && !isVisible ? "password" : "text"
-                              }
+                              type={isPassword && !isVisible ? "password" : "text"}
                               placeholder={field.placeholder}
-                              value={formData[type]?.[field.key] || ""}
+                              value={formData[typeDef.type_id]?.[field.key] || ""}
                               onChange={(e) =>
-                                updateField(type, field.key, e.target.value)
+                                updateField(typeDef.type_id, field.key, e.target.value)
                               }
                               className="text-xs h-8 pr-8"
                             />
@@ -584,53 +500,54 @@ export default function IntegrationsTab() {
                     })}
                   </div>
 
-                  {/* Name + Agent selector + Connect */}
-                  <div className="grid grid-cols-3 gap-3 items-end">
+                  <div className="grid grid-cols-4 gap-3 items-end">
                     <div className="space-y-1">
                       <Label className="text-xs">Connector Name</Label>
                       <Input
-                        placeholder={`My ${name} Bot`}
-                        value={connectorName[type] || ""}
+                        placeholder={`My ${typeDef.name} Bot`}
+                        value={connectorName[typeDef.type_id] || ""}
                         onChange={(e) =>
                           setConnectorName((prev) => ({
                             ...prev,
-                            [type]: e.target.value,
+                            [typeDef.type_id]: e.target.value,
                           }))
                         }
                         className="text-xs h-8"
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">
-                        Agent <span className="text-destructive">*</span>
-                      </Label>
+                      <Label className="text-xs">Execution Mode</Label>
                       <Select
-                        value={selectedAgentId[type] || ""}
-                        onValueChange={(value) =>
-                          setSelectedAgentId((prev) => ({
+                        value={executionMode[typeDef.type_id] || "agent"}
+                        onValueChange={(value) => {
+                          setExecutionMode((prev) => ({
                             ...prev,
-                            [type]: value,
-                          }))
-                        }
+                            [typeDef.type_id]: value as ExecutionMode,
+                          }));
+                          setSelectedTargetId((prev) => ({
+                            ...prev,
+                            [typeDef.type_id]: "",
+                          }));
+                        }}
                       >
                         <SelectTrigger className="text-xs h-8">
-                          <SelectValue placeholder="Select an agent..." />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {agents.map((a) => (
-                            <SelectItem key={a.id} value={a.id}>
-                              {a.name}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="agent">Agent</SelectItem>
+                          <SelectItem value="graph">Graph</SelectItem>
+                          <SelectItem value="supervisor">Supervisor</SelectItem>
+                          <SelectItem value="model">Direct LLM</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                    {renderTargetSelector(typeDef.type_id)}
                     <Button
                       onClick={() => handleConnect(typeDef)}
-                      disabled={creating === type}
+                      disabled={creating === typeDef.type_id}
                       className="h-8 text-xs"
                     >
-                      {creating === type ? (
+                      {creating === typeDef.type_id ? (
                         <>
                           <RefreshCw className="h-3 w-3 animate-spin mr-1" />
                           Connecting...
