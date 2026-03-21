@@ -81,23 +81,36 @@ export function InsightsPanel({
   const executionMetrics = useMemo<ExecutionMetrics | null>(() => {
     if (!displayActivities.length && !tokenUsage) return null;
 
-    const llmActivities = displayActivities.filter((a) => a.type === "llm");
-    const toolActivities = displayActivities.filter((a) => a.type === "tool");
+    const llmActivities: ExecutionActivity[] = [];
+    const toolActivities: ExecutionActivity[] = [];
+    const withDuration: ExecutionActivity[] = [];
+    let delegationEnd: ExecutionActivity | undefined;
+    let directResponse: ExecutionActivity | undefined;
+    let earliest = Infinity;
+
+    for (const a of displayActivities) {
+      if (a.type === "llm") llmActivities.push(a);
+      if (a.type === "tool") toolActivities.push(a);
+      if (!delegationEnd && a.type === "delegation" && a.status !== "running" && a.durationMs) {
+        delegationEnd = a;
+      }
+      if (!directResponse && a.type === "direct_response" && a.durationMs) {
+        directResponse = a;
+      }
+      if (a.startedAt) {
+        if (a.startedAt < earliest) earliest = a.startedAt;
+        if (a.durationMs != null) withDuration.push(a);
+      }
+    }
 
     let totalDurationMs: number | null = null;
-    const delegationEnd = displayActivities.find((a) => a.type === "delegation" && a.status !== "running" && a.durationMs);
-    const directResponse = displayActivities.find((a) => a.type === "direct_response" && a.durationMs);
     if (delegationEnd?.durationMs) {
       totalDurationMs = delegationEnd.durationMs;
     } else if (directResponse?.durationMs) {
       totalDurationMs = directResponse.durationMs;
-    } else {
-      const withDuration = displayActivities.filter((a) => a.startedAt && a.durationMs != null);
-      if (withDuration.length > 0) {
-        const earliest = Math.min(...displayActivities.filter((a) => a.startedAt).map((a) => a.startedAt));
-        const latest = Math.max(...withDuration.map((a) => a.startedAt + (a.durationMs || 0)));
-        if (latest > earliest) totalDurationMs = latest - earliest;
-      }
+    } else if (withDuration.length > 0) {
+      const latest = Math.max(...withDuration.map((a) => a.startedAt + (a.durationMs || 0)));
+      if (latest > earliest) totalDurationMs = latest - earliest;
     }
 
     const llmDurationMs = llmActivities.reduce((sum, a) => sum + (a.durationMs || 0), 0) || null;
