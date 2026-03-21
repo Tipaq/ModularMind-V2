@@ -14,21 +14,22 @@ logger = logging.getLogger(__name__)
 
 # Default tool_categories for agents that don't specify one
 DEFAULT_TOOL_CATEGORIES: dict[str, bool] = {
-    "memory": True,
     "knowledge": True,
-    "code_search": False,
+    "filesystem": False,
     "file_storage": False,
     "human_interaction": True,
     "image_generation": False,
     "custom_tools": False,
+    "github": False,
 }
 
 
 def _get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
     """Lazy import to avoid circular dependencies."""
-    from src.tools.categories.code_search import get_code_search_tool_definitions
     from src.tools.categories.custom_tools import get_custom_tool_definitions
     from src.tools.categories.file_storage import get_file_storage_tool_definitions
+    from src.tools.categories.filesystem import get_filesystem_tool_definitions
+    from src.tools.categories.github import get_github_tool_definitions
     from src.tools.categories.human_interaction import (
         get_human_interaction_tool_definitions,
     )
@@ -36,18 +37,17 @@ def _get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
         get_image_generation_tool_definitions,
     )
     from src.tools.categories.knowledge import get_knowledge_tool_definitions
-    from src.tools.categories.memory import get_memory_tool_definitions
     from src.tools.categories.mini_apps import get_mini_app_tool_definitions
 
     return {
-        "memory": get_memory_tool_definitions,
         "knowledge": get_knowledge_tool_definitions,
-        "code_search": get_code_search_tool_definitions,
+        "filesystem": get_filesystem_tool_definitions,
         "file_storage": get_file_storage_tool_definitions,
         "human_interaction": get_human_interaction_tool_definitions,
         "image_generation": get_image_generation_tool_definitions,
         "custom_tools": get_custom_tool_definitions,
         "mini_apps": get_mini_app_tool_definitions,
+        "github": get_github_tool_definitions,
     }
 
 

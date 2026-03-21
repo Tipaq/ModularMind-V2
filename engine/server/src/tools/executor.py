@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 # Prefixes for routing tool calls to the correct handler
 _CATEGORY_PREFIXES = (
-    "memory_",
     "knowledge_",
     "storage_",
     "human_",
@@ -24,6 +23,7 @@ _CATEGORY_PREFIXES = (
     "custom_tool_",
     "custom__",
     "mini_app_",
+    "github_",
 )
 
 
@@ -55,8 +55,6 @@ class ExtendedToolExecutor:
     async def execute(self, name: str, args: dict[str, Any]) -> str:
         """Execute a tool by name, dispatching to the correct handler."""
         try:
-            if name.startswith("memory_"):
-                return await self._handle_memory(name, args)
             if name.startswith("knowledge_"):
                 return await self._handle_knowledge(name, args)
             if name.startswith("storage_"):
@@ -71,18 +69,12 @@ class ExtendedToolExecutor:
                 return await self._handle_registered_custom_tool(name, args)
             if name.startswith("mini_app_"):
                 return await self._handle_mini_app(name, args)
+            if name.startswith("github_"):
+                return await self._handle_github(name, args)
             return f"Error: unknown extended tool '{name}'"
         except Exception as e:
             logger.exception("Extended tool '%s' failed", name)
             return f"Error: {e}"
-
-    async def _handle_memory(self, name: str, args: dict[str, Any]) -> str:
-        from src.tools.categories.memory import execute_memory_tool
-
-        async with self._session_maker() as session:
-            return await execute_memory_tool(
-                name, args, user_id=self._user_id, session=session,
-            )
 
     async def _handle_knowledge(self, name: str, args: dict[str, Any]) -> str:
         from src.tools.categories.knowledge import execute_knowledge_tool
@@ -137,20 +129,22 @@ class ExtendedToolExecutor:
             )
 
     async def _handle_mini_app(self, name: str, args: dict[str, Any]) -> str:
-        from src.infra.config import get_settings
-
         from src.tools.categories.mini_apps import execute_mini_app_tool
 
-        settings = get_settings()
-        if not settings.PLATFORM_URL or not settings.ENGINE_API_KEY:
-            return "Error: mini-apps require PLATFORM_URL and ENGINE_API_KEY."
+        async with self._session_maker() as session:
+            return await execute_mini_app_tool(
+                name, args,
+                agent_id=self._agent_id,
+                session=session,
+            )
 
-        return await execute_mini_app_tool(
-            name, args,
-            agent_id=self._agent_id,
-            platform_url=settings.PLATFORM_URL,
-            engine_api_key=settings.ENGINE_API_KEY,
-        )
+    async def _handle_github(self, name: str, args: dict[str, Any]) -> str:
+        from src.tools.categories.github import execute_github_tool
+
+        async with self._session_maker() as session:
+            return await execute_github_tool(
+                name, args, session=session, agent_id=self._agent_id,
+            )
 
     async def _handle_registered_custom_tool(self, name: str, args: dict[str, Any]) -> str:
         """Execute a registered custom tool (custom__<name> → custom_tool_run)."""
