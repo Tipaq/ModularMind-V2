@@ -80,6 +80,7 @@ class AgentConfig(BaseModel):
             "mini_apps": False,
             "github": False,
             "web": False,
+            "git": False,
         },
         description="Enable/disable extended tool categories for this agent.",
     )
