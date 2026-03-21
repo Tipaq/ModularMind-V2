@@ -61,7 +61,7 @@ class ScheduledTaskRunner:
                 return
             seconds = interval_to_seconds(task.interval_value, task.interval_unit)
             self._scheduler.add_job(
-                self._execute_trigger,
+                self.execute_trigger,
                 "interval",
                 seconds=seconds,
                 id=job_id,
@@ -78,7 +78,7 @@ class ScheduledTaskRunner:
                 logger.warning("One-shot task %s missing scheduled_at", task.id)
                 return
             self._scheduler.add_job(
-                self._execute_trigger,
+                self.execute_trigger,
                 "date",
                 run_date=task.scheduled_at,
                 id=job_id,
@@ -105,7 +105,7 @@ class ScheduledTaskRunner:
         self._active_jobs.pop(task_id, None)
         logger.info("Removed scheduled task job: %s", task_id)
 
-    async def _execute_trigger(self, task_id: str) -> None:
+    async def execute_trigger(self, task_id: str) -> None:
         """APScheduler callback: fetch source data, triage, enqueue."""
         from src.infra.utils import utcnow
 
