@@ -65,25 +65,35 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
   // ── Auto-restore execution data from localStorage on message load ──────
   const restoredMsgIdsRef = useRef(new Set<string>());
   useEffect(() => {
-    const toRestore: Record<string, MessageExecutionData> = {};
-    for (const msg of messages) {
-      if (msg.role !== "assistant" || restoredMsgIdsRef.current.has(msg.id)) continue;
-      restoredMsgIdsRef.current.add(msg.id);
-      try {
-        const execId = msg.metadata?.execution_id as string | undefined;
-        if (execId) {
-          const stored = localStorage.getItem(`mm:exec:${execId}`);
-          if (stored) { toRestore[msg.id] = JSON.parse(stored) as MessageExecutionData; continue; }
-        }
-        const stored = localStorage.getItem(`mm:exec:${msg.id}`);
-        if (stored) { toRestore[msg.id] = JSON.parse(stored) as MessageExecutionData; }
-      } catch {
-        // Ignore parse/storage errors
+    const newMessages = messages.filter(
+      (m) => m.role === "assistant" && !restoredMsgIdsRef.current.has(m.id),
+    );
+    if (newMessages.length === 0) return;
+
+    const restore = () => {
+      const toRestore: Record<string, MessageExecutionData> = {};
+      for (const msg of newMessages) {
+        restoredMsgIdsRef.current.add(msg.id);
+        try {
+          const execId = msg.metadata?.execution_id as string | undefined;
+          if (execId) {
+            const stored = localStorage.getItem(`mm:exec:${execId}`);
+            if (stored) { toRestore[msg.id] = JSON.parse(stored) as MessageExecutionData; continue; }
+          }
+          const stored = localStorage.getItem(`mm:exec:${msg.id}`);
+          if (stored) { toRestore[msg.id] = JSON.parse(stored) as MessageExecutionData; }
+        } catch { /* ignore parse/storage errors */ }
       }
+      if (Object.keys(toRestore).length > 0) {
+        setExecutionDataMap((prev) => ({ ...prev, ...toRestore }));
+      }
+    };
+
+    if (typeof requestIdleCallback === "function") {
+      const handle = requestIdleCallback(restore);
+      return () => cancelIdleCallback(handle);
     }
-    if (Object.keys(toRestore).length > 0) {
-      setExecutionDataMap((prev) => ({ ...prev, ...toRestore }));
-    }
+    restore();
   }, [messages]);
 
   const setInitialMessages = useCallback((msgs: Message[]) => {
