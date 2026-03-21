@@ -1,13 +1,15 @@
 import { useSearchParams } from "react-router-dom";
-import { Settings2, Key, Plug, Webhook, BookOpen, Cog } from "lucide-react";
+import { Settings2, Key, Plug, Webhook, BookOpen, Cog, Github, FolderLock } from "lucide-react";
 import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
 import ProvidersTab from "../components/configuration/ProvidersTab";
 import McpServersTab from "../components/configuration/McpServersTab";
 import IntegrationsTab from "../components/configuration/IntegrationsTab";
 import KnowledgeConfigTab from "../components/configuration/KnowledgeConfigTab";
 import SystemTab from "../components/configuration/SystemTab";
+import { GitHubTokensTab } from "../components/configuration/GitHubTokensTab";
+import { FilesystemSecurityTab } from "../components/configuration/FilesystemSecurityTab";
 
-type TabId = "providers" | "mcp" | "integrations" | "knowledge" | "system";
+type TabId = "providers" | "mcp" | "integrations" | "knowledge" | "system" | "github" | "filesystem";
 
 export default function Configuration() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -44,6 +46,14 @@ export default function Configuration() {
             <BookOpen className="h-4 w-4" />
             Knowledge
           </TabsTrigger>
+          <TabsTrigger value="github">
+            <Github className="h-4 w-4" />
+            GitHub
+          </TabsTrigger>
+          <TabsTrigger value="filesystem">
+            <FolderLock className="h-4 w-4" />
+            Filesystem
+          </TabsTrigger>
           <TabsTrigger value="system">
             <Cog className="h-4 w-4" />
             System
@@ -61,6 +71,12 @@ export default function Configuration() {
         </TabsContent>
         <TabsContent value="knowledge" className="mt-6">
           <KnowledgeConfigTab />
+        </TabsContent>
+        <TabsContent value="github" className="mt-6">
+          <GitHubTokensTab />
+        </TabsContent>
+        <TabsContent value="filesystem" className="mt-6">
+          <FilesystemSecurityTab />
         </TabsContent>
         <TabsContent value="system" className="mt-6">
           <SystemTab />
