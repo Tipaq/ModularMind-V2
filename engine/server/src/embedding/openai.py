@@ -33,6 +33,19 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         self.model = model
         self.timeout = timeout
         self._dimension = MODEL_DIMENSIONS.get(model, 1536)
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                base_url="https://api.openai.com/v1",
+                timeout=self.timeout,
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        return self._client
 
     @property
     def dimension(self) -> int:
@@ -49,22 +62,16 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
         if not self._api_key:
             raise RuntimeError("OpenAI API key not configured")
-
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/embeddings",
-                    headers={
-                        "Authorization": f"Bearer {self._api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={"model": self.model, "input": texts},
-                )
-                response.raise_for_status()
-                data = response.json()
-                # Sort by index to preserve order
-                sorted_data = sorted(data["data"], key=lambda x: x["index"])
-                return [item["embedding"] for item in sorted_data]
+            client = self._get_client()
+            response = await client.post(
+                "/embeddings",
+                json={"model": self.model, "input": texts},
+            )
+            response.raise_for_status()
+            data = response.json()
+            sorted_data = sorted(data["data"], key=lambda x: x["index"])
+            return [item["embedding"] for item in sorted_data]
         except httpx.HTTPStatusError as e:
             logger.error("OpenAI embedding HTTP error: %s", e)
             raise RuntimeError(f"OpenAI embedding failed: {e}") from e
@@ -76,15 +83,17 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         if not self._api_key:
             return False
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/embeddings",
-                    headers={
-                        "Authorization": f"Bearer {self._api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={"model": self.model, "input": "test"},
-                )
-                return response.status_code == 200
+            client = self._get_client()
+            response = await client.post(
+                "/embeddings",
+                json={"model": self.model, "input": "test"},
+                timeout=5.0,
+            )
+            return response.status_code == 200
         except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
             return False
+
+    async def close(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None

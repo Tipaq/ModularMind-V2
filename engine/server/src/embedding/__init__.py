@@ -6,36 +6,38 @@ from .base import EmbeddingProvider
 from .ollama import OllamaEmbeddingProvider
 from .openai import OpenAIEmbeddingProvider
 
-# Registry of available providers
 _PROVIDERS: dict[str, type[EmbeddingProvider]] = {
     "ollama": OllamaEmbeddingProvider,
     "openai": OpenAIEmbeddingProvider,
 }
 
+_cache: dict[tuple[str, str], EmbeddingProvider] = {}
+
 
 def get_embedding_provider(provider_name: str, **kwargs: Any) -> EmbeddingProvider:
-    """Factory function to get an embedding provider.
+    """Factory function to get an embedding provider (cached by provider+model)."""
+    model = kwargs.get("model", "")
+    cache_key = (provider_name, model)
 
-    Args:
-        provider_name: Type of provider ("ollama")
-        **kwargs: Provider-specific configuration
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
 
-    Returns:
-        An embedding provider instance
-
-    Raises:
-        ValueError: If provider_name is not recognized
-
-    Example:
-        >>> provider = get_embedding_provider("ollama", model="nomic-embed-text")
-        >>> embedding = await provider.embed_text("Hello world")
-    """
     provider_class = _PROVIDERS.get(provider_name)
     if not provider_class:
         available = ", ".join(_PROVIDERS.keys())
         raise ValueError(f"Unknown provider: {provider_name}. Available: {available}")
 
-    return provider_class(**kwargs)
+    instance = provider_class(**kwargs)
+    _cache[cache_key] = instance
+    return instance
+
+
+async def shutdown_embedding_providers() -> None:
+    """Close all cached embedding provider clients."""
+    for provider in _cache.values():
+        await provider.close()
+    _cache.clear()
 
 
 __all__ = [
@@ -43,4 +45,5 @@ __all__ = [
     "OllamaEmbeddingProvider",
     "OpenAIEmbeddingProvider",
     "get_embedding_provider",
+    "shutdown_embedding_providers",
 ]

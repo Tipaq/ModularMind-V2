@@ -81,3 +81,6 @@ class EmbeddingProvider(ABC):
             True if the provider is accessible
         """
         ...
+
+    async def close(self) -> None:
+        """Release any held resources (HTTP clients, etc.)."""
