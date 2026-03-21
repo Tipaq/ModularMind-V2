@@ -28,9 +28,8 @@ class TestToolRegistry:
         from src.tools.registry import resolve_tool_definitions
 
         categories = {
-            "memory": False,
             "knowledge": False,
-            "code_search": False,
+            "filesystem": False,
             "file_storage": False,
             "human_interaction": False,
             "image_generation": False,
@@ -42,32 +41,31 @@ class TestToolRegistry:
     def test_resolve_returns_tools_for_enabled_categories(self):
         from src.tools.registry import resolve_tool_definitions
 
-        categories = {"memory": True, "knowledge": False, "custom_tools": False}
+        categories = {"knowledge": True, "custom_tools": False}
         tools = resolve_tool_definitions(categories)
-        assert len(tools) == 2  # memory_recall + memory_list
+        assert len(tools) == 2  # knowledge_search + knowledge_list_sources
         names = {t["function"]["name"] for t in tools}
-        assert names == {"memory_recall", "memory_list"}
+        assert names == {"knowledge_search", "knowledge_list_sources"}
 
     def test_resolve_all_categories(self):
         from src.tools.registry import resolve_tool_definitions
 
         categories = {
-            "memory": True,
             "knowledge": True,
-            "code_search": True,
+            "filesystem": True,
             "file_storage": True,
             "human_interaction": True,
             "image_generation": True,
             "custom_tools": True,
         }
         tools = resolve_tool_definitions(categories)
-        assert len(tools) == 20  # 2+2+2+6+2+2+4
+        assert len(tools) == 29  # 2+13+6+2+2+4
 
     def test_all_definitions_have_valid_format(self):
         from src.tools.registry import resolve_tool_definitions
 
         categories = {k: True for k in [
-            "memory", "knowledge", "code_search", "file_storage",
+            "knowledge", "filesystem", "file_storage",
             "human_interaction", "image_generation", "custom_tools",
         ]}
         tools = resolve_tool_definitions(categories)
@@ -86,7 +84,7 @@ class TestToolRegistry:
         from src.tools.registry import resolve_tool_definitions
 
         categories = {k: True for k in [
-            "memory", "knowledge", "code_search", "file_storage",
+            "knowledge", "filesystem", "file_storage",
             "human_interaction", "image_generation", "custom_tools",
         ]}
         tools = resolve_tool_definitions(categories)
@@ -117,8 +115,6 @@ class TestExtendedToolExecutor:
             user_id="u1",
             agent_id="a1",
         )
-        assert executor.handles("memory_recall")
-        assert executor.handles("memory_list")
         assert executor.handles("knowledge_search")
         assert executor.handles("storage_upload")
         assert executor.handles("human_prompt")
@@ -162,9 +158,9 @@ class TestUnifiedToolExecutorExtended:
             extended_executor=extended,
         )
 
-        result = await executor.execute("memory_recall", {"query": "test"})
+        result = await executor.execute("knowledge_search", {"query": "test"})
         assert result == "extended result"
-        extended.execute.assert_called_once_with("memory_recall", {"query": "test"})
+        extended.execute.assert_called_once_with("knowledge_search", {"query": "test"})
 
     @pytest.mark.asyncio
     async def test_extended_skipped_when_not_handled(self):
@@ -204,28 +200,6 @@ class TestUnifiedToolExecutorExtended:
         result = await executor.execute("conversation_search", {"query": "test"})
         assert result == "builtin result"
         extended.handles.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
-# Memory Tools
-# ---------------------------------------------------------------------------
-
-
-class TestMemoryToolDefinitions:
-    """Test memory tool definitions."""
-
-    def test_definitions_count(self):
-        from src.tools.categories.memory import get_memory_tool_definitions
-
-        defs = get_memory_tool_definitions()
-        assert len(defs) == 2
-
-    def test_recall_requires_query(self):
-        from src.tools.categories.memory import get_memory_tool_definitions
-
-        defs = get_memory_tool_definitions()
-        recall = next(d for d in defs if d["function"]["name"] == "memory_recall")
-        assert "query" in recall["function"]["parameters"]["required"]
 
 
 # ---------------------------------------------------------------------------
@@ -390,27 +364,33 @@ class TestCustomToolDefinitions:
 
 
 # ---------------------------------------------------------------------------
-# Code Search Tools
+# Filesystem Tools
 # ---------------------------------------------------------------------------
 
 
-class TestCodeSearchToolDefinitions:
+class TestFilesystemToolDefinitions:
     def test_definitions_count(self):
-        from src.tools.categories.code_search import (
-            get_code_search_tool_definitions,
-        )
+        from src.tools.categories.filesystem import get_filesystem_tool_definitions
 
-        defs = get_code_search_tool_definitions()
-        assert len(defs) == 2
+        defs = get_filesystem_tool_definitions()
+        assert len(defs) == 13
 
-    def test_grep_requires_pattern(self):
-        from src.tools.categories.code_search import (
-            get_code_search_tool_definitions,
-        )
+    def test_search_requires_pattern(self):
+        from src.tools.categories.filesystem import get_filesystem_tool_definitions
 
-        defs = get_code_search_tool_definitions()
-        grep = next(d for d in defs if d["function"]["name"] == "gateway__code_grep")
-        assert "pattern" in grep["function"]["parameters"]["required"]
+        defs = get_filesystem_tool_definitions()
+        search = next(d for d in defs if d["function"]["name"] == "gateway__fs_search")
+        assert "pattern" in search["function"]["parameters"]["required"]
+
+    def test_safe_critical_groups(self):
+        from src.tools.categories.filesystem import CRITICAL_ACTIONS, SAFE_ACTIONS
+
+        assert "read" in SAFE_ACTIONS
+        assert "search" in SAFE_ACTIONS
+        assert "write" in CRITICAL_ACTIONS
+        assert "delete" in CRITICAL_ACTIONS
+        assert len(SAFE_ACTIONS) == 8
+        assert len(CRITICAL_ACTIONS) == 5
 
 
 # ---------------------------------------------------------------------------
@@ -423,9 +403,9 @@ class TestAgentConfigToolCategories:
         from src.graph_engine.interfaces import AgentConfig
 
         agent = AgentConfig(id="test", name="Test Agent")
-        assert agent.tool_categories["memory"] is True
+        assert "memory" not in agent.tool_categories
         assert agent.tool_categories["knowledge"] is True
-        assert agent.tool_categories["code_search"] is False
+        assert agent.tool_categories["filesystem"] is False
         assert agent.tool_categories["custom_tools"] is False
 
     def test_custom_tool_categories(self):
@@ -435,12 +415,11 @@ class TestAgentConfigToolCategories:
             id="test",
             name="Test Agent",
             tool_categories={
-                "memory": False,
                 "knowledge": False,
                 "custom_tools": True,
             },
         )
-        assert agent.tool_categories["memory"] is False
+        assert agent.tool_categories["knowledge"] is False
         assert agent.tool_categories["custom_tools"] is True
 
 
@@ -450,20 +429,21 @@ class TestAgentConfigToolCategories:
 
 
 class TestGatewayToolDefinitions:
-    def test_code_search_enabled(self):
+    def test_filesystem_enabled(self):
         from src.gateway.tool_definitions import get_gateway_tool_definitions
 
-        tools = get_gateway_tool_definitions({"code_search": {"enabled": True}})
+        tools = get_gateway_tool_definitions({
+            "filesystem": {"read": ["*"], "write": ["*"]},
+        })
         names = {t["function"]["name"] for t in tools}
-        assert "gateway__code_grep" in names
-        assert "gateway__code_multi_edit" in names
+        assert "gateway__fs_read" in names
+        assert "gateway__fs_write" in names
 
-    def test_code_search_disabled_by_default(self):
+    def test_empty_permissions_returns_empty(self):
         from src.gateway.tool_definitions import get_gateway_tool_definitions
 
         tools = get_gateway_tool_definitions({})
-        names = {t["function"]["name"] for t in tools}
-        assert "gateway__code_grep" not in names
+        assert tools == []
 
 
 # ---------------------------------------------------------------------------
