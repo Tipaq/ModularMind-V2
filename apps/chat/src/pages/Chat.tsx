@@ -151,7 +151,7 @@ export default function Chat() {
   );
 
   const handleSend = useCallback(async () => {
-    if ((!inputValue.trim() && attachedFiles.length === 0) || isStreaming || !effectiveModelId) return;
+    if ((!inputValue.trim() && attachedFiles.length === 0) || isStreaming || !effectiveModelIdRef.current) return;
 
     let convId = activeConversationId;
 
@@ -162,8 +162,8 @@ export default function Chat() {
     }
 
     // Auto-title on first message
-    const conv = conversations.find((c) => c.id === convId);
-    if (conv && (conv.title === "New Chat" || !conv.title) && messages.length === 0) {
+    const conv = conversationsRef.current.find((c) => c.id === convId);
+    if (conv && (conv.title === "New Chat" || !conv.title) && messagesLengthRef.current === 0) {
       const title = inputValue.trim().length > 50 ? inputValue.trim().slice(0, 50) + "\u2026" : inputValue.trim();
       setConversations((prev) =>
         prev.map((c) => (c.id === convId ? { ...c, title } : c)),
@@ -180,18 +180,18 @@ export default function Chat() {
     // Persist config before sending
     await conversationAdapter.patchConversation(convId, {
       config: {
-        enabled_agent_ids: enabledAgentIds,
-        enabled_graph_ids: enabledGraphIds,
-        model_id: effectiveModelId,
-        model_override: chatConfig.modelOverride,
+        enabled_agent_ids: enabledAgentIdsRef.current,
+        enabled_graph_ids: enabledGraphIdsRef.current,
+        model_id: effectiveModelIdRef.current,
+        model_override: chatConfigRef.current.modelOverride,
       },
     }).catch((err) => console.error("[Chat]", err));
 
     const files = attachedFiles.length > 0 ? attachedFiles.map((af) => af.file) : undefined;
-    sendMessage(inputValue, convId ?? undefined, files, chatConfig.supervisorMode);
+    sendMessage(inputValue, convId ?? undefined, files, chatConfigRef.current.supervisorMode);
     setInputValue("");
     setAttachedFiles([]);
-  }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, enabledAgentIds, enabledGraphIds, chatConfig, effectiveModelId, sendMessage, conversations, messages.length, setConversations]);
+  }, [inputValue, attachedFiles, isStreaming, activeConversationId, createConversation, sendMessage, setConversations]);
 
   const handleToggleAgent = useCallback((agentId: string) => {
     setEnabledAgentIds((prev) => toggleArrayItem(prev, agentId));
@@ -251,10 +251,11 @@ export default function Chat() {
     if (streamingMessageId && executionDataMap[streamingMessageId]?.tokenUsage) {
       return executionDataMap[streamingMessageId].tokenUsage;
     }
-    // Fallback: find the last assistant message's execution data
-    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-    if (lastAssistant && executionDataMap[lastAssistant.id]?.tokenUsage) {
-      return executionDataMap[lastAssistant.id].tokenUsage;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === "assistant" && executionDataMap[msg.id]?.tokenUsage) {
+        return executionDataMap[msg.id].tokenUsage;
+      }
     }
     return null;
   }, [streamingMessageId, executionDataMap, messages]);
@@ -302,8 +303,15 @@ export default function Chat() {
     [graphs, enabledGraphIds],
   );
 
-  const activeConv = conversations.find((c) => c.id === activeConversationId);
-  const activeTitle = activeConv?.title || "Chat";
+  const activeTitle = useMemo(() => {
+    const conv = conversations.find((c) => c.id === activeConversationId);
+    return conv?.title || "Chat";
+  }, [conversations, activeConversationId]);
+
+  const runningActivityLabel = useMemo(() => {
+    if (!isStreaming) return null;
+    return activities.find((a) => a.status === "running")?.label || "Thinking...";
+  }, [isStreaming, activities]);
 
   return (
     <div className="flex h-full w-full">
@@ -327,9 +335,9 @@ export default function Chat() {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-medium truncate">{activeTitle}</p>
-              {isStreaming && (
+              {runningActivityLabel && (
                 <p className="text-xs text-muted-foreground truncate">
-                  {activities.find((a) => a.status === "running")?.label || "Thinking..."}
+                  {runningActivityLabel}
                 </p>
               )}
             </div>
