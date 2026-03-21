@@ -2,34 +2,11 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, ExternalLink, FileCode, Database, History, Trash2, RotateCcw } from "lucide-react";
 import { MiniAppViewer } from "@modularmind/ui";
+import type { MiniApp, MiniAppFile, StorageKey, StorageValue, MiniAppSnapshot } from "@modularmind/api-client";
+import { api } from "../lib/api";
 
-const PLATFORM_URL = window.location.origin.replace(":3003", ":3000");
-const ENGINE_KEY = "mmk_dev-engine-api-key-2024";
-const PLATFORM_HEADERS: Record<string, string> = { "X-Engine-Key": ENGINE_KEY };
-
-interface MiniApp {
-  id: string;
-  name: string;
-  slug: string;
-  description: string;
-  scope: string;
-  version: number;
-  entryFile: string;
-  files?: Array<{ path: string; sizeBytes: number; contentType: string }>;
-}
-
-interface StorageEntry {
-  key: string;
-  updatedAt: string;
+interface StorageEntry extends StorageKey {
   value?: unknown;
-}
-
-interface Snapshot {
-  id: string;
-  version: number;
-  label: string | null;
-  createdAt: string;
-  fileManifest: Array<{ path: string; size: number }>;
 }
 
 export default function MiniAppDetail() {
@@ -40,19 +17,17 @@ export default function MiniAppDetail() {
   const [activeTab, setActiveTab] = useState<"preview" | "files" | "storage" | "snapshots">("preview");
   const [showViewer, setShowViewer] = useState(false);
   const [storageEntries, setStorageEntries] = useState<StorageEntry[]>([]);
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [snapshots, setSnapshots] = useState<MiniAppSnapshot[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
   const loadStorage = useCallback(async () => {
     if (!id) return;
     setTabLoading(true);
     try {
-      const res = await fetch(`${PLATFORM_URL}/api/mini-apps/${id}/storage`, { headers: PLATFORM_HEADERS });
-      const keys: StorageEntry[] = await res.json();
+      const keys = await api.get<StorageKey[]>(`/mini-apps/${id}/storage`);
       const withValues = await Promise.all(
         keys.map(async (entry) => {
-          const valRes = await fetch(`${PLATFORM_URL}/api/mini-apps/${id}/storage/${encodeURIComponent(entry.key)}`, { headers: PLATFORM_HEADERS });
-          const data = await valRes.json();
+          const data = await api.get<StorageValue>(`/mini-apps/${id}/storage/${encodeURIComponent(entry.key)}`);
           return { ...entry, value: data.value };
         }),
       );
@@ -66,10 +41,7 @@ export default function MiniAppDetail() {
 
   const deleteStorageKey = async (key: string) => {
     if (!id) return;
-    await fetch(`${PLATFORM_URL}/api/mini-apps/${id}/storage/${encodeURIComponent(key)}`, {
-      method: "DELETE",
-      headers: PLATFORM_HEADERS,
-    });
+    await api.delete(`/mini-apps/${id}/storage/${encodeURIComponent(key)}`);
     setStorageEntries((prev) => prev.filter((e) => e.key !== key));
   };
 
@@ -77,8 +49,8 @@ export default function MiniAppDetail() {
     if (!id) return;
     setTabLoading(true);
     try {
-      const res = await fetch(`${PLATFORM_URL}/api/mini-apps/${id}/snapshots`, { headers: PLATFORM_HEADERS });
-      setSnapshots(await res.json());
+      const data = await api.get<MiniAppSnapshot[]>(`/mini-apps/${id}/snapshots`);
+      setSnapshots(data);
     } catch {
       setSnapshots([]);
     } finally {
@@ -88,10 +60,7 @@ export default function MiniAppDetail() {
 
   const rollbackSnapshot = async (version: number) => {
     if (!id || !confirm(`Rollback to v${version}? Current state will be auto-backed up.`)) return;
-    await fetch(`${PLATFORM_URL}/api/mini-apps/${id}/snapshots/${version}/rollback`, {
-      method: "POST",
-      headers: PLATFORM_HEADERS,
-    });
+    await api.post(`/mini-apps/${id}/snapshots/${version}/rollback`);
     loadSnapshots();
   };
 
@@ -105,8 +74,7 @@ export default function MiniAppDetail() {
       if (!id) return;
       setLoading(true);
       try {
-        const res = await fetch(`${PLATFORM_URL}/api/mini-apps/${id}`, { headers: PLATFORM_HEADERS });
-        const data = await res.json();
+        const data = await api.get<MiniApp>(`/mini-apps/${id}`);
         setApp(data);
       } catch {
         setApp(null);
@@ -130,7 +98,7 @@ export default function MiniAppDetail() {
   }
 
   const isDark = document.documentElement.classList.contains("dark");
-  const serveUrl = `${PLATFORM_URL}/api/mini-apps/${app.id}/serve?theme=${isDark ? "dark" : "light"}`;
+  const serveUrl = `/api/v1/mini-apps/${app.id}/serve?theme=${isDark ? "dark" : "light"}`;
 
   const TABS = [
     { key: "preview", label: "Preview", icon: ExternalLink },
@@ -211,7 +179,7 @@ export default function MiniAppDetail() {
                     <span className="text-sm font-mono">{f.path}</span>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    {f.sizeBytes} bytes &middot; {f.contentType}
+                    {f.size_bytes} bytes &middot; {f.content_type}
                   </span>
                 </div>
               ))
@@ -252,7 +220,7 @@ export default function MiniAppDetail() {
                         {JSON.stringify(entry.value)}
                       </td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">
-                        {new Date(entry.updatedAt).toLocaleString()}
+                        {new Date(entry.updated_at).toLocaleString()}
                       </td>
                       <td className="px-2">
                         <button
@@ -300,7 +268,7 @@ export default function MiniAppDetail() {
                         {snap.label || `Version ${snap.version}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(snap.createdAt).toLocaleString()} &middot; {snap.fileManifest.length} file(s)
+                        {new Date(snap.created_at).toLocaleString()} &middot; {snap.file_manifest.length} file(s)
                       </p>
                     </div>
                   </div>
