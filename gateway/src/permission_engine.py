@@ -140,35 +140,79 @@ class PermissionEngine:
         perms: GatewayPermissions,
     ) -> tuple[EvalResult, str | None]:
         """Evaluate filesystem permission."""
-        raw_path = args.get("path", "")
+        # Extract path(s) based on action
+        if action == "move":
+            raw_path = args.get("source", "")
+        elif action == "read_multiple":
+            return await self._evaluate_filesystem_batch(agent_id, args, perms)
+        else:
+            raw_path = args.get("path", "")
+
         normalized, error = normalize_and_check_path(raw_path)
         if error:
             return EvalResult.AUTO_DENY, error
 
         # Update args with normalized path
-        args["path"] = normalized
+        if action == "move":
+            args["source"] = normalized
+        else:
+            args["path"] = normalized
 
+        # Check pre-approval rules before path-based checks
+        if await self._check_rules(agent_id, "filesystem", action, normalized):
+            return EvalResult.AUTO_APPROVE, None
+
+        return self._check_filesystem_path(agent_id, action, normalized, perms)
+
+    def _check_filesystem_path(
+        self,
+        agent_id: str,
+        action: str,
+        normalized: str,
+        perms: GatewayPermissions,
+    ) -> tuple[EvalResult, str | None]:
+        """Check a single path against filesystem permissions."""
         # 1. Explicit deny (highest priority)
         for pattern in perms.filesystem.deny:
             if fnmatch.fnmatch(normalized, pattern):
                 return EvalResult.AUTO_DENY, f"Path '{normalized}' matches deny pattern '{pattern}'"
 
-        # 2. Check pre-approval rules
-        if await self._check_rules(agent_id, "filesystem", action, normalized):
-            return EvalResult.AUTO_APPROVE, None
-
-        # 3. Explicit allow
+        # 2. Explicit allow — map actions to read or write permission patterns
+        _write_actions = {"write", "edit", "delete", "move", "mkdir"}
         allow_patterns = (
-            perms.filesystem.read if action == "read"
-            else perms.filesystem.write if action in ("write", "delete")
-            else perms.filesystem.read  # list uses read permissions
+            perms.filesystem.write if action in _write_actions
+            else perms.filesystem.read
         )
         for pattern in allow_patterns:
             if fnmatch.fnmatch(normalized, pattern):
                 return EvalResult.AUTO_APPROVE, None
 
-        # 4. Default deny for filesystem (no require_approval flag — too dangerous)
+        # 3. Default deny for filesystem
         return EvalResult.AUTO_DENY, f"No matching allow pattern for '{normalized}'"
+
+    async def _evaluate_filesystem_batch(
+        self,
+        agent_id: str,
+        args: dict,
+        perms: GatewayPermissions,
+    ) -> tuple[EvalResult, str | None]:
+        """Evaluate read_multiple — check all paths against read permissions."""
+        paths = args.get("paths", [])
+        if not paths:
+            return EvalResult.AUTO_DENY, "No paths provided"
+
+        normalized_paths = []
+        for raw_path in paths:
+            normalized, error = normalize_and_check_path(raw_path)
+            if error:
+                return EvalResult.AUTO_DENY, error
+            result, err = self._check_filesystem_path(agent_id, "read", normalized, perms)
+            if result != EvalResult.AUTO_APPROVE:
+                return result, err
+            normalized_paths.append(normalized)
+
+        args["paths"] = normalized_paths
+        return EvalResult.AUTO_APPROVE, None
 
     async def _evaluate_shell(
         self,
