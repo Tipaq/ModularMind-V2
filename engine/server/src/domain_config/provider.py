@@ -263,7 +263,7 @@ class ConfigProvider:
         results = await pipe.execute()
         agents = []
         expired_ids = []
-        for aid, raw in zip(agent_ids, results, strict=False):
+        for aid, raw in zip(agent_ids, results):
             if raw:
                 agents.append(AgentConfig.model_validate_json(raw))
             else:
