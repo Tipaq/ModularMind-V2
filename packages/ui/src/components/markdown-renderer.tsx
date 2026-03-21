@@ -37,7 +37,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
         sourceMessageId: messageId,
       });
     },
-    [onArtifactDetected, messageId, artifactIndexRef],
+    [onArtifactDetected, messageId],
   );
 
   const components = useMemo(

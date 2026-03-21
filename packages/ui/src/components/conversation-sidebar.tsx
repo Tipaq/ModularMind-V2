@@ -127,7 +127,7 @@ const ConversationItem = memo(function ConversationItem({
   );
 });
 
-export function ConversationSidebar({
+export const ConversationSidebar = memo(function ConversationSidebar({
   conversations,
   activeId,
   onSelect,
@@ -224,4 +224,4 @@ export function ConversationSidebar({
       </Dialog>
     </div>
   );
-}
+});

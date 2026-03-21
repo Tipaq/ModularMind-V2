@@ -51,7 +51,7 @@ export function GraphDetailModal({
   activity,
 }: GraphDetailModalProps) {
   const name = graph?.name || activity.graphName || "Graph";
-  const children = activity.children || [];
+  const children = useMemo(() => activity.children || [], [activity.children]);
   const agentChildren = children.filter((c) => c.type === "agent_execution");
 
   const aggregatedTokens = useMemo(() => {

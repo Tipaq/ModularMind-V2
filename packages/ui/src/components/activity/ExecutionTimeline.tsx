@@ -111,16 +111,12 @@ export function ExecutionTimeline(props: {
   isStreaming: boolean;
 }) {
   const { activities, enabledAgents, enabledGraphs, isStreaming } = props;
-  if (activities.length === 0 && !isStreaming) return null;
 
-  // Flatten activities with children for rendering.
-  // graph_execution: children rendered inside the card (not flattened).
-  // agent_execution: skip LLM children (shown inside the agent card).
   const items = useMemo(() => {
     const result: { activity: ExecutionActivity; depth: number }[] = [];
     for (const activity of activities) {
       result.push({ activity, depth: 0 });
-      if (activity.type === "graph_execution") continue; // children inside card
+      if (activity.type === "graph_execution") continue;
       if (activity.children?.length) {
         for (const child of activity.children) {
           if (activity.type === "agent_execution" && child.type === "llm") continue;
@@ -130,6 +126,8 @@ export function ExecutionTimeline(props: {
     }
     return result;
   }, [activities]);
+
+  if (activities.length === 0 && !isStreaming) return null;
 
   return (
     <div className="px-4 py-2">

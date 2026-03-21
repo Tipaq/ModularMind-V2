@@ -26,7 +26,6 @@ function MiniAppCard({
   scope,
   icon,
   version,
-  agentId: _agentId,
   onClick,
 }: MiniAppCardProps) {
   const scopeConfig = SCOPE_CONFIG[scope as keyof typeof SCOPE_CONFIG] || SCOPE_CONFIG.PERSONAL;
