@@ -10,6 +10,7 @@ import {
   BookOpen,
   Wrench,
   AppWindow,
+  CalendarClock,
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { name: "Knowledge", to: "/knowledge", icon: BookOpen },
   { name: "Tools", to: "/tools", icon: Wrench },
   { name: "Mini Apps", to: "/mini-apps", icon: AppWindow },
+  { name: "Scheduled Tasks", to: "/scheduled-tasks", icon: CalendarClock },
   { name: "Users", to: "/users", icon: Users },
   { name: "Monitoring", to: "/monitoring", icon: Activity },
 ];
