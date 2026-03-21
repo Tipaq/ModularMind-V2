@@ -120,6 +120,16 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down %s", settings.APP_NAME)
     scheduler.shutdown(wait=False)
     await sandbox_mgr.shutdown()
+
+    # Close shared HTTP clients
+    from src.executors.browser import _http_client as _browser_client
+    from src.executors.network import _http_client as _network_client
+
+    if _browser_client and not _browser_client.is_closed:
+        await _browser_client.aclose()
+    if _network_client and not _network_client.is_closed:
+        await _network_client.aclose()
+
     await close_redis()
     await close_db()
 
