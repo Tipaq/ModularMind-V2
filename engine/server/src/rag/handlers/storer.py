@@ -61,42 +61,64 @@ async def document_store_handler(data: dict) -> None:
         qdrant_chunks: list[ChunkData] = []
         dedup_count = 0
 
+        # Collect chunks with valid embeddings
+        chunks_with_embeddings: list[tuple] = []
         for chunk in chunks:
             embedding_data = chunk.embedding_cache or {}
             embedding = embedding_data.get("embedding")
             if not embedding:
                 logger.warning("Storer: chunk %s has no embedding, skipping", chunk.id)
                 continue
+            chunks_with_embeddings.append((chunk, embedding))
 
-            # Dedup: search Qdrant for similar existing chunks in same collection
+        # Batch dedup: search Qdrant for similar existing chunks in same collection
+        duplicate_ids: set[str] = set()
+        if chunks_with_embeddings:
             try:
-                from qdrant_client.models import FieldCondition, Filter, MatchValue
-
-                search_results = await client.search(
-                    collection_name=vector_store.collection_name,
-                    query_vector=("dense", embedding),
-                    limit=5,
-                    query_filter=Filter(
-                        must=[
-                            FieldCondition(
-                                key="collection_id",
-                                match=MatchValue(value=collection_id),
-                            )
-                        ]
-                    ),
-                    score_threshold=DEDUP_THRESHOLD,
+                from qdrant_client.models import (
+                    FieldCondition,
+                    Filter,
+                    MatchValue,
+                    SearchRequest,
                 )
-                if search_results:
-                    dedup_count += 1
-                    logger.debug(
-                        "Storer: chunk %s dedup'd (score=%.3f)",
-                        chunk.id,
-                        search_results[0].score,
+
+                dedup_filter = Filter(
+                    must=[
+                        FieldCondition(
+                            key="collection_id",
+                            match=MatchValue(value=collection_id),
+                        )
+                    ]
+                )
+                search_requests = [
+                    SearchRequest(
+                        vector=("dense", emb),
+                        filter=dedup_filter,
+                        limit=1,
+                        score_threshold=DEDUP_THRESHOLD,
                     )
-                    continue
+                    for _, emb in chunks_with_embeddings
+                ]
+                batch_results = await client.search_batch(
+                    collection_name=vector_store.collection_name,
+                    requests=search_requests,
+                )
+                for i, results in enumerate(batch_results):
+                    if results:
+                        chunk_obj = chunks_with_embeddings[i][0]
+                        duplicate_ids.add(chunk_obj.id)
+                        dedup_count += 1
+                        logger.debug(
+                            "Storer: chunk %s dedup'd (score=%.3f)",
+                            chunk_obj.id,
+                            results[0].score,
+                        )
             except Exception as e:
-                # If dedup check fails, store the chunk anyway
-                logger.warning("Storer: dedup check failed for chunk %s: %s", chunk.id, e)
+                logger.warning("Storer: batch dedup check failed: %s", e)
+
+        for chunk, embedding in chunks_with_embeddings:
+            if chunk.id in duplicate_ids:
+                continue
 
             qdrant_chunks.append(
                 ChunkData(
@@ -130,17 +152,19 @@ async def document_store_handler(data: dict) -> None:
             doc.status = DocumentStatus.READY.value
             doc.chunk_count = len(chunks)
 
-        # Update collection aggregate counts
-        total_chunks = (
+        # Update collection aggregate counts (single query)
+        total_chunks, total_docs = (
             await session.execute(
-                select(func.count(RAGChunk.id)).where(RAGChunk.collection_id == collection_id)
+                select(
+                    select(func.count(RAGChunk.id))
+                    .where(RAGChunk.collection_id == collection_id)
+                    .scalar_subquery(),
+                    select(func.count(RAGDocument.id))
+                    .where(RAGDocument.collection_id == collection_id)
+                    .scalar_subquery(),
+                )
             )
-        ).scalar() or 0
-        total_docs = (
-            await session.execute(
-                select(func.count(RAGDocument.id)).where(RAGDocument.collection_id == collection_id)
-            )
-        ).scalar() or 0
+        ).one()
 
         await session.execute(
             update(RAGCollection)
