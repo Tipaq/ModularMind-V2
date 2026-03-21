@@ -75,6 +75,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     WINDOW_SECONDS = 60
 
     CLEANUP_INTERVAL = 100
+    MAX_BUCKETS = 10_000
 
     def __init__(self, app):
         super().__init__(app)
@@ -125,7 +126,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
     def _cleanup_buckets(self, window_start: float) -> None:
-        """Remove stale bucket entries."""
+        """Remove stale bucket entries and cap total size."""
         stale = [k for k, v in self._buckets.items() if not v or v[-1] < window_start]
         for k in stale:
             del self._buckets[k]
+        if len(self._buckets) > self.MAX_BUCKETS:
+            self._buckets.clear()

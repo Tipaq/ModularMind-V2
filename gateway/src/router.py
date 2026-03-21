@@ -168,6 +168,7 @@ async def execute_tool(
         duration_ms=duration_ms,
     )
     db.add(audit)
+    await db.flush()
 
     return ExecuteResponse(
         request_id=request.request_id,
@@ -355,7 +356,7 @@ async def stream_approvals(
                 else:
                     # Keep-alive
                     yield ": heartbeat\n\n"
-                    await asyncio.sleep(15)
+                    await asyncio.sleep(5)
         finally:
             await pubsub.unsubscribe("gateway:approvals")
             await pubsub.aclose()

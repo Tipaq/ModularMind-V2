@@ -112,7 +112,7 @@ class BrowserExecutor(BaseExecutor):
         # SSRF protection (reuse from network executor)
         from src.executors.network import check_ssrf
 
-        ssrf_error = check_ssrf(parsed.hostname)
+        ssrf_error = await check_ssrf(parsed.hostname)
         if ssrf_error:
             return ssrf_error
 

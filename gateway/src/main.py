@@ -92,24 +92,32 @@ async def lifespan(app: FastAPI):
         seconds=60,
         args=[sandbox_mgr],
         id="sandbox_cleanup",
+        max_instances=1,
+        misfire_grace_time=60,
     )
     scheduler.add_job(
         _run_approval_cleanup,
         "cron",
         hour=3, minute=0,
         id="approval_cleanup",
+        max_instances=1,
+        misfire_grace_time=60,
     )
     scheduler.add_job(
         cleanup_stale_workspaces,
         "cron",
         hour=4, minute=0,
         id="workspace_cleanup",
+        max_instances=1,
+        misfire_grace_time=60,
     )
     scheduler.add_job(
         _run_audit_cleanup,
         "cron",
         hour=3, minute=30,
         id="audit_cleanup",
+        max_instances=1,
+        misfire_grace_time=60,
     )
     scheduler.start()
     app.state.scheduler = scheduler
@@ -122,13 +130,11 @@ async def lifespan(app: FastAPI):
     await sandbox_mgr.shutdown()
 
     # Close shared HTTP clients
-    from src.executors.browser import _http_client as _browser_client
-    from src.executors.network import _http_client as _network_client
+    from src.executors.browser import close_http_client as close_browser_client
+    from src.executors.network import close_http_client as close_network_client
 
-    if _browser_client and not _browser_client.is_closed:
-        await _browser_client.aclose()
-    if _network_client and not _network_client.is_closed:
-        await _network_client.aclose()
+    await close_browser_client()
+    await close_network_client()
 
     await close_redis()
     await close_db()
