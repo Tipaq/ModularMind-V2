@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Conversation } from "@modularmind/api-client";
 import { useNavigate } from "react-router-dom";
 import { ConversationSidebar, UserButton, useAuthStore } from "@modularmind/ui";
@@ -11,7 +12,7 @@ interface ChatSidebarProps {
   onRename: (id: string, title: string) => void;
 }
 
-export function ChatSidebar({
+export const ChatSidebar = memo(function ChatSidebar({
   conversations,
   activeId,
   onSelect,
@@ -44,4 +45,4 @@ export function ChatSidebar({
       }
     />
   );
-}
+});

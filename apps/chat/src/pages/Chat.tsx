@@ -294,13 +294,16 @@ export default function Chat() {
     editMessage(messageId, newContent);
   }, [editMessage]);
 
+  const enabledAgentIdSet = useMemo(() => new Set(enabledAgentIds), [enabledAgentIds]);
+  const enabledGraphIdSet = useMemo(() => new Set(enabledGraphIds), [enabledGraphIds]);
+
   const enabledAgents = useMemo(
-    () => agents.filter((a) => enabledAgentIds.includes(a.id)),
-    [agents, enabledAgentIds],
+    () => agents.filter((a) => enabledAgentIdSet.has(a.id)),
+    [agents, enabledAgentIdSet],
   );
   const enabledGraphs = useMemo(
-    () => graphs.filter((g) => enabledGraphIds.includes(g.id)),
-    [graphs, enabledGraphIds],
+    () => graphs.filter((g) => enabledGraphIdSet.has(g.id)),
+    [graphs, enabledGraphIdSet],
   );
 
   const activeTitle = useMemo(() => {

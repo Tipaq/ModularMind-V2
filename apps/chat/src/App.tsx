@@ -11,20 +11,32 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Profile = lazy(() => import("./pages/Profile"));
 
 function SetupRedirect({ children }: { children: React.ReactNode }) {
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(
+    () => sessionStorage.getItem("mm_setup_ok") === "1",
+  );
 
   useEffect(() => {
-    fetch("/api/v1/setup/status")
+    if (ready) return;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    fetch("/api/v1/setup/status", { signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
         if (!data.initialized) {
           window.location.href = "/ops/setup";
         } else {
+          sessionStorage.setItem("mm_setup_ok", "1");
           setReady(true);
         }
       })
       .catch(() => setReady(true));
-  }, []);
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [ready]);
 
   if (!ready) return <RouteLoader />;
   return <>{children}</>;
