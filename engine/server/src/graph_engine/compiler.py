@@ -135,8 +135,8 @@ def _extract_tool_publish_fn(
     else:
         return None
     for cb in handlers:
-        if hasattr(cb, "_publish") and hasattr(cb, "tokens"):
-            sync_publish = cb._publish
+        if hasattr(cb, "publish") and hasattr(cb, "tokens"):
+            sync_publish = cb.publish
 
             async def _async_publish(event: dict[str, Any], _pub=sync_publish) -> None:  # noqa: B023
                 _pub(event)
@@ -449,18 +449,7 @@ class GraphCompiler:
                         internal_token=get_internal_bearer_token(),
                     )
 
-            # Scheduled task tool executor — for agents with scheduled-task-manager capability
-            scheduled_task_executor = None
-            if "scheduled-task-manager" in (agent.capabilities or []):
-                from src.scheduled_tasks.tool_definitions import (
-                    get_scheduled_task_tool_definitions,
-                )
-                from src.scheduled_tasks.tool_executor import ScheduledTaskToolExecutor
-
-                active_tools.extend(get_scheduled_task_tool_definitions())
-                scheduled_task_executor = ScheduledTaskToolExecutor()
-
-            # Extended tools (memory, knowledge, file_storage, etc.)
+            # Extended tools (memory, knowledge, file_storage, scheduling, etc.)
             extended_executor = None
             tool_categories = getattr(agent, "tool_categories", {})
             if tool_categories and any(tool_categories.values()):
@@ -515,7 +504,6 @@ class GraphCompiler:
                     _mcp_executor,
                     BUILTIN_TOOL_NAMES,
                     gateway_executor=gateway_executor,
-                    scheduled_task_executor=scheduled_task_executor,
                     extended_executor=extended_executor,
                 )
             else:
@@ -527,7 +515,7 @@ class GraphCompiler:
                 ]
                 logger.debug("No user_id in state.metadata — built-in tools disabled")
                 # Still create UnifiedToolExecutor for gateway/scheduled task tools
-                if gateway_executor or scheduled_task_executor:
+                if gateway_executor:
                     from src.graph_engine.builtin_tools import UnifiedToolExecutor
 
                     unified_executor = UnifiedToolExecutor(
@@ -535,8 +523,7 @@ class GraphCompiler:
                         _mcp_executor,
                         set(),
                         gateway_executor=gateway_executor,
-                        scheduled_task_executor=scheduled_task_executor,
-                    )
+                        )
 
             try:
                 llm = await self.llm_provider.get_model(effective_model)

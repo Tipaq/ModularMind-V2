@@ -127,14 +127,12 @@ class UnifiedToolExecutor:
         mcp_executor: Any | None,
         builtin_names: set[str],
         gateway_executor: Any | None = None,
-        scheduled_task_executor: Any | None = None,
         extended_executor: Any | None = None,
     ):
         self._builtin = builtin_fn
         self._mcp = mcp_executor
         self._names = builtin_names
         self._gateway = gateway_executor
-        self._scheduled_task = scheduled_task_executor
         self._extended = extended_executor
 
     async def execute(self, name: str, args: dict[str, Any]) -> str:
@@ -142,8 +140,6 @@ class UnifiedToolExecutor:
             return await self._builtin(name, args)
         if name.startswith("gateway__") and self._gateway:
             return await self._gateway.execute(name, args)
-        if name.startswith("scheduled_task__") and self._scheduled_task:
-            return await self._scheduled_task.execute(name, args)
         if self._extended and self._extended.handles(name):
             return await self._extended.execute(name, args)
         if self._mcp:

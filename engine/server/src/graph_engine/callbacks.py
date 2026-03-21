@@ -233,7 +233,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
         # Per-run context (timing, model info, prompt text)
         self._runs: dict[UUID, _RunContext] = {}
 
-    def _publish(self, event: dict[str, Any]) -> None:
+    def publish(self, event: dict[str, Any]) -> None:
         """Publish a trace event, never raising."""
         try:
             event.setdefault("timestamp", datetime.now(UTC).isoformat())
@@ -287,7 +287,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
             }
             if self.log_prompts and prompts:
                 event["prompt_preview"] = _safe_str(prompts[0], self.max_content_length)
-            self._publish(event)
+            self.publish(event)
         except Exception:  # noqa: BLE001 — callback must never crash LLM execution
             logger.debug("on_llm_start trace error", exc_info=True)
 
@@ -345,7 +345,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
                 if m.content
             ]
 
-            self._publish(event)
+            self.publish(event)
         except Exception:  # noqa: BLE001 — callback must never crash LLM execution
             logger.debug("on_chat_model_start trace error", exc_info=True)
 
@@ -419,7 +419,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
             if preview:
                 event["response_preview"] = preview
 
-            self._publish(event)
+            self.publish(event)
         except Exception:
             logger.debug("on_llm_end trace error", exc_info=True)
 
@@ -433,7 +433,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             _, duration_ms = self._end_run(run_id)
-            self._publish(
+            self.publish(
                 {
                     "type": "trace:error",
                     "error": _safe_str(error, self.max_content_length),
@@ -473,7 +473,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
                 return
 
             self._start_run(run_id)
-            self._publish(
+            self.publish(
                 {
                     "type": "trace:node_start",
                     "node_name": name,
@@ -497,7 +497,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
                 # Was filtered out in on_chain_start
                 return
 
-            self._publish(
+            self.publish(
                 {
                     "type": "trace:node_end",
                     "duration_ms": duration_ms,
@@ -516,7 +516,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             _, duration_ms = self._end_run(run_id)
-            self._publish(
+            self.publish(
                 {
                     "type": "trace:error",
                     "error": _safe_str(error, self.max_content_length),
@@ -547,7 +547,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
             self._start_run(run_id)
             tool_name = serialized.get("name", "unknown")
 
-            self._publish(
+            self.publish(
                 {
                     "type": "trace:tool_start",
                     "tool_name": tool_name,
@@ -567,7 +567,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             _, duration_ms = self._end_run(run_id)
-            self._publish(
+            self.publish(
                 {
                     "type": "trace:tool_end",
                     "output_preview": _safe_str(output, self.max_content_length),
@@ -587,7 +587,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             _, duration_ms = self._end_run(run_id)
-            self._publish(
+            self.publish(
                 {
                     "type": "trace:error",
                     "error": _safe_str(error, self.max_content_length),
@@ -614,7 +614,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             self._start_run(run_id)
-            self._publish(
+            self.publish(
                 {
                     "type": "trace:retrieval",
                     "query": _truncate(query, self.max_content_length),
@@ -634,7 +634,7 @@ class ExecutionTraceHandler(BaseCallbackHandler):
     ) -> None:
         try:
             _, duration_ms = self._end_run(run_id)
-            self._publish(
+            self.publish(
                 {
                     "type": "trace:retrieval",
                     "status": "completed",
