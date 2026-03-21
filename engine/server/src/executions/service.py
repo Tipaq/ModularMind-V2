@@ -580,7 +580,7 @@ class ExecutionService:
             input_data["_context_layers"] = [msg.content for msg in context_messages]
 
         # Auto-compact if history budget exceeded (Claude-style inline compaction)
-        history_budget = context_builder._last_history_budget
+        history_budget = context_builder.last_history_budget
         if history_budget.get("budget_exceeded") and execution.session_id:
             yield {
                 "type": "trace:compaction_start",

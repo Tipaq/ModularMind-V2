@@ -158,7 +158,7 @@ class SuperSupervisorService:
             from src.prompt_layers.context import AgentContextBuilder
 
             _cw = (
-                AgentContextBuilder._resolve_context_window(_model_id)
+                AgentContextBuilder.resolve_context_window(_model_id)
                 if _model_id
                 else (_settings.CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW)
             )

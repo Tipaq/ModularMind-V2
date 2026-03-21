@@ -163,7 +163,7 @@ async def main() -> None:
         task_id = data.get("scheduled_task_id", "")
         if task_id:
             logger.info("Manual scheduled task trigger: %s", task_id)
-            await scheduled_task_runner._execute_trigger(task_id)
+            await scheduled_task_runner.execute_trigger(task_id)
 
     tasks.append(
         bus.subscribe(

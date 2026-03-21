@@ -30,7 +30,7 @@ class AgentContextBuilder:
     def __init__(self) -> None:
         self._last_rag_results: list[Any] = []
         self._last_history_count: int = 0
-        self._last_history_budget: dict[str, Any] = {}
+        self.last_history_budget: dict[str, Any] = {}
         self._last_history_messages: list[dict[str, str]] = []
         self._last_summary_text: str = ""
         self._last_user_profile: str | None = None
@@ -53,7 +53,7 @@ class AgentContextBuilder:
         """
         self._last_rag_results = []
         self._last_history_count = 0
-        self._last_history_budget = {}
+        self.last_history_budget = {}
         self._last_history_messages = []
         self._last_summary_text = ""
         self._last_user_profile = None
@@ -64,7 +64,7 @@ class AgentContextBuilder:
         settings = get_settings()
         effective_model_id = model_id or agent.model_id or ""
         context_window = (
-            self._resolve_context_window(effective_model_id)
+            self.resolve_context_window(effective_model_id)
             if effective_model_id
             else settings.CONTEXT_BUDGET_DEFAULT_CONTEXT_WINDOW
         )
@@ -164,7 +164,7 @@ class AgentContextBuilder:
         """Return full context injection details for frontend display."""
         return {
             "history": {
-                "budget": self._last_history_budget,
+                "budget": self.last_history_budget,
                 "messages": self._last_history_messages,
                 "summary": self._last_summary_text,
             },
@@ -177,7 +177,7 @@ class AgentContextBuilder:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _resolve_context_window(model_id: str) -> int:
+    def resolve_context_window(model_id: str) -> int:
         """Resolve context_window for a model_id like 'ollama:llama3.2'.
 
         Looks up the model catalog (JSON files) to find the context_window.
@@ -344,7 +344,7 @@ class AgentContextBuilder:
                     pass  # Summary lookup is best-effort
 
             self._last_history_count = len(lines)
-            self._last_history_budget = {
+            self.last_history_budget = {
                 "included_count": len(lines),
                 "total_chars": total_chars,
                 "max_chars": max_chars,

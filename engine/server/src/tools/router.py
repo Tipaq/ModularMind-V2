@@ -120,7 +120,7 @@ async def _collect_mcp_tools() -> dict[str, list[ToolDefinitionResponse]]:
     registry = get_mcp_registry()
     by_server: dict[str, list[ToolDefinitionResponse]] = {}
 
-    for server_id, config in registry._servers.items():
+    for server_id, config in registry.servers.items():
         if not config.enabled:
             continue
         try:
