@@ -34,6 +34,10 @@ SANDBOX_SAFE_ENV = {
 
 SANDBOX_LABEL = "modularmind.gateway.sandbox"
 
+DOCKER_CREATE_TIMEOUT = 30
+DOCKER_STOP_TIMEOUT = 15
+DOCKER_EXEC_TIMEOUT = 60
+
 
 @dataclass
 class SandboxContainer:
@@ -191,24 +195,29 @@ class SandboxManager:
         network = self._network or "bridge"
 
         try:
-            raw_container = await asyncio.to_thread(
-                docker_client.containers.run,
-                image=self._settings.GATEWAY_SANDBOX_IMAGE,
-                name=container_name,
-                detach=True,
-                network_mode=network,
-                environment=SANDBOX_SAFE_ENV,
-                labels=labels,
-                volumes=mounts,
-                cap_drop=["ALL"],
-                security_opt=["no-new-privileges"],
-                mem_limit="256m",
-                memswap_limit="256m",   # No swap — hard memory cap
-                cpu_period=100000,
-                cpu_quota=50000,         # 50% of one CPU core
-                pids_limit=100,
-                tmpfs={"/tmp": "size=64m,noexec,nosuid"},
+            raw_container = await asyncio.wait_for(
+                asyncio.to_thread(
+                    docker_client.containers.run,
+                    image=self._settings.GATEWAY_SANDBOX_IMAGE,
+                    name=container_name,
+                    detach=True,
+                    network_mode=network,
+                    environment=SANDBOX_SAFE_ENV,
+                    labels=labels,
+                    volumes=mounts,
+                    cap_drop=["ALL"],
+                    security_opt=["no-new-privileges"],
+                    mem_limit="256m",
+                    memswap_limit="256m",   # No swap — hard memory cap
+                    cpu_period=100000,
+                    cpu_quota=50000,         # 50% of one CPU core
+                    pids_limit=100,
+                    tmpfs={"/tmp": "size=64m,noexec,nosuid"},
+                ),
+                timeout=DOCKER_CREATE_TIMEOUT,
             )
+        except TimeoutError:
+            raise RuntimeError(f"Sandbox creation timed out after {DOCKER_CREATE_TIMEOUT}s")
         except Exception as e:
             raise RuntimeError(f"Failed to create sandbox: {e}")
 
@@ -275,8 +284,14 @@ class SandboxManager:
             return False
 
         try:
-            await asyncio.to_thread(container.container.stop, timeout=5)
-            await asyncio.to_thread(container.container.remove)
+            await asyncio.wait_for(
+                asyncio.to_thread(container.container.stop, timeout=5),
+                timeout=DOCKER_STOP_TIMEOUT,
+            )
+            await asyncio.wait_for(
+                asyncio.to_thread(container.container.remove),
+                timeout=DOCKER_STOP_TIMEOUT,
+            )
             logger.info("Released sandbox %s", container.container_name)
         except Exception:
             logger.warning(
@@ -327,11 +342,14 @@ class SandboxManager:
 
         sandbox.last_used = time.time()
 
-        result = await asyncio.to_thread(
-            sandbox.container.exec_run,
-            command,
-            workdir=workdir,
-            user="sandbox",
+        result = await asyncio.wait_for(
+            asyncio.to_thread(
+                sandbox.container.exec_run,
+                command,
+                workdir=workdir,
+                user="sandbox",
+            ),
+            timeout=DOCKER_EXEC_TIMEOUT,
         )
 
         exit_code = result.exit_code
@@ -372,8 +390,14 @@ class SandboxManager:
                 eid = container.labels.get(f"{SANDBOX_LABEL}.execution_id", "")
                 if eid not in self._active:
                     try:
-                        await asyncio.to_thread(container.stop, timeout=5)
-                        await asyncio.to_thread(container.remove)
+                        await asyncio.wait_for(
+                            asyncio.to_thread(container.stop, timeout=5),
+                            timeout=DOCKER_STOP_TIMEOUT,
+                        )
+                        await asyncio.wait_for(
+                            asyncio.to_thread(container.remove),
+                            timeout=DOCKER_STOP_TIMEOUT,
+                        )
                         removed += 1
                     except Exception:
                         logger.warning("Failed to remove orphaned %s", container.name)
@@ -388,3 +412,9 @@ class SandboxManager:
         """Release all active sandboxes on shutdown."""
         for eid in list(self._active.keys()):
             await self.release(eid)
+        if self._docker:
+            try:
+                self._docker.close()
+            except Exception:
+                logger.debug("Docker client close failed", exc_info=True)
+            self._docker = None
