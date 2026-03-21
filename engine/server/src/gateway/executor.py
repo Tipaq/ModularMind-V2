@@ -14,12 +14,21 @@ logger = logging.getLogger(__name__)
 GATEWAY_TOOL_PREFIX = "gateway__"
 GATEWAY_TOOLS = {
     "gateway__fs_read",
-    "gateway__fs_write",
+    "gateway__fs_read_media",
+    "gateway__fs_read_multiple",
     "gateway__fs_list",
+    "gateway__fs_list_with_sizes",
+    "gateway__fs_tree",
+    "gateway__fs_info",
+    "gateway__fs_search",
+    "gateway__fs_write",
+    "gateway__fs_edit",
     "gateway__fs_delete",
+    "gateway__fs_move",
+    "gateway__fs_mkdir",
     "gateway__shell_exec",
     "gateway__browser_browse",
-    "gateway__browser_screenshot",
+    "gateway__browser_search",
     "gateway__net_request",
 }
 
