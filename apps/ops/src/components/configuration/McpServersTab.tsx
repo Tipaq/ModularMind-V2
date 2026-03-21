@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   RefreshCw,
   Plug,
@@ -120,7 +120,6 @@ export default function McpServersTab() {
     useState<MCPCatalogEntry | null>(null);
   const [showManualForm, setShowManualForm] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
-
   // Settings dialog state
   const [settingsServer, setSettingsServer] = useState<MCPServer | null>(null);
   const [settingsForm, setSettingsForm] = useState({
@@ -224,7 +223,6 @@ export default function McpServersTab() {
     // For GitHub servers, open a unified panel for all tiers
     if (server.catalog_id === "github") {
       setSettingsServer(server);
-      setGithubTokens({ read: "", write: "", admin: "" });
       setSettingsForm({
         name: "GitHub",
         enabled: true,
@@ -341,26 +339,38 @@ export default function McpServersTab() {
     setSettingsToolsLoading(false);
   };
 
-  const catalogByCategory = catalog.reduce<
-    Record<string, MCPCatalogEntry[]>
-  >((acc, entry) => {
-    const cat = entry.category;
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(entry);
-    return acc;
-  }, {});
+  const catalogByCategory = useMemo(() => {
+    const grouped: Record<string, MCPCatalogEntry[]> = {};
+    for (const entry of catalog) {
+      if (!grouped[entry.category]) grouped[entry.category] = [];
+      grouped[entry.category].push(entry);
+    }
+    return grouped;
+  }, [catalog]);
 
-  const deployedCatalogIds = new Set(
-    mcpServers.filter((s) => s.catalog_id).map((s) => s.catalog_id),
+  const deployedCatalogIds = useMemo(
+    () => new Set(mcpServers.filter((s) => s.catalog_id).map((s) => s.catalog_id)),
+    [mcpServers],
   );
 
-  const getServerIcon = (server: MCPServer): React.ElementType => {
-    if (server.catalog_id) {
-      const entry = catalog.find((c) => c.id === server.catalog_id);
-      if (entry) return ICON_MAP[entry.icon] || Plug;
-    }
-    return Plug;
-  };
+  const catalogIconMap = useMemo(() => {
+    const map = new Map<string, React.ElementType>();
+    for (const entry of catalog) map.set(entry.id, ICON_MAP[entry.icon] || Plug);
+    return map;
+  }, [catalog]);
+
+  const getServerIcon = useCallback(
+    (server: MCPServer): React.ElementType => {
+      if (server.catalog_id) return catalogIconMap.get(server.catalog_id) || Plug;
+      return Plug;
+    },
+    [catalogIconMap],
+  );
+
+  const connectedCount = useMemo(
+    () => mcpServers.filter((s) => s.connected).length,
+    [mcpServers],
+  );
 
   if (loading) {
     return (
@@ -369,8 +379,6 @@ export default function McpServersTab() {
       </div>
     );
   }
-
-  const connectedCount = mcpServers.filter((s) => s.connected).length;
 
   return (
     <>
