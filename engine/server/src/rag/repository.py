@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+MAX_SEARCH_LIMIT = 100
+
 # Prevent GC of fire-and-forget tasks (standard Python pattern)
 _bg_tasks: set[asyncio.Task] = set()
 
@@ -163,6 +165,8 @@ class RAGRepository:
         1. PG gate: fetch accessible collection_ids for the user.
         2. Qdrant gate: payload filter on collection_id + scope.
         """
+        limit = min(limit, MAX_SEARCH_LIMIT)
+
         accessible = await self.list_collections_for_user(user_id, user_groups)
         accessible_ids = {c.id for c in accessible}
 

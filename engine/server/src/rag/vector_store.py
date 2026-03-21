@@ -27,6 +27,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+MAX_SEARCH_LIMIT = 100
+
 
 @dataclass
 class ChunkData:
@@ -124,6 +126,8 @@ class QdrantRAGVectorStore(BaseHybridVectorStore):
 
         Returns empty list (degraded) if Qdrant is unavailable.
         """
+        limit = min(limit, MAX_SEARCH_LIMIT)
+
         # Fetch more candidates when reranking
         fetch_limit = max(20, limit * 3) if reranker else limit
 
