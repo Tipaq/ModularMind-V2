@@ -93,6 +93,27 @@ export default function Chat() {
   // Debounce config persistence
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const conversationsRef = useRef(conversations);
+  const messagesLengthRef = useRef(messages.length);
+  const enabledAgentIdsRef = useRef(enabledAgentIds);
+  const enabledGraphIdsRef = useRef(enabledGraphIds);
+  const chatConfigRef = useRef(chatConfig);
+  const effectiveModelIdRef = useRef(effectiveModelId);
+  useEffect(() => {
+    conversationsRef.current = conversations;
+    messagesLengthRef.current = messages.length;
+    enabledAgentIdsRef.current = enabledAgentIds;
+    enabledGraphIdsRef.current = enabledGraphIds;
+    chatConfigRef.current = chatConfig;
+    effectiveModelIdRef.current = effectiveModelId;
+  });
+
   // Load config once user is authenticated
   useEffect(() => {
     if (!user) return;
@@ -272,6 +293,15 @@ export default function Chat() {
     editMessage(messageId, newContent);
   }, [editMessage]);
 
+  const enabledAgents = useMemo(
+    () => agents.filter((a) => enabledAgentIds.includes(a.id)),
+    [agents, enabledAgentIds],
+  );
+  const enabledGraphs = useMemo(
+    () => graphs.filter((g) => enabledGraphIds.includes(g.id)),
+    [graphs, enabledGraphIds],
+  );
+
   const activeConv = conversations.find((c) => c.id === activeConversationId);
   const activeTitle = activeConv?.title || "Chat";
 
@@ -391,8 +421,8 @@ export default function Chat() {
           supervisorLayers={[]}
           onUpdateLayer={noOpUpdateLayer}
           selectedModelContextWindow={selectedModel?.context_window ?? null}
-          enabledAgents={agents.filter((a) => enabledAgentIds.includes(a.id))}
-          enabledGraphs={graphs.filter((g) => enabledGraphIds.includes(g.id))}
+          enabledAgents={enabledAgents}
+          enabledGraphs={enabledGraphs}
           allAgents={agents}
           allGraphs={graphs}
           onCompact={activeConversationId ? handleCompactFromPanel : undefined}
