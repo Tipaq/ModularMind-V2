@@ -16,6 +16,8 @@ from .sdk_client import MCPClient, MCPClientError
 
 logger = logging.getLogger(__name__)
 
+MAX_MCP_CLIENTS = 50
+
 
 class MCPRegistry:
     """Registry for MCP server connections.
@@ -32,15 +34,23 @@ class MCPRegistry:
     def __init__(self, config_dir: str | None = None):
         self._servers: dict[str, MCPServerConfig] = {}
         self._clients: dict[str, MCPClient] = {}
+        self._client_last_used: dict[str, float] = {}
         self._config_dir = Path(config_dir) / "mcp" if config_dir else None
         self._locks: dict[str, asyncio.Lock] = {}
         self._shutting_down: bool = False
         self._tool_cache: dict[str, list[MCPToolDefinition]] = {}
         self._tool_cache_ts: dict[str, float] = {}
+        self._bg_tasks: set[asyncio.Task] = {}
 
     def _get_lock(self, server_id: str) -> asyncio.Lock:
         """Get or create a per-server asyncio lock (atomic via dict.setdefault)."""
         return self._locks.setdefault(server_id, asyncio.Lock())
+
+    def _spawn_bg(self, coro) -> None:
+        """Fire-and-forget with GC protection."""
+        task = asyncio.create_task(coro)
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
 
     def load_from_disk(self) -> None:
         """Load MCP server configs from CONFIG_DIR/mcp/*.json."""
@@ -62,7 +72,7 @@ class MCPRegistry:
         # Invalidate existing client if config changed
         existing_client = self._clients.pop(config.id, None)
         if existing_client:
-            asyncio.ensure_future(self._safe_disconnect(existing_client))
+            self._spawn_bg(self._safe_disconnect(existing_client))
         # Invalidate cache and lock for re-registration
         self._tool_cache.pop(config.id, None)
         self._tool_cache_ts.pop(config.id, None)
@@ -73,8 +83,9 @@ class MCPRegistry:
         removed = server_id in self._servers
         self._servers.pop(server_id, None)
         client = self._clients.pop(server_id, None)
+        self._client_last_used.pop(server_id, None)
         if client:
-            asyncio.ensure_future(self._safe_disconnect(client))
+            self._spawn_bg(self._safe_disconnect(client))
         self._tool_cache.pop(server_id, None)
         self._tool_cache_ts.pop(server_id, None)
         return removed
@@ -82,8 +93,9 @@ class MCPRegistry:
     def disconnect(self, server_id: str) -> None:
         """Disconnect a client without unregistering the server config."""
         client = self._clients.pop(server_id, None)
+        self._client_last_used.pop(server_id, None)
         if client:
-            asyncio.ensure_future(self._safe_disconnect(client))
+            self._spawn_bg(self._safe_disconnect(client))
         self._tool_cache.pop(server_id, None)
         self._tool_cache_ts.pop(server_id, None)
 
@@ -113,6 +125,7 @@ class MCPRegistry:
         if server_id in self._clients:
             client = self._clients[server_id]
             if client.is_healthy:
+                self._client_last_used[server_id] = time.monotonic()
                 return client
 
         # Slow path: acquire per-server lock
@@ -121,11 +134,17 @@ class MCPRegistry:
             if server_id in self._clients:
                 client = self._clients[server_id]
                 if client.is_healthy:
+                    self._client_last_used[server_id] = time.monotonic()
                     return client
                 # Unhealthy — purge and reconnect
                 logger.warning("Purging unhealthy MCP client for '%s'", server_id)
                 await self._safe_disconnect(client)
                 del self._clients[server_id]
+                self._client_last_used.pop(server_id, None)
+
+            # Evict least-recently-used client when at capacity
+            if len(self._clients) >= MAX_MCP_CLIENTS:
+                await self._evict_lru_client()
 
             config = self._servers.get(server_id)
             if not config:
@@ -148,9 +167,22 @@ class MCPRegistry:
                     config = config.model_copy(update={"env": resolved_env})
 
             client = MCPClient(config)
-            await client.connect()
+            async with asyncio.timeout(config.timeout_seconds):
+                await client.connect()
             self._clients[server_id] = client
+            self._client_last_used[server_id] = time.monotonic()
             return client
+
+    async def _evict_lru_client(self) -> None:
+        """Remove the least-recently-used client to stay under MAX_MCP_CLIENTS."""
+        if not self._client_last_used:
+            return
+        lru_id = min(self._client_last_used, key=self._client_last_used.get)
+        logger.info("Evicting LRU MCP client '%s' (capacity %d)", lru_id, MAX_MCP_CLIENTS)
+        evicted = self._clients.pop(lru_id, None)
+        self._client_last_used.pop(lru_id, None)
+        if evicted:
+            await self._safe_disconnect(evicted)
 
     async def discover_tools(self, server_id: str) -> list[MCPToolDefinition]:
         """Discover tools from a specific MCP server (cached with 60s TTL)."""
@@ -283,6 +315,7 @@ class MCPRegistry:
         if tasks:
             await asyncio.gather(*tasks)
         self._clients.clear()
+        self._client_last_used.clear()
         self._tool_cache.clear()
         self._tool_cache_ts.clear()
 
