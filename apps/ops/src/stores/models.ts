@@ -149,6 +149,10 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       const normalize = (n: string) => n.replace(/:latest$/, "");
       const catalogNames = new Set(catalogRes.models.map((m) => normalize(m.model_name)));
 
+      const configuredProviders = new Set(
+        configs.filter((c) => c.is_configured).map((c) => c.provider),
+      );
+
       const unified: UnifiedCatalogModel[] = catalogRes.models.map((m): CatalogEntry => {
         let unifiedStatus: CatalogEntry["unifiedStatus"] = "ready";
         if (m.model_type === "local") {
@@ -157,10 +161,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
           else if (!m.pull_status || m.pull_status === "pending") unifiedStatus = "not_pulled";
           else unifiedStatus = "ready";
         } else {
-          const configured = configs.some(
-            (c) => c.provider === m.provider && c.is_configured,
-          );
-          unifiedStatus = configured ? "ready" : "no_credentials";
+          unifiedStatus = configuredProviders.has(m.provider) ? "ready" : "no_credentials";
         }
         return {
           id: m.id,
@@ -184,10 +185,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
           let unifiedStatus: BrowsableEntry["unifiedStatus"] = "not_pulled";
           if (bm.model_type === "remote") {
-            const configured = configs.some(
-              (c) => c.provider === bm.provider && c.is_configured,
-            );
-            unifiedStatus = configured ? "ready" : "no_credentials";
+            unifiedStatus = configuredProviders.has(bm.provider) ? "ready" : "no_credentials";
           }
 
           unified.push({
