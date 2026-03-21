@@ -87,13 +87,18 @@ def create_scheduler() -> AsyncIOScheduler:
     return scheduler
 
 
-_automation_runner = None
+_scheduled_task_runner = None
 
 
-def set_automation_runner(runner) -> None:
-    """Set the global AutomationRunner instance (called from worker startup)."""
-    global _automation_runner
-    _automation_runner = runner
+def set_scheduled_task_runner(runner) -> None:
+    """Set the global ScheduledTaskRunner instance (called from worker startup)."""
+    global _scheduled_task_runner
+    _scheduled_task_runner = runner
+
+
+def get_scheduled_task_runner():
+    """Get the global ScheduledTaskRunner instance."""
+    return _scheduled_task_runner
 
 
 async def sync_platform() -> None:
@@ -106,12 +111,12 @@ async def sync_platform() -> None:
         updated = await svc.poll()
         if updated:
             logger.info("Config updated from platform")
-            # Sync automation scheduler jobs after config update
-            if _automation_runner:
+            # Sync scheduled task jobs after config update
+            if _scheduled_task_runner:
                 try:
-                    await _automation_runner.sync_jobs()
+                    await _scheduled_task_runner.sync_jobs()
                 except Exception:
-                    logger.exception("Failed to sync automation jobs")
+                    logger.exception("Failed to sync scheduled task jobs")
     except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError):
         logger.exception("Platform sync failed")
     finally:

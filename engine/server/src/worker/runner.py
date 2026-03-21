@@ -18,7 +18,7 @@ import redis.exceptions
 from src.infra.config import settings
 from src.infra.redis_streams import RedisStreamBus
 from src.infra.stream_names import (
-    STREAM_AUTOMATION_TRIGGER,
+    STREAM_SCHEDULED_TASK_TRIGGER,
     STREAM_DOCUMENTS,
     STREAM_EXECUTIONS,
     STREAM_MEMORY_EXTRACTED,
@@ -91,12 +91,12 @@ async def main() -> None:
     scheduler = create_scheduler()
     scheduler.start()
 
-    # Wire AutomationRunner into the scheduler for dynamic automation jobs
-    from src.automations.runner import AutomationRunner
-    from src.worker.scheduler import set_automation_runner
+    # Wire ScheduledTaskRunner into the scheduler for dynamic task jobs
+    from src.scheduled_tasks.runner import ScheduledTaskRunner
+    from src.worker.scheduler import set_scheduled_task_runner
 
-    automation_runner = AutomationRunner(scheduler)
-    set_automation_runner(automation_runner)
+    scheduled_task_runner = ScheduledTaskRunner(scheduler)
+    set_scheduled_task_runner(scheduled_task_runner)
 
     tasks = [
         # Task queues
@@ -158,19 +158,19 @@ async def main() -> None:
     except ImportError:
         logger.info("Memory pipeline handlers not available (removed in Phase 9)")
 
-    # Automation manual trigger consumer
-    async def automation_trigger_handler(data: dict) -> None:
-        aid = data.get("automation_id", "")
-        if aid:
-            logger.info("Manual automation trigger: %s", aid)
-            await automation_runner._execute_trigger(aid)
+    # Scheduled task manual trigger consumer
+    async def scheduled_task_trigger_handler(data: dict) -> None:
+        task_id = data.get("scheduled_task_id", "")
+        if task_id:
+            logger.info("Manual scheduled task trigger: %s", task_id)
+            await scheduled_task_runner._execute_trigger(task_id)
 
     tasks.append(
         bus.subscribe(
-            STREAM_AUTOMATION_TRIGGER,
-            "automation-triggers",
-            "at-1",
-            automation_trigger_handler,
+            STREAM_SCHEDULED_TASK_TRIGGER,
+            "scheduled-task-triggers",
+            "st-1",
+            scheduled_task_trigger_handler,
         ),
     )
 
