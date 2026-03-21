@@ -73,12 +73,35 @@ export interface ConnectorData {
   id: string;
   name: string;
   connector_type: string;
-  agent_id: string;
+  agent_id: string | null;
+  graph_id: string | null;
+  supervisor_mode: boolean;
   webhook_url: string;
   is_enabled: boolean;
   config: Record<string, string>;
   created_at: string;
   updated_at: string;
+}
+
+// ─── Connector Types (dynamic from backend) ─────────────────────────────────
+
+export interface ConnectorFieldDef {
+  key: string;
+  label: string;
+  placeholder: string;
+  is_secret: boolean;
+  is_required: boolean;
+}
+
+export interface ConnectorTypeDef {
+  type_id: string;
+  name: string;
+  icon: string;
+  color: string;
+  description: string;
+  doc_url: string;
+  setup_steps: string[];
+  fields: ConnectorFieldDef[];
 }
 
 // ─── Provider Testing ────────────────────────────────────────────────────────
