@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, type ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback, memo, type ReactNode } from "react";
 import { Plus, Trash2, MessageSquare, Check, X } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
@@ -35,6 +35,98 @@ export interface ConversationSidebarProps {
   className?: string;
 }
 
+interface ConversationItemProps {
+  conv: SidebarConversation;
+  isActive: boolean;
+  isEditing: boolean;
+  editValue: string;
+  onSelect: (id: string) => void;
+  onStartEdit: (conv: SidebarConversation) => void;
+  onConfirmEdit: () => void;
+  onCancelEdit: () => void;
+  onEditValueChange: (value: string) => void;
+  onRequestDelete: (conv: SidebarConversation) => void;
+}
+
+const ConversationItem = memo(function ConversationItem({
+  conv,
+  isActive,
+  isEditing,
+  editValue,
+  onSelect,
+  onStartEdit,
+  onConfirmEdit,
+  onCancelEdit,
+  onEditValueChange,
+  onRequestDelete,
+}: ConversationItemProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-border/30 hover:bg-muted/50 transition-colors",
+        isActive && "bg-primary/10 border-l-2 border-l-primary",
+      )}
+      onClick={() => onSelect(conv.id)}
+    >
+      {isEditing ? (
+        <div className="flex-1 flex items-center gap-1">
+          <Input
+            ref={inputRef}
+            value={editValue}
+            onChange={(e) => onEditValueChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onConfirmEdit();
+              if (e.key === "Escape") onCancelEdit();
+            }}
+            className="h-6 text-xs px-1"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); onConfirmEdit(); }}>
+            <Check className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); onCancelEdit(); }}>
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-sm font-medium truncate"
+              onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(conv); }}
+            >
+              {conv.title || "New Chat"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {conv.message_count} msgs &middot; {relativeTime(conv.updated_at)}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestDelete(conv);
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </>
+      )}
+    </div>
+  );
+});
+
 export function ConversationSidebar({
   conversations,
   activeId,
@@ -48,30 +140,22 @@ export function ConversationSidebar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [deletingConv, setDeletingConv] = useState<SidebarConversation | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (editingId && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editingId]);
-
-  const startEdit = (conv: SidebarConversation) => {
+  const startEdit = useCallback((conv: SidebarConversation) => {
     setEditingId(conv.id);
     setEditValue(conv.title || "New Chat");
-  };
+  }, []);
 
-  const confirmEdit = () => {
+  const confirmEdit = useCallback(() => {
     if (editingId && editValue.trim()) {
       onRename(editingId, editValue.trim());
     }
     setEditingId(null);
-  };
+  }, [editingId, editValue, onRename]);
 
-  const cancelEdit = () => {
+  const cancelEdit = useCallback(() => {
     setEditingId(null);
-  };
+  }, []);
 
   return (
     <div className={cn("w-[240px] h-full border-r border-border/50 flex flex-col bg-card/30 shrink-0", className)}>
@@ -91,61 +175,19 @@ export function ConversationSidebar({
         )}
 
         {conversations.map((conv) => (
-          <div
+          <ConversationItem
             key={conv.id}
-            className={cn(
-              "group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-border/30 hover:bg-muted/50 transition-colors",
-              activeId === conv.id && "bg-primary/10 border-l-2 border-l-primary",
-            )}
-            onClick={() => onSelect(conv.id)}
-          >
-            {editingId === conv.id ? (
-              <div className="flex-1 flex items-center gap-1">
-                <Input
-                  ref={inputRef}
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") confirmEdit();
-                    if (e.key === "Escape") cancelEdit();
-                  }}
-                  className="h-6 text-xs px-1"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); confirmEdit(); }}>
-                  <Check className="h-3 w-3" />
-                </Button>
-                <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); cancelEdit(); }}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="flex-1 min-w-0">
-                  <p
-                    className="text-sm font-medium truncate"
-                    onDoubleClick={(e) => { e.stopPropagation(); startEdit(conv); }}
-                  >
-                    {conv.title || "New Chat"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {conv.message_count} msgs &middot; {relativeTime(conv.updated_at)}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeletingConv(conv);
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            )}
-          </div>
+            conv={conv}
+            isActive={activeId === conv.id}
+            isEditing={editingId === conv.id}
+            editValue={editValue}
+            onSelect={onSelect}
+            onStartEdit={startEdit}
+            onConfirmEdit={confirmEdit}
+            onCancelEdit={cancelEdit}
+            onEditValueChange={setEditValue}
+            onRequestDelete={setDeletingConv}
+          />
         ))}
       </div>
 
