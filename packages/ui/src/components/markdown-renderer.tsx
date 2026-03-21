@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import Markdown from "react-markdown";
 import { CodeBlock } from "./code-block";
 import type { DetectedArtifact } from "../types/artifact";
@@ -18,7 +18,8 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   messageId,
   onArtifactDetected,
 }: MarkdownRendererProps) {
-  const artifactIndexRef = useMemo(() => ({ current: 0 }), [content]);
+  const artifactIndexRef = useRef(0);
+  useEffect(() => { artifactIndexRef.current = 0; }, [content]);
 
   const handleCodeBlock = useCallback(
     (language: string, code: string) => {
