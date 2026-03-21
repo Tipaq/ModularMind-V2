@@ -57,7 +57,6 @@ def _server_to_response(config, status_info) -> MCPServerResponse:
         managed=config.managed,
         catalog_id=config.catalog_id,
         transport=config.transport.value,
-        access_tier=config.access_tier,
     )
 
 
@@ -193,85 +192,6 @@ async def deploy_from_catalog(
     return _server_to_response(config, status_info)
 
 
-@router.post(
-    "/deploy/github", dependencies=[RequireOwner], status_code=status.HTTP_201_CREATED
-)
-async def deploy_github_tiered(
-    body: MCPDeployFromCatalogRequest, user: CurrentUser
-) -> list[MCPServerResponse]:
-    """Deploy GitHub MCP servers with tiered access (read/write/admin).
-
-    Creates one MCP server per provided token. Skips tiers already registered.
-    """
-    import shutil
-
-    from src.infra.secrets import secrets_store
-    from src.mcp import MCPServerConfig, MCPTransport, get_catalog_entry
-
-    entry = get_catalog_entry("github")
-    if not entry:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="GitHub catalog missing")
-
-    if not shutil.which("npx"):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="npx not found. Install Node.js to deploy npm-based MCP servers.",
-        )
-
-    tier_map = {
-        "GITHUB_TOKEN_READ": "read",
-        "GITHUB_TOKEN_WRITE": "write",
-        "GITHUB_TOKEN_ADMIN": "admin",
-    }
-    tokens = {tier_map[k]: v for k, v in body.secrets.items() if k in tier_map and v.strip()}
-    if not tokens:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="At least one GitHub token must be provided.",
-        )
-
-    registry = _get_registry()
-    existing_tiers = {
-        s.access_tier
-        for s in registry.list_servers()
-        if s.catalog_id == "github" and s.access_tier
-    }
-
-    created: list[MCPServerResponse] = []
-    for tier, token in tokens.items():
-        if tier in existing_tiers:
-            logger.info("GitHub MCP (%s) already deployed, skipping", tier)
-            continue
-
-        server_id = str(uuid.uuid4())
-        config = MCPServerConfig(
-            id=server_id,
-            name=f"GitHub ({tier.title()})",
-            description=entry.description,
-            transport=MCPTransport.STDIO,
-            command="npx",
-            args=["-y", entry.npm_package],
-            enabled=True,
-            project_id=body.project_id,
-            managed=True,
-            catalog_id="github",
-            access_tier=tier,
-        )
-        secrets_store.set(f"MCP_{server_id}_GITHUB_PERSONAL_ACCESS_TOKEN", token)
-        registry.register(config)
-        registry.persist_config(config)
-
-        status_info = await registry.get_server_status(server_id)
-        created.append(_server_to_response(config, status_info))
-        logger.info("GitHub MCP (%s): deployed via UI (id=%s)", tier, server_id)
-
-    if not created:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="All requested tiers are already deployed.",
-        )
-
-    return created
 
 
 @router.get("/sidecar-status", dependencies=[RequireOwner])
@@ -449,16 +369,9 @@ async def update_mcp_server(
     if "api_key" in update_data:
         api_key = update_data.pop("api_key")
         if api_key:
-            if existing.catalog_id == "github" and existing.access_tier:
-                # GitHub tiered servers store the token as GITHUB_PERSONAL_ACCESS_TOKEN
-                secret_key = f"MCP_{server_id}_GITHUB_PERSONAL_ACCESS_TOKEN"
-                secrets_store.set(secret_key, api_key)
-                # Disconnect existing client so it reconnects with new token
-                registry.disconnect(server_id)
-            else:
-                secret_ref = existing.secret_ref or f"MCP_{server_id}_TOKEN"
-                secrets_store.set(secret_ref, api_key)
-                update_data["secret_ref"] = secret_ref
+            secret_ref = existing.secret_ref or f"MCP_{server_id}_TOKEN"
+            secrets_store.set(secret_ref, api_key)
+            update_data["secret_ref"] = secret_ref
         elif existing.secret_ref:
             secrets_store.delete(existing.secret_ref)
             update_data["secret_ref"] = None

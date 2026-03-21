@@ -33,9 +33,6 @@ class MCPServerConfig(BaseModel):
         False, description="True if provisioned via sidecar manager (trusted URL)"
     )
     catalog_id: str | None = Field(None, description="Catalog entry ID if deployed from catalog")
-    access_tier: str | None = Field(
-        None, description="Access tier for tiered services (e.g., 'read', 'write', 'admin')"
-    )
 
 
 class MCPToolDefinition(BaseModel):
@@ -111,7 +108,6 @@ class MCPServerResponse(BaseModel):
     managed: bool = False
     catalog_id: str | None = None
     transport: str = "http"
-    access_tier: str | None = None
 
 
 class MCPCatalogEntryResponse(BaseModel):
