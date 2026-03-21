@@ -87,33 +87,33 @@ export function useMonitoringData(): MonitoringDataResult {
     { keepDataOnError: true },
   );
 
+  // Stable ref-based refetchAll — avoids recreating the callback when
+  // individual refetch functions change identity (which would restart polling).
+  const refetchFnsRef = useRef({
+    refetchMonitoring, refetchPipeline, refetchLlmGpu,
+    refetchLiveExecutions, refetchPipelines, refetchMetricsHistory, refetchAgentMetrics,
+  });
+  useEffect(() => {
+    refetchFnsRef.current = {
+      refetchMonitoring, refetchPipeline, refetchLlmGpu,
+      refetchLiveExecutions, refetchPipelines, refetchMetricsHistory, refetchAgentMetrics,
+    };
+  });
+
   const refetchAll = useCallback(async () => {
+    const fns = refetchFnsRef.current;
     await Promise.all([
-      refetchMonitoring(),
-      refetchPipeline(),
-      refetchLlmGpu(),
-      refetchLiveExecutions(),
-      refetchPipelines(),
-      refetchMetricsHistory(),
-      refetchAgentMetrics(),
+      fns.refetchMonitoring(), fns.refetchPipeline(), fns.refetchLlmGpu(),
+      fns.refetchLiveExecutions(), fns.refetchPipelines(),
+      fns.refetchMetricsHistory(), fns.refetchAgentMetrics(),
     ]);
     setLastUpdated(new Date());
-  }, [
-    refetchMonitoring,
-    refetchPipeline,
-    refetchLlmGpu,
-    refetchLiveExecutions,
-    refetchPipelines,
-    refetchMetricsHistory,
-    refetchAgentMetrics,
-  ]);
+  }, []);
 
   // Stop polling when session expires
   const sessionExpired = useRef(false);
   useEffect(() => {
-    const handleExpired = () => {
-      sessionExpired.current = true;
-    };
+    const handleExpired = () => { sessionExpired.current = true; };
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleExpired);
     return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleExpired);
   }, []);
