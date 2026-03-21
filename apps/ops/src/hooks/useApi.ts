@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface UseApiState<T> {
   data: T | null;
@@ -24,25 +24,36 @@ export function useApi<T>(
     isLoading: true,
   });
 
+  const fetcherRef = useRef(fetcher);
+  const keepDataOnErrorRef = useRef(keepDataOnError);
+  useEffect(() => {
+    fetcherRef.current = fetcher;
+    keepDataOnErrorRef.current = keepDataOnError;
+  });
+
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
+
   const execute = useCallback(async () => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      const data = await fetcher();
+      const data = await fetcherRef.current();
+      if (!mountedRef.current) return;
       setState({ data, error: null, isLoading: false });
     } catch (err) {
+      if (!mountedRef.current) return;
       const msg = err instanceof Error ? err.message : "Unknown error";
       setState((prev) => ({
-        data: keepDataOnError ? prev.data : null,
+        data: keepDataOnErrorRef.current ? prev.data : null,
         error: msg,
         isLoading: false,
       }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, keepDataOnError]);
+  }, []);
 
-  useEffect(() => {
-    execute();
-  }, [execute]);
+  // Re-execute when actual deps change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { execute(); }, deps);
 
   return { ...state, refetch: execute };
 }
