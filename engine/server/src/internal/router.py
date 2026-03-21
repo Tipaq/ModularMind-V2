@@ -24,6 +24,7 @@ from src.infra.rate_limit import RateLimitDependency
 from src.internal import (
     actions,
     alerts,
+    github_tokens,
     logs,
     monitoring,
     pipelines,
@@ -58,6 +59,7 @@ router.include_router(providers.router)
 router.include_router(playground.router)
 router.include_router(supervisor_layers.router)
 router.include_router(pipelines.router)
+router.include_router(github_tokens.router)
 
 
 # ==================== Core Endpoints ====================
