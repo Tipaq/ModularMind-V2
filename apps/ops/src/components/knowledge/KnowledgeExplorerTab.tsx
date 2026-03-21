@@ -170,12 +170,12 @@ function ExplorerFilters() {
     const collectionId = value === "all" ? "" : value;
     setExplorerFilters({ collection_id: collectionId, document_id: "" });
     if (collectionId) fetchDocuments(collectionId);
-    setTimeout(() => useKnowledgeStore.getState().fetchExplorerChunks(1), 0);
+    useKnowledgeStore.getState().fetchExplorerChunks(1);
   }, [setExplorerFilters, fetchDocuments]);
 
   const handleDocumentChange = useCallback((value: string) => {
     setExplorerFilters({ document_id: value === "all" ? "" : value });
-    setTimeout(() => useKnowledgeStore.getState().fetchExplorerChunks(1), 0);
+    useKnowledgeStore.getState().fetchExplorerChunks(1);
   }, [setExplorerFilters]);
 
   return (

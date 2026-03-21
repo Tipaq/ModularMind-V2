@@ -202,7 +202,7 @@ const ExecutionRow = memo(function ExecutionRow({
   );
 });
 
-export function ExecutionTable({
+export const ExecutionTable = memo(function ExecutionTable({
   rows,
   emptyMessage,
   onStopExecution,
@@ -250,4 +250,4 @@ export function ExecutionTable({
       </table>
     </div>
   );
-}
+});

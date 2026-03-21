@@ -166,6 +166,16 @@ export default function Models() {
     return () => clearInterval(interval);
   }, [unifiedCatalog, pollDownloadProgress]);
 
+  const sizeCache = useMemo(() => {
+    const map = new Map<string, number>();
+    const diskMap = new Map<string, number>();
+    for (const m of unifiedCatalog) {
+      map.set(m.id, parseSizeToNumber(m.size));
+      diskMap.set(m.id, parseSizeToNumber(m.disk_size));
+    }
+    return { param: map, disk: diskMap };
+  }, [unifiedCatalog]);
+
   // Client-side filtering + sorting
   const filtered = useMemo(() => {
     let result = unifiedCatalog;
@@ -218,13 +228,13 @@ export default function Models() {
           case "provider_desc":
             return b.provider.localeCompare(a.provider);
           case "size_asc":
-            return parseSizeToNumber(a.size) - parseSizeToNumber(b.size);
+            return (sizeCache.param.get(a.id) ?? 0) - (sizeCache.param.get(b.id) ?? 0);
           case "size_desc":
-            return parseSizeToNumber(b.size) - parseSizeToNumber(a.size);
+            return (sizeCache.param.get(b.id) ?? 0) - (sizeCache.param.get(a.id) ?? 0);
           case "disk_size_asc":
-            return parseSizeToNumber(a.disk_size) - parseSizeToNumber(b.disk_size);
+            return (sizeCache.disk.get(a.id) ?? 0) - (sizeCache.disk.get(b.id) ?? 0);
           case "disk_size_desc":
-            return parseSizeToNumber(b.disk_size) - parseSizeToNumber(a.disk_size);
+            return (sizeCache.disk.get(b.id) ?? 0) - (sizeCache.disk.get(a.id) ?? 0);
           case "context_asc":
             return (a.context_window || 0) - (b.context_window || 0);
           case "context_desc":
@@ -245,7 +255,7 @@ export default function Models() {
     });
 
     return result;
-  }, [unifiedCatalog, filterValues]);
+  }, [unifiedCatalog, filterValues, sizeCache]);
 
   // Client-side pagination
   const paginated = useMemo(() => {
