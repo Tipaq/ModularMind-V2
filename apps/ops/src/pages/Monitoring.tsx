@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router-dom";
-import { LayoutDashboard, Play, Workflow, Bell, Server } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
+import { Activity, LayoutDashboard, Play, Workflow, Bell, Server } from "lucide-react";
+import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
 import { useMonitoringData } from "../hooks/useMonitoringData";
 import { StatusBar } from "../components/monitoring/StatusBar";
 import { OverviewTab } from "../components/monitoring/tabs/OverviewTab";
@@ -11,15 +11,12 @@ import { InfraTab } from "../components/monitoring/tabs/InfraTab";
 
 type TabId = "overview" | "executions" | "pipelines" | "alerts" | "infrastructure";
 
+const TAB_IDS: TabId[] = ["overview", "executions", "pipelines", "alerts", "infrastructure"];
+
 export default function Monitoring() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const TAB_IDS: TabId[] = ["overview", "executions", "pipelines", "alerts", "infrastructure"];
   const rawTab = searchParams.get("tab");
   const activeTab: TabId = TAB_IDS.includes(rawTab as TabId) ? (rawTab as TabId) : "overview";
-
-  const setActiveTab = (tab: TabId) => {
-    setSearchParams({ tab }, { replace: true });
-  };
 
   const data = useMonitoringData();
   const { monitoring, pipeline, llmGpu, liveExecutions, pipelinesDetail, agentMetrics, lastUpdated, refetchAll } = data;
@@ -28,8 +25,14 @@ export default function Monitoring() {
   const dlqMessages = pipelinesDetail?.dlq_messages ?? [];
 
   return (
-    <div className="space-y-5">
-      {/* Status Bar */}
+    <div className="space-y-6">
+      <PageHeader
+        icon={Activity}
+        gradient="from-success to-success/70"
+        title="Monitoring"
+        description="System health, executions, pipelines, and infrastructure"
+      />
+
       <StatusBar
         monitoring={monitoring}
         liveExecutions={liveExecutions}
@@ -37,14 +40,14 @@ export default function Monitoring() {
         onRefresh={refetchAll}
       />
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
+      <Tabs value={activeTab} onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}>
         <TabsList>
-          <TabsTrigger value="overview">
-            <LayoutDashboard className="h-4 w-4" />
+          <TabsTrigger value="overview" className="gap-1.5">
+            <LayoutDashboard className="h-3.5 w-3.5" />
             Overview
           </TabsTrigger>
           <TabsTrigger value="executions" className="gap-1.5">
-            <Play className="h-4 w-4" />
+            <Play className="h-3.5 w-3.5" />
             Executions
             {liveExecutions && liveExecutions.total_active > 0 && (
               <span className="rounded-full bg-success/15 px-1.5 py-0.5 text-[10px] font-medium text-success leading-none">
@@ -52,12 +55,12 @@ export default function Monitoring() {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="pipelines">
-            <Workflow className="h-4 w-4" />
+          <TabsTrigger value="pipelines" className="gap-1.5">
+            <Workflow className="h-3.5 w-3.5" />
             Pipelines
           </TabsTrigger>
           <TabsTrigger value="alerts" className="gap-1.5">
-            <Bell className="h-4 w-4" />
+            <Bell className="h-3.5 w-3.5" />
             Alerts
             {alerts.length > 0 && (
               <span className="rounded-full bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive leading-none">
@@ -65,8 +68,8 @@ export default function Monitoring() {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="infrastructure">
-            <Server className="h-4 w-4" />
+          <TabsTrigger value="infrastructure" className="gap-1.5">
+            <Server className="h-3.5 w-3.5" />
             Infrastructure
           </TabsTrigger>
         </TabsList>
