@@ -9,7 +9,7 @@ class ConnectorCreate(BaseModel):
     """Connector creation request."""
 
     name: str = Field(min_length=1, max_length=200)
-    connector_type: str = Field(pattern="^(slack|teams|email|discord)$")
+    connector_type: str = Field(min_length=1, max_length=20)
     agent_id: str
     config: dict = Field(default_factory=dict)
 
@@ -40,14 +40,39 @@ class ConnectorResponse(BaseModel):
 
 
 class ConnectorCreateResponse(ConnectorResponse):
-    """Response after creating a connector — includes the webhook_secret once.
-
-    The secret is only shown at creation time. Subsequent GET/PUT/LIST
-    responses use ConnectorResponse which omits it.
-    """
+    """Response after creating a connector — includes the webhook_secret once."""
 
     webhook_secret: str
 
 
 class ConnectorListResponse(PaginatedResponse[ConnectorResponse]):
     """Connector list response."""
+
+
+class ConnectorFieldDefResponse(BaseModel):
+    """Field definition for connector configuration UI."""
+
+    key: str
+    label: str
+    placeholder: str
+    is_secret: bool
+    is_required: bool
+
+
+class ConnectorTypeResponse(BaseModel):
+    """Metadata for a connector type — used by frontend to render forms dynamically."""
+
+    type_id: str
+    name: str
+    icon: str
+    color: str
+    description: str
+    doc_url: str
+    setup_steps: list[str]
+    fields: list[ConnectorFieldDefResponse]
+
+
+class ConnectorTypesListResponse(BaseModel):
+    """Response for GET /connectors/types."""
+
+    items: list[ConnectorTypeResponse]

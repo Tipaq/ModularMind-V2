@@ -1,8 +1,4 @@
-"""
-Connector router.
-
-API endpoints for connector CRUD operations.
-"""
+"""Connector router — CRUD operations + connector types metadata."""
 
 import logging
 from uuid import uuid4
@@ -11,11 +7,15 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
 from src.auth import CurrentUser, RequireAdmin
+from src.connectors.registry import get_adapter, all_connector_types, registered_type_ids
 from src.connectors.schemas import (
     ConnectorCreate,
     ConnectorCreateResponse,
+    ConnectorFieldDefResponse,
     ConnectorListResponse,
     ConnectorResponse,
+    ConnectorTypeResponse,
+    ConnectorTypesListResponse,
     ConnectorUpdate,
 )
 from src.domain_config import get_config_provider
@@ -26,20 +26,35 @@ from .models import Connector
 
 logger = logging.getLogger(__name__)
 
+router = APIRouter(prefix="/connectors", tags=["Connectors"])
+
 
 async def _verify_agent_exists(agent_id: str) -> None:
-    """Verify agent_id exists in config. Raises 404 if not found."""
     config_provider = get_config_provider()
     agent = await config_provider.get_agent_config(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
 
-router = APIRouter(prefix="/connectors", tags=["Connectors"])
+def _validate_connector_config(connector_type: str, config: dict) -> None:
+    adapter = get_adapter(connector_type)
+    if not adapter:
+        raise HTTPException(status_code=422, detail=f"Unknown connector type: {connector_type}")
+    allowed = adapter.allowed_config_keys()
+    unexpected = set(config.keys()) - allowed
+    if unexpected:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unexpected config keys for {connector_type}: {sorted(unexpected)}",
+        )
+
+
+def _validate_connector_type(connector_type: str) -> None:
+    if connector_type not in registered_type_ids():
+        raise HTTPException(status_code=422, detail=f"Unknown connector type: {connector_type}")
 
 
 def to_response(connector: Connector) -> ConnectorResponse:
-    """Convert connector model to response (without secret)."""
     return ConnectorResponse(
         id=connector.id,
         name=connector.name,
@@ -54,7 +69,6 @@ def to_response(connector: Connector) -> ConnectorResponse:
 
 
 def to_create_response(connector: Connector) -> ConnectorCreateResponse:
-    """Convert connector model to creation response (includes secret once)."""
     return ConnectorCreateResponse(
         id=connector.id,
         name=connector.name,
@@ -69,31 +83,33 @@ def to_create_response(connector: Connector) -> ConnectorCreateResponse:
     )
 
 
-# ─── Config validation ────────────────────────────────────────────────────────
-
-# Allowed config keys per connector type (reject unexpected keys)
-_ALLOWED_CONFIG_KEYS: dict[str, frozenset[str]] = {
-    "slack": frozenset({"channel", "signing_secret", "bot_token", "app_token"}),
-    "teams": frozenset({"tenant_id", "app_id", "app_secret", "channel"}),
-    "email": frozenset({"smtp_host", "smtp_port", "imap_host", "address", "use_tls"}),
-    "discord": frozenset({"bot_token", "application_id", "public_key", "guild_id", "channel_id"}),
-}
-
-
-def validate_connector_config(connector_type: str, config: dict) -> None:
-    """Validate config keys against the connector type whitelist."""
-    allowed = _ALLOWED_CONFIG_KEYS.get(connector_type)
-    if allowed is None:
-        return  # Unknown type already blocked by schema regex
-    unexpected = set(config.keys()) - allowed
-    if unexpected:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Unexpected config keys for {connector_type}: {sorted(unexpected)}",
+@router.get("/types", response_model=ConnectorTypesListResponse)
+async def list_connector_types() -> ConnectorTypesListResponse:
+    """Return metadata for all registered connector types."""
+    metas = all_connector_types()
+    items = [
+        ConnectorTypeResponse(
+            type_id=m.type_id,
+            name=m.name,
+            icon=m.icon,
+            color=m.color,
+            description=m.description,
+            doc_url=m.doc_url,
+            setup_steps=m.setup_steps,
+            fields=[
+                ConnectorFieldDefResponse(
+                    key=f.key,
+                    label=f.label,
+                    placeholder=f.placeholder,
+                    is_secret=f.is_secret,
+                    is_required=f.is_required,
+                )
+                for f in m.fields
+            ],
         )
-
-
-# ─── Endpoints ─────────────────────────────────────────────────────────────────
+        for m in metas
+    ]
+    return ConnectorTypesListResponse(items=items)
 
 
 @router.get("", response_model=ConnectorListResponse, dependencies=[RequireAdmin])
@@ -101,10 +117,8 @@ async def list_connectors(
     user: CurrentUser,
     db: DbSession,
 ) -> ConnectorListResponse:
-    """List all connectors."""
     result = await db.execute(select(Connector).order_by(Connector.created_at.desc()))
     connectors = list(result.scalars().all())
-
     return ConnectorListResponse(
         items=[to_response(c) for c in connectors],
         total=len(connectors),
@@ -119,12 +133,8 @@ async def create_connector(
     user: CurrentUser,
     db: DbSession,
 ) -> ConnectorCreateResponse:
-    """Create a new connector.
-
-    Returns the webhook_secret once in the response. It will not be
-    included in subsequent GET/PUT/LIST responses.
-    """
-    validate_connector_config(data.connector_type, data.config)
+    _validate_connector_type(data.connector_type)
+    _validate_connector_config(data.connector_type, data.config)
     await _verify_agent_exists(data.agent_id)
 
     connector = Connector(
@@ -137,7 +147,6 @@ async def create_connector(
     db.add(connector)
     await db.commit()
     await db.refresh(connector)
-
     return to_create_response(connector)
 
 
@@ -147,13 +156,10 @@ async def get_connector(
     user: CurrentUser,
     db: DbSession,
 ) -> ConnectorResponse:
-    """Get a specific connector."""
     result = await db.execute(select(Connector).where(Connector.id == connector_id))
     connector = result.scalar_one_or_none()
-
     if not connector:
         raise_not_found("Connector")
-
     return to_response(connector)
 
 
@@ -164,10 +170,8 @@ async def update_connector(
     user: CurrentUser,
     db: DbSession,
 ) -> ConnectorResponse:
-    """Update a connector."""
     result = await db.execute(select(Connector).where(Connector.id == connector_id))
     connector = result.scalar_one_or_none()
-
     if not connector:
         raise_not_found("Connector")
 
@@ -179,12 +183,11 @@ async def update_connector(
     if data.is_enabled is not None:
         connector.is_enabled = data.is_enabled
     if data.config is not None:
-        validate_connector_config(connector.connector_type, data.config)
+        _validate_connector_config(connector.connector_type, data.config)
         connector.config = data.config
 
     await db.commit()
     await db.refresh(connector)
-
     return to_response(connector)
 
 
@@ -194,12 +197,9 @@ async def delete_connector(
     user: CurrentUser,
     db: DbSession,
 ) -> None:
-    """Delete a connector."""
     result = await db.execute(select(Connector).where(Connector.id == connector_id))
     connector = result.scalar_one_or_none()
-
     if not connector:
         raise_not_found("Connector")
-
     await db.delete(connector)
     await db.commit()

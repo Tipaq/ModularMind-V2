@@ -24,6 +24,8 @@ class ConnectorType(StrEnum):
     TEAMS = "teams"
     EMAIL = "email"
     DISCORD = "discord"
+    TELEGRAM = "telegram"
+    WHATSAPP = "whatsapp"
 
 
 class Connector(Base):
