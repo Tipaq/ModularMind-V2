@@ -21,10 +21,12 @@ DEFAULT_TOOL_CATEGORIES: dict[str, bool] = {
     "image_generation": False,
     "custom_tools": False,
     "github": False,
+    "web": False,
+    "git": False,
 }
 
 
-def _get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
+def get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
     """Lazy import to avoid circular dependencies."""
     from src.tools.categories.custom_tools import get_custom_tool_definitions
     from src.tools.categories.file_storage import get_file_storage_tool_definitions
@@ -37,7 +39,9 @@ def _get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
         get_image_generation_tool_definitions,
     )
     from src.tools.categories.knowledge import get_knowledge_tool_definitions
+    from src.tools.categories.git import get_git_tool_definitions
     from src.tools.categories.mini_apps import get_mini_app_tool_definitions
+    from src.tools.categories.web import get_web_tool_definitions
 
     return {
         "knowledge": get_knowledge_tool_definitions,
@@ -48,6 +52,8 @@ def _get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
         "custom_tools": get_custom_tool_definitions,
         "mini_apps": get_mini_app_tool_definitions,
         "github": get_github_tool_definitions,
+        "web": get_web_tool_definitions,
+        "git": get_git_tool_definitions,
     }
 
 
@@ -60,7 +66,7 @@ def resolve_tool_definitions(tool_categories: dict[str, bool]) -> list[dict[str,
     Returns:
         Combined list of OpenAI-compatible tool definitions.
     """
-    registry = _get_category_registry()
+    registry = get_category_registry()
     tools: list[dict[str, Any]] = []
 
     for category, enabled in tool_categories.items():
