@@ -174,8 +174,8 @@ class ExtendedToolExecutor:
         try:
             keys = await self._get_search_api_keys()
             async with self._session_maker() as session:
-                from src.tools.categories.github import _resolve_token
-                github_token = await _resolve_token(session, self._agent_id)
+                from src.tools.categories.github import resolve_token
+                github_token = await resolve_token(session, self._agent_id)
         except Exception:
             pass
         return await execute_git_tool(name, args, github_token=github_token)

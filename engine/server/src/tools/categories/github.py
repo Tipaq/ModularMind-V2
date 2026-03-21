@@ -129,7 +129,7 @@ async def execute_github_tool(
 # Token resolution
 # ---------------------------------------------------------------------------
 
-async def _resolve_token(session: AsyncSession, agent_id: str) -> str | None:
+async def resolve_token(session: AsyncSession, agent_id: str) -> str | None:
     """Resolve the GitHub PAT for this agent."""
     from src.tools.models import GitHubToken
 
