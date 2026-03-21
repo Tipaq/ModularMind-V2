@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from src.infra.database import async_session_maker
 from src.scheduled_tasks.models import ScheduledTask
-from src.scheduled_tasks.schemas import ScheduledTaskConfig
+from src.scheduled_tasks.schemas import interval_to_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -34,72 +34,68 @@ class ScheduledTaskRunner:
             result = await session.execute(select(ScheduledTask))
             all_tasks = list(result.scalars().all())
 
-        remote_configs: dict[str, ScheduledTaskConfig] = {}
-        for task in all_tasks:
-            config = self._task_to_config(task)
-            remote_configs[task.id] = config
+        task_map: dict[str, ScheduledTask] = {t.id: t for t in all_tasks}
 
         for task_id in list(self._active_jobs):
-            config = remote_configs.get(task_id)
-            if not config or not config.enabled:
+            task = task_map.get(task_id)
+            if not task or not task.enabled:
                 self._remove_job(task_id)
 
-        for task_id, config in remote_configs.items():
-            if not config.enabled:
+        for task_id, task in task_map.items():
+            if not task.enabled:
                 continue
             existing_version = self._active_jobs.get(task_id)
-            if existing_version == config.version:
+            if existing_version == task.version:
                 continue
             if existing_version is not None:
                 self._remove_job(task_id)
-            self._add_job(config)
+            self._add_job(task)
 
-    def _task_to_config(self, task: ScheduledTask) -> ScheduledTaskConfig:
-        """Convert a DB model to a ScheduledTaskConfig."""
-        config_data = task.config or {}
-        return ScheduledTaskConfig(
-            id=task.id,
-            name=task.name,
-            description=task.description,
-            enabled=task.enabled,
-            trigger=config_data.get("trigger", {}),
-            triage=config_data.get("triage"),
-            execution=config_data.get("execution", {}),
-            post_actions=config_data.get("post_actions", []),
-            settings=config_data.get("settings", {}),
-            version=task.version,
-            tags=task.tags or [],
-        )
-
-    def _add_job(self, config: ScheduledTaskConfig) -> None:
+    def _add_job(self, task: ScheduledTask) -> None:
         """Add an APScheduler job for this scheduled task."""
-        trigger_config = config.trigger
-        trigger_type = trigger_config.get("type", "cron")
-        interval = trigger_config.get("interval_seconds", 3600)
-        job_id = f"{JOB_PREFIX}{config.id}"
+        job_id = f"{JOB_PREFIX}{task.id}"
 
-        if trigger_type == "cron":
+        if task.schedule_type == "interval":
+            if not task.interval_value or not task.interval_unit:
+                logger.warning("Interval task %s missing value/unit", task.id)
+                return
+            seconds = interval_to_seconds(task.interval_value, task.interval_unit)
             self._scheduler.add_job(
                 self._execute_trigger,
                 "interval",
-                seconds=interval,
+                seconds=seconds,
                 id=job_id,
-                name=f"ScheduledTask: {config.name}",
-                args=[config.id],
+                name=f"ScheduledTask: {task.name}",
+                args=[task.id],
                 replace_existing=True,
             )
-        elif trigger_type == "manual":
+            logger.info(
+                "Scheduled task '%s' every %d %s",
+                task.name, task.interval_value, task.interval_unit,
+            )
+        elif task.schedule_type == "one_shot":
+            if not task.scheduled_at:
+                logger.warning("One-shot task %s missing scheduled_at", task.id)
+                return
+            self._scheduler.add_job(
+                self._execute_trigger,
+                "date",
+                run_date=task.scheduled_at,
+                id=job_id,
+                name=f"ScheduledTask: {task.name}",
+                args=[task.id],
+                replace_existing=True,
+            )
+            logger.info(
+                "Scheduled task '%s' at %s", task.name, task.scheduled_at,
+            )
+        elif task.schedule_type == "manual":
             pass
         else:
-            logger.warning(
-                "Unknown trigger type '%s' for task %s", trigger_type, config.id,
-            )
+            logger.warning("Unknown schedule_type '%s' for task %s", task.schedule_type, task.id)
             return
 
-        self._active_jobs[config.id] = config.version
-        logger.info(
-            "Scheduled task '%s' (%s) every %ds", config.name, config.id, interval,
-        )
+        self._active_jobs[task.id] = task.version
 
     def _remove_job(self, task_id: str) -> None:
         """Remove the APScheduler job for a scheduled task."""
@@ -111,6 +107,8 @@ class ScheduledTaskRunner:
 
     async def _execute_trigger(self, task_id: str) -> None:
         """APScheduler callback: fetch source data, triage, enqueue."""
+        from src.infra.utils import utcnow
+
         try:
             async with async_session_maker() as session:
                 result = await session.execute(
@@ -118,40 +116,114 @@ class ScheduledTaskRunner:
                 )
                 task = result.scalar_one_or_none()
 
-            if not task:
-                logger.warning("Scheduled task %s not found in DB", task_id)
+            if not task or not task.enabled:
                 return
 
-            config = self._task_to_config(task)
-            if not config.enabled:
-                logger.debug("Scheduled task %s is disabled, skipping", task_id)
-                return
+            # Check if task has a source handler (e.g. GitHub PRs)
+            config = task.config or {}
+            source_type = config.get("trigger", {}).get("source", "")
 
-            source_type = config.trigger.get("source", "")
             if source_type == "github_pr":
-                from src.scheduled_tasks.sources.github_pr import GitHubPRSource
-
-                source = GitHubPRSource(config)
-                items = await source.fetch_new_items()
+                await self._execute_source_trigger(task, config)
+            elif task.target_id:
+                await self._execute_direct(task)
             else:
-                logger.warning("Unknown source type: %s", source_type)
+                logger.warning("Task %s has no target or source", task_id)
                 return
 
-            if not items:
-                logger.debug("Scheduled task %s: no new items", task_id)
-                return
-
-            logger.info("Scheduled task %s: found %d new items", task_id, len(items))
-
-            max_per_cycle = config.settings.get("max_per_cycle", 5)
-            for item in items[:max_per_cycle]:
-                await self._enqueue_item(config, item)
+            # Update last_run_at
+            async with async_session_maker() as session:
+                result = await session.execute(
+                    select(ScheduledTask).where(ScheduledTask.id == task_id)
+                )
+                db_task = result.scalar_one_or_none()
+                if db_task:
+                    db_task.last_run_at = utcnow()
+                    # Disable one-shot tasks after execution
+                    if db_task.schedule_type == "one_shot":
+                        db_task.enabled = False
+                    await session.commit()
 
         except Exception:
             logger.exception("Scheduled task trigger failed for %s", task_id)
 
-    async def _enqueue_item(
-        self, config: ScheduledTaskConfig, item: dict[str, Any],
+    async def _execute_direct(self, task: ScheduledTask) -> None:
+        """Enqueue a direct execution (no source handler)."""
+        from uuid import uuid4
+
+        from src.infra.publish import enqueue_execution
+        from src.scheduled_tasks.models import ScheduledTaskRun, ScheduledTaskRunStatus
+
+        run_id = str(uuid4())
+        async with async_session_maker() as session:
+            run = ScheduledTaskRun(
+                id=run_id,
+                scheduled_task_id=task.id,
+                status=ScheduledTaskRunStatus.PENDING,
+                source_type="direct",
+                source_ref="",
+            )
+            session.add(run)
+            await session.commit()
+
+        input_data: dict[str, Any] = {
+            "_scheduled_task_id": task.id,
+            "_scheduled_task_run_id": run_id,
+        }
+
+        await enqueue_execution(
+            target_id=task.target_id or "",
+            input_text=task.input_text or f"Execute scheduled task: {task.name}",
+            input_data=input_data,
+            user_id="",
+        )
+        logger.info("Enqueued direct execution for task %s, run %s", task.id, run_id)
+
+    async def _execute_source_trigger(
+        self, task: ScheduledTask, config: dict[str, Any],
+    ) -> None:
+        """Execute trigger with a source handler (e.g. GitHub PRs)."""
+        from src.scheduled_tasks.schemas import ScheduledTaskConfig
+
+        task_config = ScheduledTaskConfig(
+            id=task.id,
+            name=task.name,
+            description=task.description,
+            enabled=task.enabled,
+            schedule_type=task.schedule_type,
+            target_type=task.target_type,
+            target_id=task.target_id,
+            input_text=task.input_text,
+            config=config,
+            version=task.version,
+            tags=task.tags or [],
+        )
+
+        source_type = config.get("trigger", {}).get("source", "")
+        if source_type == "github_pr":
+            from src.scheduled_tasks.sources.github_pr import GitHubPRSource
+
+            source = GitHubPRSource(task_config)
+            items = await source.fetch_new_items()
+        else:
+            logger.warning("Unknown source type: %s", source_type)
+            return
+
+        if not items:
+            logger.debug("Task %s: no new items", task.id)
+            return
+
+        logger.info("Task %s: found %d new items", task.id, len(items))
+
+        max_per_cycle = config.get("settings", {}).get("max_per_cycle", 5)
+        for item in items[:max_per_cycle]:
+            await self._enqueue_source_item(task, task_config, item)
+
+    async def _enqueue_source_item(
+        self,
+        task: ScheduledTask,
+        config: ScheduledTaskConfig,
+        item: dict[str, Any],
     ) -> None:
         """Enqueue an execution for a single source item."""
         from uuid import uuid4
@@ -165,28 +237,24 @@ class ScheduledTaskRunner:
         async with async_session_maker() as session:
             run = ScheduledTaskRun(
                 id=run_id,
-                scheduled_task_id=config.id,
+                scheduled_task_id=task.id,
                 status=ScheduledTaskRunStatus.PENDING,
-                source_type=config.trigger.get("source", ""),
+                source_type=config.config.get("trigger", {}).get("source", ""),
                 source_ref=source_ref,
             )
             session.add(run)
             await session.commit()
 
-        exec_config = config.execution
-        agent_id = exec_config.get("agent_id")
-        graph_id = exec_config.get("graph_id")
+        target_id = task.target_id
+        if not target_id:
+            logger.error("Task %s has no execution target", task.id)
+            return
 
         input_data: dict[str, Any] = {
-            "_scheduled_task_id": config.id,
+            "_scheduled_task_id": task.id,
             "_scheduled_task_run_id": run_id,
             **item,
         }
-
-        target_id = graph_id or agent_id
-        if not target_id:
-            logger.error("Scheduled task %s has no execution target", config.id)
-            return
 
         await enqueue_execution(
             target_id=target_id,
@@ -194,7 +262,4 @@ class ScheduledTaskRunner:
             input_data=input_data,
             user_id="",
         )
-        logger.info(
-            "Enqueued execution for task %s, run %s, target %s",
-            config.id, run_id, target_id,
-        )
+        logger.info("Enqueued execution for task %s, run %s", task.id, run_id)

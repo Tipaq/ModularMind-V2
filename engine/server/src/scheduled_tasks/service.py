@@ -8,7 +8,11 @@ from sqlalchemy import func, select
 from src.infra.database import async_session_maker
 from src.infra.utils import utcnow
 from src.scheduled_tasks.models import ScheduledTask, ScheduledTaskRun
-from src.scheduled_tasks.schemas import ScheduledTaskCreate, ScheduledTaskUpdate
+from src.scheduled_tasks.schemas import (
+    ScheduledTaskCreate,
+    ScheduledTaskUpdate,
+    compute_next_run_at,
+)
 
 
 async def list_tasks(
@@ -52,11 +56,22 @@ async def get_task(task_id: str) -> ScheduledTask | None:
 
 async def create_task(data: ScheduledTaskCreate) -> ScheduledTask:
     """Create a new scheduled task."""
+    next_run = compute_next_run_at(
+        data.schedule_type, data.interval_value, data.interval_unit, data.scheduled_at,
+    )
     async with async_session_maker() as session:
         task = ScheduledTask(
             id=str(uuid4()),
             name=data.name,
             description=data.description,
+            schedule_type=data.schedule_type,
+            interval_value=data.interval_value,
+            interval_unit=data.interval_unit,
+            scheduled_at=data.scheduled_at,
+            next_run_at=next_run,
+            target_type=data.target_type,
+            target_id=data.target_id,
+            input_text=data.input_text,
             config=data.config,
             tags=data.tags,
         )
@@ -82,10 +97,36 @@ async def update_task(task_id: str, data: ScheduledTaskUpdate) -> ScheduledTask 
             task.description = data.description
         if data.enabled is not None:
             task.enabled = data.enabled
+        if data.schedule_type is not None:
+            task.schedule_type = data.schedule_type
+        if data.interval_value is not None:
+            task.interval_value = data.interval_value
+        if data.interval_unit is not None:
+            task.interval_unit = data.interval_unit
+        if data.scheduled_at is not None:
+            task.scheduled_at = data.scheduled_at
+        if data.target_type is not None:
+            task.target_type = data.target_type
+        if data.target_id is not None:
+            task.target_id = data.target_id
+        if data.input_text is not None:
+            task.input_text = data.input_text
         if data.config is not None:
             task.config = data.config
         if data.tags is not None:
             task.tags = data.tags
+
+        # Recompute next_run_at if schedule changed
+        schedule_changed = any([
+            data.schedule_type is not None,
+            data.interval_value is not None,
+            data.interval_unit is not None,
+            data.scheduled_at is not None,
+        ])
+        if schedule_changed:
+            task.next_run_at = compute_next_run_at(
+                task.schedule_type, task.interval_value, task.interval_unit, task.scheduled_at,
+            )
 
         task.version += 1
         task.updated_at = utcnow()
@@ -123,6 +164,13 @@ async def duplicate_task(task_id: str) -> ScheduledTask | None:
             name=f"{source.name} (copy)",
             description=source.description,
             enabled=False,
+            schedule_type=source.schedule_type,
+            interval_value=source.interval_value,
+            interval_unit=source.interval_unit,
+            scheduled_at=source.scheduled_at,
+            target_type=source.target_type,
+            target_id=source.target_id,
+            input_text=source.input_text,
             config=dict(source.config) if source.config else {},
             tags=list(source.tags) if source.tags else [],
         )
