@@ -230,7 +230,7 @@ class GatewayApprovalService:
             deadline = time.time() + timeout
             while time.time() < deadline:
                 remaining = max(0.1, deadline - time.time())
-                wait_time = min(remaining, 1.0)
+                wait_time = min(remaining, 0.1)
                 msg = await pubsub.get_message(
                     ignore_subscribe_messages=True, timeout=wait_time
                 )
