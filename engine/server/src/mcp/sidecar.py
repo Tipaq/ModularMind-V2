@@ -67,7 +67,7 @@ class SidecarManager:
         self._sidecars: dict[str, SidecarInfo] = {}  # server_id → info
         self._deploy_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DEPLOYS)
 
-    async def _get_docker(self):
+    async def get_docker(self):
         """Lazy-initialize Docker client."""
         if self._docker is not None:
             return self._docker
@@ -174,7 +174,7 @@ class SidecarManager:
         if missing:
             raise SidecarError(f"Missing required secrets: {', '.join(missing)}")
 
-        docker_client = await self._get_docker()
+        docker_client = await self.get_docker()
         server_id = server_id or str(uuid.uuid4())
         container_name = f"mm-mcp-{entry.id}-{server_id[:8]}"
 
@@ -275,7 +275,7 @@ class SidecarManager:
             return False
 
         try:
-            docker_client = await self._get_docker()
+            docker_client = await self.get_docker()
             container = await asyncio.to_thread(docker_client.containers.get, info.container_id)
             await asyncio.to_thread(container.stop, timeout=CONTAINER_STOP_TIMEOUT_SECS)
             await asyncio.to_thread(container.remove)
@@ -293,7 +293,7 @@ class SidecarManager:
             return None
 
         try:
-            docker_client = await self._get_docker()
+            docker_client = await self.get_docker()
             container = await asyncio.to_thread(docker_client.containers.get, info.container_id)
             return {
                 "server_id": server_id,
@@ -316,7 +316,7 @@ class SidecarManager:
     async def recover_sidecars(self) -> list[SidecarInfo]:
         """On startup, find existing sidecar containers and re-track them."""
         try:
-            docker_client = await self._get_docker()
+            docker_client = await self.get_docker()
         except SidecarError:
             return []
 
@@ -367,7 +367,7 @@ class SidecarManager:
             if not info:
                 continue
             try:
-                docker_client = await self._get_docker()
+                docker_client = await self.get_docker()
                 container = await asyncio.to_thread(docker_client.containers.get, info.container_id)
                 await asyncio.to_thread(container.stop, timeout=CONTAINER_STOP_TIMEOUT_SECS)
                 logger.info("Stopped sidecar %s", info.container_name)

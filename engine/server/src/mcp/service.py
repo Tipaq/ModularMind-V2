@@ -307,7 +307,7 @@ async def _warm_mcp_clients() -> None:
                     logger.warning("MCP warm-up: could not connect to '%s': %s", name, e)
 
     await asyncio.gather(*[_try_connect(s.id, s.name) for s in servers])
-    connected = sum(1 for s in servers if registry._clients.get(s.id))
+    connected = sum(1 for s in servers if registry.clients.get(s.id))
     if connected:
         logger.info("MCP warm-up: %d/%d server(s) connected", connected, len(servers))
 
@@ -326,7 +326,7 @@ async def _mcp_health_loop() -> None:
             return
 
         registry = get_mcp_registry()
-        for server_id, client in list(registry._clients.items()):
+        for server_id, client in list(registry.clients.items()):
             try:
                 healthy = await client.health_check()
                 if not healthy:

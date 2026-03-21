@@ -52,6 +52,14 @@ class MCPRegistry:
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
 
+    @property
+    def servers(self) -> dict[str, MCPServerConfig]:
+        return self._servers
+
+    @property
+    def clients(self) -> dict[str, MCPClient]:
+        return self._clients
+
     def load_from_disk(self) -> None:
         """Load MCP server configs from CONFIG_DIR/mcp/*.json."""
         if not self._config_dir or not self._config_dir.exists():

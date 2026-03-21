@@ -239,7 +239,7 @@ async def get_server_logs(
         )
 
     try:
-        docker_client = await manager._get_docker()
+        docker_client = await manager.get_docker()
         container = await asyncio.to_thread(docker_client.containers.get, info.container_id)
         logs_bytes = await asyncio.to_thread(
             container.logs, tail=min(tail, MAX_LOG_TAIL), timestamps=False
