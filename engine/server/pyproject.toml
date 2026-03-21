@@ -44,6 +44,8 @@ dependencies = [
     "prometheus-fastapi-instrumentator>=6.0.0",
     "aiobotocore>=2.12.0",
     "modularmind-shared",
+    "duckduckgo-search>=7.0",
+    "trafilatura>=2.0",
 ]
 
 [project.optional-dependencies]
