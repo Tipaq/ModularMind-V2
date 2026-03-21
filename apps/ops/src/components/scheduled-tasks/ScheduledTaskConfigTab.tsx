@@ -1,14 +1,12 @@
 import { useState } from "react";
 import {
-  Clock,
-  SlidersHorizontal,
+  CalendarClock,
   Target,
+  MessageSquare,
   Settings2,
-  ArrowRight,
   Save,
   X,
   Edit,
-  Plus,
 } from "lucide-react";
 import {
   Badge,
@@ -22,7 +20,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@modularmind/ui";
-import type { ScheduledTask } from "@modularmind/api-client";
+import type { ScheduledTask, ScheduleType, IntervalUnit, TargetType } from "@modularmind/api-client";
 
 interface ScheduledTaskConfigTabProps {
   task: ScheduledTask;
@@ -33,21 +31,16 @@ function Section({
   icon: Icon,
   title,
   children,
-  actions,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   children: React.ReactNode;
-  actions?: React.ReactNode;
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          <Icon className="h-3.5 w-3.5" />
-          {title}
-        </div>
-        {actions}
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+        <Icon className="h-3.5 w-3.5" />
+        {title}
       </div>
       {children}
     </div>
@@ -63,62 +56,27 @@ function PropRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-const POST_ACTION_TYPES = [
-  { value: "github_comment", label: "GitHub Comment" },
-  { value: "github_commit", label: "GitHub Commit" },
-  { value: "github_merge", label: "GitHub Merge" },
-  { value: "webhook", label: "Webhook" },
-];
-
-const MERGE_METHODS = [
-  { value: "squash", label: "Squash" },
-  { value: "merge", label: "Merge" },
-  { value: "rebase", label: "Rebase" },
-];
-
 export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabProps) {
-  const config = task.config || {};
-  const trigger = config.trigger || {};
-  const triage = config.triage || {};
-  const execution = config.execution || {};
-  const postActions = config.post_actions || [];
-  const settings = config.settings || {};
-
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const settings = task.config?.settings || {};
 
   const [editValues, setEditValues] = useState({
     name: task.name,
     description: task.description,
-    trigger_type: trigger.type || "cron",
-    trigger_interval: trigger.interval_seconds || 3600,
-    trigger_source: trigger.source || "github_pr",
-    trigger_token_ref: trigger.github_token_ref || "GITHUB_TOKEN",
-    trigger_repos: (trigger.repos || []).join(", "),
-    triage_enabled: triage.enabled !== false,
-    triage_max_files: triage.simple_threshold?.max_files || 10,
-    triage_max_lines: triage.simple_threshold?.max_lines || 500,
-    exec_agent_id: execution.agent_id || "",
-    exec_graph_id: execution.graph_id || "",
-    exec_timeout: execution.timeout_seconds || 600,
-    post_actions: (postActions || []).map((pa) => ({
-      type: pa.type,
-      on: pa.on,
-      method: pa.method,
-      url: pa.url,
-    })),
+    schedule_type: task.schedule_type as ScheduleType,
+    interval_value: task.interval_value || 1,
+    interval_unit: (task.interval_unit || "hours") as IntervalUnit,
+    scheduled_at: task.scheduled_at || "",
+    target_type: task.target_type as TargetType,
+    target_id: task.target_id || "",
+    input_text: task.input_text || "",
     dry_run: settings.dry_run !== false,
-    max_per_cycle: settings.max_per_cycle || 5,
-    skip_labels: (settings.skip_labels || []).join(", "),
-    require_labels: (settings.require_labels || []).join(", "),
-    branches: (settings.branches || ["main"]).join(", "),
+    max_per_cycle: (settings.max_per_cycle as number) || 5,
   });
 
   const startEditing = () => setIsEditing(true);
   const cancelEditing = () => setIsEditing(false);
-
-  const splitList = (s: string) =>
-    s.split(",").map((p) => p.trim()).filter(Boolean);
 
   const handleSave = async () => {
     setSaving(true);
@@ -126,33 +84,19 @@ export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabP
       await onSave({
         name: editValues.name,
         description: editValues.description,
+        schedule_type: editValues.schedule_type,
+        interval_value: editValues.schedule_type === "interval" ? editValues.interval_value : null,
+        interval_unit: editValues.schedule_type === "interval" ? editValues.interval_unit : null,
+        scheduled_at: editValues.schedule_type === "one_shot" ? editValues.scheduled_at : null,
+        target_type: editValues.target_type,
+        target_id: editValues.target_id || null,
+        input_text: editValues.input_text,
         config: {
-          trigger: {
-            type: editValues.trigger_type as "cron" | "manual",
-            interval_seconds: editValues.trigger_interval,
-            source: editValues.trigger_source,
-            github_token_ref: editValues.trigger_token_ref,
-            repos: splitList(editValues.trigger_repos),
-          },
-          triage: {
-            enabled: editValues.triage_enabled,
-            simple_threshold: {
-              max_files: editValues.triage_max_files,
-              max_lines: editValues.triage_max_lines,
-            },
-          },
-          execution: {
-            agent_id: editValues.exec_agent_id || null,
-            graph_id: editValues.exec_graph_id || null,
-            timeout_seconds: editValues.exec_timeout,
-          },
-          post_actions: editValues.post_actions,
+          ...task.config,
           settings: {
+            ...(task.config?.settings || {}),
             dry_run: editValues.dry_run,
             max_per_cycle: editValues.max_per_cycle,
-            skip_labels: splitList(editValues.skip_labels),
-            require_labels: splitList(editValues.require_labels),
-            branches: splitList(editValues.branches),
           },
         },
       });
@@ -160,29 +104,6 @@ export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabP
     } finally {
       setSaving(false);
     }
-  };
-
-  const addPostAction = () => {
-    setEditValues((v) => ({
-      ...v,
-      post_actions: [...v.post_actions, { type: "github_comment", on: "always" as const, method: undefined, url: undefined }],
-    }));
-  };
-
-  const removePostAction = (index: number) => {
-    setEditValues((v) => ({
-      ...v,
-      post_actions: v.post_actions.filter((_, i) => i !== index),
-    }));
-  };
-
-  const updatePostAction = (index: number, field: string, value: string) => {
-    setEditValues((v) => ({
-      ...v,
-      post_actions: v.post_actions.map((pa, i) =>
-        i === index ? { ...pa, [field]: value } : pa,
-      ),
-    }));
   };
 
   return (
@@ -204,246 +125,135 @@ export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabP
         )}
       </div>
 
-      {/* Trigger */}
-      <Section icon={Clock} title="Trigger">
+      {/* Schedule */}
+      <Section icon={CalendarClock} title="Schedule">
         {isEditing ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <PropRow label="Type">
               <Select
-                value={editValues.trigger_type}
-                onValueChange={(v) => setEditValues((prev) => ({ ...prev, trigger_type: v as "cron" | "manual" }))}
+                value={editValues.schedule_type}
+                onValueChange={(v) => setEditValues((prev) => ({ ...prev, schedule_type: v as ScheduleType }))}
               >
-                <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-40 h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cron">Cron</SelectItem>
+                  <SelectItem value="interval">Interval</SelectItem>
+                  <SelectItem value="one_shot">One-shot</SelectItem>
                   <SelectItem value="manual">Manual</SelectItem>
                 </SelectContent>
               </Select>
             </PropRow>
-            {editValues.trigger_type === "cron" && (
-              <PropRow label="Interval">
-                <div className="flex items-center gap-1.5">
+            {editValues.schedule_type === "interval" && (
+              <PropRow label="Every">
+                <div className="flex items-center gap-2">
                   <Input
                     type="number"
-                    value={editValues.trigger_interval}
-                    onChange={(e) =>
-                      setEditValues((v) => ({ ...v, trigger_interval: Number(e.target.value) }))
-                    }
-                    className="w-24 h-8 text-sm"
-                    min={60}
-                    max={86400}
+                    value={editValues.interval_value}
+                    onChange={(e) => setEditValues((v) => ({ ...v, interval_value: Number(e.target.value) }))}
+                    className="w-20 h-8 text-sm"
+                    min={1}
                   />
-                  <span className="text-xs text-muted-foreground">sec</span>
+                  <Select
+                    value={editValues.interval_unit}
+                    onValueChange={(v) => setEditValues((prev) => ({ ...prev, interval_unit: v as IntervalUnit }))}
+                  >
+                    <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="minutes">Minutes</SelectItem>
+                      <SelectItem value="hours">Hours</SelectItem>
+                      <SelectItem value="days">Days</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </PropRow>
             )}
-            <PropRow label="Source">
+            {editValues.schedule_type === "one_shot" && (
+              <PropRow label="Run at">
+                <Input
+                  type="datetime-local"
+                  value={typeof editValues.scheduled_at === "string" ? editValues.scheduled_at.slice(0, 16) : ""}
+                  onChange={(e) => setEditValues((v) => ({ ...v, scheduled_at: e.target.value }))}
+                  className="w-52 h-8 text-sm"
+                />
+              </PropRow>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <PropRow label="Type">
+              <Badge variant="outline" className="text-[10px]">{task.schedule_type}</Badge>
+            </PropRow>
+            {task.schedule_type === "interval" && (
+              <PropRow label="Every">
+                <span className="text-sm">
+                  {task.interval_value} {task.interval_unit}
+                </span>
+              </PropRow>
+            )}
+            {task.schedule_type === "one_shot" && task.scheduled_at && (
+              <PropRow label="Run at">
+                <span className="text-sm">{new Date(task.scheduled_at).toLocaleString()}</span>
+              </PropRow>
+            )}
+          </div>
+        )}
+      </Section>
+
+      <Separator />
+
+      {/* Target */}
+      <Section icon={Target} title="Execution Target">
+        {isEditing ? (
+          <div className="space-y-3">
+            <PropRow label="Type">
               <Select
-                value={editValues.trigger_source}
-                onValueChange={(v) => setEditValues((prev) => ({ ...prev, trigger_source: v }))}
+                value={editValues.target_type}
+                onValueChange={(v) => setEditValues((prev) => ({ ...prev, target_type: v as TargetType }))}
               >
-                <SelectTrigger className="w-36 h-8"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="github_pr">GitHub PR</SelectItem>
-                  <SelectItem value="github_issue">GitHub Issue</SelectItem>
+                  <SelectItem value="agent">Agent</SelectItem>
+                  <SelectItem value="graph">Graph</SelectItem>
                 </SelectContent>
               </Select>
             </PropRow>
             <div>
-              <label className="text-[11px] text-muted-foreground">Token env var</label>
+              <label className="text-[11px] text-muted-foreground">Target ID</label>
               <Input
-                value={editValues.trigger_token_ref}
-                onChange={(e) => setEditValues((v) => ({ ...v, trigger_token_ref: e.target.value }))}
+                value={editValues.target_id}
+                onChange={(e) => setEditValues((v) => ({ ...v, target_id: e.target.value }))}
                 className="h-8 text-xs font-mono"
-                placeholder="GITHUB_TOKEN"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-muted-foreground">Repositories</label>
-              <Input
-                value={editValues.trigger_repos}
-                onChange={(e) => setEditValues((v) => ({ ...v, trigger_repos: e.target.value }))}
-                className="h-8 text-xs font-mono"
-                placeholder="owner/repo1, owner/repo2"
+                placeholder="Agent or Graph ID"
               />
             </div>
           </div>
         ) : (
           <div className="space-y-1">
             <PropRow label="Type">
-              <Badge variant="outline" className="text-[10px]">{trigger.type || "Not set"}</Badge>
+              <Badge variant="outline" className="text-[10px]">{task.target_type}</Badge>
             </PropRow>
-            <PropRow label="Source">
-              <Badge variant="outline" className="text-[10px]">{trigger.source || "Not set"}</Badge>
+            <PropRow label="ID">
+              <span className="text-xs font-mono">{task.target_id || "Not set"}</span>
             </PropRow>
-            {!!trigger.interval_seconds && (
-              <PropRow label="Interval">
-                <span className="text-sm">{trigger.interval_seconds}s</span>
-              </PropRow>
-            )}
           </div>
         )}
       </Section>
 
       <Separator />
 
-      {/* Triage */}
-      <Section
-        icon={Target}
-        title="Triage"
-        actions={
-          isEditing ? (
-            <Switch
-              checked={editValues.triage_enabled}
-              onCheckedChange={(checked) => setEditValues((v) => ({ ...v, triage_enabled: checked }))}
-            />
-          ) : (
-            <Badge variant={triage.enabled !== false ? "default" : "secondary"} className="text-[10px]">
-              {triage.enabled !== false ? "On" : "Off"}
-            </Badge>
-          )
-        }
-      >
-        {isEditing && editValues.triage_enabled ? (
-          <div className="space-y-2">
-            <PropRow label="Max files">
-              <Input type="number" value={editValues.triage_max_files}
-                onChange={(e) => setEditValues((v) => ({ ...v, triage_max_files: Number(e.target.value) }))}
-                className="w-20 h-8 text-sm" min={1} max={100}
-              />
-            </PropRow>
-            <PropRow label="Max lines">
-              <Input type="number" value={editValues.triage_max_lines}
-                onChange={(e) => setEditValues((v) => ({ ...v, triage_max_lines: Number(e.target.value) }))}
-                className="w-20 h-8 text-sm" min={10} max={5000}
-              />
-            </PropRow>
-          </div>
+      {/* Input Text */}
+      <Section icon={MessageSquare} title="Instruction">
+        {isEditing ? (
+          <textarea
+            value={editValues.input_text}
+            onChange={(e) => setEditValues((v) => ({ ...v, input_text: e.target.value }))}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-y min-h-[80px] placeholder:text-muted-foreground"
+            rows={3}
+            placeholder="What should the agent/graph do?"
+          />
         ) : (
-          <p className="text-xs text-muted-foreground">
-            {triage.enabled !== false ? "Classifying items by complexity." : "Triage is disabled."}
+          <p className="text-sm text-muted-foreground bg-muted/30 rounded p-3">
+            {task.input_text || "No instruction set"}
           </p>
-        )}
-      </Section>
-
-      <Separator />
-
-      {/* Execution */}
-      <Section icon={SlidersHorizontal} title="Execution">
-        {isEditing ? (
-          <div className="space-y-2">
-            <div>
-              <label className="text-[11px] text-muted-foreground">Agent ID</label>
-              <Input value={editValues.exec_agent_id}
-                onChange={(e) => setEditValues((v) => ({ ...v, exec_agent_id: e.target.value }))}
-                className="h-8 text-xs font-mono" placeholder="Agent ID"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-muted-foreground">Graph ID</label>
-              <Input value={editValues.exec_graph_id}
-                onChange={(e) => setEditValues((v) => ({ ...v, exec_graph_id: e.target.value }))}
-                className="h-8 text-xs font-mono" placeholder="Graph ID"
-              />
-            </div>
-            <PropRow label="Timeout">
-              <div className="flex items-center gap-1.5">
-                <Input type="number" value={editValues.exec_timeout}
-                  onChange={(e) => setEditValues((v) => ({ ...v, exec_timeout: Number(e.target.value) }))}
-                  className="w-24 h-8 text-sm" min={30} max={3600}
-                />
-                <span className="text-xs text-muted-foreground">sec</span>
-              </div>
-            </PropRow>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {execution.agent_id && <PropRow label="Agent"><span className="text-xs font-mono">{execution.agent_id}</span></PropRow>}
-            {execution.graph_id && <PropRow label="Graph"><span className="text-xs font-mono">{execution.graph_id}</span></PropRow>}
-            <PropRow label="Timeout"><span className="text-sm">{execution.timeout_seconds || 600}s</span></PropRow>
-          </div>
-        )}
-      </Section>
-
-      <Separator />
-
-      {/* Post-Actions */}
-      <Section
-        icon={ArrowRight}
-        title="Post-Actions"
-        actions={isEditing ? (
-          <Button size="sm" variant="outline" onClick={addPostAction} className="h-6 text-xs px-2">
-            <Plus className="h-3 w-3 mr-1" /> Add
-          </Button>
-        ) : undefined}
-      >
-        {isEditing ? (
-          <div className="space-y-3">
-            {editValues.post_actions.length === 0 && (
-              <p className="text-xs text-muted-foreground">No post-actions configured.</p>
-            )}
-            {editValues.post_actions.map((pa, i) => (
-              <div key={i} className="rounded-md border p-2 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Select value={pa.type} onValueChange={(v) => updatePostAction(i, "type", v)}>
-                    <SelectTrigger className="w-40 h-7 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {POST_ACTION_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive"
-                    onClick={() => removePostAction(i)}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-                <PropRow label="Run on">
-                  <Select value={pa.on} onValueChange={(v) => updatePostAction(i, "on", v)}>
-                    <SelectTrigger className="w-28 h-7 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="always">Always</SelectItem>
-                      <SelectItem value="success">Success</SelectItem>
-                      <SelectItem value="failure">Failure</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </PropRow>
-                {pa.type === "github_merge" && (
-                  <PropRow label="Method">
-                    <Select value={pa.method || "squash"} onValueChange={(v) => updatePostAction(i, "method", v)}>
-                      <SelectTrigger className="w-28 h-7 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {MERGE_METHODS.map((m) => (
-                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </PropRow>
-                )}
-                {pa.type === "webhook" && (
-                  <div>
-                    <label className="text-[11px] text-muted-foreground">Webhook URL</label>
-                    <Input value={pa.url || ""} onChange={(e) => updatePostAction(i, "url", e.target.value)}
-                      className="h-7 text-xs font-mono" placeholder="https://example.com/hook"
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {postActions.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No post-actions configured.</p>
-            ) : (
-              postActions.map((pa, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[10px]">{pa.type}</Badge>
-                  <span className="text-[10px] text-muted-foreground">on {pa.on}</span>
-                </div>
-              ))
-            )}
-          </div>
         )}
       </Section>
 
@@ -455,40 +265,34 @@ export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabP
           <div className="space-y-2">
             <div className="flex items-center justify-between py-1">
               <span className="text-sm text-muted-foreground">Dry run</span>
-              <Switch checked={editValues.dry_run}
+              <Switch
+                checked={editValues.dry_run}
                 onCheckedChange={(checked) => setEditValues((v) => ({ ...v, dry_run: checked }))}
               />
             </div>
             <PropRow label="Max per cycle">
-              <Input type="number" value={editValues.max_per_cycle}
+              <Input
+                type="number"
+                value={editValues.max_per_cycle}
                 onChange={(e) => setEditValues((v) => ({ ...v, max_per_cycle: Number(e.target.value) }))}
-                className="w-20 h-8 text-sm" min={1} max={50}
+                className="w-20 h-8 text-sm"
+                min={1}
+                max={50}
               />
             </PropRow>
-            <div>
-              <label className="text-[11px] text-muted-foreground">Skip labels</label>
-              <Input value={editValues.skip_labels}
-                onChange={(e) => setEditValues((v) => ({ ...v, skip_labels: e.target.value }))}
-                className="h-8 text-xs font-mono" placeholder="no-auto-review, wip"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-muted-foreground">Target branches</label>
-              <Input value={editValues.branches}
-                onChange={(e) => setEditValues((v) => ({ ...v, branches: e.target.value }))}
-                className="h-8 text-xs font-mono" placeholder="main, develop"
-              />
-            </div>
           </div>
         ) : (
           <div className="space-y-1">
             <PropRow label="Dry run">
-              <Badge variant={settings.dry_run !== false ? "default" : "secondary"} className="text-[10px]">
+              <Badge
+                variant={settings.dry_run !== false ? "default" : "secondary"}
+                className="text-[10px]"
+              >
                 {settings.dry_run !== false ? "On" : "Off"}
               </Badge>
             </PropRow>
             <PropRow label="Max per cycle">
-              <span className="text-sm">{settings.max_per_cycle || 5}</span>
+              <span className="text-sm">{(settings.max_per_cycle as number) || 5}</span>
             </PropRow>
           </div>
         )}

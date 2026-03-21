@@ -1,4 +1,4 @@
-import { Activity, CheckCircle, Clock } from "lucide-react";
+import { Activity, CheckCircle, Clock, CalendarClock } from "lucide-react";
 import { Badge, Switch } from "@modularmind/ui";
 import type { ScheduledTask, ScheduledTaskRun } from "@modularmind/api-client";
 
@@ -31,6 +31,28 @@ function StatCard({
   );
 }
 
+function formatSchedule(task: ScheduledTask): string {
+  if (task.schedule_type === "interval" && task.interval_value && task.interval_unit) {
+    return `Every ${task.interval_value} ${task.interval_unit}`;
+  }
+  if (task.schedule_type === "one_shot" && task.scheduled_at) {
+    return `One-shot: ${new Date(task.scheduled_at).toLocaleString()}`;
+  }
+  return "Manual only";
+}
+
+function formatRelativeTime(dateStr: string | null): string {
+  if (!dateStr) return "Never";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 0) return `in ${Math.abs(minutes)}m`;
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export function ScheduledTaskOverviewTab({
   task,
   runs,
@@ -49,17 +71,13 @@ export function ScheduledTaskOverviewTab({
       : "—";
 
   const lastRun = runs[0];
-  const triggerType = task.config?.trigger?.type || "Not configured";
-  const source = task.config?.trigger?.source || "—";
 
   return (
     <div className="space-y-6 p-5">
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            {task.description || "No description"}
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          {task.description || "No description"}
+        </p>
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium">Enabled</span>
           <Switch checked={task.enabled} onCheckedChange={onToggle} />
@@ -82,67 +100,62 @@ export function ScheduledTaskOverviewTab({
         <StatCard
           icon={Activity}
           label="Last Run"
-          value={
-            lastRun
-              ? lastRun.status
-              : "Never"
-          }
-          sub={
-            lastRun?.created_at
-              ? new Date(lastRun.created_at).toLocaleString()
-              : undefined
-          }
+          value={lastRun ? lastRun.status : "Never"}
+          sub={lastRun?.created_at ? formatRelativeTime(lastRun.created_at) : undefined}
         />
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Trigger Configuration
-        </h3>
-        <div className="flex flex-wrap gap-3">
-          <div>
-            <span className="text-xs text-muted-foreground">Type</span>
-            <div>
-              <Badge variant="outline">{triggerType}</Badge>
+      {/* Schedule & Target info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <CalendarClock className="h-3.5 w-3.5" /> Schedule
+          </h3>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Type</span>
+              <Badge variant="outline">{formatSchedule(task)}</Badge>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Next run</span>
+              <span className="text-sm">{formatRelativeTime(task.next_run_at)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Last run</span>
+              <span className="text-sm">{formatRelativeTime(task.last_run_at)}</span>
             </div>
           </div>
-          <div>
-            <span className="text-xs text-muted-foreground">Source</span>
-            <div>
-              <Badge variant="outline">{source}</Badge>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Target
+          </h3>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Type</span>
+              <Badge variant="outline">{task.target_type}</Badge>
             </div>
-          </div>
-          {task.config?.trigger?.interval_seconds && (
-            <div>
-              <span className="text-xs text-muted-foreground">Interval</span>
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">ID</span>
+              <span className="text-xs font-mono">{task.target_id || "Not set"}</span>
+            </div>
+            {task.input_text && (
               <div>
-                <Badge variant="outline">
-                  {task.config.trigger.interval_seconds}s
-                </Badge>
+                <span className="text-sm text-muted-foreground">Instruction</span>
+                <p className="text-xs mt-1 bg-muted/50 rounded p-2 line-clamp-3">
+                  {task.input_text}
+                </p>
               </div>
-            </div>
-          )}
-          {task.config?.trigger?.repos && task.config.trigger.repos.length > 0 && (
-            <div>
-              <span className="text-xs text-muted-foreground">Repos</span>
-              <div className="flex gap-1 flex-wrap">
-                {task.config.trigger.repos.map((repo) => (
-                  <Badge key={repo} variant="outline" className="font-mono text-xs">
-                    {repo}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {task.tags.length > 0 && (
         <div className="flex gap-2 flex-wrap">
           {task.tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="text-xs">
-              {tag}
-            </Badge>
+            <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
           ))}
         </div>
       )}

@@ -18,7 +18,7 @@ interface ScheduledTasksState {
 
   fetchTasks: (page?: number, search?: string) => Promise<void>;
   fetchTask: (id: string) => Promise<void>;
-  createTask: (data: { name: string; description?: string }) => Promise<ScheduledTask>;
+  createTask: (data: Partial<ScheduledTask> & { name: string }) => Promise<ScheduledTask>;
   updateTask: (id: string, data: Partial<ScheduledTask>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   duplicateTask: (id: string) => Promise<void>;
