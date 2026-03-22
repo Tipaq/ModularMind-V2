@@ -112,7 +112,10 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
 
                 if cancelled:
                     await _handle_cancellation(session, r, execution_id, stream_key)
-                    await _update_scheduled_task_run(execution_id, "skipped", error_message="Cancelled by user")
+                    await _update_scheduled_task_run(
+                        execution_id, "skipped",
+                        error_message="Cancelled by user",
+                    )
                 else:
                     # Normal completion — persist assistant message
                     await _persist_assistant_message(session, execution_id, complete_event)
@@ -142,7 +145,10 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 await r2.expire(f"exec_stream:{execution_id}", 300)
             finally:
                 await r2.aclose()
-            await _update_scheduled_task_run(execution_id, "skipped", error_message="Cancelled by user")
+            await _update_scheduled_task_run(
+                execution_id, "skipped",
+                error_message="Cancelled by user",
+            )
 
         except Exception:  # noqa: BLE001 — Worker resilience: catch all to avoid stream consumer crash
             logger.exception("Execution %s failed", execution_id)
@@ -162,7 +168,10 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 )
             )
             await session.commit()
-            await _update_scheduled_task_run(execution_id, "failed", error_message="Execution failed")
+            await _update_scheduled_task_run(
+                execution_id, "failed",
+                error_message="Execution failed",
+            )
             raise  # Re-raise to trigger retry/DLQ
 
         finally:
@@ -338,7 +347,6 @@ async def _update_scheduled_task_run(
 
         from src.infra.utils import utcnow
         from src.scheduled_tasks.models import (
-            ScheduledTask,
             ScheduledTaskRun,
             ScheduledTaskRunStatus,
         )

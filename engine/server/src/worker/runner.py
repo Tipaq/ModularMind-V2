@@ -18,7 +18,6 @@ import redis.exceptions
 from src.infra.config import settings
 from src.infra.redis_streams import RedisStreamBus
 from src.infra.stream_names import (
-    STREAM_SCHEDULED_TASK_TRIGGER,
     STREAM_DOCUMENTS,
     STREAM_EXECUTIONS,
     STREAM_MEMORY_EXTRACTED,
@@ -27,6 +26,7 @@ from src.infra.stream_names import (
     STREAM_MODELS,
     STREAM_RAG_EMBEDDED,
     STREAM_RAG_EXTRACTED,
+    STREAM_SCHEDULED_TASK_TRIGGER,
 )
 from src.worker.scheduler import create_scheduler
 from src.worker.tasks import graph_execution_handler, model_pull_handler
@@ -116,7 +116,10 @@ async def main() -> None:
                 bus.subscribe(
                     STREAM_DOCUMENTS, "rag-extractors", "ext-1", document_extract_handler
                 ),
-                bus.subscribe(STREAM_RAG_EXTRACTED, "rag-embedders", "emb-1", document_embed_handler),
+                bus.subscribe(
+                    STREAM_RAG_EXTRACTED, "rag-embedders",
+                    "emb-1", document_embed_handler,
+                ),
                 bus.subscribe(STREAM_RAG_EMBEDDED, "rag-storers", "stor-1", document_store_handler),
             ]
         )

@@ -8,10 +8,8 @@ Configures interval and cron jobs for:
 - RAG consolidation (every RAG_CONSOLIDATION_INTERVAL seconds)
 """
 
-from datetime import datetime, timezone
-
 import logging
-from datetime import UTC
+from datetime import UTC, datetime
 
 import httpx
 import redis.exceptions
@@ -36,7 +34,7 @@ def create_scheduler() -> AsyncIOScheduler:
             seconds=settings.SYNC_INTERVAL_SECONDS,
             id="sync_platform",
             name="Poll platform for config updates",
-            next_run_time=datetime.now(timezone.utc),
+            next_run_time=datetime.now(UTC),
         )
 
         # Report metrics to platform
@@ -350,12 +348,11 @@ async def rag_consolidation() -> None:
             semaphore = asyncio.Semaphore(5)
 
             async def _check_collection(cid: str) -> int:
-                async with semaphore:
-                    async with async_session_maker() as coll_session:
-                        obsolete = await consolidator.detect_obsolete_documents(
-                            cid, coll_session
-                        )
-                        return len(obsolete)
+                async with semaphore, async_session_maker() as coll_session:
+                    obsolete = await consolidator.detect_obsolete_documents(
+                        cid, coll_session
+                    )
+                    return len(obsolete)
 
             results = await asyncio.gather(
                 *[_check_collection(cid) for cid in coll_ids],
