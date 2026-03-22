@@ -1,18 +1,27 @@
 """
 Graphs router.
 
-API endpoints for listing graphs (read-only from config).
+API endpoints for graph CRUD and listing.
 """
 
-from fastapi import APIRouter, HTTPException
+import asyncio
 
-from src.auth import CurrentUser
+from fastapi import APIRouter, HTTPException, status
+from sqlalchemy.exc import IntegrityError
+
+from src.auth import CurrentUser, RequireOwner
 from src.domain_config import get_config_provider
-from src.graphs.schemas import (
+from src.infra.database import DbSession
+
+from . import service
+from .schemas import (
+    DuplicateGraphRequest,
     EdgeDetail,
+    GraphCreate,
     GraphDetail,
     GraphListResponse,
     GraphSummary,
+    GraphUpdate,
     NodeDetail,
 )
 
@@ -31,31 +40,23 @@ async def list_graphs(
     config_provider = get_config_provider()
     graphs = await config_provider.list_graphs()
 
-    # Filter by version
     if version:
         graphs = [g for g in graphs if g.version == version]
 
-    # Filter by search term (name or description)
     if search:
         q = search.lower()
         graphs = [g for g in graphs if q in g.name.lower() or q in (g.description or "").lower()]
 
     total = len(graphs)
-
-    # Paginate
     start = (page - 1) * page_size
-    end = start + page_size
-    page_graphs = graphs[start:end]
+    page_graphs = graphs[start : start + page_size]
 
-    # Resolve unique model_ids for each graph from agent nodes (batch-fetch)
     all_agent_ids: set[str] = set()
     for g in page_graphs:
         for node in g.nodes:
             agent_id = (node.data.get("config") or {}).get("agentId") or node.data.get("agent_id")
             if agent_id:
                 all_agent_ids.add(str(agent_id))
-
-    import asyncio
 
     agent_configs = dict(
         zip(
@@ -99,10 +100,7 @@ async def list_graphs(
 
 
 @router.get("/{graph_id}", response_model=GraphDetail)
-async def get_graph(
-    graph_id: str,
-    user: CurrentUser,
-) -> GraphDetail:
+async def get_graph(graph_id: str, user: CurrentUser) -> GraphDetail:
     """Get graph details."""
     config_provider = get_config_provider()
     graph = await config_provider.get_graph_config(graph_id)
@@ -113,15 +111,7 @@ async def get_graph(
     config_hash = config_provider.get_config_version("graph", graph_id)
     version_number = config_provider.get_config_version_number("graph", graph_id)
 
-    nodes = [
-        NodeDetail(
-            id=n.id,
-            type=n.type,
-            data=n.data,
-        )
-        for n in graph.nodes
-    ]
-
+    nodes = [NodeDetail(id=n.id, type=n.type, data=n.data) for n in graph.nodes]
     edges = [
         EdgeDetail(
             id=e.id,
@@ -146,3 +136,59 @@ async def get_graph(
         config_version=version_number,
         config_hash=config_hash,
     )
+
+
+@router.post(
+    "",
+    response_model=GraphDetail,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[RequireOwner],
+)
+async def create_graph(body: GraphCreate, user: CurrentUser, db: DbSession) -> GraphDetail:
+    """Create a new graph."""
+    try:
+        return await service.create_graph(db, body, user.id)
+    except IntegrityError as err:
+        raise HTTPException(status_code=409, detail="Graph creation conflict") from err
+
+
+@router.patch(
+    "/{graph_id}",
+    response_model=GraphDetail,
+    dependencies=[RequireOwner],
+)
+async def update_graph(
+    graph_id: str,
+    body: GraphUpdate,
+    user: CurrentUser,
+    db: DbSession,
+) -> GraphDetail:
+    """Update an existing graph (creates a new version)."""
+    return await service.update_graph(db, graph_id, body, user.id)
+
+
+@router.delete(
+    "/{graph_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[RequireOwner],
+)
+async def delete_graph(graph_id: str, db: DbSession) -> None:
+    """Delete a graph and all its versions."""
+    await service.delete_graph(db, graph_id)
+
+
+@router.post(
+    "/{graph_id}/duplicate",
+    response_model=GraphDetail,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[RequireOwner],
+)
+async def duplicate_graph(
+    graph_id: str,
+    user: CurrentUser,
+    db: DbSession,
+    body: DuplicateGraphRequest | None = None,
+) -> GraphDetail:
+    """Duplicate an existing graph."""
+    new_name = body.name if body else None
+    return await service.duplicate_graph(db, graph_id, user.id, new_name)
