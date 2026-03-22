@@ -44,7 +44,7 @@ export const useScheduledTasksStore = create<ScheduledTasksState>((set, get) => 
       const params = new URLSearchParams({ page: String(page), page_size: "20" });
       if (search) params.set("search", search);
       const data = await api.get<ScheduledTaskListResponse>(
-        `/scheduled-tasks?${params}`,
+        `/scheduled-tasks/?${params}`,
       );
       set({
         tasks: data.items,
@@ -74,7 +74,7 @@ export const useScheduledTasksStore = create<ScheduledTasksState>((set, get) => 
   createTask: async (data) => {
     set({ error: null });
     try {
-      const task = await api.post<ScheduledTask>("/scheduled-tasks", data);
+      const task = await api.post<ScheduledTask>("/scheduled-tasks/", data);
       get().fetchTasks(get().page);
       return task;
     } catch (err) {
