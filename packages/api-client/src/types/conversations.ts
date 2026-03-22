@@ -45,6 +45,7 @@ export interface ConversationConfig {
   model_override?: boolean;
   enabled_agent_ids?: string[];
   enabled_graph_ids?: string[];
+  supervisor_tool_categories?: string[];
 }
 
 // ─── Requests ────────────────────────────────────────────────────────────────

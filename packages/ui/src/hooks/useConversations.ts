@@ -127,6 +127,7 @@ export function useConversations({
           modelId: (convConfig.model_id as string) || null,
           modelOverride: (convConfig.model_override as boolean) || false,
           userPreferences: (convConfig.user_preferences as string | null) ?? null,
+          supervisorToolCategories: (convConfig.supervisor_tool_categories as string[] | null) ?? null,
         });
       } catch {
         showError("Failed to load conversation");

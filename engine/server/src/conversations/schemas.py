@@ -26,6 +26,7 @@ class ConversationConfig(TypedDict, total=False):
     enabled_agents: list[str]
     enabled_graphs: list[str]
     supervisor_prompt: str
+    supervisor_tool_categories: list[str]
 
 
 class ConversationCreate(BaseModel):
