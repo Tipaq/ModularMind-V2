@@ -18,6 +18,7 @@ import type {
   MessageExecutionData,
 } from "../../types/chat";
 import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "../../types/engine";
+import { ALL_TOOL_CATEGORIES } from "../../lib/chat-config";
 import type { ChatConfig } from "../../lib/chat-config";
 
 export interface InsightsPanelProps {
@@ -152,6 +153,19 @@ export function InsightsPanel({
           enabledGraphs={enabledGraphs}
           allAgents={allAgents}
           allGraphs={allGraphs}
+          supervisorToolCategories={config.supervisorToolCategories}
+          onToggleToolCategory={(category, enabled) => {
+            const current = config.supervisorToolCategories;
+            if (enabled) {
+              if (current === null || current === undefined) return;
+              const updated = [...current, category];
+              onConfigChange({ supervisorToolCategories: updated });
+            } else {
+              const all = current ?? ALL_TOOL_CATEGORIES.map((c) => c.id);
+              const updated = all.filter((c) => c !== category);
+              onConfigChange({ supervisorToolCategories: updated });
+            }
+          }}
         />
       </TabsContent>
 

@@ -20,6 +20,7 @@ import { Button } from "../button";
 import { Switch } from "../switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../tooltip";
 import { cn, formatModelName } from "../../lib/utils";
+import { ALL_TOOL_CATEGORIES } from "../../lib/chat-config";
 import type { BudgetOverview } from "../../types/chat";
 import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "../../types/engine";
 
@@ -53,6 +54,8 @@ export interface ConfigTabProps {
   allGraphs: EngineGraph[];
   userPreferences?: string | null;
   onSavePreferences?: (prefs: string) => Promise<void>;
+  supervisorToolCategories?: string[] | null;
+  onToggleToolCategory?: (category: string, enabled: boolean) => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -361,6 +364,8 @@ export function ConfigTab({
   allAgents,
   userPreferences,
   onSavePreferences,
+  supervisorToolCategories,
+  onToggleToolCategory,
 }: ConfigTabProps) {
   const selectedModel = useMemo(() => {
     if (!selectedModelId) return null;
@@ -491,6 +496,42 @@ export function ConfigTab({
                 onSave={onUpdateLayer}
               />
             ))}
+          </div>
+        )}
+        {supervisorMode && onToggleToolCategory && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <Wrench className="size-3 text-muted-foreground" />
+              <span className="text-[11px] font-medium text-foreground/80">Tool Categories</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {ALL_TOOL_CATEGORIES.map((cat) => {
+                const isEnabled = supervisorToolCategories === null || supervisorToolCategories === undefined || supervisorToolCategories.includes(cat.id);
+                return (
+                  <TooltipProvider key={cat.id}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => onToggleToolCategory(cat.id, !isEnabled)}
+                          className={cn(
+                            "rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors",
+                            isEnabled
+                              ? "bg-primary/10 text-primary border border-primary/20"
+                              : "bg-muted/50 text-muted-foreground border border-transparent"
+                          )}
+                        >
+                          {cat.label}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-[10px]">
+                        {cat.description}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                );
+              })}
+            </div>
           </div>
         )}
         {!supervisorMode && (
