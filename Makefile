@@ -19,15 +19,14 @@ setup: ## Initial project setup
 
 # --- Development ---
 
-dev: ## Start all services (Docker)
+dev: ## Start all backend services (Docker, attached)
 	docker compose -f docker/docker-compose.dev.yml up --build
 
-dev-all: ## Start everything (Docker backend + all frontends)
-	docker compose -f docker/docker-compose.dev.yml up -d --build && \
-	npx concurrently -n platform,ops,chat -c blue,magenta,cyan \
-		"pnpm dev:platform" \
-		"pnpm dev:ops" \
-		"pnpm dev:chat"
+dev-all: build-sandbox ## Start everything (Docker backend + frontends)
+	docker compose -f docker/docker-compose.dev.yml up -d --build engine worker gateway && \
+	npx concurrently -n chat,ops -c cyan,magenta \
+		"pnpm dev:chat" \
+		"pnpm dev:ops"
 
 dev-chat: ## Start Chat app (Vite dev server)
 	pnpm dev:chat
@@ -47,8 +46,8 @@ dev-worker: ## Start Worker process (auto-reload)
 dev-gateway: ## Start Gateway service (uvicorn --reload)
 	cd gateway && uvicorn src.main:app --reload --host 0.0.0.0 --port 8200
 
-dev-infra: build-sandbox ## Start infra only (db, redis, qdrant, ollama) + ensure sandbox image
-	docker compose -f docker/docker-compose.dev.yml up db redis qdrant ollama
+dev-infra: build-sandbox ## Start infra only (db, redis, qdrant, minio, ollama) + ensure sandbox image
+	docker compose -f docker/docker-compose.dev.yml up db redis qdrant minio ollama
 
 dev-monitoring: ## Start monitoring (Prometheus + Grafana + exporters)
 	docker compose -f docker/docker-compose.monitoring.yml up -d
