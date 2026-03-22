@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   addEdge,
   type Connection,
   type Node,
   type Edge,
+  type NodeChange,
   type NodeTypes,
   type EdgeTypes,
-  BackgroundVariant,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import GraphNodeComponent from "./nodes/GraphNode";
@@ -34,6 +31,9 @@ interface GraphCanvasProps {
   graph: Graph;
   onSave: (nodes: Node[], edges: Edge[]) => void;
   saving?: boolean;
+  isEditMode?: boolean;
+  onSelectionChange?: (node: Node | null) => void;
+  onNodesEdgesChange?: (nodes: Node[], edges: Edge[]) => void;
 }
 
 function graphToFlow(graph: Graph): { nodes: Node[]; edges: Edge[] } {
@@ -61,7 +61,13 @@ function graphToFlow(graph: Graph): { nodes: Node[]; edges: Edge[] } {
   return { nodes, edges };
 }
 
-export function GraphCanvas({ graph, onSave }: GraphCanvasProps) {
+export function GraphCanvas({
+  graph,
+  onSave,
+  isEditMode = true,
+  onSelectionChange,
+  onNodesEdgesChange,
+}: GraphCanvasProps) {
   const initial = useMemo(() => graphToFlow(graph), [graph]);
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
@@ -81,11 +87,34 @@ export function GraphCanvas({ graph, onSave }: GraphCanvasProps) {
     [nodes],
   );
 
+  useEffect(() => {
+    onSelectionChange?.(selectedNode);
+  }, [selectedNode, onSelectionChange]);
+
+  useEffect(() => {
+    onNodesEdgesChange?.(nodes, edges);
+  }, [nodes, edges, onNodesEdgesChange]);
+
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      if (isEditMode) {
+        onNodesChange(changes);
+      } else {
+        const allowed = changes.filter(
+          (c) => c.type === "select" || c.type === "dimensions",
+        );
+        if (allowed.length > 0) onNodesChange(allowed);
+      }
+    },
+    [isEditMode, onNodesChange],
+  );
+
   const onConnect = useCallback(
     (params: Connection) => {
+      if (!isEditMode) return;
       setEdges((eds) => addEdge({ ...params, type: "execution" }, eds));
     },
-    [setEdges],
+    [setEdges, isEditMode],
   );
 
   const handleAddNode = useCallback(
@@ -104,11 +133,18 @@ export function GraphCanvas({ graph, onSave }: GraphCanvasProps) {
   );
 
   const handleDeleteSelected = useCallback(() => {
-    const selectedIds = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
+    if (!isEditMode) return;
+    const selectedIds = new Set(
+      nodes.filter((n) => n.selected).map((n) => n.id),
+    );
     if (selectedIds.size === 0) return;
     setNodes((nds) => nds.filter((n) => !selectedIds.has(n.id)));
-    setEdges((eds) => eds.filter((e) => !selectedIds.has(e.source) && !selectedIds.has(e.target)));
-  }, [nodes, setNodes, setEdges]);
+    setEdges((eds) =>
+      eds.filter(
+        (e) => !selectedIds.has(e.source) && !selectedIds.has(e.target),
+      ),
+    );
+  }, [nodes, setNodes, setEdges, isEditMode]);
 
   const handleUpdateNode = useCallback(
     (nodeId: string, data: Record<string, unknown>) => {
@@ -121,24 +157,31 @@ export function GraphCanvas({ graph, onSave }: GraphCanvasProps) {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Delete" || e.key === "Backspace") {
+      if (isEditMode && (e.key === "Delete" || e.key === "Backspace")) {
         handleDeleteSelected();
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if (isEditMode && (e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         onSave(nodes, edges);
       }
     },
-    [handleDeleteSelected, onSave, nodes, edges],
+    [handleDeleteSelected, onSave, nodes, edges, isEditMode],
   );
 
   return (
-    <div className="flex flex-col h-full" ref={containerRef} data-graph-canvas onKeyDown={handleKeyDown} tabIndex={0}>
+    <div
+      className="flex flex-col h-full"
+      ref={containerRef}
+      data-graph-canvas
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+    >
       <GraphToolbar
         onAddNode={handleAddNode}
         onDeleteSelected={handleDeleteSelected}
         hasSelection={!!selectedNode}
         nodeCount={nodes.length}
+        isEditMode={isEditMode}
       />
 
       <div className="flex flex-1 min-h-0">
@@ -146,8 +189,8 @@ export function GraphCanvas({ graph, onSave }: GraphCanvasProps) {
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={isEditMode ? onEdgesChange : undefined}
             onConnect={onConnect}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
@@ -155,25 +198,24 @@ export function GraphCanvas({ graph, onSave }: GraphCanvasProps) {
             snapGrid={[15, 15]}
             fitView
             deleteKeyCode={null}
-          >
-            <Background variant={BackgroundVariant.Dots} gap={15} size={1} />
-            <Controls />
-            <MiniMap
-              nodeStrokeWidth={3}
-              className="!bg-background/80 !border !border-border !rounded-lg"
-            />
-          </ReactFlow>
+            nodesDraggable={isEditMode}
+            nodesConnectable={isEditMode}
+            elementsSelectable
+            proOptions={{ hideAttribution: true }}
+          />
         </div>
 
-        <div className="w-[280px] border-l border-border overflow-y-auto shrink-0">
-          <div className="px-3 py-2 border-b border-border">
-            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Properties
-            </h3>
+        {selectedNode && (
+          <div className="w-[280px] shrink-0 border-l border-border overflow-y-auto">
+            <PropertiesPanel
+              node={selectedNode}
+              onUpdateNode={handleUpdateNode}
+              isEditMode={isEditMode}
+            />
           </div>
-          <PropertiesPanel node={selectedNode} onUpdateNode={handleUpdateNode} />
-        </div>
+        )}
       </div>
     </div>
   );
 }
+

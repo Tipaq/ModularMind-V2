@@ -1,13 +1,85 @@
-import { Input, Label } from "@modularmind/ui";
-import { NODE_CONFIG, type NodeType } from "../nodes/nodeConfig";
+import { useState, useEffect } from "react";
+import {
+  Bot,
+  Settings2,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Info,
+} from "lucide-react";
+import {
+  Input,
+  Label,
+  Badge,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  stripProvider,
+  isLocalModel,
+} from "@modularmind/ui";
+import type { Agent } from "@modularmind/api-client";
 import type { Node } from "@xyflow/react";
+import { NODE_CONFIG, type NodeType } from "../nodes/nodeConfig";
+import { api } from "../../../lib/api";
 
 interface PropertiesPanelProps {
   node: Node | null;
   onUpdateNode: (nodeId: string, data: Record<string, unknown>) => void;
+  isEditMode?: boolean;
 }
 
-export function PropertiesPanel({ node, onUpdateNode }: PropertiesPanelProps) {
+function PropRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1">
+      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
+      <div className="min-w-0 text-right">{children}</div>
+    </div>
+  );
+}
+
+function resolveAgentId(data: Record<string, unknown>): string | null {
+  const fromConfig = (data.config as Record<string, unknown> | undefined)
+    ?.agentId as string | undefined;
+  if (fromConfig) return fromConfig;
+  if (data.agent_id) return data.agent_id as string;
+  return null;
+}
+
+const TAB_CLS =
+  "h-8 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-2.5 gap-1 text-xs";
+
+export function PropertiesPanel({
+  node,
+  onUpdateNode,
+  isEditMode = true,
+}: PropertiesPanelProps) {
+  const [agentDetail, setAgentDetail] = useState<Agent | null>(null);
+  const [agentLoading, setAgentLoading] = useState(false);
+
+  const nodeData = node?.data as Record<string, unknown> | undefined;
+  const nodeType = ((nodeData?.type || node?.type || "agent") as string) as NodeType;
+  const agentId = nodeData ? resolveAgentId(nodeData) : null;
+  const isAgentNode = nodeType === "agent" || nodeType === "supervisor";
+
+  useEffect(() => {
+    if (!agentId) {
+      setAgentDetail(null);
+      return;
+    }
+    setAgentLoading(true);
+    api
+      .get<Agent>(`/agents/${agentId}`)
+      .then((agent) => setAgentDetail(agent))
+      .catch(() => setAgentDetail(null))
+      .finally(() => setAgentLoading(false));
+  }, [agentId]);
+
   if (!node) {
     return (
       <div className="p-4 text-center text-sm text-muted-foreground">
@@ -16,74 +88,339 @@ export function PropertiesPanel({ node, onUpdateNode }: PropertiesPanelProps) {
     );
   }
 
-  const nodeType = (node.data?.type || node.type || "agent") as NodeType;
   const config = NODE_CONFIG[nodeType];
-  const Icon = config?.icon;
+  const NodeIcon = config?.icon;
+
+  const customConfig = nodeData?.config
+    ? Object.fromEntries(
+        Object.entries(
+          nodeData.config as Record<string, unknown>,
+        ).filter(
+          ([k]) =>
+            !["agentId", "supervisorAgentId", "workerAgentIds"].includes(k),
+        ),
+      )
+    : null;
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        {Icon && (
-          <div className={`rounded-md p-1.5 ${config.iconBgClass}`}>
-            <Icon className="h-4 w-4" />
+    <div className="h-full flex flex-col bg-background">
+      {/* Node header */}
+      <div className="shrink-0 border-b border-border px-4 py-2 flex items-center gap-2.5">
+        {NodeIcon && (
+          <div
+            className={`w-7 h-7 rounded-md flex items-center justify-center ${config.iconBgClass}`}
+          >
+            <NodeIcon className="h-3.5 w-3.5" />
           </div>
         )}
-        <div>
-          <h3 className="text-sm font-medium">{config?.label || nodeType}</h3>
-          <p className="text-xs text-muted-foreground">{config?.description}</p>
+        <div className="min-w-0">
+          <div className="font-semibold text-xs leading-tight truncate">
+            {(nodeData?.label as string) || node.id}
+          </div>
+          <div className="text-[10px] text-muted-foreground leading-tight">
+            {config?.label} &middot;{" "}
+            <span className="font-mono">{node.id}</span>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Label</Label>
-          <Input
-            value={(node.data?.label as string) || ""}
-            onChange={(e) => onUpdateNode(node.id, { ...node.data, label: e.target.value })}
-            placeholder={config?.label}
-          />
+      {/* Tabs */}
+      <Tabs
+        defaultValue={isAgentNode ? "agent" : "config"}
+        className="flex flex-col flex-1 min-h-0"
+      >
+        <div className="shrink-0 border-b border-border px-1">
+          <TabsList className="h-8 w-full justify-start bg-transparent p-0 gap-0">
+            {isAgentNode && (
+              <TabsTrigger value="agent" className={TAB_CLS}>
+                <Bot className="h-3 w-3" />
+                Agent
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="config" className={TAB_CLS}>
+              <Settings2 className="h-3 w-3" />
+              Config
+            </TabsTrigger>
+            <TabsTrigger value="input" className={TAB_CLS}>
+              <ArrowDownToLine className="h-3 w-3" />
+              Input
+            </TabsTrigger>
+            <TabsTrigger value="output" className={TAB_CLS}>
+              <ArrowUpFromLine className="h-3 w-3" />
+              Output
+            </TabsTrigger>
+          </TabsList>
         </div>
 
-        <div className="space-y-1.5">
-          <Label className="text-xs">Node ID</Label>
-          <p className="text-xs text-muted-foreground font-mono bg-muted/50 rounded px-2 py-1">
-            {node.id}
-          </p>
-        </div>
+        {/* ── Agent tab ── */}
+        {isAgentNode && (
+          <TabsContent value="agent" className="flex-1 overflow-auto mt-0 p-4">
+            {!agentId ? (
+              <p className="text-xs text-muted-foreground italic">
+                No agent assigned to this node
+              </p>
+            ) : agentLoading ? (
+              <div className="text-xs text-muted-foreground animate-pulse py-1">
+                Loading agent...
+              </div>
+            ) : agentDetail ? (
+              <div className="space-y-4">
+                {agentDetail.description && (
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {agentDetail.description}
+                  </p>
+                )}
 
-        {(nodeType === "agent" || nodeType === "supervisor") && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Agent ID</Label>
-            <Input
-              value={(node.data?.agent_id as string) || ""}
-              onChange={(e) => onUpdateNode(node.id, { ...node.data, agent_id: e.target.value })}
-              placeholder="Agent ID"
-            />
-          </div>
+                {/* Configuration */}
+                <div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    <Settings2 className="h-3 w-3" />
+                    Configuration
+                  </div>
+                  <div className="space-y-0.5">
+                    <PropRow label="Model">
+                      <span className="text-xs font-medium">
+                        {stripProvider(agentDetail.model_id)}
+                      </span>
+                    </PropRow>
+                    <PropRow label="Type">
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] py-0 px-1"
+                      >
+                        {isLocalModel(agentDetail.model_id) ? "Local" : "Cloud"}
+                      </Badge>
+                    </PropRow>
+                    <PropRow label="Version">
+                      <span className="text-xs font-mono">
+                        v{agentDetail.version}
+                      </span>
+                    </PropRow>
+                    <PropRow label="Timeout">
+                      <span className="text-xs">
+                        {agentDetail.timeout_seconds}s
+                      </span>
+                    </PropRow>
+                  </div>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* Memory */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <Bot className="h-3 w-3" />
+                      Memory
+                    </div>
+                    <Badge
+                      variant={
+                        agentDetail.memory_enabled ? "default" : "secondary"
+                      }
+                      className="text-[9px] py-0 px-1.5"
+                    >
+                      {agentDetail.memory_enabled ? "On" : "Off"}
+                    </Badge>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {agentDetail.memory_enabled
+                      ? "Short-term and long-term memory is active."
+                      : "Memory is disabled for this agent."}
+                  </p>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* RAG */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <ArrowDownToLine className="h-3 w-3" />
+                      RAG (Knowledge Base)
+                    </div>
+                    <Badge
+                      variant={
+                        agentDetail.rag_enabled ? "default" : "secondary"
+                      }
+                      className="text-[9px] py-0 px-1.5"
+                    >
+                      {agentDetail.rag_enabled ? "On" : "Off"}
+                    </Badge>
+                  </div>
+                  {agentDetail.rag_enabled ? (
+                    <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+                      <div className="rounded-md bg-muted/50 px-2 py-1 text-center">
+                        <p className="text-[9px] text-muted-foreground">
+                          Collections
+                        </p>
+                        <p className="text-xs font-medium">
+                          {agentDetail.rag_collection_ids.length}
+                        </p>
+                      </div>
+                      <div className="rounded-md bg-muted/50 px-2 py-1 text-center">
+                        <p className="text-[9px] text-muted-foreground">
+                          Top-K
+                        </p>
+                        <p className="text-xs font-medium">
+                          {agentDetail.rag_retrieval_count}
+                        </p>
+                      </div>
+                      <div className="rounded-md bg-muted/50 px-2 py-1 text-center">
+                        <p className="text-[9px] text-muted-foreground">
+                          Threshold
+                        </p>
+                        <p className="text-xs font-medium">
+                          {agentDetail.rag_similarity_threshold}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground">
+                      RAG is disabled for this agent.
+                    </p>
+                  )}
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* System Prompt */}
+                <div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    <Info className="h-3 w-3" />
+                    System Prompt
+                  </div>
+                  <pre className="whitespace-pre-wrap text-xs bg-muted/50 rounded-md p-2.5 max-h-[200px] overflow-y-auto leading-relaxed">
+                    {agentDetail.system_prompt || "No system prompt configured"}
+                  </pre>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">
+                Agent not found ({agentId})
+              </p>
+            )}
+          </TabsContent>
         )}
 
-        {nodeType === "subgraph" && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Subgraph ID</Label>
-            <Input
-              value={(node.data?.subgraph_id as string) || ""}
-              onChange={(e) => onUpdateNode(node.id, { ...node.data, subgraph_id: e.target.value })}
-              placeholder="Graph ID"
-            />
-          </div>
-        )}
+        {/* ── Config tab ── */}
+        <TabsContent value="config" className="flex-1 overflow-auto mt-0 p-4">
+          <div className="space-y-3">
+            {/* Editable label */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Label</Label>
+              <Input
+                value={(nodeData?.label as string) || ""}
+                onChange={(e) =>
+                  onUpdateNode(node.id, {
+                    ...nodeData,
+                    label: e.target.value,
+                  })
+                }
+                placeholder={config?.label}
+                disabled={!isEditMode}
+              />
+            </div>
 
-        {nodeType === "condition" && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Condition Expression</Label>
-            <Input
-              value={(node.data?.condition as string) || ""}
-              onChange={(e) => onUpdateNode(node.id, { ...node.data, condition: e.target.value })}
-              placeholder="e.g. confidence > 0.7"
-            />
+            {/* Read-only info */}
+            <div className="space-y-0.5">
+              <PropRow label="Type">
+                <span className="text-xs font-medium">{config?.label}</span>
+              </PropRow>
+              <PropRow label="Node ID">
+                <span className="font-mono text-[10px] truncate block max-w-[180px]">
+                  {node.id}
+                </span>
+              </PropRow>
+            </div>
+
+            {/* Agent ID (editable) */}
+            {isAgentNode && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Agent ID</Label>
+                <Input
+                  value={(nodeData?.agent_id as string) || ""}
+                  onChange={(e) =>
+                    onUpdateNode(node.id, {
+                      ...nodeData,
+                      agent_id: e.target.value,
+                    })
+                  }
+                  placeholder="Agent ID"
+                  disabled={!isEditMode}
+                />
+              </div>
+            )}
+
+            {/* Subgraph ID */}
+            {nodeType === "subgraph" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Subgraph ID</Label>
+                <Input
+                  value={(nodeData?.subgraph_id as string) || ""}
+                  onChange={(e) =>
+                    onUpdateNode(node.id, {
+                      ...nodeData,
+                      subgraph_id: e.target.value,
+                    })
+                  }
+                  placeholder="Graph ID"
+                  disabled={!isEditMode}
+                />
+              </div>
+            )}
+
+            {/* Condition */}
+            {nodeType === "condition" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Condition Expression</Label>
+                <Input
+                  value={(nodeData?.condition as string) || ""}
+                  onChange={(e) =>
+                    onUpdateNode(node.id, {
+                      ...nodeData,
+                      condition: e.target.value,
+                    })
+                  }
+                  placeholder="e.g. confidence > 0.7"
+                  disabled={!isEditMode}
+                />
+              </div>
+            )}
+
+            {/* Custom Config JSON */}
+            {customConfig && Object.keys(customConfig).length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Custom Config
+                </h4>
+                <pre className="text-xs bg-muted/50 rounded-md p-2.5 overflow-auto max-h-48 whitespace-pre-wrap break-all text-foreground/80 font-mono">
+                  {JSON.stringify(customConfig, null, 2)}
+                </pre>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </TabsContent>
+
+        {/* ── Input tab ── */}
+        <TabsContent value="input" className="flex-1 overflow-auto mt-0 p-4">
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <Info className="h-6 w-6 mb-1.5 opacity-40" />
+            <p className="text-xs text-center">
+              Run the graph in the playground to see execution inputs.
+            </p>
+          </div>
+        </TabsContent>
+
+        {/* ── Output tab ── */}
+        <TabsContent value="output" className="flex-1 overflow-auto mt-0 p-4">
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <Info className="h-6 w-6 mb-1.5 opacity-40" />
+            <p className="text-xs text-center">
+              Run the graph in the playground to see execution results.
+            </p>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
