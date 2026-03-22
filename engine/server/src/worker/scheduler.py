@@ -28,8 +28,8 @@ def create_scheduler() -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
     scheduler = AsyncIOScheduler()
 
-    # Platform sync — poll for config changes
-    if settings.PLATFORM_URL:
+    # Platform sync — poll for config changes (opt-in, disabled in open-source mode)
+    if settings.PLATFORM_SYNC_ENABLED and settings.PLATFORM_URL:
         scheduler.add_job(
             sync_platform,
             "interval",

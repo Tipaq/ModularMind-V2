@@ -331,6 +331,10 @@ class Settings(BaseSettings):
     PLATFORM_URL: str = ""
     ENGINE_API_KEY: str = ""
     SYNC_INTERVAL_SECONDS: int = 300
+    PLATFORM_SYNC_ENABLED: bool = Field(
+        default=False,
+        description="Enable pull-based config sync from Platform. Disabled in open-source mode.",
+    )
 
     # ---- Fair-Scheduling ----------------------------------------------------
     FAIR_SCHEDULE_MAX_PER_TEAM: int = Field(default=10, ge=1, le=100)
