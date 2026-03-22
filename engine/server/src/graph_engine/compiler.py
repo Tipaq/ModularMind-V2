@@ -60,8 +60,7 @@ def _filter_mcp_for_agent(
 
         catalog = getattr(server, "catalog_id", None) or ""
 
-        if catalog in ("brave-search", "puppeteer"):
-            if perms.get("browser", {}).get("enabled"):
+        if catalog in ("brave-search", "puppeteer") and perms.get("browser", {}).get("enabled"):
                 filtered.append(sid)
         # Skip all other servers (github, filesystem, git, memory, shell)
         # These are handled natively by tool categories or gateway
@@ -728,7 +727,7 @@ class GraphCompiler:
 
                 # Build pipeline context from previous agents' outputs
                 prior_outputs = []
-                for nid, out in node_outputs.items():
+                for _nid, out in node_outputs.items():
                     resp = out.get("response", "") if isinstance(out, dict) else str(out)
                     if resp:
                         prior_outputs.append(resp)
