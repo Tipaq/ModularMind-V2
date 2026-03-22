@@ -44,7 +44,11 @@ def get_github_tool_definitions() -> list[dict[str, Any]]:
             "repo": _str("Repository (owner/name format)"),
             "title": _str("Issue title"),
             "body": _str("Issue body (markdown)"),
-            "labels": {"type": "array", "items": {"type": "string"}, "description": "Labels to add"},
+            "labels": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Labels to add",
+            },
         }, ["repo", "title"]),
         _tool("github_list_prs", "List pull requests for a repository.", {
             "repo": _str("Repository (owner/name format)"),
@@ -54,7 +58,10 @@ def get_github_tool_definitions() -> list[dict[str, Any]]:
         _tool("github_get_pr", "Get pull request details including diff.", {
             "repo": _str("Repository (owner/name format)"),
             "pr_number": _int("Pull request number"),
-            "include_diff": {"type": "boolean", "description": "Include diff content (default: true)"},
+            "include_diff": {
+                "type": "boolean",
+                "description": "Include diff content (default: true)",
+            },
         }, ["repo", "pr_number"]),
         _tool("github_create_pr", "Create a new pull request.", {
             "repo": _str("Repository (owner/name format)"),
@@ -106,7 +113,7 @@ async def execute_github_tool(
     agent_id: str,
 ) -> str:
     """Execute a GitHub tool call."""
-    token = await _resolve_token(session, agent_id)
+    token = await resolve_token(session, agent_id)
     if not token:
         return "Error: no GitHub token configured. Add one in Settings > GitHub."
 

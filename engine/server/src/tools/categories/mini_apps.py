@@ -26,14 +26,20 @@ def get_mini_app_tool_definitions() -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "name": {"type": "string", "description": "App display name."},
-                        "slug": {"type": "string", "description": "URL-safe identifier (lowercase, hyphens)."},
+                        "slug": {
+                            "type": "string",
+                            "description": "URL-safe identifier (lowercase, hyphens).",
+                        },
                         "description": {"type": "string", "description": "What the app does."},
                         "scope": {
                             "type": "string",
                             "enum": ["GLOBAL", "GROUP", "PERSONAL"],
                             "description": "Visibility scope (default: PERSONAL).",
                         },
-                        "html": {"type": "string", "description": "Initial HTML content for index.html."},
+                        "html": {
+                            "type": "string",
+                            "description": "Initial HTML content for index.html.",
+                        },
                     },
                     "required": ["name", "slug"],
                 },
@@ -51,10 +57,22 @@ def get_mini_app_tool_definitions() -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "app_id": {"type": "string", "description": "Mini-app ID."},
-                        "path": {"type": "string", "description": "File path (e.g., 'index.html', 'js/app.js')."},
-                        "content": {"type": "string", "description": "File content."},
-                        "content_type": {"type": "string", "description": "MIME type (default: auto-detect)."},
-                        "is_base64": {"type": "boolean", "description": "Content is base64-encoded (default: false)."},
+                        "path": {
+                            "type": "string",
+                            "description": "File path (e.g., 'index.html', 'js/app.js').",
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "File content.",
+                        },
+                        "content_type": {
+                            "type": "string",
+                            "description": "MIME type (default: auto-detect).",
+                        },
+                        "is_base64": {
+                            "type": "boolean",
+                            "description": "Content is base64-encoded (default: false).",
+                        },
                     },
                     "required": ["app_id", "path", "content"],
                 },

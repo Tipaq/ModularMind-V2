@@ -43,7 +43,10 @@ def get_human_interaction_tool_definitions() -> list[dict[str, Any]]:
                                 },
                                 "required": ["label", "value"],
                             },
-                            "description": "Options for select/multi_select (2-10 items). For confirm, omit (defaults to Yes/No).",
+                            "description": (
+                                "Options for select/multi_select (2-10 items). "
+                                "For confirm, omit (defaults to Yes/No)."
+                            ),
                         },
                     },
                     "required": ["prompt_type", "question"],

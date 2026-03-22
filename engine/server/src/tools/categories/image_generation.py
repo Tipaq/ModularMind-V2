@@ -30,7 +30,10 @@ def get_image_generation_tool_definitions() -> list[dict[str, Any]]:
                         },
                         "model_id": {
                             "type": "string",
-                            "description": "Image model ID (e.g., 'openai:dall-e-3'). Uses default if omitted.",
+                            "description": (
+                                "Image model ID (e.g., 'openai:dall-e-3'). "
+                                "Uses default if omitted."
+                            ),
                         },
                         "size": {
                             "type": "string",
@@ -136,7 +139,11 @@ async def _image_generate(args: dict, object_store: Any | None) -> str:
 def _image_list_models() -> str:
     """List available image generation models."""
     models = [
-        {"id": "openai:dall-e-3", "name": "DALL-E 3", "sizes": ["1024x1024", "1024x1792", "1792x1024"]},
+        {
+            "id": "openai:dall-e-3",
+            "name": "DALL-E 3",
+            "sizes": ["1024x1024", "1024x1792", "1792x1024"],
+        },
         {"id": "openai:dall-e-2", "name": "DALL-E 2", "sizes": ["256x256", "512x512", "1024x1024"]},
     ]
     return json.dumps(models)

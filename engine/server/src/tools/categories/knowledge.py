@@ -30,7 +30,10 @@ def get_knowledge_tool_definitions() -> list[dict[str, Any]]:
                         "collection_ids": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Optional list of collection IDs to search in. Omit to search all accessible collections.",
+                            "description": (
+                                "Optional list of collection IDs to search in. "
+                                "Omit to search all accessible collections."
+                            ),
                         },
                         "limit": {
                             "type": "integer",
