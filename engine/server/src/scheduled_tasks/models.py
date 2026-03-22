@@ -38,6 +38,9 @@ class ScheduledTask(Base):
         String(20), nullable=True,
     )  # "minutes" | "hours" | "days"
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    start_at: Mapped[str | None] = mapped_column(
+        String(5), nullable=True,
+    )  # Anchor time for intervals, e.g. "09:00" or "00:30"
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -75,7 +78,7 @@ class ScheduledTaskRun(Base):
         index=True,
     )
     status: Mapped[ScheduledTaskRunStatus] = mapped_column(
-        Enum(ScheduledTaskRunStatus),
+        Enum(ScheduledTaskRunStatus, values_callable=lambda e: [m.value for m in e]),
         default=ScheduledTaskRunStatus.PENDING,
     )
     source_type: Mapped[str] = mapped_column(String(50), default="")

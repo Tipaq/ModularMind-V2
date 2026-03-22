@@ -23,16 +23,46 @@ def interval_to_seconds(value: int, unit: str) -> int:
     return value * multipliers.get(unit, 3600)
 
 
+def _parse_anchor_time(start_at: str) -> tuple[int, int]:
+    """Parse 'HH:MM' string into (hour, minute) tuple."""
+    parts = start_at.split(":")
+    return int(parts[0]), int(parts[1])
+
+
+def _compute_anchored_next_run(
+    interval_value: int, interval_unit: str, start_at: str,
+) -> datetime:
+    """Compute next run aligned to anchor time (start_at='HH:MM')."""
+    now = datetime.utcnow()
+    hour, minute = _parse_anchor_time(start_at)
+
+    if interval_unit == "days":
+        candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        interval_delta = timedelta(days=interval_value)
+    elif interval_unit == "hours":
+        candidate = now.replace(minute=minute, second=0, microsecond=0)
+        interval_delta = timedelta(hours=interval_value)
+    else:
+        return now + timedelta(seconds=interval_to_seconds(interval_value, interval_unit))
+
+    if candidate <= now:
+        candidate += interval_delta
+    return candidate
+
+
 def compute_next_run_at(
     schedule_type: str,
     interval_value: int | None,
     interval_unit: str | None,
     scheduled_at: datetime | None,
+    start_at: str | None = None,
 ) -> datetime | None:
     """Compute next run time based on schedule configuration."""
     if schedule_type == "one_shot" and scheduled_at:
         return scheduled_at
     if schedule_type == "interval" and interval_value and interval_unit:
+        if start_at:
+            return _compute_anchored_next_run(interval_value, interval_unit, start_at)
         seconds = interval_to_seconds(interval_value, interval_unit)
         return datetime.utcnow() + timedelta(seconds=seconds)
     return None
@@ -49,6 +79,7 @@ class ScheduledTaskConfig(BaseModel):
     interval_value: int | None = None
     interval_unit: str | None = None
     scheduled_at: datetime | None = None
+    start_at: str | None = None
     target_type: str = "agent"
     target_id: str | None = None
     input_text: str = ""
@@ -65,10 +96,12 @@ class ScheduledTaskConfig(BaseModel):
 class ScheduledTaskCreate(BaseModel):
     name: str
     description: str = ""
+    enabled: bool = False
     schedule_type: str = "manual"
     interval_value: int | None = None
     interval_unit: str | None = None
     scheduled_at: datetime | None = None
+    start_at: str | None = None
     target_type: str = "agent"
     target_id: str | None = None
     input_text: str = ""
@@ -105,6 +138,7 @@ class ScheduledTaskUpdate(BaseModel):
     interval_value: int | None = None
     interval_unit: str | None = None
     scheduled_at: datetime | None = None
+    start_at: str | None = None
     target_type: str | None = None
     target_id: str | None = None
     input_text: str | None = None
@@ -121,6 +155,7 @@ class ScheduledTaskResponse(BaseModel):
     interval_value: int | None
     interval_unit: str | None
     scheduled_at: datetime | None
+    start_at: str | None
     next_run_at: datetime | None
     last_run_at: datetime | None
     target_type: str
