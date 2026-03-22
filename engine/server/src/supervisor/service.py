@@ -454,6 +454,8 @@ class SuperSupervisorService:
 
         mcp_tools = await self._discover_mcp_tools_for_routing(conv_config)
 
+        allowed_tool_categories = conv_config.get("supervisor_tool_categories")
+
         return build_routing_task_prompt(
             agents=agents,
             graphs=graphs,
@@ -462,6 +464,7 @@ class SuperSupervisorService:
             mcp_tools=mcp_tools,
             memory_context=memory_context,
             knowledge_context=knowledge_context,
+            allowed_tool_categories=allowed_tool_categories,
         )
 
     async def _discover_mcp_tools_for_routing(
@@ -637,26 +640,26 @@ class SuperSupervisorService:
         user_id: str,
         conv_config: dict[str, Any],
     ) -> dict[str, Any]:
-        """Handle TOOL_RESPONSE — supervisor answers using MCP tools."""
+        """Handle TOOL_RESPONSE — supervisor answers using discovered tools.
+
+        Uses two meta-tools (search_tools + use_tool) to give the supervisor
+        access to all tool sources without binding dozens of tools directly.
+        """
         from src.graph_engine.tool_loop import run_tool_loop, try_bind_tools
 
-        lc_tools, tool_executor = await self._discover_mcp_tools(conv_config)
-        if not lc_tools or not tool_executor:
-            return await self._handle_direct_response(
-                decision, conv_id, content, user_id, conv_config,
-            )
-
         execution, publish_fn = await self._setup_tool_execution(
-            conv_id,
-            content,
-            user_id,
+            conv_id, content, user_id,
+        )
+
+        discovery_defs, discovery_executor = await self._create_discovery_tools(
+            user_id, conv_config, publish_fn, execution.id,
         )
 
         _, model_name = self._resolve_model_name(conv_config)
 
         try:
             llm = await self.llm_provider.get_model(model_name, temperature=TOOL_TEMPERATURE)
-            llm_with_tools, tools_bound = try_bind_tools(llm, lc_tools)
+            llm_with_tools, tools_bound = try_bind_tools(llm, discovery_defs)
 
             if not tools_bound:
                 logger.info("Model %s doesn't support tools, falling back", model_name)
@@ -664,7 +667,7 @@ class SuperSupervisorService:
                     decision, conv_id, content, user_id, conv_config,
                 )
 
-            memory_context, _ = await self._get_memory_context(user_id, content)
+            memory_context = await self._get_memory_context(user_id)
             llm_messages = self._compose_tool_messages(
                 conv_config,
                 content,
@@ -677,7 +680,7 @@ class SuperSupervisorService:
                 publish_fn,
                 execution.id,
                 model_name,
-                lc_tools,
+                discovery_defs,
             )
 
             from src.infra.config import get_settings
@@ -685,7 +688,7 @@ class SuperSupervisorService:
             response_text, _ = await run_tool_loop(
                 llm_with_tools,
                 llm_messages,
-                tool_executor,
+                discovery_executor,
                 max_iterations=TOOL_LOOP_MAX_ITERATIONS,
                 tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
                 publish_fn=publish_fn,
@@ -720,6 +723,75 @@ class SuperSupervisorService:
                 decision, conv_id, content, user_id, conv_config,
             )
 
+    async def _create_discovery_tools(
+        self,
+        user_id: str,
+        conv_config: dict[str, Any],
+        publish_fn: Any,
+        execution_id: str,
+    ) -> tuple[list[dict[str, Any]], Any]:
+        """Build the two meta-tools and their unified executor.
+
+        Returns (tool_definitions, ToolDiscoveryExecutor).
+        """
+        from src.graph_engine.builtin_tools import (
+            BUILTIN_TOOL_NAMES,
+            create_builtin_executor,
+        )
+        from src.infra.config import get_settings
+        from src.infra.database import async_session_maker
+        from src.tools.discovery import ToolDiscoveryExecutor, get_discovery_tool_definitions
+        from src.tools.executor import ExtendedToolExecutor
+
+        allowed_categories = conv_config.get("supervisor_tool_categories")
+
+        # MCP tools (per-request discovery)
+        mcp_tools, mcp_executor = await self._discover_mcp_tools(conv_config)
+
+        # Extended tools
+        extended_executor = ExtendedToolExecutor(
+            session_maker=async_session_maker,
+            user_id=user_id,
+            agent_id="supervisor",
+            publish_fn=publish_fn,
+        )
+
+        # Gateway tools (only if gateway is configured)
+        gateway_executor = None
+        gateway_tool_defs: list[dict[str, Any]] = []
+        settings = get_settings()
+        if settings.GATEWAY_URL:
+            from src.gateway.executor import GatewayToolExecutor
+            from src.gateway.tool_definitions import get_gateway_tool_definitions
+            from src.internal.auth import get_internal_bearer_token
+
+            gateway_tool_defs = get_gateway_tool_definitions(
+                {"shell": {"enabled": True}, "network": {"enabled": True}},
+            )
+            gateway_executor = GatewayToolExecutor(
+                gateway_url=settings.GATEWAY_URL,
+                agent_id="supervisor",
+                execution_id=execution_id,
+                user_id=user_id,
+                internal_token=get_internal_bearer_token(),
+            )
+
+        # Builtin tools
+        builtin_fn = create_builtin_executor(user_id, async_session_maker)
+
+        discovery_executor = ToolDiscoveryExecutor(
+            extended_executor=extended_executor,
+            mcp_executor=mcp_executor,
+            gateway_executor=gateway_executor,
+            builtin_fn=builtin_fn,
+            builtin_names=BUILTIN_TOOL_NAMES,
+            mcp_tool_defs=mcp_tools or [],
+            gateway_tool_defs=gateway_tool_defs,
+            allowed_categories=allowed_categories,
+        )
+
+        return get_discovery_tool_definitions(), discovery_executor
+
     async def _discover_mcp_tools(self, conv_config: dict[str, Any]) -> tuple[list | None, Any]:
         """Discover and convert MCP tools for tool-calling execution."""
         from src.mcp.service import get_mcp_registry
@@ -727,7 +799,7 @@ class SuperSupervisorService:
 
         enabled_servers = conv_config.get("enabled_mcp_servers", [])
         if not enabled_servers:
-            logger.info("TOOL_RESPONSE but no enabled MCP servers, falling back")
+            logger.debug("No enabled MCP servers for supervisor tools")
             return None, None
 
         registry = get_mcp_registry()
@@ -737,7 +809,7 @@ class SuperSupervisorService:
         )
 
         if not lc_tools or not tool_executor:
-            logger.info("TOOL_RESPONSE but no MCP tools discovered, falling back")
+            logger.debug("No MCP tools discovered for supervisor")
             return None, None
 
         return lc_tools, tool_executor
@@ -953,7 +1025,7 @@ class SuperSupervisorService:
                 "node_id": "supervisor_tools",
                 "node_type": "supervisor_tools",
                 "status": "running",
-                "agent_name": "Supervisor (MCP Tools)",
+                "agent_name": "Supervisor (Tools)",
                 "model": model_name,
                 "tools": tool_names[:MAX_TOOLS_IN_EVENT],
                 "is_ephemeral": False,
