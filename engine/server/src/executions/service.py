@@ -417,10 +417,7 @@ class ExecutionService:
                 has_approval = graph_config and any(
                     n.type == "approval" for n in graph_config.nodes
                 )
-                if has_approval:
-                    timeout = None
-                else:
-                    timeout = min(timeout * 3, 3600)
+                timeout = None if has_approval else min(timeout * 3, 3600)
                 node_types = [n.type for n in graph_config.nodes] if graph_config else []
                 logger.info(
                     "Execution %s: graph=%s has_approval=%s timeout=%s node_types=%s",
@@ -443,7 +440,7 @@ class ExecutionService:
                     # internal TimeoutError (Redis/DB/HTTP), re-raise as generic error
                     raise RuntimeError(
                         "Internal timeout during execution (not execution-level)"
-                    )
+                    ) from None
                 _execution_timed_out = True
 
             if _execution_timed_out:
@@ -933,7 +930,10 @@ class ExecutionService:
                     for k, v in output.items():
                         if k == "messages":
                             safe_output[k] = [
-                                {"role": getattr(m, "type", "unknown"), "content": str(getattr(m, "content", m))}
+                                {
+                                    "role": getattr(m, "type", "unknown"),
+                                    "content": str(getattr(m, "content", m)),
+                                }
                                 if hasattr(m, "content") else str(m)
                                 for m in v
                             ] if isinstance(v, list) else str(v)
@@ -995,7 +995,10 @@ class ExecutionService:
             for k, v in dict(final_state.values).items():
                 if k == "messages" and isinstance(v, list):
                     safe_final[k] = [
-                        {"role": getattr(m, "type", "unknown"), "content": str(getattr(m, "content", m))}
+                        {
+                            "role": getattr(m, "type", "unknown"),
+                            "content": str(getattr(m, "content", m)),
+                        }
                         if hasattr(m, "content") else str(m)
                         for m in v
                     ]

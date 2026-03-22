@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 from src.admin.user_router import admin_user_router
 from src.agents.router import router as agents_router
 from src.auth.router import router as auth_router
-from src.scheduled_tasks.router import router as scheduled_tasks_router
 from src.connectors.router import router as connectors_router
 from src.connectors.webhook_router import webhook_router
 from src.conversations.router import admin_router as conversations_admin_router
@@ -38,15 +37,16 @@ from src.health.router import router as health_router
 from src.internal.router import router as internal_router
 from src.mcp.router import router as mcp_admin_router
 from src.mcp.usage_router import usage_router as mcp_usage_router
+from src.mini_apps.router import router as mini_apps_router
 from src.models.router import router as models_admin_router
 from src.models.usage_router import usage_router as models_usage_router
 from src.rag.router import router as rag_router
 from src.recall.router import router as recall_router
 from src.report.router import router as report_router
+from src.scheduled_tasks.router import router as scheduled_tasks_router
 from src.setup.router import router as setup_router
 from src.supervisor.router import router as supervisor_router
 from src.sync.router import router as sync_router
-from src.mini_apps.router import router as mini_apps_router
 from src.tools.router import router as tools_admin_router
 
 # ---------------------------------------------------------------------------
@@ -282,7 +282,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["X-Frame-Options"] = "DENY"
 
         if not is_mini_app_serve:
-            if path.startswith("/api/") or path.startswith("/health") or path.startswith("/metrics"):
+            is_api_path = (
+                path.startswith("/api/")
+                or path.startswith("/health")
+                or path.startswith("/metrics")
+            )
+            if is_api_path:
                 response.headers["Content-Security-Policy"] = self._API_CSP
             else:
                 response.headers["Content-Security-Policy"] = self._SPA_CSP

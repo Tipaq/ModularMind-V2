@@ -74,7 +74,10 @@ async def create_dataset(
         dataset = await svc.create_dataset(data, str(user.id))
         return DatasetResponse.model_validate(dataset)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=_safe_error(e, "Dataset creation failed")) from e
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_error(e, "Dataset creation failed"),
+        ) from e
 
 
 @router.get("/datasets", response_model=DatasetListResponse)
@@ -319,7 +322,10 @@ async def cancel_job(
         await svc.cancel_job(job_id)
         return {"status": "cancelled"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=_safe_error(e, "Job cancellation failed")) from e
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_error(e, "Job cancellation failed"),
+        ) from e
 
 
 @router.post(
@@ -338,7 +344,10 @@ async def deploy_model(
         await svc.deploy_model(job_id, agent_id)
         return {"status": "deployed", "job_id": job_id, "agent_id": agent_id}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=_safe_error(e, "Model deployment failed")) from e
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_error(e, "Model deployment failed"),
+        ) from e
 
 
 @router.post(
@@ -397,7 +406,10 @@ async def create_experiment(
         experiment = await svc.create_experiment(data, str(user.id))
         return ExperimentResponse.model_validate(experiment)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=_safe_error(e, "Experiment creation failed")) from e
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_error(e, "Experiment creation failed"),
+        ) from e
 
 
 @router.get("/experiments", response_model=ExperimentListResponse)
@@ -443,7 +455,10 @@ async def start_experiment(
         await svc.start_experiment(experiment_id)
         return {"status": "started", "experiment_id": experiment_id}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=_safe_error(e, "Experiment start failed")) from e
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_error(e, "Experiment start failed"),
+        ) from e
 
 
 @router.post(

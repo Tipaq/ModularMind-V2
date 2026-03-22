@@ -52,7 +52,6 @@ async def action_worker_restart(user: CurrentUser) -> ActionResponse:
 async def action_purge_streams(body: PurgeRequest, user: CurrentUser) -> ActionResponse:
     """Trim Redis Streams to remove old messages."""
     from src.infra.redis import get_redis_client
-
     from src.infra.stream_names import (
         STREAM_EXECUTIONS,
         STREAM_MEMORY_EXTRACTED,

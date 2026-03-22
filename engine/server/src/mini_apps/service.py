@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from typing import Any
@@ -132,10 +133,8 @@ class MiniAppService:
 
         existing = await self._get_file(app_id, path)
         if existing:
-            try:
+            with contextlib.suppress(Exception):
                 await self.create_snapshot(app_id, f"auto: before updating {path}")
-            except Exception:
-                pass
 
         return await self._write_file_internal(app_id, path, content, content_type)
 
@@ -391,10 +390,12 @@ class MiniAppService:
         document.documentElement.classList.toggle("dark", e.data.data === "dark");
       }}
       if (e.data && e.data.source === "modularmind-parent" && e.data.type === "initialized") {{
-        document.documentElement.classList.toggle("dark", (e.data.data && e.data.data.theme) === "dark");
+        var t = e.data.data && e.data.data.theme;
+        document.documentElement.classList.toggle("dark", t === "dark");
       }}
     }});
-    if (!document.documentElement.classList.contains("dark") && window.matchMedia("(prefers-color-scheme: dark)").matches) {{
+    var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if (!document.documentElement.classList.contains("dark") && prefersDark) {{
       document.documentElement.classList.add("dark");
     }}
   </script>

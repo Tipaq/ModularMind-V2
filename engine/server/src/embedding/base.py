@@ -82,5 +82,5 @@ class EmbeddingProvider(ABC):
         """
         ...
 
-    async def close(self) -> None:
+    async def close(self) -> None:  # noqa: B027
         """Release any held resources (HTTP clients, etc.)."""

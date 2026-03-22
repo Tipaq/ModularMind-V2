@@ -297,7 +297,6 @@ async def get_metrics_history(
 @router.get("/llm-gpu", dependencies=[RequireAdmin])
 async def get_llm_gpu_monitoring(user: CurrentUser) -> LlmGpuMonitoring:
     """LLM and GPU monitoring data (Redis-only, no DB dependency)."""
-    from src.infra.gpu import detect_gpu
     from src.infra.redis import get_redis_client
 
     # --- Poll Ollama /api/ps ---
