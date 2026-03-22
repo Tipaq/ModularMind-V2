@@ -18,6 +18,7 @@ export interface ScheduledTask {
   interval_value: number | null;
   interval_unit: IntervalUnit | null;
   scheduled_at: string | null;
+  start_at: string | null;
   next_run_at: string | null;
   last_run_at: string | null;
   target_type: TargetType;
