@@ -30,6 +30,7 @@ services:
     build:
       context: ..
       dockerfile: engine/server/Dockerfile
+      target: dev
     ports:
       - "8000:8000"
     volumes:
