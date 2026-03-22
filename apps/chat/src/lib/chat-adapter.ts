@@ -84,21 +84,28 @@ export const conversationAdapter: ConversationAdapter = {
  */
 export const chatConfigAdapter: ChatConfigAdapter = {
   async fetchConfig() {
+    console.log("[chatConfig] fetchConfig called — 6 parallel requests");
     const [agentsRes, graphsRes, modelsRes, prefsRes, layersRes, mcpRes] = await Promise.all([
       api.get<{ items: EngineAgent[] }>("/agents?page=1&page_size=200").catch(() => ({ items: [] as EngineAgent[] })),
       api.get<{ items: EngineGraph[] }>("/graphs?page=1&page_size=200").catch(() => ({ items: [] as EngineGraph[] })),
       api.get<EngineModel[]>("/models").catch(() => [] as EngineModel[]),
       api.get<{ preferences: string | null }>("/auth/me/preferences").catch(() => ({ preferences: null })),
-      api.get<{ layers: SupervisorLayer[] }>("/internal/supervisor/layers").catch(() => ({ layers: [] as SupervisorLayer[] })),
-      api.get<McpServer[]>("/internal/mcp/servers").catch(() => [] as McpServer[]),
+      api.get<{ layers: SupervisorLayer[] }>("/internal/supervisor/layers").catch((err) => {
+        console.error("[chatConfig] supervisor layers fetch failed:", err);
+        return { layers: [] as SupervisorLayer[] };
+      }),
+      api.get<McpServer[]>("/internal/mcp/servers").catch((err) => {
+        console.error("[chatConfig] MCP servers fetch failed:", err);
+        return [] as McpServer[];
+      }),
     ]);
 
     return {
       agents: Array.isArray(agentsRes.items) ? agentsRes.items : [],
       graphs: Array.isArray(graphsRes.items) ? graphsRes.items : [],
       models: Array.isArray(modelsRes) ? modelsRes : [],
-      supervisorLayers: Array.isArray(layersRes.layers) ? layersRes.layers : [],
-      mcpServers: Array.isArray(mcpRes) ? mcpRes : [],
+      supervisorLayers: (() => { console.log("[chatConfig] layersRes:", layersRes); return Array.isArray(layersRes.layers) ? layersRes.layers : []; })(),
+      mcpServers: (() => { console.log("[chatConfig] mcpRes:", mcpRes); return Array.isArray(mcpRes) ? mcpRes : []; })(),
       userPreferences: prefsRes.preferences ?? null,
     };
   },

@@ -18,9 +18,10 @@ export default function Chat() {
   const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CHAT_CONFIG);
 
   const user = useAuthStore((s) => s.user);
-  const { agents, graphs, models, supervisorLayers, updateSupervisorLayer, load: loadConfig } = useChatConfig(chatConfigAdapter);
+  const { agents, graphs, models, supervisorLayers, updateSupervisorLayer, load: loadConfig, reload: reloadConfig } = useChatConfig(chatConfigAdapter);
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
 
   // Build the full model identifier the Engine expects: "provider:model_id"
   const toEngineModelId = useCallback((m: EngineModel) => `${m.provider}:${m.model_id}`, []);
@@ -114,11 +115,11 @@ export default function Chat() {
     effectiveModelIdRef.current = effectiveModelId;
   });
 
-  // Load config once user is authenticated
+  // Load config once user is authenticated (reload to override any failed pre-login fetch)
   useEffect(() => {
     if (!user) return;
-    loadConfig();
-  }, [user, loadConfig]);
+    reloadConfig();
+  }, [user, reloadConfig]);
 
   // Determine if sending is blocked
   const sendDisabledReason = useMemo(() => {
@@ -240,11 +241,18 @@ export default function Chat() {
   }, [persistConfig]);
 
   // Use execution data from the streaming message, or null
-  const isLiveSelected = isStreaming && !!streamingMessageId;
+  const lastAssistantId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return messages[i].id;
+    }
+    return null;
+  }, [messages]);
+  const activeMessageId = selectedMessageId ?? streamingMessageId ?? lastAssistantId;
+  const isLiveSelected = isStreaming && !!streamingMessageId && !selectedMessageId;
   const selectedExecution = useMemo(() => {
-    if (!streamingMessageId) return null;
-    return executionDataMap[streamingMessageId] ?? null;
-  }, [streamingMessageId, executionDataMap]);
+    if (!activeMessageId) return null;
+    return executionDataMap[activeMessageId] ?? null;
+  }, [activeMessageId, executionDataMap]);
 
   // Token usage from the latest execution
   const latestTokenUsage = useMemo(() => {
@@ -268,8 +276,6 @@ export default function Chat() {
   const handleCompactFromPanel = useCallback(async () => {
     return conversationAdapter.compactConversation(activeConversationId!);
   }, [activeConversationId]);
-
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
 
   const handleArtifactDetected = useCallback(
     (artifact: DetectedArtifact) => {
