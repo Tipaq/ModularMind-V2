@@ -45,7 +45,24 @@ COPY apps/chat/ ./apps/chat/
 COPY apps/ops/ ./apps/ops/
 RUN pnpm --filter @modularmind/chat build && pnpm --filter @modularmind/ops build
 
-# --- Runtime ---
+# --- Dev runtime (no SPA build, apps run locally via Vite) ---
+FROM base AS dev
+
+COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=deps /usr/local/bin /usr/local/bin
+
+COPY engine/server/src ./src
+COPY engine/server/seed ./seed
+COPY engine/server/alembic.ini ./alembic.ini
+COPY engine/server/alembic ./alembic
+COPY engine/server/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+EXPOSE 8000
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["uvicorn", "src.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+
+# --- Production runtime (includes SPA builds baked into static/) ---
 FROM base AS runtime
 
 # Copy installed packages from deps stage
