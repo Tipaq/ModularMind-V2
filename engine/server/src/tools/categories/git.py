@@ -37,7 +37,10 @@ def get_git_tool_definitions() -> list[dict[str, Any]]:
         }, ["repo"]),
         _tool("git_diff", "Show file changes in a repository.", {
             "repo": _str("Repository directory name"),
-            "staged": {"type": "boolean", "description": "Show staged changes only (default: false)"},
+            "staged": {
+                "type": "boolean",
+                "description": "Show staged changes only (default: false)",
+            },
             "file": _str("Specific file to diff (optional)"),
         }, ["repo"]),
         _tool("git_log", "Show commit history.", {
@@ -57,7 +60,11 @@ def get_git_tool_definitions() -> list[dict[str, Any]]:
         _tool("git_commit", "Stage and commit changes.", {
             "repo": _str("Repository directory name"),
             "message": _str("Commit message"),
-            "files": {"type": "array", "items": {"type": "string"}, "description": "Files to stage (default: all changes)"},
+            "files": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Files to stage (default: all changes)",
+            },
         }, ["repo", "message"]),
         _tool("git_push", "Push commits to remote.", {
             "repo": _str("Repository directory name"),
@@ -85,7 +92,7 @@ async def execute_git_tool(
 
     try:
         return await handler(args, github_token)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return f"Error: git command timed out after {GIT_TIMEOUT}s."
     except Exception as e:
         logger.exception("Git tool '%s' failed", name)
@@ -200,7 +207,7 @@ async def _git_log(args: dict, token: str | None) -> str:
         return f"Error: repository '{args.get('repo')}' not found."
 
     limit = min(max(int(args.get("limit", 20)), 1), 100)
-    cmd = ["git", "log", f"--oneline", f"-n{limit}", "--no-color"]
+    cmd = ["git", "log", "--oneline", f"-n{limit}", "--no-color"]
     if args.get("branch"):
         cmd.append(args["branch"])
 

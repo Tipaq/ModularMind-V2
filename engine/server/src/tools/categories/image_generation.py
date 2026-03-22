@@ -76,7 +76,6 @@ async def _image_generate(args: dict, object_store: Any | None) -> str:
     if not prompt:
         return "Error: prompt is required."
 
-    model_id = args.get("model_id", "openai:dall-e-3")
     size = args.get("size", "1024x1024")
 
     try:

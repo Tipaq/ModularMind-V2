@@ -32,7 +32,10 @@ USER_AGENT = (
 def get_web_tool_definitions() -> list[dict[str, Any]]:
     """Return tool definitions for the web category."""
     return [
-        _tool("web_search", "Search the web. Uses DuckDuckGo by default, or Brave/Tavily/Serper if configured.", {
+        _tool("web_search", (
+            "Search the web. Uses DuckDuckGo by default, "
+            "or Brave/Tavily/Serper if configured."
+        ), {
             "query": _str("Search query"),
             "provider": _str("Provider: auto, duckduckgo, brave, tavily, serper (default: auto)"),
             "max_results": _int("Max results to return (1-20, default: 10)"),
@@ -40,13 +43,22 @@ def get_web_tool_definitions() -> list[dict[str, Any]]:
         _tool("browse_url", "Fetch a web page and extract its content as clean markdown or text.", {
             "url": _str("URL to browse"),
             "format": _str("Output format: markdown, text, raw (default: markdown)"),
-            "render_js": {"type": "boolean", "description": "Render JavaScript via headless browser (default: false). Requires Puppeteer MCP."},
+            "render_js": {
+                "type": "boolean",
+                "description": (
+                    "Render JavaScript via headless browser "
+                    "(default: false). Requires Puppeteer MCP."
+                ),
+            },
         }, ["url"]),
         _tool("screenshot_url", "Take a screenshot of a web page. Requires Puppeteer MCP server.", {
             "url": _str("URL to capture"),
             "width": _int("Viewport width in pixels (default: 1280)"),
             "height": _int("Viewport height in pixels (default: 720)"),
-            "full_page": {"type": "boolean", "description": "Capture full page height (default: false)"},
+            "full_page": {
+                "type": "boolean",
+                "description": "Capture full page height (default: false)",
+            },
         }, ["url"]),
         _tool("extract_links", "Extract all links from a web page with optional regex filtering.", {
             "url": _str("URL to extract links from"),
@@ -102,7 +114,7 @@ def _check_ssrf(url: str) -> str | None:
             if ip.is_private or ip.is_loopback or ip.is_link_local:
                 return f"Blocked: {hostname} resolves to private IP {ip}"
             if str(ip) == "169.254.169.254":
-                return f"Blocked: cloud metadata endpoint"
+                return "Blocked: cloud metadata endpoint"
     except socket.gaierror:
         return f"Error: cannot resolve hostname '{hostname}'"
 
@@ -372,7 +384,10 @@ async def _extract_links(args: dict) -> str:
         resp.raise_for_status()
 
     html = resp.text
-    pattern = re.compile(r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', re.IGNORECASE | re.DOTALL)
+    pattern = re.compile(
+        r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+        re.IGNORECASE | re.DOTALL,
+    )
     matches = pattern.findall(html)
 
     links = []

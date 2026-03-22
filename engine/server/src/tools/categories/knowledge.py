@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -117,9 +116,9 @@ async def _knowledge_list_sources(
     session: AsyncSession,
 ) -> str:
     """List accessible knowledge collections."""
-    from src.rag.models import RAGCollection
-
     from sqlalchemy import select as sa_select
+
+    from src.rag.models import RAGCollection
 
     scope_filter = args.get("scope")
 

@@ -165,7 +165,10 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
                         "exclude": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Glob patterns to exclude (e.g. ['node_modules', '.git']).",
+                            "description": (
+                                "Glob patterns to exclude "
+                                "(e.g. ['node_modules', '.git'])."
+                            ),
                         },
                     },
                     "required": [],
@@ -220,7 +223,10 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
                         },
                         "context": {
                             "type": "integer",
-                            "description": "Lines of context before/after each match (0-5, default: 0).",
+                            "description": (
+                                "Lines of context before/after each match "
+                                "(0-5, default: 0)."
+                            ),
                         },
                     },
                     "required": ["pattern"],

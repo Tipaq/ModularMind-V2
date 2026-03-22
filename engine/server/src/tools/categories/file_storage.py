@@ -192,10 +192,7 @@ async def _storage_upload(
     content_type = args.get("content_type", "text/plain")
     is_base64 = args.get("is_base64", False)
 
-    if is_base64:
-        data = base64.b64decode(content_str)
-    else:
-        data = content_str.encode("utf-8")
+    data = base64.b64decode(content_str) if is_base64 else content_str.encode("utf-8")
 
     file_id = str(uuid4())
     s3_key = f"agents/{agent_id}/{file_id}/{file_name}"

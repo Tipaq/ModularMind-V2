@@ -29,7 +29,10 @@ def get_custom_tool_definitions() -> list[dict[str, Any]]:
                     "properties": {
                         "name": {
                             "type": "string",
-                            "description": "Tool name (lowercase, alphanumeric + underscores, max 64 chars).",
+                            "description": (
+                                "Tool name (lowercase, alphanumeric "
+                                "+ underscores, max 64 chars)."
+                            ),
                         },
                         "description": {
                             "type": "string",
@@ -241,7 +244,11 @@ async def _run(
 
     result = await session.execute(
         select(CustomTool)
-        .where(CustomTool.agent_id == agent_id, CustomTool.name == tool_name, CustomTool.is_active.is_(True))
+        .where(
+            CustomTool.agent_id == agent_id,
+            CustomTool.name == tool_name,
+            CustomTool.is_active.is_(True),
+        )
     )
     tool = result.scalar_one_or_none()
     if not tool:
