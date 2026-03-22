@@ -32,6 +32,7 @@ def get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
     from src.tools.categories.custom_tools import get_custom_tool_definitions
     from src.tools.categories.file_storage import get_file_storage_tool_definitions
     from src.tools.categories.filesystem import get_filesystem_tool_definitions
+    from src.tools.categories.git import get_git_tool_definitions
     from src.tools.categories.github import get_github_tool_definitions
     from src.tools.categories.human_interaction import (
         get_human_interaction_tool_definitions,
@@ -40,7 +41,6 @@ def get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
         get_image_generation_tool_definitions,
     )
     from src.tools.categories.knowledge import get_knowledge_tool_definitions
-    from src.tools.categories.git import get_git_tool_definitions
     from src.tools.categories.mini_apps import get_mini_app_tool_definitions
     from src.tools.categories.scheduling import get_scheduling_tool_definitions
     from src.tools.categories.web import get_web_tool_definitions
@@ -86,7 +86,9 @@ def resolve_tool_definitions(tool_categories: dict[str, bool]) -> list[dict[str,
     return tools
 
 
-async def resolve_registered_custom_tools(agent_id: str, session_maker: Callable) -> list[dict[str, Any]]:
+async def resolve_registered_custom_tools(
+    agent_id: str, session_maker: Callable,
+) -> list[dict[str, Any]]:
     """Load agent's registered custom tools from DB and return as LLM tool definitions.
 
     Each registered custom tool becomes a callable tool for the LLM,
@@ -109,7 +111,8 @@ async def resolve_registered_custom_tools(agent_id: str, session_maker: Callable
 
         definitions = []
         for tool in tools:
-            parameters = tool.parameters if isinstance(tool.parameters, dict) and tool.parameters else {
+            has_params = isinstance(tool.parameters, dict) and tool.parameters
+            parameters = tool.parameters if has_params else {
                 "type": "object", "properties": {}, "required": [],
             }
             if "type" not in parameters:

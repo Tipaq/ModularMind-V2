@@ -7,7 +7,6 @@ as MCPToolExecutor and GatewayToolExecutor.
 
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -175,7 +174,7 @@ class ExtendedToolExecutor:
 
         github_token = None
         try:
-            keys = await self._get_search_api_keys()
+            await self._get_search_api_keys()
             async with self._session_maker() as session:
                 from src.tools.categories.github import resolve_token
                 github_token = await resolve_token(session, self._agent_id)
