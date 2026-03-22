@@ -13,6 +13,7 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  GitFork,
   LayoutDashboard,
   type LucideIcon,
 } from "lucide-react";
@@ -29,6 +30,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { name: "Dashboard", to: "/", icon: LayoutDashboard, end: true },
+  { name: "Agents", to: "/agents", icon: Bot },
+  { name: "Graphs", to: "/graphs", icon: GitFork },
   { name: "Configuration", to: "/configuration", icon: Settings2 },
   { name: "Models", to: "/models", icon: Layers },
   { name: "Knowledge", to: "/knowledge", icon: BookOpen },

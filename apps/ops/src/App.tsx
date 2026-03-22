@@ -23,6 +23,10 @@ const MiniApps = lazy(() => import("./pages/MiniApps"));
 const MiniAppDetail = lazy(() => import("./pages/MiniAppDetail"));
 const ScheduledTasks = lazy(() => import("./pages/ScheduledTasks"));
 const ScheduledTaskDetail = lazy(() => import("./pages/ScheduledTaskDetail"));
+const Graphs = lazy(() => import("./pages/Graphs"));
+const GraphDetail = lazy(() => import("./pages/GraphDetail"));
+const Agents = lazy(() => import("./pages/Agents"));
+const AgentDetail = lazy(() => import("./pages/AgentDetail"));
 
 function SetupGuard({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<"loading" | "initialized" | "needs-setup">("loading");
@@ -73,6 +77,10 @@ export default function App() {
           <Route path="/mini-apps/:id" element={<MiniAppDetail />} />
           <Route path="/scheduled-tasks" element={<ScheduledTasks />} />
           <Route path="/scheduled-tasks/:id" element={<ScheduledTaskDetail />} />
+          <Route path="/graphs" element={<Graphs />} />
+          <Route path="/graphs/:id" element={<GraphDetail />} />
+          <Route path="/agents" element={<Agents />} />
+          <Route path="/agents/:id" element={<AgentDetail />} />
           <Route path="/users" element={<Users />} />
           <Route path="/users/:userId" element={<UserDetail />} />
 
