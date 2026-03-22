@@ -5,16 +5,10 @@ and individual category handlers (with mocked dependencies).
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from tests.conftest import TestSession
-
 
 # ---------------------------------------------------------------------------
 # Registry + Definitions
@@ -326,11 +320,11 @@ class TestImageGenerationTools:
         assert len(defs) == 2
 
     def test_list_models_returns_json(self):
+        import asyncio
+
         from src.tools.categories.image_generation import (
             execute_image_generation_tool,
         )
-
-        import asyncio
 
         result = asyncio.get_event_loop().run_until_complete(
             execute_image_generation_tool("image_list_models", {})
