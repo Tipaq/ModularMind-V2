@@ -29,9 +29,9 @@ def _find_nvidia_smi() -> str:
 
     if platform.system() == "Windows":
         # Common Windows install paths
-        sys32 = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32")
+        sys32 = os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"), "System32")
         candidates.append(os.path.join(sys32, "nvidia-smi.exe"))
-        prog = os.environ.get("ProgramFiles", r"C:\Program Files")
+        prog = os.environ.get("PROGRAMFILES", r"C:\Program Files")
         nv_dir = os.path.join(prog, "NVIDIA Corporation", "NVSMI")
         candidates.append(os.path.join(nv_dir, "nvidia-smi.exe"))
 
