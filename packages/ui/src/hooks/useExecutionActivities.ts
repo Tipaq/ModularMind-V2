@@ -538,6 +538,7 @@ export function useExecutionActivities() {
       const agentName = data.agent_name as string | undefined;
       const inputPrompt = data.input_prompt as string | undefined;
       const model = data.model as string | undefined;
+      const nodeId = data.node_id as string | undefined;
       const graphParent = currentGraphIdRef.current;
       const existingAgentId = currentAgentIdRef.current;
 
@@ -551,7 +552,7 @@ export function useExecutionActivities() {
                 ...a,
                 children: (a.children || []).map((c) =>
                   c.id === existingAgentId
-                    ? { ...c, inputPrompt, model, agentName: agentName ?? c.agentName }
+                    ? { ...c, inputPrompt, model, nodeId: nodeId ?? c.nodeId, agentName: agentName ?? c.agentName }
                     : c,
                 ),
               };
@@ -559,7 +560,7 @@ export function useExecutionActivities() {
           }
           return prev.map((a) =>
             a.id === existingAgentId
-              ? { ...a, inputPrompt, model, agentName: agentName ?? a.agentName }
+              ? { ...a, inputPrompt, model, nodeId: nodeId ?? a.nodeId, agentName: agentName ?? a.agentName }
               : a,
           );
         });
@@ -577,6 +578,7 @@ export function useExecutionActivities() {
           agentName,
           inputPrompt,
           model,
+          nodeId,
           children: [],
           toolCallCount: 0,
           llmCallCount: 0,

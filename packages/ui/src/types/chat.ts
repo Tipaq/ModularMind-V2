@@ -91,6 +91,8 @@ export interface ExecutionActivity {
   graphName?: string;
   /** For graph_execution: number of nodes */
   nodeCount?: number;
+  /** For graph nodes: the graph node ID this activity corresponds to */
+  nodeId?: string;
 }
 
 // ─── Shared camelCase types for Insights / Knowledge / Memory panels ─────────
