@@ -651,9 +651,12 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
         await r.expire(progress_key, 3600)
         logger.info("Model %s pulled successfully", model_name)
 
-    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError) as exc:
         logger.exception("Failed to pull model %s", model_name)
-        await r.hset(progress_key, mapping={"status": "error", "progress": "0"})
+        await r.hset(
+            progress_key,
+            mapping={"status": "error", "progress": "0", "error": str(exc)[:500]},
+        )
         raise  # Trigger retry/DLQ
     finally:
         await r.aclose()
