@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Bot,
   Settings2,
   ArrowDownToLine,
   ArrowUpFromLine,
   Info,
+  CheckCircle2,
+  XCircle,
+  Clock,
 } from "lucide-react";
 import {
   Input,
@@ -16,7 +19,9 @@ import {
   TabsContent,
   stripProvider,
   isLocalModel,
+  formatDurationMs,
 } from "@modularmind/ui";
+import type { ExecutionActivity } from "@modularmind/ui";
 import type { Agent } from "@modularmind/api-client";
 import type { Node } from "@xyflow/react";
 import { NODE_CONFIG, type NodeType } from "../nodes/nodeConfig";
@@ -26,6 +31,7 @@ interface PropertiesPanelProps {
   node: Node | null;
   onUpdateNode: (nodeId: string, data: Record<string, unknown>) => void;
   isEditMode?: boolean;
+  executionActivities?: ExecutionActivity[];
 }
 
 function PropRow({
@@ -54,10 +60,25 @@ function resolveAgentId(data: Record<string, unknown>): string | null {
 const TAB_CLS =
   "h-8 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-2.5 gap-1 text-xs";
 
+function findActivityForNode(
+  activities: ExecutionActivity[],
+  nodeId: string,
+): ExecutionActivity | null {
+  for (const activity of activities) {
+    if (activity.nodeId === nodeId) return activity;
+    if (activity.children) {
+      const found = findActivityForNode(activity.children, nodeId);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 export function PropertiesPanel({
   node,
   onUpdateNode,
   isEditMode = true,
+  executionActivities = [],
 }: PropertiesPanelProps) {
   const [agentDetail, setAgentDetail] = useState<Agent | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
@@ -66,6 +87,11 @@ export function PropertiesPanel({
   const nodeType = ((nodeData?.type || node?.type || "agent") as string) as NodeType;
   const agentId = nodeData ? resolveAgentId(nodeData) : null;
   const isAgentNode = nodeType === "agent" || nodeType === "supervisor";
+
+  const nodeActivity = useMemo(
+    () => (node ? findActivityForNode(executionActivities, node.id) : null),
+    [executionActivities, node],
+  );
 
   useEffect(() => {
     if (!agentId) {
@@ -141,13 +167,9 @@ export function PropertiesPanel({
               <Settings2 className="h-3 w-3" />
               Config
             </TabsTrigger>
-            <TabsTrigger value="input" className={TAB_CLS}>
+            <TabsTrigger value="io" className={TAB_CLS}>
               <ArrowDownToLine className="h-3 w-3" />
-              Input
-            </TabsTrigger>
-            <TabsTrigger value="output" className={TAB_CLS}>
-              <ArrowUpFromLine className="h-3 w-3" />
-              Output
+              I/O
             </TabsTrigger>
           </TabsList>
         </div>
@@ -401,24 +423,117 @@ export function PropertiesPanel({
           </div>
         </TabsContent>
 
-        {/* ── Input tab ── */}
-        <TabsContent value="input" className="flex-1 overflow-auto mt-0 p-4">
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <Info className="h-6 w-6 mb-1.5 opacity-40" />
-            <p className="text-xs text-center">
-              Run the graph in the playground to see execution inputs.
-            </p>
-          </div>
-        </TabsContent>
+        {/* ── I/O tab ── */}
+        <TabsContent value="io" className="flex-1 overflow-auto mt-0 p-4">
+          {nodeActivity ? (
+            <div className="space-y-4">
+              {/* Status + duration */}
+              <div className="flex items-center gap-2">
+                {nodeActivity.status === "completed" && (
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                )}
+                {nodeActivity.status === "failed" && (
+                  <XCircle className="h-4 w-4 text-destructive" />
+                )}
+                {nodeActivity.status === "running" && (
+                  <Clock className="h-4 w-4 text-primary animate-pulse" />
+                )}
+                <span className="text-sm font-medium capitalize">
+                  {nodeActivity.status}
+                </span>
+                {nodeActivity.durationMs != null && (
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {formatDurationMs(nodeActivity.durationMs)}
+                  </span>
+                )}
+              </div>
 
-        {/* ── Output tab ── */}
-        <TabsContent value="output" className="flex-1 overflow-auto mt-0 p-4">
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <Info className="h-6 w-6 mb-1.5 opacity-40" />
-            <p className="text-xs text-center">
-              Run the graph in the playground to see execution results.
-            </p>
-          </div>
+              {/* Input */}
+              {nodeActivity.inputPrompt && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                    <ArrowDownToLine className="h-3 w-3" />
+                    Input
+                  </div>
+                  <div className="text-sm bg-muted/50 rounded-md p-2.5 whitespace-pre-wrap max-h-40 overflow-auto">
+                    {nodeActivity.inputPrompt}
+                  </div>
+                </div>
+              )}
+
+              {/* Output */}
+              {nodeActivity.agentResponse && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                    <ArrowUpFromLine className="h-3 w-3" />
+                    Output
+                  </div>
+                  <div className="text-sm bg-muted/50 rounded-md p-2.5 max-h-40 overflow-auto whitespace-pre-wrap">
+                    {nodeActivity.agentResponse}
+                  </div>
+                </div>
+              )}
+
+              {/* Meta */}
+              {nodeActivity.model && (
+                <PropRow label="Model">
+                  <span className="text-xs font-mono">
+                    {stripProvider(nodeActivity.model)}
+                  </span>
+                </PropRow>
+              )}
+              {(nodeActivity.toolCallCount ?? 0) > 0 && (
+                <PropRow label="Tool calls">
+                  <span className="text-xs">
+                    {nodeActivity.toolCallCount}
+                  </span>
+                </PropRow>
+              )}
+
+              {/* Steps */}
+              {nodeActivity.children &&
+                nodeActivity.children.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                      Steps
+                    </h4>
+                    <div className="space-y-1">
+                      {nodeActivity.children.map((child) => (
+                        <div
+                          key={child.id}
+                          className="flex items-center justify-between text-xs bg-muted/30 rounded px-2 py-1.5"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {child.status === "completed" && (
+                              <CheckCircle2 className="h-3 w-3 text-success shrink-0" />
+                            )}
+                            {child.status === "failed" && (
+                              <XCircle className="h-3 w-3 text-destructive shrink-0" />
+                            )}
+                            {child.status === "running" && (
+                              <Clock className="h-3 w-3 text-primary animate-pulse shrink-0" />
+                            )}
+                            <span className="truncate">{child.label}</span>
+                          </div>
+                          {child.durationMs != null && (
+                            <span className="text-muted-foreground shrink-0 ml-2">
+                              {formatDurationMs(child.durationMs)}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <Info className="h-6 w-6 mb-1.5 opacity-40" />
+              <p className="text-xs text-center">
+                Run the graph to see execution data.
+              </p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

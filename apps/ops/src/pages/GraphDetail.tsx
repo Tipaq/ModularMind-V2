@@ -23,6 +23,7 @@ import {
 } from "@modularmind/ui";
 import type { Node, Edge } from "@xyflow/react";
 import type { NodeInput, EdgeInput, ValidationIssue } from "@modularmind/api-client";
+import type { ExecutionActivity } from "@modularmind/ui";
 import { useGraphsStore } from "../stores/graphs";
 import { validateGraph } from "../lib/graph-validation";
 import {
@@ -97,6 +98,14 @@ export default function GraphDetail() {
   const [currentEdges, setCurrentEdges] = useState<Edge[]>([]);
   const [canvasKey, setCanvasKey] = useState(0);
   const [activeTab, setActiveTab] = useState("settings");
+  const [executionActivities, setExecutionActivities] = useState<ExecutionActivity[]>([]);
+
+  const handleActivitiesChange = useCallback(
+    (activities: ExecutionActivity[]) => {
+      setExecutionActivities(activities);
+    },
+    [],
+  );
 
   const handleNodesEdgesChange = useCallback((nodes: Node[], edges: Edge[]) => {
     setCurrentNodes(nodes);
@@ -281,6 +290,7 @@ export default function GraphDetail() {
                 saving={saving}
                 isEditMode={isEditMode}
                 onNodesEdgesChange={handleNodesEdgesChange}
+                executionActivities={executionActivities}
               />
             </Suspense>
           </div>
@@ -356,6 +366,7 @@ export default function GraphDetail() {
             graphName={graphSettings.name}
             isValid={isValid}
             validationIssues={validationIssues}
+            onActivitiesChange={handleActivitiesChange}
           />
         </div>
       </div>

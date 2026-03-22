@@ -18,6 +18,13 @@ import { GraphToolbar } from "./GraphToolbar";
 import { PropertiesPanel } from "./panels/PropertiesPanel";
 import type { NodeType } from "./nodes/nodeConfig";
 import type { Graph } from "@modularmind/api-client";
+import type { ExecutionActivity } from "@modularmind/ui";
+
+interface NodeExecutionState {
+  nodeId: string;
+  status: "running" | "completed" | "failed";
+  durationMs?: number;
+}
 
 const nodeTypes: NodeTypes = {
   graphNode: GraphNodeComponent,
@@ -27,6 +34,23 @@ const edgeTypes: EdgeTypes = {
   execution: ExecutionEdge,
 };
 
+function activitiesToNodeStates(activities: ExecutionActivity[]): NodeExecutionState[] {
+  const states: NodeExecutionState[] = [];
+  for (const activity of activities) {
+    if (activity.nodeId) {
+      states.push({
+        nodeId: activity.nodeId,
+        status: activity.status,
+        durationMs: activity.durationMs,
+      });
+    }
+    if (activity.children) {
+      states.push(...activitiesToNodeStates(activity.children));
+    }
+  }
+  return states;
+}
+
 interface GraphCanvasProps {
   graph: Graph;
   onSave: (nodes: Node[], edges: Edge[]) => void;
@@ -34,6 +58,7 @@ interface GraphCanvasProps {
   isEditMode?: boolean;
   onSelectionChange?: (node: Node | null) => void;
   onNodesEdgesChange?: (nodes: Node[], edges: Edge[]) => void;
+  executionActivities?: ExecutionActivity[];
 }
 
 function graphToFlow(graph: Graph): { nodes: Node[]; edges: Edge[] } {
@@ -67,6 +92,7 @@ export function GraphCanvas({
   isEditMode = true,
   onSelectionChange,
   onNodesEdgesChange,
+  executionActivities = [],
 }: GraphCanvasProps) {
   const initial = useMemo(() => graphToFlow(graph), [graph]);
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
@@ -168,6 +194,65 @@ export function GraphCanvas({
     [handleDeleteSelected, onSave, nodes, edges, isEditMode],
   );
 
+  const nodeStates = useMemo(
+    () => activitiesToNodeStates(executionActivities),
+    [executionActivities],
+  );
+
+  const currentNodeId = useMemo(() => {
+    const running = nodeStates.find((s) => s.status === "running");
+    return running?.nodeId ?? null;
+  }, [nodeStates]);
+
+  const completedNodeIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of nodeStates) {
+      if (s.status === "completed" || s.status === "failed") set.add(s.nodeId);
+    }
+    return set;
+  }, [nodeStates]);
+
+  const augmentedNodes = useMemo(() => {
+    if (nodeStates.length === 0) return nodes;
+    const stateMap = new Map(nodeStates.map((s) => [s.nodeId, s]));
+    return nodes.map((node) => {
+      const state = stateMap.get(node.id);
+      if (!state) return node;
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          executionStatus: state.status,
+          executionDurationMs: state.durationMs ?? null,
+        },
+      };
+    });
+  }, [nodes, nodeStates]);
+
+  const augmentedEdges = useMemo(() => {
+    if (nodeStates.length === 0) return edges;
+    return edges.map((edge) => {
+      let executionState = "idle";
+      if (edge.target === currentNodeId || edge.source === currentNodeId) {
+        executionState = "running";
+      } else if (
+        completedNodeIds.has(edge.source) &&
+        completedNodeIds.has(edge.target)
+      ) {
+        const failed = nodeStates.find(
+          (s) =>
+            (s.nodeId === edge.source || s.nodeId === edge.target) &&
+            s.status === "failed",
+        );
+        executionState = failed ? "failed" : "completed";
+      }
+      return {
+        ...edge,
+        data: { ...edge.data, status: executionState },
+      };
+    });
+  }, [edges, currentNodeId, completedNodeIds, nodeStates]);
+
   return (
     <div
       className="flex flex-col h-full"
@@ -187,8 +272,8 @@ export function GraphCanvas({
       <div className="flex flex-1 min-h-0">
         <div className="flex-1">
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={augmentedNodes}
+            edges={augmentedEdges}
             onNodesChange={handleNodesChange}
             onEdgesChange={isEditMode ? onEdgesChange : undefined}
             onConnect={onConnect}
@@ -211,6 +296,7 @@ export function GraphCanvas({
               node={selectedNode}
               onUpdateNode={handleUpdateNode}
               isEditMode={isEditMode}
+              executionActivities={executionActivities}
             />
           </div>
         )}

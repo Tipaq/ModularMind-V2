@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { AlertTriangle, MessageSquare, RotateCcw } from "lucide-react";
 import {
   useChat,
@@ -10,6 +10,7 @@ import {
   useAuthStore,
 } from "@modularmind/ui";
 import type { EngineModel, AttachedFile } from "@modularmind/ui";
+import type { ExecutionActivity } from "@modularmind/ui";
 import type { ValidationIssue } from "@modularmind/api-client";
 import {
   chatAdapter,
@@ -24,6 +25,7 @@ interface GraphPlaygroundProps {
   graphName: string;
   isValid: boolean;
   validationIssues: ValidationIssue[];
+  onActivitiesChange?: (activities: ExecutionActivity[], isStreaming: boolean) => void;
 }
 
 export function GraphPlayground({
@@ -31,6 +33,7 @@ export function GraphPlayground({
   graphName,
   isValid,
   validationIssues,
+  onActivitiesChange,
 }: GraphPlaygroundProps) {
   const user = useAuthStore((s) => s.user);
 
@@ -78,6 +81,13 @@ export function GraphPlayground({
     setInitialMessages,
     cancelStream,
   } = useChat(conversationId, chatAdapter);
+
+  const onActivitiesChangeRef = useRef(onActivitiesChange);
+  onActivitiesChangeRef.current = onActivitiesChange;
+
+  useEffect(() => {
+    onActivitiesChangeRef.current?.(activities, isStreaming);
+  }, [activities, isStreaming]);
 
   const handleSend = useCallback(async () => {
     const content = inputValue.trim();
