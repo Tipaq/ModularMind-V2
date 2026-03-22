@@ -30,8 +30,13 @@ export function formatNumber(num: number): string {
 /** Alias for formatNumber — formats token counts with K/M suffixes. */
 export const formatTokens = formatNumber;
 
+function asUtc(dateString: string): string {
+  if (dateString.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(dateString)) return dateString;
+  return `${dateString}Z`;
+}
+
 function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
+  return new Date(asUtc(dateString)).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -41,7 +46,7 @@ function formatDate(dateString: string): string {
 }
 
 export function relativeTime(dateString: string): string {
-  const date = new Date(dateString);
+  const date = new Date(asUtc(dateString));
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
