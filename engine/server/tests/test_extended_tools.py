@@ -53,7 +53,7 @@ class TestToolRegistry:
             "custom_tools": True,
         }
         tools = resolve_tool_definitions(categories)
-        assert len(tools) == 29  # 2+13+6+2+2+4
+        assert len(tools) == 30  # 2+13+6+2+2+5
 
     def test_all_definitions_have_valid_format(self):
         from src.tools.registry import resolve_tool_definitions
@@ -160,8 +160,9 @@ class TestUnifiedToolExecutorExtended:
     async def test_extended_skipped_when_not_handled(self):
         from src.graph_engine.builtin_tools import UnifiedToolExecutor
 
-        extended = AsyncMock()
+        extended = MagicMock()
         extended.handles.return_value = False
+        extended.execute = AsyncMock()
 
         mcp = AsyncMock()
         mcp.execute.return_value = "mcp result"
@@ -344,7 +345,7 @@ class TestCustomToolDefinitions:
         from src.tools.categories.custom_tools import get_custom_tool_definitions
 
         defs = get_custom_tool_definitions()
-        assert len(defs) == 4
+        assert len(defs) == 5
 
     def test_register_requires_name_and_executor(self):
         from src.tools.categories.custom_tools import get_custom_tool_definitions
@@ -423,15 +424,23 @@ class TestAgentConfigToolCategories:
 
 
 class TestGatewayToolDefinitions:
-    def test_filesystem_enabled(self):
+    def test_shell_enabled(self):
         from src.gateway.tool_definitions import get_gateway_tool_definitions
 
         tools = get_gateway_tool_definitions({
-            "filesystem": {"read": ["*"], "write": ["*"]},
+            "shell": {"enabled": True},
         })
         names = {t["function"]["name"] for t in tools}
-        assert "gateway__fs_read" in names
-        assert "gateway__fs_write" in names
+        assert "gateway__shell_exec" in names
+
+    def test_network_enabled(self):
+        from src.gateway.tool_definitions import get_gateway_tool_definitions
+
+        tools = get_gateway_tool_definitions({
+            "network": {"enabled": True},
+        })
+        names = {t["function"]["name"] for t in tools}
+        assert "gateway__net_request" in names
 
     def test_empty_permissions_returns_empty(self):
         from src.gateway.tool_definitions import get_gateway_tool_definitions
