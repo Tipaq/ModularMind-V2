@@ -31,19 +31,24 @@ function StatCard({
   );
 }
 
+function asUtc(dateStr: string): string {
+  if (dateStr.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(dateStr)) return dateStr;
+  return `${dateStr}Z`;
+}
+
 function formatSchedule(task: ScheduledTask): string {
   if (task.schedule_type === "interval" && task.interval_value && task.interval_unit) {
     return `Every ${task.interval_value} ${task.interval_unit}`;
   }
   if (task.schedule_type === "one_shot" && task.scheduled_at) {
-    return `One-shot: ${new Date(task.scheduled_at).toLocaleString()}`;
+    return `One-shot: ${new Date(asUtc(task.scheduled_at)).toLocaleString()}`;
   }
   return "Manual only";
 }
 
 function formatRelativeTime(dateStr: string | null): string {
   if (!dateStr) return "Never";
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const diff = Date.now() - new Date(asUtc(dateStr)).getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 0) return `in ${Math.abs(minutes)}m`;
   if (minutes < 1) return "just now";

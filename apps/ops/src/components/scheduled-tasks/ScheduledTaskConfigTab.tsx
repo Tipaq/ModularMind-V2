@@ -68,6 +68,7 @@ export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabP
     interval_value: task.interval_value || 1,
     interval_unit: (task.interval_unit || "hours") as IntervalUnit,
     scheduled_at: task.scheduled_at || "",
+    start_at: task.start_at || "00:00",
     target_type: task.target_type as TargetType,
     target_id: task.target_id || "",
     input_text: task.input_text || "",
@@ -88,6 +89,7 @@ export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabP
         interval_value: editValues.schedule_type === "interval" ? editValues.interval_value : null,
         interval_unit: editValues.schedule_type === "interval" ? editValues.interval_unit : null,
         scheduled_at: editValues.schedule_type === "one_shot" ? editValues.scheduled_at : null,
+        start_at: editValues.schedule_type === "interval" ? editValues.start_at : null,
         target_type: editValues.target_type,
         target_id: editValues.target_id || null,
         input_text: editValues.input_text,
@@ -143,28 +145,40 @@ export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabP
               </Select>
             </PropRow>
             {editValues.schedule_type === "interval" && (
-              <PropRow label="Every">
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={editValues.interval_value}
-                    onChange={(e) => setEditValues((v) => ({ ...v, interval_value: Number(e.target.value) }))}
-                    className="w-20 h-8 text-sm"
-                    min={1}
-                  />
-                  <Select
-                    value={editValues.interval_unit}
-                    onValueChange={(v) => setEditValues((prev) => ({ ...prev, interval_unit: v as IntervalUnit }))}
-                  >
-                    <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="minutes">Minutes</SelectItem>
-                      <SelectItem value="hours">Hours</SelectItem>
-                      <SelectItem value="days">Days</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </PropRow>
+              <>
+                <PropRow label="Every">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={editValues.interval_value}
+                      onChange={(e) => setEditValues((v) => ({ ...v, interval_value: Number(e.target.value) }))}
+                      className="w-20 h-8 text-sm"
+                      min={1}
+                    />
+                    <Select
+                      value={editValues.interval_unit}
+                      onValueChange={(v) => setEditValues((prev) => ({ ...prev, interval_unit: v as IntervalUnit }))}
+                    >
+                      <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="minutes">Minutes</SelectItem>
+                        <SelectItem value="hours">Hours</SelectItem>
+                        <SelectItem value="days">Days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </PropRow>
+                {(editValues.interval_unit === "hours" || editValues.interval_unit === "days") && (
+                  <PropRow label="Starting at">
+                    <Input
+                      type="time"
+                      value={editValues.start_at}
+                      onChange={(e) => setEditValues((v) => ({ ...v, start_at: e.target.value }))}
+                      className="w-32 h-8 text-sm"
+                    />
+                  </PropRow>
+                )}
+              </>
             )}
             {editValues.schedule_type === "one_shot" && (
               <PropRow label="Run at">
@@ -183,15 +197,22 @@ export function ScheduledTaskConfigTab({ task, onSave }: ScheduledTaskConfigTabP
               <Badge variant="outline" className="text-[10px]">{task.schedule_type}</Badge>
             </PropRow>
             {task.schedule_type === "interval" && (
-              <PropRow label="Every">
-                <span className="text-sm">
-                  {task.interval_value} {task.interval_unit}
-                </span>
-              </PropRow>
+              <>
+                <PropRow label="Every">
+                  <span className="text-sm">
+                    {task.interval_value} {task.interval_unit}
+                  </span>
+                </PropRow>
+                {task.start_at && (
+                  <PropRow label="Starting at">
+                    <span className="text-sm">{task.start_at}</span>
+                  </PropRow>
+                )}
+              </>
             )}
             {task.schedule_type === "one_shot" && task.scheduled_at && (
               <PropRow label="Run at">
-                <span className="text-sm">{new Date(task.scheduled_at).toLocaleString()}</span>
+                <span className="text-sm">{new Date(task.scheduled_at.endsWith("Z") ? task.scheduled_at : `${task.scheduled_at}Z`).toLocaleString()}</span>
               </PropRow>
             )}
           </div>
