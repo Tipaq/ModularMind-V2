@@ -24,7 +24,7 @@ async def run_post_actions(
     """Execute all configured post-actions for a completed run."""
     status = run.status.value
 
-    for action in config.post_actions:
+    for action in config.config.get("post_actions", []):
         action_type = action.get("type", "")
         run_on = action.get("on", "always")
 
@@ -53,7 +53,7 @@ async def run_post_actions(
 
 def _get_github_headers(config: ScheduledTaskConfig) -> dict[str, str]:
     """Get GitHub API headers with token from env var."""
-    token_ref = config.trigger.get("github_token_ref", "GITHUB_TOKEN")
+    token_ref = config.config.get("trigger", {}).get("github_token_ref", "GITHUB_TOKEN")
     token = os.environ.get(token_ref, "")
     return {
         "Authorization": f"token {token}",
@@ -81,7 +81,7 @@ async def _github_comment(
     headers = _get_github_headers(config)
 
     summary = run.result_summary or execution_result.get("summary", "No summary available.")
-    dry_run = config.settings.get("dry_run", True)
+    dry_run = config.config.get("settings", {}).get("dry_run", True)
 
     body = (
         f"## Scheduled Task Review {'(Dry Run)' if dry_run else ''}\n\n"
@@ -108,7 +108,7 @@ async def _github_commit(
     execution_result: dict[str, Any],
 ) -> None:
     """Commit file changes from execution output to the PR branch."""
-    if config.settings.get("dry_run", True):
+    if config.config.get("settings", {}).get("dry_run", True):
         logger.info("Dry run — skipping commit for %s", run.source_ref)
         return
 
@@ -147,7 +147,7 @@ async def _github_merge(
     method: str = "squash",
 ) -> None:
     """Merge the PR."""
-    if config.settings.get("dry_run", True):
+    if config.config.get("settings", {}).get("dry_run", True):
         logger.info("Dry run — skipping merge for %s", run.source_ref)
         return
 

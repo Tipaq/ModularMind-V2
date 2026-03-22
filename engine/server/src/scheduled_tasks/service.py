@@ -57,17 +57,20 @@ async def get_task(task_id: str) -> ScheduledTask | None:
 async def create_task(data: ScheduledTaskCreate) -> ScheduledTask:
     """Create a new scheduled task."""
     next_run = compute_next_run_at(
-        data.schedule_type, data.interval_value, data.interval_unit, data.scheduled_at,
+        data.schedule_type, data.interval_value, data.interval_unit,
+        data.scheduled_at, data.start_at,
     )
     async with async_session_maker() as session:
         task = ScheduledTask(
             id=str(uuid4()),
             name=data.name,
             description=data.description,
+            enabled=data.enabled,
             schedule_type=data.schedule_type,
             interval_value=data.interval_value,
             interval_unit=data.interval_unit,
             scheduled_at=data.scheduled_at,
+            start_at=data.start_at,
             next_run_at=next_run,
             target_type=data.target_type,
             target_id=data.target_id,
@@ -105,6 +108,8 @@ async def update_task(task_id: str, data: ScheduledTaskUpdate) -> ScheduledTask 
             task.interval_unit = data.interval_unit
         if data.scheduled_at is not None:
             task.scheduled_at = data.scheduled_at
+        if data.start_at is not None:
+            task.start_at = data.start_at
         if data.target_type is not None:
             task.target_type = data.target_type
         if data.target_id is not None:
@@ -122,10 +127,12 @@ async def update_task(task_id: str, data: ScheduledTaskUpdate) -> ScheduledTask 
             data.interval_value is not None,
             data.interval_unit is not None,
             data.scheduled_at is not None,
+            data.start_at is not None,
         ])
         if schedule_changed:
             task.next_run_at = compute_next_run_at(
-                task.schedule_type, task.interval_value, task.interval_unit, task.scheduled_at,
+                task.schedule_type, task.interval_value, task.interval_unit,
+                task.scheduled_at, task.start_at,
             )
 
         task.version += 1
@@ -168,6 +175,7 @@ async def duplicate_task(task_id: str) -> ScheduledTask | None:
             interval_value=source.interval_value,
             interval_unit=source.interval_unit,
             scheduled_at=source.scheduled_at,
+            start_at=source.start_at,
             target_type=source.target_type,
             target_id=source.target_id,
             input_text=source.input_text,

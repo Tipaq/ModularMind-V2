@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from src.infra.database import async_session_maker
 from src.scheduled_tasks.models import ScheduledTask
-from src.scheduled_tasks.schemas import interval_to_seconds
+from src.scheduled_tasks.schemas import ScheduledTaskConfig, compute_next_run_at, interval_to_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -60,18 +60,24 @@ class ScheduledTaskRunner:
                 logger.warning("Interval task %s missing value/unit", task.id)
                 return
             seconds = interval_to_seconds(task.interval_value, task.interval_unit)
+            next_run = compute_next_run_at(
+                task.schedule_type, task.interval_value, task.interval_unit,
+                task.scheduled_at, task.start_at,
+            )
             self._scheduler.add_job(
                 self.execute_trigger,
                 "interval",
                 seconds=seconds,
+                next_run_time=next_run,
                 id=job_id,
                 name=f"ScheduledTask: {task.name}",
                 args=[task.id],
                 replace_existing=True,
             )
             logger.info(
-                "Scheduled task '%s' every %d %s",
+                "Scheduled task '%s' every %d %s (anchor=%s)",
                 task.name, task.interval_value, task.interval_unit,
+                task.start_at or "none",
             )
         elif task.schedule_type == "one_shot":
             if not task.scheduled_at:
@@ -151,31 +157,55 @@ class ScheduledTaskRunner:
         """Enqueue a direct execution (no source handler)."""
         from uuid import uuid4
 
+        from src.executions.models import ExecutionRun, ExecutionStatus, ExecutionType
         from src.infra.publish import enqueue_execution
         from src.scheduled_tasks.models import ScheduledTaskRun, ScheduledTaskRunStatus
 
         run_id = str(uuid4())
-        async with async_session_maker() as session:
-            run = ScheduledTaskRun(
-                id=run_id,
-                scheduled_task_id=task.id,
-                status=ScheduledTaskRunStatus.PENDING,
-                source_type="direct",
-                source_ref="",
-            )
-            session.add(run)
-            await session.commit()
+        execution_id = str(uuid4())
+        agent_id = task.target_id if task.target_type == "agent" else None
+        graph_id = task.target_id if task.target_type == "graph" else None
+        input_prompt = task.input_text or f"Execute scheduled task: {task.name}"
 
         input_data: dict[str, Any] = {
             "_scheduled_task_id": task.id,
             "_scheduled_task_run_id": run_id,
         }
 
+        exec_type = ExecutionType.GRAPH if task.target_type == "graph" else ExecutionType.AGENT
+
+        async with async_session_maker() as session:
+            execution = ExecutionRun(
+                id=execution_id,
+                execution_type=exec_type,
+                agent_id=agent_id,
+                graph_id=graph_id,
+                user_id="platform-service",
+                status=ExecutionStatus.PENDING,
+                input_prompt=input_prompt,
+                input_data=input_data,
+            )
+            session.add(execution)
+
+            run = ScheduledTaskRun(
+                id=run_id,
+                scheduled_task_id=task.id,
+                status=ScheduledTaskRunStatus.RUNNING,
+                execution_id=execution_id,
+                source_type="direct",
+                source_ref="",
+            )
+            session.add(run)
+            await session.commit()
+
         await enqueue_execution(
-            target_id=task.target_id or "",
-            input_text=task.input_text or f"Execute scheduled task: {task.name}",
+            execution_id=execution_id,
+            execution_type=task.target_type,
+            agent_id=agent_id,
+            graph_id=graph_id,
+            input_prompt=input_prompt,
             input_data=input_data,
-            user_id="",
+            user_id="platform-service",
         )
         logger.info("Enqueued direct execution for task %s, run %s", task.id, run_id)
 
@@ -228,27 +258,21 @@ class ScheduledTaskRunner:
         """Enqueue an execution for a single source item."""
         from uuid import uuid4
 
+        from src.executions.models import ExecutionRun, ExecutionStatus, ExecutionType
         from src.infra.publish import enqueue_execution
         from src.scheduled_tasks.models import ScheduledTaskRun, ScheduledTaskRunStatus
-
-        run_id = str(uuid4())
-        source_ref = item.get("source_ref", "")
-
-        async with async_session_maker() as session:
-            run = ScheduledTaskRun(
-                id=run_id,
-                scheduled_task_id=task.id,
-                status=ScheduledTaskRunStatus.PENDING,
-                source_type=config.config.get("trigger", {}).get("source", ""),
-                source_ref=source_ref,
-            )
-            session.add(run)
-            await session.commit()
 
         target_id = task.target_id
         if not target_id:
             logger.error("Task %s has no execution target", task.id)
             return
+
+        run_id = str(uuid4())
+        execution_id = str(uuid4())
+        source_ref = item.get("source_ref", "")
+        agent_id = target_id if task.target_type == "agent" else None
+        graph_id = target_id if task.target_type == "graph" else None
+        input_prompt = item.get("prompt", f"Process: {source_ref}")
 
         input_data: dict[str, Any] = {
             "_scheduled_task_id": task.id,
@@ -256,10 +280,39 @@ class ScheduledTaskRunner:
             **item,
         }
 
+        exec_type = ExecutionType.GRAPH if task.target_type == "graph" else ExecutionType.AGENT
+
+        async with async_session_maker() as session:
+            execution = ExecutionRun(
+                id=execution_id,
+                execution_type=exec_type,
+                agent_id=agent_id,
+                graph_id=graph_id,
+                user_id="platform-service",
+                status=ExecutionStatus.PENDING,
+                input_prompt=input_prompt,
+                input_data=input_data,
+            )
+            session.add(execution)
+
+            run = ScheduledTaskRun(
+                id=run_id,
+                scheduled_task_id=task.id,
+                status=ScheduledTaskRunStatus.RUNNING,
+                execution_id=execution_id,
+                source_type=config.config.get("trigger", {}).get("source", ""),
+                source_ref=source_ref,
+            )
+            session.add(run)
+            await session.commit()
+
         await enqueue_execution(
-            target_id=target_id,
-            input_text=item.get("prompt", f"Process: {source_ref}"),
+            execution_id=execution_id,
+            execution_type=task.target_type,
+            agent_id=agent_id,
+            graph_id=graph_id,
+            input_prompt=input_prompt,
             input_data=input_data,
-            user_id="",
+            user_id="platform-service",
         )
         logger.info("Enqueued execution for task %s, run %s", task.id, run_id)
