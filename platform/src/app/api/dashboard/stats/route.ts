@@ -7,18 +7,15 @@ export async function GET(): Promise<NextResponse> {
   const { error } = await requireAuth();
   if (error) return error;
 
-  const [clientCount, engineStatusCounts, agentCount, graphCount, recentEngines] =
-    await Promise.all([
-      db.client.count(),
-      db.engine.groupBy({ by: ["status"], _count: true }),
-      db.agent.count(),
-      db.graph.count(),
-      db.engine.findMany({
-        take: 10,
-        orderBy: { lastSeen: { sort: "desc", nulls: "last" } },
-        include: { client: { select: { id: true, name: true } } },
-      }),
-    ]);
+  const [clientCount, engineStatusCounts, recentEngines] = await Promise.all([
+    db.client.count(),
+    db.engine.groupBy({ by: ["status"], _count: true }),
+    db.engine.findMany({
+      take: 10,
+      orderBy: { lastSeen: { sort: "desc", nulls: "last" } },
+      include: { client: { select: { id: true, name: true } } },
+    }),
+  ]);
 
   const engineTotal = engineStatusCounts.reduce((sum, g) => sum + g._count, 0);
   const enginesByStatus: Record<string, number> = {};
@@ -34,8 +31,6 @@ export async function GET(): Promise<NextResponse> {
       registered: enginesByStatus["registered"] ?? 0,
       offline: enginesByStatus["offline"] ?? 0,
     },
-    agents: agentCount,
-    graphs: graphCount,
     recentEngines,
   });
   response.headers.set("Cache-Control", "private, max-age=30");

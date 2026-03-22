@@ -5,13 +5,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  Bot,
   Building2,
   LayoutDashboard,
   Server,
   Settings2,
-  Bot,
-  GitFork,
-  MessageSquare,
   ChevronLeft,
   ChevronRight,
   type LucideIcon,
@@ -39,14 +37,6 @@ const sections: NavSection[] = [
       { name: "Clients", href: "/clients", icon: Building2 },
       { name: "Engines", href: "/engines", icon: Server },
       { name: "Settings", href: "/settings", icon: Settings2 },
-    ],
-  },
-  {
-    label: "Studio",
-    items: [
-      { name: "Chat", href: "/chat", icon: MessageSquare },
-      { name: "Agents", href: "/agents", icon: Bot },
-      { name: "Graphs", href: "/graphs", icon: GitFork },
     ],
   },
 ];
