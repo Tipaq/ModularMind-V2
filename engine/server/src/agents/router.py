@@ -1,15 +1,25 @@
 """
 Agents router.
 
-API endpoints for listing agents (read-only from config).
+API endpoints for agent CRUD and listing.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
-from src.auth import CurrentUser
+from src.auth import CurrentUser, RequireOwner
 from src.domain_config import get_config_provider
+from src.infra.database import DbSession
 
-from .schemas import AgentDetail, AgentListResponse, AgentSummary
+from . import service
+from .schemas import (
+    AgentCreate,
+    AgentDetail,
+    AgentListResponse,
+    AgentSummary,
+    AgentUpdate,
+    DuplicateAgentRequest,
+)
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
 
@@ -26,21 +36,16 @@ async def list_agents(
     config_provider = get_config_provider()
     agents = await config_provider.list_agents()
 
-    # Filter by version
     if version:
         agents = [a for a in agents if a.version == version]
 
-    # Filter by search term (name or description)
     if search:
         q = search.lower()
         agents = [a for a in agents if q in a.name.lower() or q in (a.description or "").lower()]
 
     total = len(agents)
-
-    # Paginate
     start = (page - 1) * page_size
-    end = start + page_size
-    page_agents = agents[start:end]
+    page_agents = agents[start : start + page_size]
 
     items = [
         AgentSummary(
@@ -70,10 +75,7 @@ async def list_agents(
 
 
 @router.get("/{agent_id}", response_model=AgentDetail)
-async def get_agent(
-    agent_id: str,
-    user: CurrentUser,
-) -> AgentDetail:
+async def get_agent(agent_id: str, user: CurrentUser) -> AgentDetail:
     """Get agent details."""
     config_provider = get_config_provider()
     agent = await config_provider.get_agent_config(agent_id)
@@ -98,6 +100,65 @@ async def get_agent(
         rag_retrieval_count=agent.rag_config.retrieval_count,
         rag_similarity_threshold=agent.rag_config.similarity_threshold,
         tool_categories=dict(agent.tool_categories),
+        capabilities=list(agent.capabilities),
+        gateway_permissions=agent.gateway_permissions,
+        routing_metadata=dict(agent.routing_metadata),
         config_version=version_number or 0,
         config_hash=config_hash,
     )
+
+
+@router.post(
+    "",
+    response_model=AgentDetail,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[RequireOwner],
+)
+async def create_agent(body: AgentCreate, user: CurrentUser, db: DbSession) -> AgentDetail:
+    """Create a new agent."""
+    try:
+        return await service.create_agent(db, body, user.id)
+    except IntegrityError as err:
+        raise HTTPException(status_code=409, detail="Agent creation conflict") from err
+
+
+@router.patch(
+    "/{agent_id}",
+    response_model=AgentDetail,
+    dependencies=[RequireOwner],
+)
+async def update_agent(
+    agent_id: str,
+    body: AgentUpdate,
+    user: CurrentUser,
+    db: DbSession,
+) -> AgentDetail:
+    """Update an existing agent (creates a new version)."""
+    return await service.update_agent(db, agent_id, body, user.id)
+
+
+@router.delete(
+    "/{agent_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[RequireOwner],
+)
+async def delete_agent(agent_id: str, db: DbSession) -> None:
+    """Delete an agent and all its versions."""
+    await service.delete_agent(db, agent_id)
+
+
+@router.post(
+    "/{agent_id}/duplicate",
+    response_model=AgentDetail,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[RequireOwner],
+)
+async def duplicate_agent(
+    agent_id: str,
+    user: CurrentUser,
+    db: DbSession,
+    body: DuplicateAgentRequest | None = None,
+) -> AgentDetail:
+    """Duplicate an existing agent."""
+    new_name = body.name if body else None
+    return await service.duplicate_agent(db, agent_id, user.id, new_name)
