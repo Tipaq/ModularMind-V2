@@ -4,6 +4,18 @@
 /* Scan shared UI package so Tailwind generates classes used in @modularmind/ui components */
 @source "../../../packages/ui/src";
 
+.react-flow {
+  --xy-controls-button-background-color: hsl(var(--card));
+  --xy-controls-button-background-color-hover: hsl(var(--accent));
+  --xy-controls-button-color: hsl(var(--foreground));
+  --xy-controls-button-color-hover: hsl(var(--foreground));
+  --xy-controls-button-border-color: hsl(var(--border));
+  --xy-controls-box-shadow: none;
+  --xy-minimap-background-color: hsl(var(--card));
+  --xy-minimap-mask-background-color: hsl(var(--background) / 0.6);
+  --xy-minimap-node-background-color: hsl(var(--muted));
+}
+
 @theme {
   /* Surfaces */
   --color-background: hsl(var(--background));

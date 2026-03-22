@@ -14,7 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   GitFork,
-  LayoutDashboard,
   type LucideIcon,
 } from "lucide-react";
 import { cn, UserButton } from "@modularmind/ui";
@@ -25,15 +24,13 @@ interface NavItem {
   name: string;
   to: string;
   icon: LucideIcon;
-  end?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { name: "Dashboard", to: "/", icon: LayoutDashboard, end: true },
-  { name: "Agents", to: "/agents", icon: Bot },
-  { name: "Graphs", to: "/graphs", icon: GitFork },
   { name: "Configuration", to: "/configuration", icon: Settings2 },
   { name: "Models", to: "/models", icon: Layers },
+  { name: "Agents", to: "/agents", icon: Bot },
+  { name: "Graphs", to: "/graphs", icon: GitFork },
   { name: "Knowledge", to: "/knowledge", icon: BookOpen },
   { name: "Tools", to: "/tools", icon: Wrench },
   { name: "Mini Apps", to: "/mini-apps", icon: AppWindow },
@@ -88,7 +85,7 @@ export function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {navItems.map((item, idx) => {
-          const isActive = item.end ? pathname === "/" : pathname.startsWith(item.to);
+          const isActive = pathname.startsWith(item.to);
           return (
             <motion.div
               key={item.name}
@@ -98,7 +95,6 @@ export function Sidebar() {
             >
               <NavLink
                 to={item.to}
-                end={item.end}
                 className={cn(
                   "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
                   collapsed && "justify-center px-0",

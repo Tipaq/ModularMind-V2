@@ -6,7 +6,6 @@ import DashboardLayout from "./layouts/DashboardLayout";
 import Login from "./pages/Login";
 
 // Lazy-loaded routes
-const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Setup = lazy(() => import("./pages/Setup"));
 const Monitoring = lazy(() => import("./pages/Monitoring"));
 const Configuration = lazy(() => import("./pages/Configuration"));
@@ -65,7 +64,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/setup" element={<Setup />} />
         <Route element={<DashboardLayout />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<Navigate to="/configuration" replace />} />
           <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/configuration" element={<Configuration />} />
           <Route path="/models" element={<Models />} />
