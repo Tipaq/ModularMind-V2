@@ -97,6 +97,7 @@ async def main() -> None:
 
     scheduled_task_runner = ScheduledTaskRunner(scheduler)
     set_scheduled_task_runner(scheduled_task_runner)
+    await scheduled_task_runner.sync_jobs()
 
     tasks = [
         # Task queues

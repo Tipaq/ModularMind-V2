@@ -112,14 +112,14 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
 
                 if cancelled:
                     await _handle_cancellation(session, r, execution_id, stream_key)
+                    await _update_scheduled_task_run(execution_id, "skipped", error_message="Cancelled by user")
                 else:
                     # Normal completion — persist assistant message
                     await _persist_assistant_message(session, execution_id, complete_event)
                     await session.commit()
                     logger.info("Execution %s completed", execution_id)
 
-                    # Run scheduled task post-hooks if applicable
-                    await _run_scheduled_task_post_hooks(session, execution_id, complete_event)
+                    await _update_scheduled_task_run(execution_id, "completed", complete_event)
 
                 # Stream auto-expires after 5 minutes (cleanup)
                 await r.expire(stream_key, 300)
@@ -142,6 +142,7 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 await r2.expire(f"exec_stream:{execution_id}", 300)
             finally:
                 await r2.aclose()
+            await _update_scheduled_task_run(execution_id, "skipped", error_message="Cancelled by user")
 
         except Exception:  # noqa: BLE001 — Worker resilience: catch all to avoid stream consumer crash
             logger.exception("Execution %s failed", execution_id)
@@ -161,6 +162,7 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 )
             )
             await session.commit()
+            await _update_scheduled_task_run(execution_id, "failed", error_message="Execution failed")
             raise  # Re-raise to trigger retry/DLQ
 
         finally:
@@ -293,69 +295,62 @@ async def _cleanup_orphaned_conversation(
         )
 
 
-# --- Scheduled task post-execution hooks ---
+# --- Scheduled task run status updates ---
 
 
-async def _run_scheduled_task_post_hooks(
-    session: AsyncSession,
+def _extract_scheduled_task_ids(
+    input_data: dict[str, Any] | None,
+) -> tuple[str, str] | None:
+    """Extract (task_id, run_id) from execution input_data, or None."""
+    if not input_data:
+        return None
+    task_id = input_data.get("_scheduled_task_id", "")
+    run_id = input_data.get("_scheduled_task_run_id", "")
+    if not task_id or not run_id:
+        return None
+    return task_id, run_id
+
+
+async def _update_scheduled_task_run(
     execution_id: str,
-    complete_event: dict[str, Any] | None,
+    status: str,
+    complete_event: dict[str, Any] | None = None,
+    error_message: str = "",
 ) -> None:
-    """Run post-execution hooks if this was a scheduled-task-triggered execution."""
+    """Update the ScheduledTaskRun linked to this execution."""
     from sqlalchemy import select as sa_select
 
     from src.executions.models import ExecutionRun
+    from src.infra.database import async_session_maker
 
     try:
-        result = await session.execute(
-            sa_select(ExecutionRun.input_data).where(ExecutionRun.id == execution_id)
-        )
-        row = result.first()
-        if not row or not row[0]:
-            return
-        input_data = row[0]
+        async with async_session_maker() as session:
+            result = await session.execute(
+                sa_select(ExecutionRun.input_data).where(
+                    ExecutionRun.id == execution_id,
+                )
+            )
+            row = result.first()
+            ids = _extract_scheduled_task_ids(row[0] if row else None)
+            if not ids:
+                return
+            task_id, run_id = ids
 
-        task_id = input_data.get("_scheduled_task_id")
-        run_id = input_data.get("_scheduled_task_run_id")
-        if not task_id or not run_id:
-            return
-
-        from src.infra.database import async_session_maker
         from src.infra.utils import utcnow
-        from src.scheduled_tasks.hooks import run_post_actions
         from src.scheduled_tasks.models import (
             ScheduledTask,
             ScheduledTaskRun,
             ScheduledTaskRunStatus,
         )
-        from src.scheduled_tasks.schemas import ScheduledTaskConfig
+
+        status_map = {
+            "completed": ScheduledTaskRunStatus.COMPLETED,
+            "failed": ScheduledTaskRunStatus.FAILED,
+            "skipped": ScheduledTaskRunStatus.SKIPPED,
+        }
+        run_status = status_map.get(status, ScheduledTaskRunStatus.FAILED)
 
         async with async_session_maker() as hook_session:
-            # Load task config from DB
-            task_result = await hook_session.execute(
-                sa_select(ScheduledTask).where(ScheduledTask.id == task_id)
-            )
-            task = task_result.scalar_one_or_none()
-            if not task:
-                logger.warning("Scheduled task %s not found for post-hooks", task_id)
-                return
-
-            config_data = task.config or {}
-            config = ScheduledTaskConfig(
-                id=task.id,
-                name=task.name,
-                description=task.description,
-                enabled=task.enabled,
-                trigger=config_data.get("trigger", {}),
-                triage=config_data.get("triage"),
-                execution=config_data.get("execution", {}),
-                post_actions=config_data.get("post_actions", []),
-                settings=config_data.get("settings", {}),
-                version=task.version,
-                tags=task.tags or [],
-            )
-
-            # Update run status
             run_result = await hook_session.execute(
                 sa_select(ScheduledTaskRun).where(ScheduledTaskRun.id == run_id)
             )
@@ -363,24 +358,73 @@ async def _run_scheduled_task_post_hooks(
             if not run:
                 return
 
-            run.status = ScheduledTaskRunStatus.COMPLETED
+            now = utcnow()
+            run.status = run_status
             run.execution_id = execution_id
-            run.completed_at = utcnow()
-            run.result_summary = (complete_event or {}).get("content", "")[:2000]
+            run.completed_at = now
+            run.error_message = error_message
+
+            if status == "completed":
+                output = (complete_event or {}).get("output", {})
+                summary = ""
+                if isinstance(output, dict):
+                    summary = output.get("response", "")
+                run.result_summary = summary[:2000]
 
             if run.created_at:
-                run.duration_seconds = (run.completed_at - run.created_at).total_seconds()
+                run.duration_seconds = (now - run.created_at).total_seconds()
 
             await hook_session.commit()
 
-            execution_result = {
-                "summary": run.result_summary,
-                "content": (complete_event or {}).get("content", ""),
-            }
-            await run_post_actions(config, run, execution_result)
+            if status == "completed":
+                await _run_scheduled_task_post_hooks(hook_session, task_id, run)
 
     except Exception:
-        logger.exception("Scheduled task post-hooks failed for execution %s", execution_id)
+        logger.exception(
+            "Failed to update scheduled task run for execution %s", execution_id,
+        )
+
+
+async def _run_scheduled_task_post_hooks(
+    session: AsyncSession,
+    task_id: str,
+    run: Any,
+) -> None:
+    """Run post-action hooks (webhooks, GitHub comments, etc.)."""
+    from sqlalchemy import select as sa_select
+
+    from src.infra.database import async_session_maker
+    from src.scheduled_tasks.hooks import run_post_actions
+    from src.scheduled_tasks.models import ScheduledTask
+    from src.scheduled_tasks.schemas import ScheduledTaskConfig
+
+    async with async_session_maker() as hook_session:
+        task_result = await hook_session.execute(
+            sa_select(ScheduledTask).where(ScheduledTask.id == task_id)
+        )
+        task = task_result.scalar_one_or_none()
+        if not task:
+            return
+
+        config = ScheduledTaskConfig(
+            id=task.id,
+            name=task.name,
+            description=task.description,
+            enabled=task.enabled,
+            schedule_type=task.schedule_type,
+            target_type=task.target_type,
+            target_id=task.target_id,
+            input_text=task.input_text,
+            config=task.config or {},
+            version=task.version,
+            tags=task.tags or [],
+        )
+
+        execution_result = {
+            "summary": run.result_summary or "",
+            "content": run.result_summary or "",
+        }
+        await run_post_actions(config, run, execution_result)
 
 
 # --- Persist assistant message after execution ---
