@@ -18,7 +18,7 @@ export default function Chat() {
   const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CHAT_CONFIG);
 
   const user = useAuthStore((s) => s.user);
-  const { agents, graphs, models, supervisorLayers, updateSupervisorLayer, load: loadConfig, reload: reloadConfig } = useChatConfig(chatConfigAdapter);
+  const { agents, graphs, models, supervisorLayers, updateSupervisorLayer, reload: reloadConfig } = useChatConfig(chatConfigAdapter);
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
@@ -144,6 +144,9 @@ export default function Chat() {
             enabled_graph_ids: enabledGraphIds,
             model_id: newConfig.modelId,
             model_override: newConfig.modelOverride,
+            ...(newConfig.supervisorToolCategories !== null && {
+              supervisor_tool_categories: newConfig.supervisorToolCategories,
+            }),
           },
         }).catch((err) => console.error("[Chat]", err));
       }, 500);
@@ -225,7 +228,8 @@ export default function Chat() {
     modelId: effectiveModelId,
     modelOverride: chatConfig.modelOverride,
     userPreferences: chatConfig.userPreferences,
-  }), [chatConfig.supervisorMode, chatConfig.modelOverride, effectiveModelId, chatConfig.userPreferences]);
+    supervisorToolCategories: chatConfig.supervisorToolCategories,
+  }), [chatConfig.supervisorMode, chatConfig.modelOverride, effectiveModelId, chatConfig.userPreferences, chatConfig.supervisorToolCategories]);
 
   const handleConfigChange = useCallback((patch: Partial<typeof insightsConfig>) => {
     setChatConfig((prev) => {
@@ -234,6 +238,7 @@ export default function Chat() {
         ...(patch.supervisorMode !== undefined && { supervisorMode: patch.supervisorMode }),
         ...(patch.modelId !== undefined && { modelId: patch.modelId }),
         ...(patch.modelOverride !== undefined && { modelOverride: patch.modelOverride }),
+        ...(patch.supervisorToolCategories !== undefined && { supervisorToolCategories: patch.supervisorToolCategories }),
       };
       persistConfig(next);
       return next;
