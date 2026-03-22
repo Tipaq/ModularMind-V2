@@ -921,7 +921,7 @@ export default function Setup() {
         )}
 
         <button
-          onClick={() => navigate("/", { replace: true })}
+          onClick={() => { window.location.href = "/ops/"; }}
           className={`${btnPrimary} w-full`}
         >
           Go to Dashboard

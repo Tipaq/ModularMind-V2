@@ -476,8 +476,8 @@ export default function Models() {
               </Button>
             );
           }
-          // Not pulled Ollama -> download button
-          if (m.unifiedStatus === "not_pulled" && m.provider === "ollama") {
+          // Error or not pulled Ollama -> download/retry button
+          if ((m.unifiedStatus === "not_pulled" || m.unifiedStatus === "error") && m.provider === "ollama") {
             return (
               <Button
                 variant="ghost"

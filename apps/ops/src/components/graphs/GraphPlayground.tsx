@@ -46,6 +46,7 @@ export function GraphPlayground({
   });
 
   const [inputValue, setInputValue] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
 
   const { models, load: loadConfig } = useChatConfig(chatConfigAdapter);
@@ -83,7 +84,10 @@ export function GraphPlayground({
   } = useChat(conversationId, chatAdapter);
 
   const onActivitiesChangeRef = useRef(onActivitiesChange);
-  onActivitiesChangeRef.current = onActivitiesChange;
+
+  useEffect(() => {
+    onActivitiesChangeRef.current = onActivitiesChange;
+  }, [onActivitiesChange]);
 
   useEffect(() => {
     onActivitiesChangeRef.current?.(activities, isStreaming);

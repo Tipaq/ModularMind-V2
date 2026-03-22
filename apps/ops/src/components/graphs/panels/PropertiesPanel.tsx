@@ -95,15 +95,20 @@ export function PropertiesPanel({
 
   useEffect(() => {
     if (!agentId) {
-      setAgentDetail(null);
+      requestAnimationFrame(() => {
+        setAgentDetail(null);
+        setAgentLoading(false);
+      });
       return;
     }
-    setAgentLoading(true);
+    let cancelled = false;
+    requestAnimationFrame(() => { if (!cancelled) setAgentLoading(true); });
     api
       .get<Agent>(`/agents/${agentId}`)
-      .then((agent) => setAgentDetail(agent))
-      .catch(() => setAgentDetail(null))
-      .finally(() => setAgentLoading(false));
+      .then((agent) => { if (!cancelled) setAgentDetail(agent); })
+      .catch(() => { if (!cancelled) setAgentDetail(null); })
+      .finally(() => { if (!cancelled) setAgentLoading(false); });
+    return () => { cancelled = true; };
   }, [agentId]);
 
   if (!node) {
