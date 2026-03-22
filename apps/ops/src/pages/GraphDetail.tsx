@@ -95,6 +95,7 @@ export default function GraphDetail() {
   }, [graph]);
 
   const [currentNodes, setCurrentNodes] = useState<Node[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [currentEdges, setCurrentEdges] = useState<Edge[]>([]);
   const [canvasKey, setCanvasKey] = useState(0);
   const [activeTab, setActiveTab] = useState("settings");
