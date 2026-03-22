@@ -29,7 +29,7 @@ Create a conventional commit following project conventions.
 8. Stage the relevant files (prefer specific files over `git add .`) — run `git add` as a **separate command**, never chain with `&&`
 9. Create the commit as a **separate command** using a HEREDOC format:
 ```bash
-git commit --author="Tim North <tim@modularmind.dev>" -m "$(cat <<'EOF'
+git commit --author="Tim North <timothee.paquot.pro@gmail.com>" -m "$(cat <<'EOF'
 type(scope): message
 
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
