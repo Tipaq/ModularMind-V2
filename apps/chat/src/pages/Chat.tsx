@@ -18,7 +18,7 @@ export default function Chat() {
   const [chatConfig, setChatConfig] = useState<ChatConfig>(DEFAULT_CHAT_CONFIG);
 
   const user = useAuthStore((s) => s.user);
-  const { agents, graphs, models, load: loadConfig } = useChatConfig(chatConfigAdapter);
+  const { agents, graphs, models, supervisorLayers, updateSupervisorLayer, load: loadConfig } = useChatConfig(chatConfigAdapter);
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
@@ -269,7 +269,7 @@ export default function Chat() {
     return conversationAdapter.compactConversation(activeConversationId!);
   }, [activeConversationId]);
 
-  const noOpUpdateLayer = useCallback(async () => false, []);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
 
   const handleArtifactDetected = useCallback(
     (artifact: DetectedArtifact) => {
@@ -393,6 +393,8 @@ export default function Chat() {
           onRegenerate={regenerateLastMessage}
           onEditMessage={handleEditMessage}
           onArtifactDetected={handleArtifactDetected}
+          selectedMessageId={selectedMessageId}
+          onSelectMessage={setSelectedMessageId}
           stickyFooter={
             <ChatInput
               value={inputValue}
@@ -429,8 +431,8 @@ export default function Chat() {
           config={insightsConfig}
           onConfigChange={handleConfigChange}
           models={models}
-          supervisorLayers={[]}
-          onUpdateLayer={noOpUpdateLayer}
+          supervisorLayers={supervisorLayers ?? []}
+          onUpdateLayer={updateSupervisorLayer ?? (async () => false)}
           selectedModelContextWindow={selectedModel?.context_window ?? null}
           enabledAgents={enabledAgents}
           enabledGraphs={enabledGraphs}
