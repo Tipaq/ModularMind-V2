@@ -14,7 +14,11 @@ from sqlalchemy import select
 
 from src.infra.database import async_session_maker
 from src.scheduled_tasks.models import ScheduledTask
-from src.scheduled_tasks.schemas import ScheduledTaskConfig, compute_next_run_at, interval_to_seconds
+from src.scheduled_tasks.schemas import (
+    ScheduledTaskConfig,
+    compute_next_run_at,
+    interval_to_seconds,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-
 VALID_SCHEDULE_TYPES = {"interval", "one_shot", "manual"}
 VALID_INTERVAL_UNITS = {"minutes", "hours", "days"}
 VALID_TARGET_TYPES = {"agent", "graph"}
