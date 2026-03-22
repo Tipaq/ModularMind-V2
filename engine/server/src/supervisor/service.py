@@ -831,6 +831,8 @@ class SuperSupervisorService:
         exec_channel = f"execution:{execution.id}"
         seq = 0
 
+        stream_key = f"exec_stream:{execution.id}"
+
         async def publish_fn(event: dict[str, Any]) -> None:
             nonlocal seq
             seq += 1
@@ -840,6 +842,9 @@ class SuperSupervisorService:
             await self.redis.publish(exec_channel, event_json)
             await self.redis.rpush(f"buffer:{execution.id}", event_json)
             await self.redis.expire(f"buffer:{execution.id}", EVENT_BUFFER_TTL_SECONDS)
+            await self.redis.xadd(stream_key, {"data": event_json})
+            if event.get("type") in ("complete", "error"):
+                await self.redis.expire(stream_key, 300)
 
         return execution, publish_fn
 

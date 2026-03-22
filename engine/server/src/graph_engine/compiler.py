@@ -695,7 +695,8 @@ class GraphCompiler:
             logger.info("Executing agent node: %s with model: %s", node_id, effective_model)
 
             # Signal that this agent node has started (for real-time Activity tracking)
-            _started_fn = (config.get("configurable") or {}).get("_node_started_fn") if config else None
+            configurable = (config.get("configurable") or {}) if config else {}
+            _started_fn = configurable.get("_node_started_fn")
             if _started_fn:
                 _started_fn(node_id, effective_model)
             messages = state.get("messages", [])
@@ -1190,7 +1191,6 @@ class GraphCompiler:
             # 2. Poll Redis key for decision
             # 3. Reset status on approve, or cancel on reject
 
-            approval_key = f"approval:{exec_id}"
             stream_key = f"exec_stream:{exec_id}"
 
             r = await _get_redis()
