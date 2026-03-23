@@ -424,7 +424,10 @@ class SuperSupervisorService:
 
             return self._parse_routing_response(response)
 
-        except (httpx.HTTPError, ConnectionError, TimeoutError, ValidationError, ValueError, RuntimeError, KeyError) as e:
+        except (
+            httpx.HTTPError, ConnectionError, TimeoutError,
+            ValidationError, ValueError, RuntimeError, KeyError,
+        ) as e:
             logger.error("LLM routing failed: %s", e, exc_info=True)
             return RoutingDecision(
                 strategy=RoutingStrategy.DIRECT_RESPONSE,
@@ -715,7 +718,10 @@ class SuperSupervisorService:
                 "tool_response_inline": True,
             }
 
-        except (httpx.HTTPError, ConnectionError, TimeoutError, ValueError, RuntimeError, KeyError) as e:
+        except (
+            httpx.HTTPError, ConnectionError, TimeoutError,
+            ValueError, RuntimeError, KeyError,
+        ) as e:
             logger.error("TOOL_RESPONSE execution failed: %s", e, exc_info=True)
             await publish_fn(
                 {
@@ -988,7 +994,10 @@ class SuperSupervisorService:
                 )
                 return formatted, knowledge_data
 
-        except (SQLAlchemyError, httpx.HTTPError, ConnectionError, TimeoutError, RuntimeError, ValueError) as e:
+        except (
+            SQLAlchemyError, httpx.HTTPError, ConnectionError,
+            TimeoutError, RuntimeError, ValueError,
+        ) as e:
             logger.warning("Knowledge retrieval for supervisor failed: %s", e, exc_info=True)
             return "", None
 
