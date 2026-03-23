@@ -18,6 +18,7 @@ import {
   CardContent,
   Badge,
   Button,
+  ConfirmDialog,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -29,7 +30,6 @@ import {
 import { api } from "../lib/api";
 import { roleConfig } from "../lib/constants";
 import { EditUserDialog } from "../components/users/EditUserDialog";
-import { ConfirmDialog } from "../components/shared/ConfirmDialog";
 import { UserConversationsTab } from "../components/users/UserConversationsTab";
 import { UserTokenUsageTab } from "../components/users/UserTokenUsageTab";
 import { UserKnowledgeTab } from "../components/users/UserKnowledgeTab";

@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Dialog,
   DialogContent,
@@ -5,8 +7,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Button,
-} from "@modularmind/ui";
+} from "./dialog";
+import { Button } from "./button";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -14,17 +16,19 @@ interface ConfirmDialogProps {
   title: string;
   description: string;
   confirmLabel?: string;
+  cancelLabel?: string | false;
   destructive?: boolean;
   loading?: boolean;
   onConfirm: () => void;
 }
 
-export function ConfirmDialog({
+function ConfirmDialog({
   open,
   onOpenChange,
   title,
   description,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   destructive = false,
   loading = false,
   onConfirm,
@@ -37,9 +41,11 @@ export function ConfirmDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-            Cancel
-          </Button>
+          {cancelLabel !== false && (
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+              {cancelLabel}
+            </Button>
+          )}
           <Button
             variant={destructive ? "destructive" : "default"}
             onClick={onConfirm}
@@ -52,3 +58,6 @@ export function ConfirmDialog({
     </Dialog>
   );
 }
+
+export { ConfirmDialog };
+export type { ConfirmDialogProps };
