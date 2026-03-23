@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Brain, Clock, Wrench } from "lucide-react";
 import {
   Badge,
@@ -60,16 +60,13 @@ function CreateAgentDialog({ isOpen, onOpenChange, onCreated }: CreateAgentDialo
   const [form, setForm] = useState<AgentForm>(INITIAL_FORM);
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && unifiedCatalog.length === 0) fetchUnifiedCatalog();
-  }, [isOpen, unifiedCatalog.length, fetchUnifiedCatalog]);
-
   const readyModels = unifiedCatalog.filter((m) => m.unifiedStatus === "ready");
 
   const updateForm = (partial: Partial<AgentForm>) =>
     setForm((prev) => ({ ...prev, ...partial }));
 
   const handleOpenChange = (open: boolean) => {
+    if (open && unifiedCatalog.length === 0) fetchUnifiedCatalog();
     if (!open) setForm(INITIAL_FORM);
     onOpenChange(open);
   };

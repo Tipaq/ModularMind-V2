@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { PromptDisplay, SectionCard, Textarea } from "@modularmind/ui";
 import type { AgentDetail, AgentUpdateInput } from "@modularmind/api-client";
@@ -14,14 +14,8 @@ function countLines(text: string): number {
   return text.split("\n").length;
 }
 
-export function AgentPromptSection({ agent, isEditing, onChange }: AgentPromptSectionProps) {
+function AgentPromptSectionInner({ agent, isEditing, onChange }: AgentPromptSectionProps) {
   const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt || "");
-
-  useEffect(() => {
-    if (!isEditing) {
-      setSystemPrompt(agent.system_prompt || "");
-    }
-  }, [isEditing, agent]);
 
   const handleChange = (value: string) => {
     setSystemPrompt(value);
@@ -59,4 +53,9 @@ export function AgentPromptSection({ agent, isEditing, onChange }: AgentPromptSe
       )}
     </SectionCard>
   );
+}
+
+export function AgentPromptSection(props: AgentPromptSectionProps) {
+  const resetKey = props.isEditing ? "editing" : `view-${props.agent.id}`;
+  return <AgentPromptSectionInner key={resetKey} {...props} />;
 }

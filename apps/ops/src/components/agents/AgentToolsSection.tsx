@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Wrench } from "lucide-react";
 import { Badge, SectionCard } from "@modularmind/ui";
 import type { AgentDetail, AgentUpdateInput, ToolCategories } from "@modularmind/api-client";
@@ -11,21 +11,15 @@ interface AgentToolsSectionProps {
   onChange: (data: AgentUpdateInput) => void;
 }
 
-export function AgentToolsSection({ agent, isEditing, onChange }: AgentToolsSectionProps) {
+function AgentToolsSectionInner({ agent, isEditing, onChange }: AgentToolsSectionProps) {
   const [categories, setCategories] = useState<ToolCategories>(agent.tool_categories || {});
 
-  useEffect(() => {
-    if (!isEditing) {
-      setCategories(agent.tool_categories || {});
-    }
-  }, [isEditing, agent]);
+  const currentCategories = isEditing ? categories : (agent.tool_categories || {});
 
   const handleChange = (next: ToolCategories) => {
     setCategories(next);
     onChange({ tool_categories: next });
   };
-
-  const currentCategories = isEditing ? categories : agent.tool_categories;
   const enabledCount = Object.values(currentCategories).filter(isCategoryEnabled).length;
 
   return (
@@ -46,4 +40,9 @@ export function AgentToolsSection({ agent, isEditing, onChange }: AgentToolsSect
       />
     </SectionCard>
   );
+}
+
+export function AgentToolsSection(props: AgentToolsSectionProps) {
+  const resetKey = props.isEditing ? "editing" : `view-${props.agent.id}`;
+  return <AgentToolsSectionInner key={resetKey} {...props} />;
 }

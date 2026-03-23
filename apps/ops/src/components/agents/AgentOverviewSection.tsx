@@ -22,7 +22,7 @@ interface AgentOverviewSectionProps {
   onChange: (data: AgentUpdateInput) => void;
 }
 
-export function AgentOverviewSection({ agent, isEditing, onChange }: AgentOverviewSectionProps) {
+function AgentOverviewSectionInner({ agent, isEditing, onChange }: AgentOverviewSectionProps) {
   const [values, setValues] = useState({
     name: agent.name,
     description: agent.description,
@@ -35,21 +35,11 @@ export function AgentOverviewSection({ agent, isEditing, onChange }: AgentOvervi
   const { unifiedCatalog, fetchUnifiedCatalog } = useModelsStore();
 
   useEffect(() => {
-    if (unifiedCatalog.length === 0) fetchUnifiedCatalog();
-  }, [unifiedCatalog.length, fetchUnifiedCatalog]);
-
-  useEffect(() => {
-    if (!isEditing) {
-      setValues({
-        name: agent.name,
-        description: agent.description,
-        model_id: agent.model_id,
-        timeout_seconds: agent.timeout_seconds,
-        memory_enabled: agent.memory_enabled,
-        timeout_enabled: agent.timeout_seconds > 0,
-      });
+    if (unifiedCatalog.length === 0) {
+      void fetchUnifiedCatalog();
     }
-  }, [isEditing, agent]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const readyModels = unifiedCatalog.filter((m) => m.unifiedStatus === "ready");
 
@@ -165,4 +155,9 @@ export function AgentOverviewSection({ agent, isEditing, onChange }: AgentOvervi
       />
     </SectionCard>
   );
+}
+
+export function AgentOverviewSection(props: AgentOverviewSectionProps) {
+  const resetKey = props.isEditing ? "editing" : `view-${props.agent.id}`;
+  return <AgentOverviewSectionInner key={resetKey} {...props} />;
 }
