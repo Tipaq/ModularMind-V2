@@ -47,13 +47,15 @@ class TestToolRegistry:
         categories = {
             "knowledge": True,
             "filesystem": True,
+            "shell": True,
+            "network": True,
             "file_storage": True,
             "human_interaction": True,
             "image_generation": True,
             "custom_tools": True,
         }
         tools = resolve_tool_definitions(categories)
-        assert len(tools) == 30  # 2+13+6+2+2+5
+        assert len(tools) == 32  # 2+13+1+1+6+2+2+5
 
     def test_all_definitions_have_valid_format(self):
         from src.tools.registry import resolve_tool_definitions
@@ -84,6 +86,25 @@ class TestToolRegistry:
         tools = resolve_tool_definitions(categories)
         names = [t["function"]["name"] for t in tools]
         assert len(names) == len(set(names)), f"Duplicate names: {names}"
+
+    def test_per_tool_filtering(self):
+        from src.tools.registry import resolve_tool_definitions
+
+        categories = {
+            "knowledge": {"knowledge_search": True, "knowledge_list_sources": False},
+        }
+        tools = resolve_tool_definitions(categories)
+        assert len(tools) == 1
+        assert tools[0]["function"]["name"] == "knowledge_search"
+
+    def test_per_tool_dict_all_false_still_resolves(self):
+        from src.tools.registry import resolve_tool_definitions
+
+        categories = {
+            "knowledge": {"knowledge_search": False, "knowledge_list_sources": False},
+        }
+        tools = resolve_tool_definitions(categories)
+        assert len(tools) == 0
 
     def test_unknown_category_ignored(self):
         from src.tools.registry import resolve_tool_definitions
@@ -123,7 +144,7 @@ class TestExtendedToolExecutor:
             user_id="u1",
             agent_id="a1",
         )
-        assert not executor.handles("gateway__fs_read")
+        assert not executor.handles("fs_read")
         assert not executor.handles("automation__list")
         assert not executor.handles("conversation_search")
         assert not executor.handles("random_tool")
@@ -374,7 +395,7 @@ class TestFilesystemToolDefinitions:
         from src.tools.categories.filesystem import get_filesystem_tool_definitions
 
         defs = get_filesystem_tool_definitions()
-        search = next(d for d in defs if d["function"]["name"] == "gateway__fs_search")
+        search = next(d for d in defs if d["function"]["name"] == "fs_search")
         assert "pattern" in search["function"]["parameters"]["required"]
 
     def test_safe_critical_groups(self):
@@ -401,6 +422,8 @@ class TestAgentConfigToolCategories:
         assert "memory" not in agent.tool_categories
         assert agent.tool_categories["knowledge"] is True
         assert agent.tool_categories["filesystem"] is False
+        assert agent.tool_categories["shell"] is False
+        assert agent.tool_categories["network"] is False
         assert agent.tool_categories["custom_tools"] is False
 
     def test_custom_tool_categories(self):
@@ -423,30 +446,63 @@ class TestAgentConfigToolCategories:
 # ---------------------------------------------------------------------------
 
 
-class TestGatewayToolDefinitions:
-    def test_shell_enabled(self):
+class TestShellToolDefinitions:
+    def test_definitions_count(self):
+        from src.tools.categories.shell import get_shell_tool_definitions
+
+        defs = get_shell_tool_definitions()
+        assert len(defs) == 1
+        assert defs[0]["function"]["name"] == "shell_exec"
+
+    def test_command_is_required(self):
+        from src.tools.categories.shell import get_shell_tool_definitions
+
+        defs = get_shell_tool_definitions()
+        assert "command" in defs[0]["function"]["parameters"]["required"]
+
+
+class TestNetworkToolDefinitions:
+    def test_definitions_count(self):
+        from src.tools.categories.network import get_network_tool_definitions
+
+        defs = get_network_tool_definitions()
+        assert len(defs) == 1
+        assert defs[0]["function"]["name"] == "net_request"
+
+    def test_url_is_required(self):
+        from src.tools.categories.network import get_network_tool_definitions
+
+        defs = get_network_tool_definitions()
+        assert "url" in defs[0]["function"]["parameters"]["required"]
+
+
+class TestGatewayRoutedTools:
+    def test_all_filesystem_tools_in_routing(self):
+        from src.gateway.executor import GATEWAY_ROUTED_TOOLS
+        from src.tools.categories.filesystem import get_filesystem_tool_definitions
+
+        fs_names = {d["function"]["name"] for d in get_filesystem_tool_definitions()}
+        routed_names = set(GATEWAY_ROUTED_TOOLS.keys())
+        assert fs_names.issubset(routed_names)
+
+    def test_shell_and_network_in_routing(self):
+        from src.gateway.executor import GATEWAY_ROUTED_TOOLS
+
+        assert "shell_exec" in GATEWAY_ROUTED_TOOLS
+        assert "net_request" in GATEWAY_ROUTED_TOOLS
+
+    def test_routing_maps_to_correct_categories(self):
+        from src.gateway.executor import GATEWAY_ROUTED_TOOLS
+
+        assert GATEWAY_ROUTED_TOOLS["shell_exec"] == ("shell", "exec")
+        assert GATEWAY_ROUTED_TOOLS["net_request"] == ("network", "request")
+        assert GATEWAY_ROUTED_TOOLS["fs_read"] == ("filesystem", "read")
+
+    def test_deprecated_gateway_tool_definitions_returns_empty(self):
         from src.gateway.tool_definitions import get_gateway_tool_definitions
 
-        tools = get_gateway_tool_definitions({
-            "shell": {"enabled": True},
-        })
-        names = {t["function"]["name"] for t in tools}
-        assert "gateway__shell_exec" in names
-
-    def test_network_enabled(self):
-        from src.gateway.tool_definitions import get_gateway_tool_definitions
-
-        tools = get_gateway_tool_definitions({
-            "network": {"enabled": True},
-        })
-        names = {t["function"]["name"] for t in tools}
-        assert "gateway__net_request" in names
-
-    def test_empty_permissions_returns_empty(self):
-        from src.gateway.tool_definitions import get_gateway_tool_definitions
-
-        tools = get_gateway_tool_definitions({})
-        assert tools == []
+        assert get_gateway_tool_definitions({}) == []
+        assert get_gateway_tool_definitions({"shell": {"enabled": True}}) == []
 
 
 # ---------------------------------------------------------------------------
