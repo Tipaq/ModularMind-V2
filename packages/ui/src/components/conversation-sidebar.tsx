@@ -191,11 +191,6 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         ))}
       </div>
 
-      {footer && (
-        <div className="border-t border-border/50 p-3">
-          {footer}
-        </div>
-      )}
 
       <Dialog open={!!deletingConv} onOpenChange={(open) => { if (!open) setDeletingConv(null); }}>
         <DialogContent className="max-w-sm">
