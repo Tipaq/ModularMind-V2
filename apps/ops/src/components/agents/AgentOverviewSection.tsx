@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
-import { Bot, Brain, Clock, Cpu, Settings2 } from "lucide-react";
+import { Bot, Brain, Clock, Settings2 } from "lucide-react";
 import {
-  Badge,
+  AgentConfigGrid,
   formatModelName,
   Input,
+  SectionCard,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Switch,
   Textarea,
+  ToggleRow,
 } from "@modularmind/ui";
 import type { AgentDetail, AgentUpdateInput } from "@modularmind/api-client";
 import { useModelsStore } from "../../stores/models";
@@ -66,12 +67,7 @@ export function AgentOverviewSection({ agent, isEditing, onChange }: AgentOvervi
 
   if (isEditing) {
     return (
-      <div className="rounded-xl border border-border bg-card p-5 space-y-5">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          <Settings2 className="h-3.5 w-3.5" />
-          Configuration
-        </div>
-
+      <SectionCard icon={Settings2} title="Configuration" variant="card" className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Name</label>
@@ -116,53 +112,39 @@ export function AgentOverviewSection({ agent, isEditing, onChange }: AgentOvervi
         </div>
 
         <div className="grid grid-cols-2 gap-4 pt-1">
-          <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
-            <div className="flex items-center gap-2.5">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Timeout</p>
-                {values.timeout_enabled && (
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <Input
-                      type="number"
-                      value={values.timeout_seconds}
-                      onChange={(e) => update("timeout_seconds", Number(e.target.value))}
-                      className="w-16 h-7 text-xs"
-                      min={10}
-                      max={600}
-                    />
-                    <span className="text-[10px] text-muted-foreground">sec</span>
-                  </div>
-                )}
+          <ToggleRow
+            icon={Clock}
+            label="Timeout"
+            checked={values.timeout_enabled}
+            onCheckedChange={(checked) => update("timeout_enabled", checked)}
+          >
+            {values.timeout_enabled && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <Input
+                  type="number"
+                  value={values.timeout_seconds}
+                  onChange={(e) => update("timeout_seconds", Number(e.target.value))}
+                  className="w-16 h-7 text-xs"
+                  min={10}
+                  max={600}
+                />
+                <span className="text-[10px] text-muted-foreground">sec</span>
               </div>
-            </div>
-            <Switch
-              checked={values.timeout_enabled}
-              onCheckedChange={(checked) => update("timeout_enabled", checked)}
-            />
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
-            <div className="flex items-center gap-2.5">
-              <Brain className="h-4 w-4 text-muted-foreground" />
-              <p className="text-sm font-medium">Memory</p>
-            </div>
-            <Switch
-              checked={values.memory_enabled}
-              onCheckedChange={(checked) => update("memory_enabled", checked)}
-            />
-          </div>
+            )}
+          </ToggleRow>
+          <ToggleRow
+            icon={Brain}
+            label="Memory"
+            checked={values.memory_enabled}
+            onCheckedChange={(checked) => update("memory_enabled", checked)}
+          />
         </div>
-      </div>
+      </SectionCard>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        <Settings2 className="h-3.5 w-3.5" />
-        Configuration
-      </div>
-
+    <SectionCard icon={Settings2} title="Configuration" variant="card">
       <div className="flex items-start gap-3.5">
         <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
           <Bot className="h-5 w-5 text-primary" />
@@ -175,36 +157,12 @@ export function AgentOverviewSection({ agent, isEditing, onChange }: AgentOvervi
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 pt-1">
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Model</p>
-          <div className="flex items-center gap-2">
-            <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-sm font-medium">{formatModelName(agent.model_id)}</span>
-          </div>
-        </div>
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Timeout</p>
-          <div className="flex items-center gap-2">
-            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-sm">
-              {agent.timeout_seconds > 0 ? `${agent.timeout_seconds}s` : "None"}
-            </span>
-          </div>
-        </div>
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Memory</p>
-          <div className="flex items-center gap-2">
-            <Brain className="h-3.5 w-3.5 text-muted-foreground" />
-            <Badge
-              variant={agent.memory_enabled ? "default" : "secondary"}
-              className="text-[10px]"
-            >
-              {agent.memory_enabled ? "Enabled" : "Disabled"}
-            </Badge>
-          </div>
-        </div>
-      </div>
-    </div>
+      <AgentConfigGrid
+        modelId={agent.model_id}
+        timeoutSeconds={agent.timeout_seconds}
+        memoryEnabled={agent.memory_enabled}
+        size="md"
+      />
+    </SectionCard>
   );
 }
