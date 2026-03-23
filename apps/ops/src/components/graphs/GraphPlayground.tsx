@@ -2,21 +2,16 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import {
   useChat,
-  useChatConfig,
   ChatMessages,
   ChatInput,
   ChatEmptyState,
   Button,
-  useAuthStore,
 } from "@modularmind/ui";
 import type { EngineModel, AttachedFile } from "@modularmind/ui";
 import type { ExecutionActivity } from "@modularmind/ui";
 import type { ValidationIssue } from "@modularmind/api-client";
-import {
-  chatAdapter,
-  conversationAdapter,
-  chatConfigAdapter,
-} from "../../lib/chat-adapter";
+import { chatAdapter, conversationAdapter } from "../../lib/chat-adapter";
+import { useModelsStore } from "../../stores/models";
 
 const STORAGE_KEY_PREFIX = "mm:graph-playground:";
 
@@ -35,7 +30,11 @@ export function GraphPlayground({
   validationIssues,
   onActivitiesChange,
 }: GraphPlaygroundProps) {
-  const user = useAuthStore((s) => s.user);
+  const { unifiedCatalog, fetchUnifiedCatalog } = useModelsStore();
+
+  useEffect(() => {
+    if (unifiedCatalog.length === 0) fetchUnifiedCatalog();
+  }, [unifiedCatalog.length, fetchUnifiedCatalog]);
 
   const [conversationId, setConversationId] = useState<string | null>(() => {
     try {
@@ -49,15 +48,22 @@ export function GraphPlayground({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
 
-  const { models, load: loadConfig } = useChatConfig(chatConfigAdapter);
-
-  useEffect(() => {
-    if (user) loadConfig();
-  }, [user, loadConfig]);
-
-  const availableModels = useMemo(
-    () => models.filter((m) => m.is_active && m.is_available && !m.is_embedding),
-    [models],
+  const availableModels: EngineModel[] = useMemo(
+    () =>
+      unifiedCatalog
+        .filter((m) => m.unifiedStatus === "ready")
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          provider: m.provider,
+          model_id: m.model_name,
+          display_name: m.name,
+          context_window: m.context_window,
+          is_active: true,
+          is_available: true,
+          is_embedding: false,
+        })),
+    [unifiedCatalog],
   );
 
   const toEngineModelId = useCallback(
@@ -95,7 +101,7 @@ export function GraphPlayground({
 
   const handleSend = useCallback(async () => {
     const content = inputValue.trim();
-    if (!content) return;
+    if (!content || !effectiveModelId) return;
 
     let targetConvId = conversationId;
 
@@ -116,9 +122,15 @@ export function GraphPlayground({
       }
     }
 
+    await conversationAdapter
+      .patchConversation(targetConvId, {
+        config: { model_id: effectiveModelId },
+      })
+      .catch(() => {});
+
     setInputValue("");
     sendMessage(content, targetConvId);
-  }, [inputValue, conversationId, graphId, graphName, sendMessage]);
+  }, [inputValue, conversationId, graphId, graphName, effectiveModelId, sendMessage]);
 
   const handleNewConversation = useCallback(async () => {
     try {
