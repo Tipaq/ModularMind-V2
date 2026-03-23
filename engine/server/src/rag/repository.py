@@ -117,6 +117,7 @@ class RAGRepository:
         self,
         user_id: str,
         user_groups: list[str],
+        project_id: str | None = None,
     ) -> list[RAGCollection]:
         """Return collections accessible to this user."""
         conditions = self._build_collection_acl(
@@ -124,6 +125,8 @@ class RAGRepository:
             user_groups,
         )
         query = select(RAGCollection).where(or_(*conditions)).order_by(RAGCollection.name)
+        if project_id:
+            query = query.where(RAGCollection.project_id == project_id)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

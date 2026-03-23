@@ -65,6 +65,7 @@ class ConversationService:
         page: int = 1,
         page_size: int = 20,
         agent_id: str | None = None,
+        project_id: str | None = None,
     ) -> tuple[list[tuple[Conversation, int]], int]:
         """List conversations for a user with message counts in a single query."""
         msg_count_sq = _message_count_subquery()
@@ -73,6 +74,8 @@ class ConversationService:
         base_filter = [Conversation.user_id == user_id]
         if agent_id:
             base_filter.append(Conversation.agent_id == agent_id)
+        if project_id:
+            base_filter.append(Conversation.project_id == project_id)
 
         # Count total
         count_query = select(func.count(Conversation.id)).where(*base_filter)

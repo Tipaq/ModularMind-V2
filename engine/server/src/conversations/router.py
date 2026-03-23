@@ -171,11 +171,13 @@ async def list_conversations(
     page: int = 1,
     page_size: int = Query(default=20, ge=1, le=100),
     agent_id: str | None = None,
+    project_id: str | None = None,
 ) -> ConversationListResponse:
     """List user's conversations."""
     service = ConversationService(db)
     conversations_with_counts, total = await service.list_conversations(
-        user_id=user.id, page=page, page_size=page_size, agent_id=agent_id
+        user_id=user.id, page=page, page_size=page_size,
+        agent_id=agent_id, project_id=project_id,
     )
 
     items = [

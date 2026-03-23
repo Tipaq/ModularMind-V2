@@ -235,10 +235,11 @@ async def list_collections(
     user: CurrentUser,
     user_groups: CurrentUserGroups,
     db: DbSession,
+    project_id: str | None = None,
 ) -> CollectionListResponse:
     """List RAG collections accessible to the current user."""
     repo = RAGRepository(db)
-    collections = await repo.list_collections_for_user(user.id, user_groups)
+    collections = await repo.list_collections_for_user(user.id, user_groups, project_id)
 
     return CollectionListResponse(
         items=[CollectionResponse.model_validate(c) for c in collections],

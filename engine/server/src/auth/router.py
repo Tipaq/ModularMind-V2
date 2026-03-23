@@ -266,6 +266,51 @@ async def update_preferences(
     return PreferencesResponse(preferences=body.preferences)
 
 
+# ── User Secrets ─────────────────────────────────────────────────────────
+
+
+@router.get("/me/secrets")
+async def list_secrets(user: CurrentUser, db: DbSession) -> dict:
+    """List current user's secrets (masked values)."""
+    from src.auth.secrets import UserSecretService
+
+    svc = UserSecretService(db)
+    items = await svc.list_secrets(user.id)
+    return {"items": items}
+
+
+@router.post("/me/secrets", status_code=status.HTTP_201_CREATED)
+async def add_secret(
+    user: CurrentUser,
+    body: dict,
+    db: DbSession,
+) -> dict:
+    """Add a secret for the current user."""
+    from src.auth.secrets import UserSecretService
+
+    svc = UserSecretService(db)
+    return await svc.add_secret(
+        user_id=user.id,
+        key=body.get("key", ""),
+        label=body.get("label", body.get("key", "")),
+        value=body.get("value", ""),
+    )
+
+
+@router.delete("/me/secrets/{secret_key}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_secret(
+    secret_key: str,
+    user: CurrentUser,
+    db: DbSession,
+) -> Response:
+    """Delete a secret for the current user."""
+    from src.auth.secrets import UserSecretService
+
+    svc = UserSecretService(db)
+    await svc.delete_secret(user.id, secret_key)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.put("/me", response_model=UserResponse, dependencies=[Depends(_password_rate_limit)])
 async def update_current_user(
     user: CurrentUser,

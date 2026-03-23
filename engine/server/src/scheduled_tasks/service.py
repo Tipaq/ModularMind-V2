@@ -19,6 +19,7 @@ async def list_tasks(
     search: str = "",
     page: int = 1,
     page_size: int = 20,
+    project_id: str | None = None,
 ) -> dict:
     """List scheduled tasks with pagination and search."""
     async with async_session_maker() as session:
@@ -27,6 +28,8 @@ async def list_tasks(
         if search:
             pattern = f"%{search}%"
             query = query.where(ScheduledTask.name.ilike(pattern))
+        if project_id:
+            query = query.where(ScheduledTask.project_id == project_id)
 
         count_query = select(func.count()).select_from(query.subquery())
         total = (await session.execute(count_query)).scalar() or 0

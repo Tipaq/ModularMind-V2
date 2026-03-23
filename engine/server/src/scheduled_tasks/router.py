@@ -34,8 +34,11 @@ async def list_tasks(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: str = Query(""),
+    project_id: str | None = Query(None),
 ) -> dict:
-    result = await service.list_tasks(search=search, page=page, page_size=page_size)
+    result = await service.list_tasks(
+        search=search, page=page, page_size=page_size, project_id=project_id,
+    )
     result["items"] = [ScheduledTaskResponse.model_validate(t) for t in result["items"]]
     return result
 

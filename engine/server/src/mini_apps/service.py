@@ -74,6 +74,7 @@ class MiniAppService:
         search: str | None = None,
         page: int = 1,
         page_size: int = 20,
+        project_id: str | None = None,
     ) -> tuple[list[MiniApp], int]:
         query = select(MiniApp)
         count_query = select(func.count(MiniApp.id))
@@ -84,6 +85,9 @@ class MiniAppService:
         if agent_id:
             query = query.where(MiniApp.agent_id == agent_id)
             count_query = count_query.where(MiniApp.agent_id == agent_id)
+        if project_id:
+            query = query.where(MiniApp.project_id == project_id)
+            count_query = count_query.where(MiniApp.project_id == project_id)
         if search:
             escaped = escape_like(search)
             pattern = f"%{escaped}%"

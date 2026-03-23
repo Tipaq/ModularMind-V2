@@ -42,9 +42,12 @@ async def list_apps(
     search: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    project_id: str | None = Query(None),
 ) -> MiniAppListResponse:
     svc = MiniAppService(db)
-    items, total = await svc.list_apps(scope, agent_id, search, page, page_size)
+    items, total = await svc.list_apps(
+        scope, agent_id, search, page, page_size, project_id=project_id,
+    )
     return MiniAppListResponse(
         items=[MiniAppResponse.model_validate(a) for a in items],
         total=total,
