@@ -8,14 +8,28 @@ Uses Qdrant hybrid search (dense + BM25 sparse) with double-gate ACL.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+import httpx
 
 from src.embedding.base import IEmbeddingProvider
+from src.infra.constants import DEFAULT_RAG_RETRIEVAL_COUNT, DEFAULT_RAG_THRESHOLD
 
 if TYPE_CHECKING:
-    from src.rag.repository import RAGSearchResult
+    from src.rag.repository import RAGRepository, RAGSearchResult
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class RetrievalQuery:
+    query: str
+    user_id: str = ""
+    user_groups: list[str] | None = None
+    collection_ids: list[str] | None = None
+    limit: int | None = None
+    threshold: float | None = None
 
 
 class RAGRetriever:
@@ -27,45 +41,44 @@ class RAGRetriever:
 
     def __init__(
         self,
-        repository: Any,
+        repository: RAGRepository,
         embedding_provider: IEmbeddingProvider,
-        default_limit: int = 5,
-        default_threshold: float = 0.0,
+        default_limit: int = DEFAULT_RAG_RETRIEVAL_COUNT,
+        default_threshold: float = DEFAULT_RAG_THRESHOLD,
     ):
         self.repository = repository
         self.embedding_provider = embedding_provider
         self.default_limit = default_limit
         self.default_threshold = default_threshold
 
-    async def retrieve(
-        self,
-        query: str,
-        user_id: str = "",
-        user_groups: list[str] | None = None,
-        collection_ids: list[str] | None = None,
-        limit: int | None = None,
-        threshold: float | None = None,
-    ) -> str:
+    async def retrieve(self, retrieval_query: RetrievalQuery) -> str:
         """Retrieve relevant context for a query.
 
         Returns formatted context string for inclusion in prompt.
         """
-        limit = limit or self.default_limit
-        threshold = threshold if threshold is not None else self.default_threshold
+        limit = retrieval_query.limit or self.default_limit
+        threshold = (
+            retrieval_query.threshold
+            if retrieval_query.threshold is not None
+            else self.default_threshold
+        )
 
         try:
             query_embedding = await self.embedding_provider.embed_text(
-                query,
+                retrieval_query.query,
             )
 
-            # Ensure collection IDs are strings (callers may pass UUIDs)
-            str_ids = [str(c) for c in collection_ids] if collection_ids else None
+            str_ids = (
+                [str(c) for c in retrieval_query.collection_ids]
+                if retrieval_query.collection_ids
+                else None
+            )
 
             results = await self.repository.search_hybrid(
                 query_embedding=query_embedding,
-                query_text=query,
-                user_id=user_id,
-                user_groups=user_groups or [],
+                query_text=retrieval_query.query,
+                user_id=retrieval_query.user_id,
+                user_groups=retrieval_query.user_groups or [],
                 collection_ids=str_ids,
                 limit=limit,
                 threshold=threshold,
@@ -78,41 +91,41 @@ class RAGRetriever:
             logger.info("Found %d RAG results for query", len(results))
             return self.format_context(results)
 
-        except Exception as e:  # Graceful degradation: RAG retrieval falls back to empty context
+        except (httpx.HTTPError, ConnectionError, TimeoutError, RuntimeError, ValueError) as e:
             logger.error("Error retrieving RAG context: %s", e)
             return ""
 
-    async def retrieve_raw(
-        self,
-        query: str,
-        user_id: str = "",
-        user_groups: list[str] | None = None,
-        collection_ids: list[str] | None = None,
-        limit: int | None = None,
-        threshold: float | None = None,
-    ) -> list[RAGSearchResult]:
+    async def retrieve_raw(self, retrieval_query: RetrievalQuery) -> list[RAGSearchResult]:
         """Retrieve raw search results without formatting."""
-        limit = limit or self.default_limit
-        threshold = threshold if threshold is not None else self.default_threshold
+        limit = retrieval_query.limit or self.default_limit
+        threshold = (
+            retrieval_query.threshold
+            if retrieval_query.threshold is not None
+            else self.default_threshold
+        )
 
         try:
             query_embedding = await self.embedding_provider.embed_text(
-                query,
+                retrieval_query.query,
             )
 
-            str_ids = [str(c) for c in collection_ids] if collection_ids else None
+            str_ids = (
+                [str(c) for c in retrieval_query.collection_ids]
+                if retrieval_query.collection_ids
+                else None
+            )
 
             return await self.repository.search_hybrid(
                 query_embedding=query_embedding,
-                query_text=query,
-                user_id=user_id,
-                user_groups=user_groups or [],
+                query_text=retrieval_query.query,
+                user_id=retrieval_query.user_id,
+                user_groups=retrieval_query.user_groups or [],
                 collection_ids=str_ids,
                 limit=limit,
                 threshold=threshold,
             )
 
-        except Exception as e:  # Graceful degradation: RAG retrieval falls back to empty results
+        except (httpx.HTTPError, ConnectionError, TimeoutError, RuntimeError, ValueError) as e:
             logger.error("Error retrieving RAG results: %s", e)
             return []
 

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.conversations.models import Conversation, ConversationMessage
 from src.infra.config import get_settings
+from src.infra.constants import COMPACTION_MESSAGE_CAP, RAG_CONTEXT_MAX_CHARS
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ class CompactionService:
         if not formatted:
             return {"summary_preview": "", "compacted_count": 0, "duration_ms": 0}
 
-        conversation_text = "\n".join(formatted[-80:])  # Cap at ~80 messages
+        conversation_text = "\n".join(formatted[-COMPACTION_MESSAGE_CAP:])  # Cap at ~80 messages
 
         # Include existing summary for incremental compaction
         existing_summary = await self._get_existing_summary(conv)
@@ -161,7 +162,7 @@ class CompactionService:
         )
 
         return {
-            "summary_preview": summary_text[:300],
+            "summary_preview": summary_text[:RAG_CONTEXT_MAX_CHARS],
             "compacted_count": len(compactable),
             "duration_ms": elapsed_ms,
         }

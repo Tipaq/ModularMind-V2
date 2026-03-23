@@ -558,11 +558,11 @@ class ExecutionService:
         graph = await compiler.compile_agent_graph(agent)
 
         # Build memory/RAG context layers for the agent
-        from src.prompt_layers.context import AgentContextBuilder
+        from src.prompt_layers.context import AgentContextBuilder, ContextBuildParams
 
         context_builder = AgentContextBuilder()
         system_prompt_chars = len(agent.system_prompt or "")
-        context_messages = await context_builder.build_context_messages(
+        context_params = ContextBuildParams(
             agent=agent,
             query=execution.input_prompt,
             session=self.db,
@@ -571,12 +571,12 @@ class ExecutionService:
             model_id=agent.model_id,
             system_prompt_chars=system_prompt_chars,
         )
+        context_messages = await context_builder.build_context_messages(context_params)
 
         input_data = dict(execution.input_data or {})
         if context_messages:
             input_data["_context_layers"] = [msg.content for msg in context_messages]
 
-        # Auto-compact if history budget exceeded (Claude-style inline compaction)
         history_budget = context_builder.last_history_budget
         if history_budget.get("budget_exceeded") and execution.session_id:
             yield {
@@ -594,17 +594,8 @@ class ExecutionService:
                 )
                 yield {"type": "trace:compaction_end", **compact_result}
 
-                # Re-build context with the compacted history
                 if compact_result.get("compacted_count", 0) > 0:
-                    context_messages = await context_builder.build_context_messages(
-                        agent=agent,
-                        query=execution.input_prompt,
-                        session=self.db,
-                        user_id=execution.user_id,
-                        conversation_id=execution.session_id,
-                        model_id=agent.model_id,
-                        system_prompt_chars=system_prompt_chars,
-                    )
+                    context_messages = await context_builder.build_context_messages(context_params)
                     if context_messages:
                         input_data["_context_layers"] = [msg.content for msg in context_messages]
             except Exception as e:  # Resilience: compaction failure must not block execution

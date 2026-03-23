@@ -97,15 +97,18 @@ async def _knowledge_search(
     if not query:
         return "Error: query parameter is required."
 
+    from src.rag.retriever import RetrievalQuery
+
     collection_ids = args.get("collection_ids")
     limit = min(max(int(args.get("limit", 5)), 1), 20)
 
-    context = await rag_retriever.retrieve(
+    retrieval_query = RetrievalQuery(
         query=query,
         user_id=user_id,
         collection_ids=collection_ids,
         limit=limit,
     )
+    context = await rag_retriever.retrieve(retrieval_query)
 
     if not context:
         return "No relevant documents found."

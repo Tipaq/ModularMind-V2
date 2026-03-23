@@ -10,7 +10,10 @@ import json as json_module
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.mcp.registry import MCPRegistry
 
 from src.graph_engine.state import GraphState
 
@@ -38,7 +41,7 @@ logger = logging.getLogger(__name__)
 def _filter_mcp_for_agent(
     server_ids: list[str],
     agent: AgentConfig,
-    registry: Any,
+    registry: MCPRegistry,
 ) -> list[str]:
     """Filter MCP server IDs based on agent's gateway_permissions.
 
@@ -159,7 +162,7 @@ class GraphCompiler:
         self,
         config_provider: ConfigProviderProtocol,
         llm_provider: LLMProviderProtocol,
-        mcp_registry: Any | None = None,
+        mcp_registry: MCPRegistry | None = None,
     ):
         self.config_provider = config_provider
         self.llm_provider = llm_provider
@@ -491,14 +494,17 @@ class GraphCompiler:
 
                 # Build extended executor if any categories are enabled
                 if tool_categories and any(tool_categories.values()):
-                    from src.tools.executor import ExtendedToolExecutor
+                    from src.tools.executor import ExtendedToolExecutor, ToolExecutorDeps
 
+                    executor_deps = ToolExecutorDeps(
+                        gateway_executor=gateway_executor,
+                        publish_fn=_extract_tool_publish_fn(config),
+                    )
                     extended_executor = ExtendedToolExecutor(
                         session_maker=async_session_maker,
                         user_id=user_id,
                         agent_id=agent.id,
-                        gateway_executor=gateway_executor,
-                        publish_fn=_extract_tool_publish_fn(config),
+                        deps=executor_deps,
                     )
 
                 builtin_exec = create_builtin_executor(user_id, async_session_maker)
@@ -538,14 +544,12 @@ class GraphCompiler:
                 if active_tools and unified_executor:
                     from src.infra.config import get_settings
 
-                    from .tool_loop import run_tool_loop, try_bind_tools
+                    from .tool_loop import ToolLoopConfig, run_tool_loop, try_bind_tools
 
                     llm_with_tools, tools_bound = try_bind_tools(llm, active_tools)
                     if tools_bound:
-                        # Extract publish_fn from callbacks (if ExecutionTraceHandler present)
                         _tool_publish_fn = _extract_tool_publish_fn(config)
 
-                        # If agent has search tools, require multiple searches
                         _search_tool_names = {
                             "web_search",
                         }
@@ -555,15 +559,18 @@ class GraphCompiler:
                         }
                         _has_search = bool(_search_tool_names & _tool_fn_names)
 
+                        loop_config = ToolLoopConfig(
+                            max_iterations=10,
+                            tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
+                            min_tool_calls=3 if _has_search else 0,
+                        )
                         response_text, _ = await run_tool_loop(
                             llm_with_tools,
                             llm_messages,
                             unified_executor,
-                            max_iterations=10,
-                            tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
+                            config=loop_config,
                             cancel_check_fn=_is_cancelled,
                             publish_fn=_tool_publish_fn,
-                            min_tool_calls=3 if _has_search else 0,
                         )
                     else:
                         response = await llm.ainvoke(llm_messages, config=config)
@@ -811,7 +818,7 @@ class GraphCompiler:
                 if active_tools and unified_executor:
                     from src.infra.config import get_settings
 
-                    from .tool_loop import run_tool_loop, try_bind_tools
+                    from .tool_loop import ToolLoopConfig, run_tool_loop, try_bind_tools
 
                     logger.info(
                         "Binding %d tools to %s for %s: %s",
@@ -824,7 +831,6 @@ class GraphCompiler:
                     if tools_bound:
                         _tool_publish_fn = _extract_tool_publish_fn(config)
 
-                        # Require multiple searches for agents with search tools
                         _search_tool_names = {
                             "web_search",
                         }
@@ -834,15 +840,18 @@ class GraphCompiler:
                         }
                         _has_search = bool(_search_tool_names & _tool_fn_names)
 
+                        loop_config = ToolLoopConfig(
+                            max_iterations=10,
+                            tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
+                            min_tool_calls=3 if _has_search else 0,
+                        )
                         response_text, _ = await run_tool_loop(
                             llm_with_tools,
                             llm_messages,
                             unified_executor,
-                            max_iterations=10,
-                            tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
+                            config=loop_config,
                             cancel_check_fn=_is_cancelled,
                             publish_fn=_tool_publish_fn,
-                            min_tool_calls=3 if _has_search else 0,
                         )
                     else:
                         response = await llm.ainvoke(llm_messages, config=config)

@@ -11,15 +11,17 @@ from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 
+from src.infra.constants import EPHEMERAL_AGENT_TTL_SECONDS, MAX_SUPERVISOR_CONTEXT_MESSAGES
+
 from .schemas import SubContext
 
 logger = logging.getLogger(__name__)
 
 _CTX_PREFIX = "supervisor:ctx:"
 _AFFINITY_PREFIX = "supervisor:affinity:"
-_CTX_AGENT_INDEX = "supervisor:ctx_agents:"  # SET of agent_ids per conversation
-_CTX_TTL = 86400  # 24 hours
-_MAX_GLOBAL_MESSAGES = 20  # max messages for routing prompt
+_CTX_AGENT_INDEX = "supervisor:ctx_agents:"
+_CTX_TTL = EPHEMERAL_AGENT_TTL_SECONDS
+_MAX_GLOBAL_MESSAGES = MAX_SUPERVISOR_CONTEXT_MESSAGES
 
 
 class HierarchicalContextManager:

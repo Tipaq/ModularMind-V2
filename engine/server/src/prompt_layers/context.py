@@ -7,7 +7,10 @@ memory and RAG retrieval are fail-safe: errors are logged and result in
 empty context (the agent still works, just without augmentation).
 """
 
+from __future__ import annotations
+
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.messages import SystemMessage
@@ -19,6 +22,17 @@ from src.infra.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class ContextBuildParams:
+    agent: AgentConfig
+    query: str
+    session: AsyncSession
+    user_id: str | None = None
+    conversation_id: str | None = None
+    model_id: str | None = None
+    system_prompt_chars: int = 0
+
+
 class AgentContextBuilder:
     """Builds context SystemMessages for an agent.
 
@@ -28,7 +42,7 @@ class AgentContextBuilder:
     """
 
     def __init__(self) -> None:
-        self._last_rag_results: list[Any] = []
+        self._last_rag_results: list[dict[str, Any]] = []
         self._last_history_count: int = 0
         self.last_history_budget: dict[str, Any] = {}
         self._last_history_messages: list[dict[str, str]] = []
@@ -38,13 +52,7 @@ class AgentContextBuilder:
 
     async def build_context_messages(
         self,
-        agent: AgentConfig,
-        query: str,
-        session: AsyncSession,
-        user_id: str | None = None,
-        conversation_id: str | None = None,
-        model_id: str | None = None,
-        system_prompt_chars: int = 0,
+        params: ContextBuildParams,
     ) -> list[SystemMessage]:
         """Build context SystemMessages for an agent.
 
@@ -60,9 +68,15 @@ class AgentContextBuilder:
         self._last_budget_overview = {}
         messages: list[SystemMessage] = []
 
-        # Resolve model context_window and compute per-layer budgets
+        agent = params.agent
+        query = params.query
+        session = params.session
+        user_id = params.user_id
+        conversation_id = params.conversation_id
+        system_prompt_chars = params.system_prompt_chars
+
         settings = get_settings()
-        effective_model_id = model_id or agent.model_id or ""
+        effective_model_id = params.model_id or agent.model_id or ""
         context_window = (
             self.resolve_context_window(effective_model_id)
             if effective_model_id
@@ -441,13 +455,16 @@ class AgentContextBuilder:
                 default_limit=agent.rag_config.retrieval_count,
                 default_threshold=agent.rag_config.similarity_threshold,
             )
-            raw_results = await retriever.retrieve_raw(
+            from src.rag.retriever import RetrievalQuery
+
+            retrieval_query = RetrievalQuery(
                 query=query,
                 user_id=user_id or "",
                 collection_ids=agent.rag_config.collection_ids,
                 limit=agent.rag_config.retrieval_count,
                 threshold=agent.rag_config.similarity_threshold,
             )
+            raw_results = await retriever.retrieve_raw(retrieval_query)
 
             if not raw_results:
                 return ""

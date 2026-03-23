@@ -9,9 +9,23 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.gateway.executor import GatewayToolExecutor
+    from src.infra.object_store import ObjectStore
+    from src.rag.retriever import RAGRetriever
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ToolExecutorDeps:
+    rag_retriever: RAGRetriever | None = None
+    object_store: ObjectStore | None = None
+    gateway_executor: GatewayToolExecutor | None = None
+    publish_fn: Callable[[dict[str, Any]], Awaitable[None]] | None = None
 
 # Prefixes for routing tool calls to the correct handler
 _CATEGORY_PREFIXES = (
@@ -40,18 +54,16 @@ class ExtendedToolExecutor:
         session_maker: Callable,
         user_id: str,
         agent_id: str,
-        rag_retriever: Any | None = None,
-        object_store: Any | None = None,
-        gateway_executor: Any | None = None,
-        publish_fn: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+        deps: ToolExecutorDeps | None = None,
     ):
         self._session_maker = session_maker
         self._user_id = user_id
         self._agent_id = agent_id
-        self._rag_retriever = rag_retriever
-        self._object_store = object_store
-        self._gateway_executor = gateway_executor
-        self._publish_fn = publish_fn
+        resolved_deps = deps or ToolExecutorDeps()
+        self._rag_retriever = resolved_deps.rag_retriever
+        self._object_store = resolved_deps.object_store
+        self._gateway_executor = resolved_deps.gateway_executor
+        self._publish_fn = resolved_deps.publish_fn
 
     def handles(self, name: str) -> bool:
         """Check if this executor handles a tool name."""
@@ -83,7 +95,7 @@ class ExtendedToolExecutor:
             if name.startswith("scheduling_"):
                 return await self._handle_scheduling(name, args)
             return f"Error: unknown extended tool '{name}'"
-        except Exception as e:
+        except (KeyError, ValueError, TypeError, RuntimeError, ConnectionError, TimeoutError) as e:
             logger.exception("Extended tool '%s' failed", name)
             return f"Error: {e}"
 
@@ -166,7 +178,7 @@ class ExtendedToolExecutor:
                 "tavily": secrets_store.get("SEARCH_TAVILY_API_KEY", ""),
                 "serper": secrets_store.get("SEARCH_SERPER_API_KEY", ""),
             }
-        except Exception:
+        except (ImportError, KeyError, AttributeError):
             return {}
 
     async def _handle_git(self, name: str, args: dict[str, Any]) -> str:
@@ -178,7 +190,7 @@ class ExtendedToolExecutor:
             async with self._session_maker() as session:
                 from src.tools.categories.github import resolve_token
                 github_token = await resolve_token(session, self._agent_id)
-        except Exception:
+        except (ImportError, KeyError, ValueError, ConnectionError, RuntimeError):
             pass
         return await execute_git_tool(name, args, github_token=github_token)
 

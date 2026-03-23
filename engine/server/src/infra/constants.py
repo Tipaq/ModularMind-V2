@@ -67,3 +67,31 @@ RATE_LIMIT_INTERNAL: int = 6
 # ── Concurrency ───────────────────────────────────────────────────────────────
 WEBHOOK_BACKGROUND_MAX_CONCURRENT: int = 10
 """Max concurrent webhook background agent tasks (deferred-execution platforms)."""
+
+# ── RAG Defaults ─────────────────────────────────────────────────────────────
+DEFAULT_RAG_RETRIEVAL_COUNT: int = 5
+DEFAULT_RAG_SIMILARITY_THRESHOLD: float = 0.7
+DEFAULT_RAG_THRESHOLD: float = 0.0
+RAG_CONTEXT_MAX_CHARS: int = 300
+
+# ── Agent Defaults ───────────────────────────────────────────────────────────
+EPHEMERAL_AGENT_TTL_SECONDS: int = 86400
+MAX_SUPERVISOR_CONTEXT_MESSAGES: int = 20
+DEFAULT_TOOL_LOOP_MAX_ITERATIONS: int = 10
+COMPACTION_MESSAGE_CAP: int = 80
+
+DEFAULT_TOOL_CATEGORIES: dict[str, bool] = {
+    "knowledge": True,
+    "filesystem": False,
+    "shell": False,
+    "network": False,
+    "file_storage": False,
+    "human_interaction": True,
+    "image_generation": False,
+    "custom_tools": False,
+    "mini_apps": False,
+    "github": False,
+    "web": False,
+    "git": False,
+    "scheduling": False,
+}

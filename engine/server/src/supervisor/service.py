@@ -16,8 +16,11 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
 import redis.asyncio as aioredis
 from langchain_core.messages import HumanMessage
+from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain_config.provider import ConfigProvider
@@ -263,7 +266,7 @@ class SuperSupervisorService:
                 if auto_ids:
                     conv_config = {**conv_config, "enabled_mcp_servers": auto_ids}
                     logger.debug("MCP auto-enable: %d server(s) for conversation", len(auto_ids))
-        except Exception as e:  # MCP registry may raise heterogeneous errors
+        except (ImportError, OSError, RuntimeError, KeyError) as e:
             logger.debug("MCP auto-enable check failed: %s", e)
         return conv_config
 
@@ -421,7 +424,7 @@ class SuperSupervisorService:
 
             return self._parse_routing_response(response)
 
-        except Exception as e:  # LLM providers raise heterogeneous errors
+        except (httpx.HTTPError, ConnectionError, TimeoutError, ValidationError, ValueError, RuntimeError, KeyError) as e:
             logger.error("LLM routing failed: %s", e, exc_info=True)
             return RoutingDecision(
                 strategy=RoutingStrategy.DIRECT_RESPONSE,
@@ -487,14 +490,14 @@ class SuperSupervisorService:
                     tools = await registry.discover_tools(sid)
                     if tools:
                         tools_map[server_name] = tools
-                except Exception:  # MCP protocol errors are heterogeneous
+                except (ConnectionError, TimeoutError, OSError, RuntimeError):
                     logger.debug(
                         "MCP tool discovery failed for server %s",
                         sid,
                         exc_info=True,
                     )
             return tools_map or None
-        except Exception as e:  # MCP registry/protocol errors are heterogeneous
+        except (ImportError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.debug("MCP tool discovery for routing failed: %s", e)
             return None
 
@@ -645,7 +648,7 @@ class SuperSupervisorService:
         Uses two meta-tools (search_tools + use_tool) to give the supervisor
         access to all tool sources without binding dozens of tools directly.
         """
-        from src.graph_engine.tool_loop import run_tool_loop, try_bind_tools
+        from src.graph_engine.tool_loop import ToolLoopConfig, run_tool_loop, try_bind_tools
 
         execution, publish_fn = await self._setup_tool_execution(
             conv_id, content, user_id,
@@ -685,12 +688,15 @@ class SuperSupervisorService:
 
             from src.infra.config import get_settings
 
+            loop_config = ToolLoopConfig(
+                max_iterations=TOOL_LOOP_MAX_ITERATIONS,
+                tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
+            )
             response_text, _ = await run_tool_loop(
                 llm_with_tools,
                 llm_messages,
                 discovery_executor,
-                max_iterations=TOOL_LOOP_MAX_ITERATIONS,
-                tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
+                config=loop_config,
                 publish_fn=publish_fn,
             )
 
@@ -709,7 +715,7 @@ class SuperSupervisorService:
                 "tool_response_inline": True,
             }
 
-        except Exception as e:  # LLM providers raise heterogeneous errors
+        except (httpx.HTTPError, ConnectionError, TimeoutError, ValueError, RuntimeError, KeyError) as e:
             logger.error("TOOL_RESPONSE execution failed: %s", e, exc_info=True)
             await publish_fn(
                 {
@@ -741,19 +747,18 @@ class SuperSupervisorService:
         from src.infra.config import get_settings
         from src.infra.database import async_session_maker
         from src.tools.discovery import ToolDiscoveryExecutor, get_discovery_tool_definitions
-        from src.tools.executor import ExtendedToolExecutor
+        from src.tools.executor import ExtendedToolExecutor, ToolExecutorDeps
 
         allowed_categories = conv_config.get("supervisor_tool_categories")
 
-        # MCP tools (per-request discovery)
         mcp_tools, mcp_executor = await self._discover_mcp_tools(conv_config)
 
-        # Extended tools
+        executor_deps = ToolExecutorDeps(publish_fn=publish_fn)
         extended_executor = ExtendedToolExecutor(
             session_maker=async_session_maker,
             user_id=user_id,
             agent_id="supervisor",
-            publish_fn=publish_fn,
+            deps=executor_deps,
         )
 
         # Gateway tools (only if gateway is configured)
@@ -864,7 +869,7 @@ class SuperSupervisorService:
                 return f"User profile:\n{profile}"
             return ""
 
-        except Exception as e:
+        except (SQLAlchemyError, ConnectionError, OSError) as e:
             logger.warning("User profile retrieval for supervisor failed: %s", e, exc_info=True)
             return ""
 
@@ -919,14 +924,17 @@ class SuperSupervisorService:
 
             async with async_session_maker() as session:
                 repo = RAGRepository(session)
+                from src.rag.retriever import RetrievalQuery
+
                 retriever = RAGRetriever(repo, embedding_provider, default_limit=5)
-                raw_results = await retriever.retrieve_raw(
+                retrieval_query = RetrievalQuery(
                     query=query,
                     user_id="",
                     collection_ids=all_collection_ids,
                     limit=5,
                     threshold=0.3,
                 )
+                raw_results = await retriever.retrieve_raw(retrieval_query)
 
                 if not raw_results:
                     return "", None
@@ -980,7 +988,7 @@ class SuperSupervisorService:
                 )
                 return formatted, knowledge_data
 
-        except Exception as e:  # Resilience: mixed DB + RAG + embedding ops
+        except (SQLAlchemyError, httpx.HTTPError, ConnectionError, TimeoutError, RuntimeError, ValueError) as e:
             logger.warning("Knowledge retrieval for supervisor failed: %s", e, exc_info=True)
             return "", None
 
@@ -1307,7 +1315,7 @@ class SuperSupervisorService:
                 results.append(result)
                 if result.get("execution_id"):
                     execution_ids.append(result["execution_id"])
-            except Exception as e:  # Resilience: sub-decisions must not abort the batch
+            except (ValueError, RuntimeError, ConnectionError, TimeoutError, KeyError) as e:
                 logger.error(
                     "MULTI_ACTION sub-decision %d/%d failed: %s",
                     i + 1,

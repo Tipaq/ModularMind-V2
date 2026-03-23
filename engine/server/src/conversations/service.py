@@ -19,6 +19,17 @@ from .models import Conversation, ConversationMessage, MessageRole
 logger = logging.getLogger(__name__)
 
 
+def _message_count_subquery():
+    return (
+        select(
+            ConversationMessage.conversation_id,
+            func.count(ConversationMessage.id).label("msg_count"),
+        )
+        .group_by(ConversationMessage.conversation_id)
+        .subquery()
+    )
+
+
 class ConversationService:
     """Service for managing conversations."""
 
@@ -56,15 +67,7 @@ class ConversationService:
         agent_id: str | None = None,
     ) -> tuple[list[tuple[Conversation, int]], int]:
         """List conversations for a user with message counts in a single query."""
-        # Subquery for message counts
-        msg_count_sq = (
-            select(
-                ConversationMessage.conversation_id,
-                func.count(ConversationMessage.id).label("msg_count"),
-            )
-            .group_by(ConversationMessage.conversation_id)
-            .subquery()
-        )
+        msg_count_sq = _message_count_subquery()
 
         # Base filter
         base_filter = [Conversation.user_id == user_id]
@@ -104,14 +107,7 @@ class ConversationService:
         """List ALL conversations (admin moderation view) with message counts."""
         from src.auth.models import User
 
-        msg_count_sq = (
-            select(
-                ConversationMessage.conversation_id,
-                func.count(ConversationMessage.id).label("msg_count"),
-            )
-            .group_by(ConversationMessage.conversation_id)
-            .subquery()
-        )
+        msg_count_sq = _message_count_subquery()
 
         base_filter: list = []
         if agent_id:

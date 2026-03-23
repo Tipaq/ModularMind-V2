@@ -10,23 +10,9 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from src.infra.constants import DEFAULT_TOOL_CATEGORIES
 
-# Default tool_categories for agents that don't specify one
-DEFAULT_TOOL_CATEGORIES: dict[str, bool] = {
-    "knowledge": True,
-    "filesystem": False,
-    "shell": False,
-    "network": False,
-    "file_storage": False,
-    "human_interaction": True,
-    "image_generation": False,
-    "custom_tools": False,
-    "github": False,
-    "web": False,
-    "git": False,
-    "scheduling": False,
-}
+logger = logging.getLogger(__name__)
 
 
 def get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:

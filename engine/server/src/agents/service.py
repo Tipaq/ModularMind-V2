@@ -14,26 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain_config import get_config_provider
 from src.domain_config.repository import ConfigRepository
 from src.graph_engine.interfaces import AgentConfig
+from src.infra.constants import (
+    DEFAULT_RAG_RETRIEVAL_COUNT,
+    DEFAULT_RAG_SIMILARITY_THRESHOLD,
+    DEFAULT_TOOL_CATEGORIES,
+)
 
 from .schemas import AgentCreate, AgentDetail, AgentUpdate
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_TOOL_CATEGORIES: dict[str, bool] = {
-    "knowledge": True,
-    "filesystem": False,
-    "shell": False,
-    "network": False,
-    "file_storage": False,
-    "human_interaction": True,
-    "image_generation": False,
-    "custom_tools": False,
-    "mini_apps": False,
-    "github": False,
-    "web": False,
-    "git": False,
-    "scheduling": False,
-}
 
 
 def _build_config_dict(body: AgentCreate, agent_id: str) -> dict[str, Any]:
@@ -41,8 +30,8 @@ def _build_config_dict(body: AgentCreate, agent_id: str) -> dict[str, Any]:
     rag_config = {
         "enabled": False,
         "collection_ids": [],
-        "retrieval_count": 5,
-        "similarity_threshold": 0.7,
+        "retrieval_count": DEFAULT_RAG_RETRIEVAL_COUNT,
+        "similarity_threshold": DEFAULT_RAG_SIMILARITY_THRESHOLD,
     }
     if body.rag_config:
         rag_config = {

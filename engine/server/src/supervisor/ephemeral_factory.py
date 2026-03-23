@@ -14,13 +14,14 @@ import redis.asyncio as aioredis
 
 from src.domain_config.provider import ConfigProvider
 from src.graph_engine.interfaces import AgentConfig, RAGConfig
+from src.infra.constants import EPHEMERAL_AGENT_TTL_SECONDS
 
 logger = logging.getLogger(__name__)
 
 MAX_EPHEMERAL_PER_CONVERSATION = 5
 MAX_EPHEMERAL_GLOBAL = 50
 RATE_LIMIT_PREFIX = "ephemeral_rate:"
-RATE_LIMIT_TTL_SECONDS = 86400  # 24 hours
+RATE_LIMIT_TTL_SECONDS = EPHEMERAL_AGENT_TTL_SECONDS
 
 
 class EphemeralAgentFactory:

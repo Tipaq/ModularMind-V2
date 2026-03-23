@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 
 from src.infra.config import get_settings
-from src.mcp import MCPRegistry
+from src.mcp import MCPClientError, MCPRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +203,7 @@ async def _auto_deploy_free_catalog_entries() -> None:
                     entry.name,
                     config.transport.value,
                 )
-            except Exception as e:  # Resilience: individual deploy failures must not abort the loop
+            except (OSError, RuntimeError, ConnectionError, TimeoutError, ValueError) as e:
                 logger.warning("MCP auto-deploy: failed to deploy %s: %s", entry.name, e)
                 continue
 
@@ -239,7 +239,7 @@ async def startup_mcp(*, leader_only: bool = False) -> None:
         if settings.MCP_AUTO_DEPLOY_FREE:
             try:
                 await _auto_deploy_free_catalog_entries()
-            except Exception as e:  # Resilience: auto-deploy is non-fatal startup work
+            except (OSError, RuntimeError, ConnectionError, TimeoutError, ValueError) as e:
                 logger.warning("MCP free auto-deploy failed (non-fatal): %s", e)
         return
 
@@ -258,7 +258,7 @@ async def startup_mcp(*, leader_only: bool = False) -> None:
     # Auto-register MCP servers from environment
     try:
         _bootstrap_mcp_servers()
-    except Exception as e:  # Resilience: bootstrap is non-fatal startup work
+    except (OSError, RuntimeError, ValueError, KeyError) as e:
         logger.warning("MCP bootstrap failed (non-fatal): %s", e)
 
     # GitHub is now handled natively via tools/categories/github.py
@@ -280,7 +280,6 @@ async def _warm_mcp_clients() -> None:
     connection with retries.  Failures are non-fatal — clients will
     reconnect lazily when actually used.
     """
-    from src.mcp import MCPClientError
     from src.mcp.schemas import MCPTransport
 
     registry = get_mcp_registry()
@@ -331,7 +330,7 @@ async def _mcp_health_loop() -> None:
                 healthy = await client.health_check()
                 if not healthy:
                     logger.warning("MCP health: '%s' ping failed", server_id)
-            except Exception as e:  # MCP protocol errors are heterogeneous
+            except (MCPClientError, ConnectionError, TimeoutError, OSError) as e:
                 logger.warning("MCP health: error checking '%s': %s", server_id, e)
 
 

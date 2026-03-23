@@ -23,6 +23,7 @@ from modularmind_shared.utils import compute_config_hash
 
 from src.graph_engine import AgentConfig, ConfigVersion, GraphConfig
 from src.infra.config import get_settings
+from src.infra.constants import EPHEMERAL_AGENT_TTL_SECONDS
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -216,7 +217,7 @@ class ConfigProvider:
 
     EPHEMERAL_PREFIX = "ephemeral_agent:"
     EPHEMERAL_INDEX_KEY = "ephemeral_agent_ids"  # Redis SET of all ephemeral agent IDs
-    EPHEMERAL_TTL = 86400  # 24 hours
+    EPHEMERAL_TTL = EPHEMERAL_AGENT_TTL_SECONDS
 
     async def register_ephemeral_agent(self, config: AgentConfig) -> None:
         """Store ephemeral agent in Redis (visible across all processes)."""

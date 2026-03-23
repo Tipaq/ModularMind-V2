@@ -15,11 +15,14 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+
+from src.infra.constants import DEFAULT_TOOL_LOOP_MAX_ITERATIONS
 
 logger = logging.getLogger(__name__)
 
@@ -30,17 +33,22 @@ class ToolExecutor(Protocol):
     async def execute(self, name: str, args: dict[str, Any]) -> str: ...
 
 
+@dataclass(frozen=True)
+class ToolLoopConfig:
+    max_iterations: int = DEFAULT_TOOL_LOOP_MAX_ITERATIONS
+    tool_call_timeout: float = 60.0
+    min_tool_calls: int = 0
+    reflection_prompt: str | None = None
+
+
 async def run_tool_loop(
     llm: BaseChatModel,
     messages: list[BaseMessage],
     tool_executor: ToolExecutor,
     *,
-    max_iterations: int = 10,
-    tool_call_timeout: float = 60.0,
+    config: ToolLoopConfig | None = None,
     publish_fn: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     cancel_check_fn: Callable[[], Awaitable[bool]] | None = None,
-    min_tool_calls: int = 0,
-    reflection_prompt: str | None = None,
 ) -> tuple[str, list[BaseMessage]]:
     """Run an LLM tool-calling loop until completion or max iterations.
 
@@ -67,13 +75,14 @@ async def run_tool_loop(
     Returns:
         Tuple of ``(final_text_response, full_message_history)``.
     """
-    # Work on a copy to avoid mutating the caller's list
+    loop_config = config or ToolLoopConfig()
+
     msgs = list(messages)
     total_tool_calls = 0
     reflections_sent = 0
-    max_reflections = 2  # Safety cap to avoid infinite reflection loops
+    max_reflections = 2
 
-    for iteration in range(max_iterations):
+    for iteration in range(loop_config.max_iterations):
         # Check for cancellation before each LLM call
         if cancel_check_fn and await cancel_check_fn():
             from src.executions.cancel import ExecutionCancelled
@@ -104,21 +113,21 @@ async def run_tool_loop(
         if not tool_calls:
             # No tool calls — check if we need more tool usage
             if (
-                min_tool_calls > 0
-                and total_tool_calls < min_tool_calls
+                loop_config.min_tool_calls > 0
+                and total_tool_calls < loop_config.min_tool_calls
                 and reflections_sent < max_reflections
             ):
-                nudge = reflection_prompt or (
+                nudge = loop_config.reflection_prompt or (
                     "You have only used your tools "
                     f"{total_tool_calls} time(s) so far. "
-                    f"Please perform at least {min_tool_calls - total_tool_calls} more "
+                    f"Please perform at least {loop_config.min_tool_calls - total_tool_calls} more "
                     "search(es) with different keywords or angles to ensure comprehensive "
                     "coverage before giving your final answer."
                 )
                 logger.info(
                     "Reflection nudge: %d/%d tool calls, injecting prompt",
                     total_tool_calls,
-                    min_tool_calls,
+                    loop_config.min_tool_calls,
                 )
                 msgs.append(HumanMessage(content=nudge))
                 reflections_sent += 1
@@ -172,11 +181,12 @@ async def run_tool_loop(
             try:
                 result_text = await asyncio.wait_for(
                     tool_executor.execute(tool_name, tool_args),
-                    timeout=tool_call_timeout,
+                    timeout=loop_config.tool_call_timeout,
                 )
             except TimeoutError:
-                logger.warning("Tool '%s' timed out after %.1fs", tool_name, tool_call_timeout)
-                result_text = f"Tool error: '{tool_name}' timed out after {tool_call_timeout:.0f}s"
+                timeout = loop_config.tool_call_timeout
+                logger.warning("Tool '%s' timed out after %.1fs", tool_name, timeout)
+                result_text = f"Tool error: '{tool_name}' timed out after {timeout:.0f}s"
             except Exception as e:  # MCP tool calls raise heterogeneous errors
                 logger.warning("Tool '%s' failed: %s", tool_name, e)
                 result_text = f"Tool error: {e}"
@@ -206,7 +216,7 @@ async def run_tool_loop(
             msgs.append(ToolMessage(content=result_text, tool_call_id=call_id))
 
     # Max iterations reached — return the last AI message content
-    logger.warning("Tool loop reached max_iterations=%d", max_iterations)
+    logger.warning("Tool loop reached max_iterations=%d", loop_config.max_iterations)
     last_content = ""
     for msg in reversed(msgs):
         if isinstance(msg, AIMessage) and msg.content:
