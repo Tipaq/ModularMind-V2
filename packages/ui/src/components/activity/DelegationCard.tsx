@@ -7,6 +7,7 @@ import type { ExecutionActivity } from "../../types/chat";
 import type { EngineAgent } from "../../types/engine";
 import { StatusIcon, DurationBadge, ChevronToggle } from "./shared";
 import { AgentDetailModal } from "./AgentDetailModal";
+import { formatModelName } from "../../lib/utils";
 
 export function DelegationCard({
   activity,
@@ -73,7 +74,7 @@ export function DelegationCard({
               <div className="flex items-center gap-1.5">
                 <Cpu className="h-3 w-3 text-muted-foreground" />
                 <Badge variant="secondary" className="text-[10px]">
-                  {agent.model_id}
+                  {formatModelName(agent.model_id)}
                 </Badge>
               </div>
             )}

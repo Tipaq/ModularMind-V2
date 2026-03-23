@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Badge } from "../badge";
 import { Button } from "../button";
+import { SectionCard } from "../section-card";
 import { Switch } from "../switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../tooltip";
 import { cn, formatModelName } from "../../lib/utils";
@@ -70,35 +71,6 @@ function formatK(n: number): string {
   if (n >= 10_000) return `${Math.round(n / 1000)}K`;
   if (n >= 1_000) return `${(n / 1000).toFixed(1)}K`;
   return String(n);
-}
-
-// ── Shared Section Card ─────────────────────────────────────
-
-function SectionCard({
-  icon: Icon,
-  title,
-  trailing,
-  children,
-  className,
-}: {
-  icon: React.ElementType;
-  title: string;
-  trailing?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("px-4 py-3.5 space-y-2.5", className)}>
-      <div className="flex items-center justify-between">
-        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          <Icon className="h-3.5 w-3.5" />
-          {title}
-        </p>
-        {trailing}
-      </div>
-      {children}
-    </div>
-  );
 }
 
 // ── Context Usage ───────────────────────────────────────────
@@ -452,7 +424,7 @@ export function ConfigTab({
                     <p>Cannot disable — some agent models are not pulled:</p>
                     <ul className="mt-1 list-disc pl-3">
                       {missingAgentModels.map((m) => (
-                        <li key={m.modelId}>{m.agentName}: {m.modelId}</li>
+                        <li key={m.modelId}>{m.agentName}: {formatModelName(m.modelId)}</li>
                       ))}
                     </ul>
                   </TooltipContent>
