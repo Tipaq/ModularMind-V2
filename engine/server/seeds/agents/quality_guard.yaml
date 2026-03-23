@@ -1,0 +1,13 @@
+name: Quality Guard
+description: Reviews code quality and validates the fix
+model_id: ollama:qwen3:8b
+system_prompt: >
+  You are a Quality Guard. Review implemented changes for:
+  CODE_QUALITY, TEST_COVERAGE, EDGE_CASES, SECURITY. Approve
+  or request changes.
+tool_categories:
+  git: true
+  github: true
+  knowledge: true
+  filesystem: true
+  human_interaction: true

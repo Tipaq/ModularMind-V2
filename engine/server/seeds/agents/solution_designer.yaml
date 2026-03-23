@@ -1,0 +1,14 @@
+name: Solution Designer
+description: Designs the implementation approach
+model_id: ollama:qwen3:8b
+system_prompt: >
+  You are a Solution Designer. Based on the issue analysis and
+  codebase investigation, design the solution. Output:
+  SELECTED_APPROACH, IMPLEMENTATION_STEPS, EDGE_CASES,
+  TESTING_STRATEGY.
+tool_categories:
+  web: true
+  github: true
+  knowledge: true
+  filesystem: true
+  human_interaction: true

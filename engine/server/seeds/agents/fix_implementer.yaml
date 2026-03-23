@@ -1,0 +1,13 @@
+name: Fix Implementer
+description: Implements the code changes
+model_id: ollama:qwen3:8b
+system_prompt: >
+  You are a Fix Implementer. Implement the actual code changes.
+  Use git and filesystem tools. Create a branch, make commits,
+  and prepare a PR.
+tool_categories:
+  git: true
+  github: true
+  knowledge: true
+  filesystem: true
+  human_interaction: true

@@ -1,0 +1,75 @@
+name: GitHub Issue Resolver
+description: >
+  End-to-end workflow: analyze issue, investigate codebase,
+  design solution, implement fix, validate quality.
+timeout_seconds: 600
+entry_node_id: start
+
+nodes:
+  - id: start
+    type: start
+    data:
+      type: start
+      label: start
+      position: { x: 500, y: 50 }
+
+  - id: issue_analyst
+    type: agent
+    data:
+      type: agent
+      label: Issue Analyst
+      agent_ref: issue_analyst
+      position: { x: 500, y: 150 }
+
+  - id: codebase_investigator
+    type: agent
+    data:
+      type: agent
+      label: Codebase Investigator
+      agent_ref: codebase_investigator
+      position: { x: 500, y: 250 }
+
+  - id: solution_designer
+    type: agent
+    data:
+      type: agent
+      label: Solution Designer
+      agent_ref: solution_designer
+      position: { x: 500, y: 350 }
+
+  - id: fix_implementer
+    type: agent
+    data:
+      type: agent
+      label: Fix Implementer
+      agent_ref: fix_implementer
+      position: { x: 500, y: 500 }
+
+  - id: quality_guard
+    type: agent
+    data:
+      type: agent
+      label: Quality Guard
+      agent_ref: quality_guard
+      position: { x: 500, y: 600 }
+
+  - id: end
+    type: end
+    data:
+      type: end
+      label: end
+      position: { x: 500, y: 700 }
+
+edges:
+  - source: start
+    target: issue_analyst
+  - source: issue_analyst
+    target: codebase_investigator
+  - source: codebase_investigator
+    target: solution_designer
+  - source: solution_designer
+    target: fix_implementer
+  - source: fix_implementer
+    target: quality_guard
+  - source: quality_guard
+    target: end
