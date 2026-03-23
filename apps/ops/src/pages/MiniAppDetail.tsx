@@ -9,7 +9,7 @@ interface StorageEntry extends StorageKey {
   value?: unknown;
 }
 
-export default function MiniAppDetail() {
+export function MiniAppDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [app, setApp] = useState<MiniApp | null>(null);

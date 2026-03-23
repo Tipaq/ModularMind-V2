@@ -20,7 +20,7 @@ function renderLink({ href, className, children }: { href: string; className: st
   return <Link to={href} className={className}>{children}</Link>;
 }
 
-export default function CollectionDetail() {
+export function CollectionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);

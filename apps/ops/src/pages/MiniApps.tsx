@@ -9,7 +9,7 @@ import {
 import type { MiniAppListResponse, MiniApp } from "@modularmind/api-client";
 import { api } from "../lib/api";
 
-export default function MiniApps() {
+export function MiniApps() {
   const [apps, setApps] = useState<MiniApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");

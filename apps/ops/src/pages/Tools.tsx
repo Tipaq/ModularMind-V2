@@ -13,7 +13,7 @@ import {
 import { useToolsStore } from "../stores/tools";
 import { ToolsTable } from "../components/tools/ToolsTable";
 
-export default function Tools() {
+export function Tools() {
   const { tools, categories, totalCount, loading, fetchTools } = useToolsStore();
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [search, setSearch] = useState("");

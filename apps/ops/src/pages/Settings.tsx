@@ -1,5 +1,5 @@
 import { SettingsPage } from "@modularmind/ui";
 
-export default function Settings() {
+export function Settings() {
   return <SettingsPage />;
 }

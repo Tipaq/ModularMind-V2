@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   BookOpen, RefreshCw, Plus, Search, AlertCircle,
@@ -94,6 +94,14 @@ function CollectionsContent() {
     personal: buckets.personal.length,
   }), [buckets]);
 
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+  }, []);
+
+  const handleScopeChange = useCallback((v: string) => {
+    setScopeFilter(v as ScopeFilter);
+  }, []);
+
   const canDelete = (c: Collection) =>
     isAdmin || (c.scope === "agent" && c.owner_user_id === user?.id);
 
@@ -106,10 +114,10 @@ function CollectionsContent() {
             className="pl-9"
             placeholder="Search collections..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleSearchChange}
           />
         </div>
-        <Select value={scopeFilter} onValueChange={(v) => setScopeFilter(v as ScopeFilter)}>
+        <Select value={scopeFilter} onValueChange={handleScopeChange}>
           <SelectTrigger className="w-[180px]">
             <SelectValue />
           </SelectTrigger>
@@ -144,7 +152,7 @@ function CollectionsContent() {
   );
 }
 
-export default function Knowledge() {
+export function Knowledge() {
   const {
     collectionsLoading, collectionsError,
     fetchCollections, createCollection, clearError,

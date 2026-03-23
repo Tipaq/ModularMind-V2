@@ -23,7 +23,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "runs", label: "Runs" },
 ];
 
-export default function ScheduledTaskDetail() {
+export function ScheduledTaskDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");

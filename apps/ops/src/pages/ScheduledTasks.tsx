@@ -49,7 +49,7 @@ function formatRelativeTime(dateStr: string | null): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export default function ScheduledTasks() {
+export function ScheduledTasks() {
   const navigate = useNavigate();
   const {
     tasks, loading, page, totalPages, total,

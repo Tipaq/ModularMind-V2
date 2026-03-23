@@ -1,6 +1,6 @@
 import { ProfilePage, useAuthStore } from "@modularmind/ui";
 
-export default function Profile() {
+export function Profile() {
   const { user } = useAuthStore();
 
   if (!user) return null;

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useCallback, useState, useMemo } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import {
   ArrowLeft,
   GitFork,
@@ -58,11 +58,19 @@ function flowEdgesToInput(edges: Edge[]): EdgeInput[] {
   }));
 }
 
-export default function GraphDetail() {
+export function GraphDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [saving, setSaving] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(searchParams.get("edit") === "true");
+
+  useEffect(() => {
+    if (searchParams.has("edit")) {
+      searchParams.delete("edit");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const {
     selectedGraph: graph,

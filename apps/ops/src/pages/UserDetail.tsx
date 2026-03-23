@@ -35,7 +35,7 @@ import { UserTokenUsageTab } from "../components/users/UserTokenUsageTab";
 import { UserKnowledgeTab } from "../components/users/UserKnowledgeTab";
 import type { UserStats } from "@modularmind/api-client";
 
-export default function UserDetail() {
+export function UserDetail() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const currentRole = useAuthStore((s) => s.user?.role ?? "user");

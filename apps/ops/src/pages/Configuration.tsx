@@ -1,17 +1,17 @@
 import { useSearchParams } from "react-router-dom";
 import { Settings2, Key, Plug, Webhook, BookOpen, Cog, Github, FolderLock } from "lucide-react";
 import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
-import ProvidersTab from "../components/configuration/ProvidersTab";
-import McpServersTab from "../components/configuration/McpServersTab";
-import IntegrationsTab from "../components/configuration/IntegrationsTab";
-import KnowledgeConfigTab from "../components/configuration/KnowledgeConfigTab";
-import SystemTab from "../components/configuration/SystemTab";
+import { ProvidersTab } from "../components/configuration/ProvidersTab";
+import { McpServersTab } from "../components/configuration/McpServersTab";
+import { IntegrationsTab } from "../components/configuration/IntegrationsTab";
+import { KnowledgeConfigTab } from "../components/configuration/KnowledgeConfigTab";
+import { SystemTab } from "../components/configuration/SystemTab";
 import { GitHubTokensTab } from "../components/configuration/GitHubTokensTab";
 import { FilesystemSecurityTab } from "../components/configuration/FilesystemSecurityTab";
 
 type TabId = "providers" | "mcp" | "integrations" | "knowledge" | "system" | "github" | "filesystem";
 
-export default function Configuration() {
+export function Configuration() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get("tab") as TabId) || "providers";
 

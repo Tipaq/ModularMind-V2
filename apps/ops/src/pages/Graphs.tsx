@@ -17,21 +17,20 @@ import {
 import type { ResourceColumn, ResourceFilterConfig } from "@modularmind/ui";
 import type { GraphListItem } from "@modularmind/api-client";
 import { useGraphsStore } from "../stores/graphs";
-import { CreateGraphDialog } from "../components/graphs/CreateGraphDialog";
 
 const filterConfigs: ResourceFilterConfig[] = [
   { key: "search", label: "Search", type: "search", placeholder: "Search graphs..." },
 ];
 
-export default function Graphs() {
+export function Graphs() {
   const navigate = useNavigate();
   const {
     graphs, loading, page, totalPages, total,
-    fetchGraphs, deleteGraph, duplicateGraph,
+    fetchGraphs, createGraph, deleteGraph, duplicateGraph,
   } = useGraphsStore();
 
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     fetchGraphs(1);
@@ -44,6 +43,17 @@ export default function Graphs() {
       (g) => g.name.toLowerCase().includes(searchTerm) || g.description?.toLowerCase().includes(searchTerm),
     );
   }, [graphs, filterValues.search]);
+
+  const handleCreateGraph = useCallback(async () => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const graph = await createGraph({ name: "Untitled Graph" });
+      navigate(`/graphs/${graph.id}?edit=true`);
+    } finally {
+      setCreating(false);
+    }
+  }, [creating, createGraph, navigate]);
 
   const handleRowClick = useCallback(
     (graph: GraphListItem) => navigate(`/graphs/${graph.id}`),
@@ -123,9 +133,9 @@ export default function Graphs() {
         title="Graphs"
         description="Visual agent workflows with nodes and edges"
         actions={
-          <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+          <Button onClick={handleCreateGraph} disabled={creating} className="gap-2">
             <Plus className="h-4 w-4" />
-            New Graph
+            {creating ? "Creating..." : "New Graph"}
           </Button>
         }
       />
@@ -149,7 +159,7 @@ export default function Graphs() {
             title="No graphs yet"
             description="Create your first graph to get started."
             action={
-              <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+              <Button onClick={handleCreateGraph} disabled={creating} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Create Graph
               </Button>
@@ -172,12 +182,6 @@ export default function Graphs() {
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-      />
-
-      <CreateGraphDialog
-        isOpen={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        onCreated={(graph) => navigate(`/graphs/${graph.id}`)}
       />
     </div>
   );

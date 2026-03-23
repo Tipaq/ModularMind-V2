@@ -62,7 +62,7 @@ function PropRow({ label, children }: { label: string; children: React.ReactNode
 // Main Page
 // ---------------------------------------------------------------------------
 
-export default function ModelDetail() {
+export function ModelDetail() {
   const params = useParams();
   const navigate = useNavigate();
   const modelId = params.id as string;

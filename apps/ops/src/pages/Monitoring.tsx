@@ -13,7 +13,7 @@ type TabId = "overview" | "executions" | "pipelines" | "alerts" | "infrastructur
 
 const TAB_IDS: TabId[] = ["overview", "executions", "pipelines", "alerts", "infrastructure"];
 
-export default function Monitoring() {
+export function Monitoring() {
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get("tab");
   const activeTab: TabId = TAB_IDS.includes(rawTab as TabId) ? (rawTab as TabId) : "overview";

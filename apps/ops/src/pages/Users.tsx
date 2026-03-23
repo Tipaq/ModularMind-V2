@@ -14,7 +14,7 @@ import { Pagination } from "../components/shared/Pagination";
 import { EditUserDialog } from "../components/users/EditUserDialog";
 import type { UserStats, UserStatsListResponse } from "@modularmind/api-client";
 
-export default function Users() {
+export function Users() {
   const navigate = useNavigate();
   const currentRole = useAuthStore((s) => s.user?.role ?? "user");
 

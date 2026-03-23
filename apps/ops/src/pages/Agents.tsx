@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bot, Plus, Copy, Trash2, Check, X } from "lucide-react";
 import {
@@ -23,15 +23,15 @@ const filterConfigs: ResourceFilterConfig[] = [
   { key: "search", label: "Search", type: "search", placeholder: "Search agents..." },
 ];
 
-function ModelBadge({ modelId }: { modelId: string }) {
+const ModelBadge = memo(function ModelBadge({ modelId }: { modelId: string }) {
   return (
     <Badge variant="outline" className="text-[10px] py-0 px-1.5">
       {formatModelName(modelId)}
     </Badge>
   );
-}
+});
 
-function ToolCount({ categories }: { categories: Record<string, boolean | Record<string, boolean>> }) {
+const ToolCount = memo(function ToolCount({ categories }: { categories: Record<string, boolean | Record<string, boolean>> }) {
   const count = Object.values(categories).filter((v) =>
     typeof v === "boolean" ? v : Object.values(v).some(Boolean),
   ).length;
@@ -40,9 +40,9 @@ function ToolCount({ categories }: { categories: Record<string, boolean | Record
       {count} tool{count !== 1 ? "s" : ""}
     </Badge>
   );
-}
+});
 
-export default function Agents() {
+export function Agents() {
   const navigate = useNavigate();
   const {
     agents, loading, page, totalPages, total,

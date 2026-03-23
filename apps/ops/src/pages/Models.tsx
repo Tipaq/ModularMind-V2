@@ -132,7 +132,7 @@ const filterConfigs: ResourceFilterConfig[] = [
   },
 ];
 
-export default function Models() {
+export function Models() {
   const navigate = useNavigate();
   const {
     unifiedCatalog,
@@ -299,7 +299,7 @@ export default function Models() {
     [navigate],
   );
 
-  const columns: ResourceColumn<UnifiedCatalogModel>[] = [
+  const columns = useMemo((): ResourceColumn<UnifiedCatalogModel>[] => [
     {
       key: "name",
       header: "Model",
@@ -403,7 +403,7 @@ export default function Models() {
         );
       },
     },
-  ];
+  ], [isProviderConfigured]);
 
   const hasProviders = providerConfigs.some((p) => p.is_connected);
 

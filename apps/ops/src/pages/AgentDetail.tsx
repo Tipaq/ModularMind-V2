@@ -8,7 +8,7 @@ import { AgentOverviewSection } from "../components/agents/AgentOverviewSection"
 import { AgentToolsSection } from "../components/agents/AgentToolsSection";
 import { AgentPromptSection } from "../components/agents/AgentPromptSection";
 
-export default function AgentDetail() {
+export function AgentDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
