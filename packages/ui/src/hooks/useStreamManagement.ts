@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import type { SendMessageResponse } from "@modularmind/api-client";
 import type { ChatMessage } from "../components/chat-messages";
 import type { KnowledgeData, TokenUsage, ContextData, MessageExecutionData } from "../types/chat";
@@ -47,15 +47,15 @@ export function useStreamManagement(
   const {
     setMessages, setIsStreaming, setError, setStreamingMsgId, setSelectedMessageId,
     setExecutionDataMap, setPendingApproval, setApprovalDecision,
-    handleTraceEvent, resetActivities, finalizeActivities,
+    handleTraceEvent, finalizeActivities,
   } = callbacks;
 
   const connectStream = useCallback(
     (
       executionId: string,
       assistantId: string,
-      routingStrategy: string | undefined,
-      delegatedTo: string | undefined,
+      routingStrategy: string | null | undefined,
+      delegatedTo: string | null | undefined,
     ) => {
       let liveFlushTimer: ReturnType<typeof setTimeout> | null = null;
       const scheduleLiveFlush = () => {

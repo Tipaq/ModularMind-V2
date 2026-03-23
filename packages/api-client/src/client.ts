@@ -44,7 +44,7 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  async request<T>(path: string, options: RequestOptions = {}): Promise<T | undefined> {
+  async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const { method = "GET", body, headers = {}, signal } = options;
     const serializedBody = serializeBody(body);
 
@@ -72,7 +72,7 @@ export class ApiClient {
   async upload<T>(
     path: string,
     formDataOrFactory: FormData | FormDataFactory,
-  ): Promise<T | undefined> {
+  ): Promise<T> {
     const buildFormData = typeof formDataOrFactory === "function"
       ? formDataOrFactory
       : (): FormData => {
@@ -102,9 +102,9 @@ export class ApiClient {
     return this.handleResponse<T>(response);
   }
 
-  private async handleResponse<T>(response: Response): Promise<T | undefined> {
+  private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) throw new ApiError(response.status, await response.text());
-    if (isEmptyResponse(response)) return undefined;
+    if (isEmptyResponse(response)) return undefined as T;
     return parseJsonSafely<T>(response);
   }
 
