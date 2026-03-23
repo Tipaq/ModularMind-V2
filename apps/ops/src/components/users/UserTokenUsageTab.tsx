@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, TrendingUp, DollarSign, Cpu, Zap } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, Badge, cn, formatTokens, formatCost } from "@modularmind/ui";
+import { Card, CardContent, CardHeader, CardTitle, Badge, cn, formatTokens, formatCost, formatModelName } from "@modularmind/ui";
 import {
   BarChart,
   Bar,
@@ -187,7 +187,7 @@ export function UserTokenUsageTab({ userId }: { userId: string }) {
                   className="flex items-center justify-between rounded-lg border p-3"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{m.model}</span>
+                    <span className="text-sm font-medium">{formatModelName(m.model)}</span>
                     {m.provider ? (
                       <Badge variant="secondary" className="text-[10px]">
                         {m.provider}

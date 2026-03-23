@@ -12,6 +12,7 @@ import {
   EmptyState,
   ResourceTable,
   ResourceFilters,
+  formatModelName,
 } from "@modularmind/ui";
 import type { ResourceColumn, ResourceFilterConfig } from "@modularmind/ui";
 import type { GraphListItem } from "@modularmind/api-client";
@@ -95,7 +96,7 @@ export default function Graphs() {
           {g.models.length > 0
             ? g.models.map((model) => (
                 <Badge key={model} variant="outline" className="text-[10px] py-0 px-1.5">
-                  {model}
+                  {formatModelName(model)}
                 </Badge>
               ))
             : <span className="text-xs text-muted-foreground">—</span>}

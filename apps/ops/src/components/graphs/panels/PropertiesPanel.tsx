@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  MessageSquare,
+  Wrench,
 } from "lucide-react";
 import {
   Input,
@@ -17,8 +19,9 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
+  AgentConfigGrid,
+  PromptDisplay,
   formatModelName,
-  isLocalModel,
   formatDurationMs,
 } from "@modularmind/ui";
 import type { ExecutionActivity } from "@modularmind/ui";
@@ -55,6 +58,58 @@ function resolveAgentId(data: Record<string, unknown>): string | null {
   if (fromConfig) return fromConfig;
   if (data.agent_id) return data.agent_id as string;
   return null;
+}
+
+const TOOL_CATEGORY_LABELS: Record<string, string> = {
+  knowledge: "Knowledge",
+  filesystem: "Filesystem",
+  shell: "Shell",
+  network: "Network",
+  file_storage: "File Storage",
+  human_interaction: "Human Interaction",
+  image_generation: "Image Generation",
+  custom_tools: "Custom Tools",
+  mini_apps: "Mini Apps",
+  github: "GitHub",
+  web: "Web",
+  git: "Git",
+  scheduling: "Scheduling",
+};
+
+function isCategoryOn(value: boolean | Record<string, boolean> | undefined): boolean {
+  if (value === undefined || value === false) return false;
+  if (value === true) return true;
+  return Object.values(value).some(Boolean);
+}
+
+function AgentToolsSummary({ toolCategories }: { toolCategories: Record<string, boolean | Record<string, boolean>> }) {
+  const enabledCategories = Object.entries(toolCategories).filter(([, v]) => isCategoryOn(v));
+  const totalCount = Object.keys(TOOL_CATEGORY_LABELS).length;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <Wrench className="h-3 w-3" />
+          Tools
+        </div>
+        <span className="text-[10px] text-muted-foreground tabular-nums">
+          {enabledCategories.length} / {totalCount}
+        </span>
+      </div>
+      {enabledCategories.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {enabledCategories.map(([key]) => (
+            <Badge key={key} variant="secondary" className="text-[9px] py-0 px-1.5">
+              {TOOL_CATEGORY_LABELS[key] || key}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">No tools enabled</p>
+      )}
+    </div>
+  );
 }
 
 const TAB_CLS =
@@ -192,134 +247,44 @@ export function PropertiesPanel({
               </div>
             ) : agentDetail ? (
               <div className="space-y-4">
-                {agentDetail.description && (
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {agentDetail.description}
-                  </p>
-                )}
-
-                {/* Configuration */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                    <Settings2 className="h-3 w-3" />
-                    Configuration
+                {/* Agent identity */}
+                <div className="flex items-start gap-2.5">
+                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="space-y-0.5">
-                    <PropRow label="Model">
-                      <span className="text-xs font-medium">
-                        {formatModelName(agentDetail.model_id)}
-                      </span>
-                    </PropRow>
-                    <PropRow label="Type">
-                      <Badge
-                        variant="outline"
-                        className="text-[9px] py-0 px-1"
-                      >
-                        {isLocalModel(agentDetail.model_id) ? "Local" : "Cloud"}
-                      </Badge>
-                    </PropRow>
-                    <PropRow label="Version">
-                      <span className="text-xs font-mono">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold truncate">{agentDetail.name}</p>
+                      <Badge variant="outline" className="text-[9px] py-0 px-1 font-mono shrink-0">
                         v{agentDetail.version}
-                      </span>
-                    </PropRow>
-                    <PropRow label="Timeout">
-                      <span className="text-xs">
-                        {agentDetail.timeout_seconds}s
-                      </span>
-                    </PropRow>
-                  </div>
-                </div>
-
-                <div className="h-px bg-border" />
-
-                {/* Memory */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      <Bot className="h-3 w-3" />
-                      Memory
+                      </Badge>
                     </div>
-                    <Badge
-                      variant={
-                        agentDetail.memory_enabled ? "default" : "secondary"
-                      }
-                      className="text-[9px] py-0 px-1.5"
-                    >
-                      {agentDetail.memory_enabled ? "On" : "Off"}
-                    </Badge>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    {agentDetail.memory_enabled
-                      ? "Short-term and long-term memory is active."
-                      : "Memory is disabled for this agent."}
-                  </p>
-                </div>
-
-                <div className="h-px bg-border" />
-
-                {/* RAG */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      <ArrowDownToLine className="h-3 w-3" />
-                      RAG (Knowledge Base)
-                    </div>
-                    <Badge
-                      variant={
-                        agentDetail.rag_enabled ? "default" : "secondary"
-                      }
-                      className="text-[9px] py-0 px-1.5"
-                    >
-                      {agentDetail.rag_enabled ? "On" : "Off"}
-                    </Badge>
-                  </div>
-                  {agentDetail.rag_enabled ? (
-                    <div className="grid grid-cols-3 gap-1.5 mt-1.5">
-                      <div className="rounded-md bg-muted/50 px-2 py-1 text-center">
-                        <p className="text-[9px] text-muted-foreground">
-                          Collections
-                        </p>
-                        <p className="text-xs font-medium">
-                          {agentDetail.rag_collection_ids.length}
-                        </p>
-                      </div>
-                      <div className="rounded-md bg-muted/50 px-2 py-1 text-center">
-                        <p className="text-[9px] text-muted-foreground">
-                          Top-K
-                        </p>
-                        <p className="text-xs font-medium">
-                          {agentDetail.rag_retrieval_count}
-                        </p>
-                      </div>
-                      <div className="rounded-md bg-muted/50 px-2 py-1 text-center">
-                        <p className="text-[9px] text-muted-foreground">
-                          Threshold
-                        </p>
-                        <p className="text-xs font-medium">
-                          {agentDetail.rag_similarity_threshold}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-[10px] text-muted-foreground">
-                      RAG is disabled for this agent.
+                    <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                      {agentDetail.description || "No description"}
                     </p>
-                  )}
+                  </div>
                 </div>
 
-                <div className="h-px bg-border" />
+                <AgentConfigGrid
+                  modelId={agentDetail.model_id}
+                  timeoutSeconds={agentDetail.timeout_seconds}
+                  memoryEnabled={agentDetail.memory_enabled}
+                  size="sm"
+                />
 
-                {/* System Prompt */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                    <Info className="h-3 w-3" />
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <MessageSquare className="h-3 w-3" />
                     System Prompt
                   </div>
-                  <pre className="whitespace-pre-wrap text-xs bg-muted/50 rounded-md p-2.5 max-h-[200px] overflow-y-auto leading-relaxed">
-                    {agentDetail.system_prompt || "No system prompt configured"}
-                  </pre>
+                  <PromptDisplay
+                    content={agentDetail.system_prompt || null}
+                    maxHeight="180px"
+                  />
                 </div>
+
+                {/* Tools */}
+                <AgentToolsSummary toolCategories={agentDetail.tool_categories} />
               </div>
             ) : (
               <p className="text-xs text-muted-foreground italic">
