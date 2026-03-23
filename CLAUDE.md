@@ -64,7 +64,7 @@ docker/            Docker Compose stacks + Nginx
 ## Key Patterns
 
 ### Backend
-- **Worker**: single process = Redis Streams consumers + APScheduler (`worker/runner.py`)
+- **Workers**: `worker-exec` (executions, models, scheduled tasks, APScheduler) + `worker-pipeline` (documents, memory). Controlled by `WORKER_STREAMS` and `WORKER_SCHEDULER` env vars.
 - **Streams**: `tasks:executions`, `tasks:models`, `tasks:documents`, `memory:raw`, `memory:extracted`
 - **Config**: `ConfigProvider` reads from DB, synced from Platform
 - **Auth**: JWT (HttpOnly cookies), engine↔platform via HMAC-SHA256
@@ -85,7 +85,7 @@ docker/            Docker Compose stacks + Nginx
 ```bash
 make dev-infra       # DB, Redis, Qdrant, MinIO, Ollama
 make dev-engine      # uvicorn --reload :8000
-make dev-worker      # Redis streams + scheduler
+make dev-worker      # All streams + scheduler (local dev)
 make dev-gateway     # uvicorn --reload :8200
 make dev-chat        # Vite :3002
 make dev-ops         # Vite :3003

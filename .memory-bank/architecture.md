@@ -34,7 +34,7 @@ engine ←──poll──→ platform (sync manifest)
 ### Backend
 - **No Celery** — Redis Streams via `RedisStreamBus` for all async work
 - **No WebSocket** — SSE only (`infra/sse.py`)
-- **Worker**: single process = Redis Streams consumers + APScheduler (`worker/runner.py`)
+- **Workers**: split by `WORKER_STREAMS` env — `worker-exec` (executions, models, scheduled tasks + APScheduler) and `worker-pipeline` (documents, memory). Controlled via `WORKER_STREAMS` and `WORKER_SCHEDULER` settings.
 - **Stream names**: `tasks:executions`, `tasks:models`, `tasks:documents`, `memory:raw`, `memory:extracted`
 - **Config source**: `ConfigProvider` (`domain_config/provider.py`) reads from DB, synced from Platform
 - **LangGraph**: graph engine compiles agent graphs, runs tool loops
