@@ -13,7 +13,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { Badge, Button, Separator, Slider, cn, DetailHeader } from "@modularmind/ui";
+import { Badge, Button, ConfirmDialog, Separator, Slider, cn, DetailHeader } from "@modularmind/ui";
 import { PROVIDER_INFO } from "@modularmind/api-client";
 import type { CatalogModel } from "@modularmind/api-client";
 import { ModelStatusBadge } from "../components/shared/ModelStatusBadge";
@@ -80,6 +80,8 @@ export function ModelDetail() {
   const [maxTokensOverride, setMaxTokensOverride] = useState<number | null>(null);
   const maxTokens = maxTokensOverride ?? model?.max_output_tokens ?? 4096;
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   // Load model
   useEffect(() => {
@@ -151,17 +153,15 @@ export function ModelDetail() {
 
   const handleRemove = useCallback(async () => {
     if (!model) return;
-    if (
-      !confirm(
-        `Remove "${model.display_name || model.model_name}" from the catalog?`,
-      )
-    )
-      return;
+    setRemoving(true);
     try {
       await removeFromCatalog(model.id);
       navigate("/models");
     } catch (err) {
       console.error("[ModelDetail] remove:", err);
+    } finally {
+      setRemoving(false);
+      setShowRemoveConfirm(false);
     }
   }, [model, removeFromCatalog, navigate]);
 
@@ -261,7 +261,7 @@ export function ModelDetail() {
               size="sm"
               variant="outline"
               className="text-destructive hover:text-destructive gap-1.5"
-              onClick={handleRemove}
+              onClick={() => setShowRemoveConfirm(true)}
             >
               <Trash2 className="h-3.5 w-3.5" />
               Remove
@@ -521,6 +521,19 @@ export function ModelDetail() {
           )}
         </div>
       </div>
+
+      {model && (
+        <ConfirmDialog
+          open={showRemoveConfirm}
+          onOpenChange={setShowRemoveConfirm}
+          title={`Remove "${model.display_name || model.model_name}"?`}
+          description="This will remove the model from the catalog. You can re-add it later."
+          confirmLabel="Remove"
+          destructive
+          loading={removing}
+          onConfirm={handleRemove}
+        />
+      )}
     </div>
   );
 }

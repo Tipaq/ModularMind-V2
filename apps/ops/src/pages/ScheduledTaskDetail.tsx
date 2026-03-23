@@ -8,7 +8,7 @@ import {
   Trash2,
   CalendarClock,
 } from "lucide-react";
-import { Badge, Button, cn } from "@modularmind/ui";
+import { Badge, Button, ConfirmDialog, cn } from "@modularmind/ui";
 import type { ScheduledTask } from "@modularmind/api-client";
 import { useScheduledTasksStore } from "../stores/scheduled-tasks";
 import { ScheduledTaskOverviewTab } from "../components/scheduled-tasks/ScheduledTaskOverviewTab";
@@ -28,6 +28,8 @@ export function ScheduledTaskDetail() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [triggering, setTriggering] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const {
     selectedTask: task,
@@ -50,9 +52,15 @@ export function ScheduledTaskDetail() {
   }, [id, fetchTask, fetchTaskRuns]);
 
   const handleDelete = useCallback(async () => {
-    if (!task || !confirm(`Delete "${task.name}"?`)) return;
-    await deleteTask(task.id);
-    navigate("/scheduled-tasks");
+    if (!task) return;
+    setDeleting(true);
+    try {
+      await deleteTask(task.id);
+      navigate("/scheduled-tasks");
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   }, [task, deleteTask, navigate]);
 
   const handleDuplicate = useCallback(async () => {
@@ -140,7 +148,7 @@ export function ScheduledTaskDetail() {
               size="sm"
               variant="outline"
               className="text-destructive hover:text-destructive"
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
             >
               <Trash2 className="h-4 w-4 mr-1" /> Delete
             </Button>
@@ -182,6 +190,17 @@ export function ScheduledTaskDetail() {
           <ScheduledTaskRunsTab runs={taskRuns} isLoading={loading} />
         )}
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title={`Delete "${task.name}"?`}
+        description="This action cannot be undone. The scheduled task will be permanently removed."
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

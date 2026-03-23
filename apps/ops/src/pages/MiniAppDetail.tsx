@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, ExternalLink, FileCode, Database, History, Trash2, RotateCcw } from "lucide-react";
-import { MiniAppViewer } from "@modularmind/ui";
+import { ConfirmDialog, MiniAppViewer } from "@modularmind/ui";
 import type { MiniApp, StorageKey, StorageValue, MiniAppSnapshot } from "@modularmind/api-client";
 import { api } from "../lib/api";
 
@@ -19,6 +19,8 @@ export function MiniAppDetail() {
   const [storageEntries, setStorageEntries] = useState<StorageEntry[]>([]);
   const [snapshots, setSnapshots] = useState<MiniAppSnapshot[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
+  const [rollbackVersion, setRollbackVersion] = useState<number | null>(null);
+  const [rollingBack, setRollingBack] = useState(false);
 
   const loadStorage = useCallback(async () => {
     if (!id) return;
@@ -58,10 +60,16 @@ export function MiniAppDetail() {
     }
   }, [id]);
 
-  const rollbackSnapshot = async (version: number) => {
-    if (!id || !confirm(`Rollback to v${version}? Current state will be auto-backed up.`)) return;
-    await api.post(`/mini-apps/${id}/snapshots/${version}/rollback`);
-    loadSnapshots();
+  const handleRollbackConfirm = async () => {
+    if (!id || rollbackVersion === null) return;
+    setRollingBack(true);
+    try {
+      await api.post(`/mini-apps/${id}/snapshots/${rollbackVersion}/rollback`);
+      loadSnapshots();
+    } finally {
+      setRollingBack(false);
+      setRollbackVersion(null);
+    }
   };
 
   useEffect(() => {
@@ -273,7 +281,7 @@ export function MiniAppDetail() {
                     </div>
                   </div>
                   <button
-                    onClick={() => rollbackSnapshot(snap.version)}
+                    onClick={() => setRollbackVersion(snap.version)}
                     className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border hover:bg-muted transition-colors"
                   >
                     <RotateCcw className="h-3 w-3" />
@@ -296,6 +304,16 @@ export function MiniAppDetail() {
           />
         </div>
       )}
+
+      <ConfirmDialog
+        open={rollbackVersion !== null}
+        onOpenChange={(open) => { if (!open) setRollbackVersion(null); }}
+        title={`Rollback to v${rollbackVersion}?`}
+        description="The current state will be auto-backed up before rolling back."
+        confirmLabel="Rollback"
+        loading={rollingBack}
+        onConfirm={handleRollbackConfirm}
+      />
     </div>
   );
 }

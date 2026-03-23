@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, Copy, Trash2, Bot, RefreshCw, Save, X, Pencil } from "lucide-react";
-import { Badge, Button } from "@modularmind/ui";
+import { Badge, Button, ConfirmDialog } from "@modularmind/ui";
 import type { AgentUpdateInput } from "@modularmind/api-client";
 import { useAgentsStore } from "../stores/agents";
 import { AgentOverviewSection } from "../components/agents/AgentOverviewSection";
@@ -13,6 +13,8 @@ export function AgentDetail() {
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const pendingChanges = useRef<AgentUpdateInput>({});
 
   const {
@@ -50,9 +52,15 @@ export function AgentDetail() {
   }, []);
 
   const handleDelete = useCallback(async () => {
-    if (!agent || !confirm(`Delete "${agent.name}"?`)) return;
-    await deleteAgent(agent.id);
-    navigate("/agents");
+    if (!agent) return;
+    setDeleting(true);
+    try {
+      await deleteAgent(agent.id);
+      navigate("/agents");
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   }, [agent, deleteAgent, navigate]);
 
   const handleDuplicate = useCallback(async () => {
@@ -122,7 +130,7 @@ export function AgentDetail() {
                   size="sm"
                   variant="ghost"
                   className="text-destructive hover:text-destructive"
-                  onClick={handleDelete}
+                  onClick={() => setShowDeleteConfirm(true)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -139,6 +147,17 @@ export function AgentDetail() {
           <AgentToolsSection agent={agent} isEditing={isEditing} onChange={handleChange} />
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title={`Delete "${agent.name}"?`}
+        description="This action cannot be undone. The agent and its configuration will be permanently removed."
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
