@@ -101,6 +101,7 @@ export function useStreamManagement(
           handleTraceEvent(data);
 
           if (eventType === "human_prompt") {
+            console.log("[HITL] human_prompt event received:", data);
             setPendingPrompt({
               executionId: currentExecutionIdRef.current,
               promptId: data.prompt_id || "",

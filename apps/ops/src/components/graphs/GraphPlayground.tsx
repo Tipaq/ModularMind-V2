@@ -91,6 +91,12 @@ export function GraphPlayground({
     respondToPrompt,
   } = useChat(conversationId, chatAdapter);
 
+  useEffect(() => {
+    if (pendingPrompt) {
+      console.log("[GraphPlayground] pendingPrompt:", pendingPrompt);
+    }
+  }, [pendingPrompt]);
+
   const onActivitiesChangeRef = useRef(onActivitiesChange);
 
   useEffect(() => {
