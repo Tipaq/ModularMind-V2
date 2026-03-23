@@ -19,6 +19,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  ConfirmDialog,
   Input,
   Label,
 } from "@modularmind/ui";
@@ -58,6 +59,8 @@ export function GitHubTokensTab() {
   const [tokenVisible, setTokenVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadTokens = async () => {
     try {
@@ -100,13 +103,17 @@ export function GitHubTokensTab() {
     setSaving(false);
   };
 
-  const handleDelete = async (tokenId: string, label: string) => {
-    if (!confirm(`Remove the GitHub token "${label}"?`)) return;
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.delete(`/internal/github-tokens/${tokenId}`);
+      await api.delete(`/internal/github-tokens/${deleteTarget.id}`);
       await loadTokens();
     } catch {
       setError("Failed to delete token");
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -308,7 +315,7 @@ export function GitHubTokensTab() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleDelete(token.id, token.label)}
+                  onClick={() => setDeleteTarget({ id: token.id, label: token.label })}
                   className="text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -318,6 +325,17 @@ export function GitHubTokensTab() {
           ))}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title={`Remove GitHub token "${deleteTarget?.label}"?`}
+        description="This action cannot be undone. Agents using this token will lose GitHub access."
+        confirmLabel="Remove"
+        destructive
+        loading={deleting}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 }

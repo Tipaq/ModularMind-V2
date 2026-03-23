@@ -24,6 +24,7 @@ import {
   CardContent,
   Button,
   Badge,
+  ConfirmDialog,
   Input,
   Label,
   Select,
@@ -135,6 +136,9 @@ export function IntegrationsTab() {
   const [selectedTargetId, setSelectedTargetId] = useState<Record<string, string>>({});
   const [connectorName, setConnectorName] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -188,13 +192,13 @@ export function IntegrationsTab() {
 
     for (const f of typeDef.fields) {
       if (f.is_required && !fields[f.key]?.trim()) {
-        alert(`Please fill in: ${f.label}`);
+        setAlertMessage(`Please fill in: ${f.label}`);
         return;
       }
     }
 
     if (mode !== "supervisor" && !targetId) {
-      alert(`Please select a target ${EXECUTION_MODE_LABELS[mode]}`);
+      setAlertMessage(`Please select a target ${EXECUTION_MODE_LABELS[mode]}`);
       return;
     }
 
@@ -218,7 +222,7 @@ export function IntegrationsTab() {
       setConnectorName((prev) => ({ ...prev, [typeDef.type_id]: "" }));
       setSelectedTargetId((prev) => ({ ...prev, [typeDef.type_id]: "" }));
     } catch (err) {
-      alert(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+      setAlertMessage(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
     }
     setCreating(null);
   };
@@ -235,13 +239,17 @@ export function IntegrationsTab() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to disconnect this connector?")) return;
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.delete(`/connectors/${id}`);
-      setConnectors((prev) => prev.filter((c) => c.id !== id));
+      await api.delete(`/connectors/${deleteTarget}`);
+      setConnectors((prev) => prev.filter((c) => c.id !== deleteTarget));
     } catch (err) {
       console.error("[Integrations] delete:", err);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -421,7 +429,7 @@ export function IntegrationsTab() {
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDelete(connector.id);
+                                setDeleteTarget(connector.id);
                               }}
                               title="Disconnect"
                             >
@@ -563,6 +571,27 @@ export function IntegrationsTab() {
           </Card>
         );
       })}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Disconnect connector?"
+        description="Are you sure you want to disconnect this connector? This action cannot be undone."
+        confirmLabel="Disconnect"
+        destructive
+        loading={deleting}
+        onConfirm={handleDeleteConfirm}
+      />
+
+      <ConfirmDialog
+        open={!!alertMessage}
+        onOpenChange={(open) => { if (!open) setAlertMessage(null); }}
+        title="Attention"
+        description={alertMessage ?? ""}
+        confirmLabel="OK"
+        cancelLabel={false}
+        onConfirm={() => setAlertMessage(null)}
+      />
     </div>
   );
 }

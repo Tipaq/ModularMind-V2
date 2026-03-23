@@ -16,6 +16,7 @@ import {
   CardContent,
   Button,
   Badge,
+  ConfirmDialog,
   Input,
 } from "@modularmind/ui";
 import type { LocalSettings } from "@modularmind/api-client";
@@ -146,6 +147,7 @@ export function ProvidersTab() {
   const [saving, setSaving] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -195,26 +197,21 @@ export function ProvidersTab() {
     setSaving(null);
   };
 
-  const handleRemove = async (providerKey: string) => {
-    if (
-      !confirm(
-        `Remove the ${PROVIDERS.find((p) => p.key === providerKey)?.name} API key?`,
-      )
-    )
-      return;
-
-    setSaving(providerKey);
+  const handleRemoveConfirm = async () => {
+    if (!removeTarget) return;
+    setSaving(removeTarget);
     try {
       const data = await api.patch<LocalSettings>("/internal/settings", {
-        llm_api_keys: { [providerKey]: "" },
+        llm_api_keys: { [removeTarget]: "" },
       });
       setSettings(data);
-      setSaveSuccess(providerKey);
+      setSaveSuccess(removeTarget);
       setTimeout(() => setSaveSuccess(null), 3000);
     } catch (err) {
       console.error("[ProvidersTab] remove key:", err);
     }
     setSaving(null);
+    setRemoveTarget(null);
   };
 
   if (loading) {
@@ -371,7 +368,7 @@ export function ProvidersTab() {
                     {isConfigured && (
                       <Button
                         variant="ghost"
-                        onClick={() => handleRemove(key)}
+                        onClick={() => setRemoveTarget(key)}
                         disabled={isSaving}
                         className="h-8 text-xs text-muted-foreground"
                         title="Remove API key"
@@ -386,6 +383,17 @@ export function ProvidersTab() {
           </Card>
         );
       })}
+
+      <ConfirmDialog
+        open={!!removeTarget}
+        onOpenChange={(open) => { if (!open) setRemoveTarget(null); }}
+        title={`Remove ${PROVIDERS.find((p) => p.key === removeTarget)?.name} API key?`}
+        description="Models from this provider will no longer be available until a new key is configured."
+        confirmLabel="Remove"
+        destructive
+        loading={saving === removeTarget}
+        onConfirm={handleRemoveConfirm}
+      />
     </div>
   );
 }
