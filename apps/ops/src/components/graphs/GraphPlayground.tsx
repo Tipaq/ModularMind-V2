@@ -144,14 +144,8 @@ export function GraphPlayground({
 
   return (
     <div className="flex flex-col h-full relative">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-background/80 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Playground
-          </span>
-        </div>
-        {conversationId && (
+      {conversationId && (
+        <div className="absolute top-2 right-2 z-10">
           <Button
             size="sm"
             variant="ghost"
@@ -161,8 +155,8 @@ export function GraphPlayground({
             <RotateCcw className="h-3 w-3" />
             New
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {messages.length === 0 ? (
