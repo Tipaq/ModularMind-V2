@@ -90,15 +90,20 @@ export function GraphDetail() {
     description: "",
     entryNodeId: null,
     timeoutSeconds: 300,
+    timeoutEnabled: true,
+    modelOverride: null,
   });
 
   useEffect(() => {
     if (graph) {
+      const timeout = graph.timeout_seconds || 0;
       setGraphSettings({
         name: graph.name,
         description: graph.description || "",
         entryNodeId: graph.entry_node_id,
-        timeoutSeconds: graph.timeout_seconds || 300,
+        timeoutSeconds: timeout > 0 ? timeout : 300,
+        timeoutEnabled: timeout > 0,
+        modelOverride: null,
       });
     }
   }, [graph]);
@@ -147,7 +152,7 @@ export function GraphDetail() {
           name: graphSettings.name,
           description: graphSettings.description || undefined,
           entry_node_id: graphSettings.entryNodeId || undefined,
-          timeout_seconds: graphSettings.timeoutSeconds,
+          timeout_seconds: graphSettings.timeoutEnabled ? graphSettings.timeoutSeconds : 0,
           nodes: flowNodesToInput(nodes),
           edges: flowEdgesToInput(edges),
         });
@@ -177,11 +182,14 @@ export function GraphDetail() {
 
   const handleCancelEdit = useCallback(() => {
     if (graph) {
+      const timeout = graph.timeout_seconds || 0;
       setGraphSettings({
         name: graph.name,
         description: graph.description || "",
         entryNodeId: graph.entry_node_id,
-        timeoutSeconds: graph.timeout_seconds || 300,
+        timeoutSeconds: timeout > 0 ? timeout : 300,
+        timeoutEnabled: timeout > 0,
+        modelOverride: null,
       });
       setCanvasKey((k) => k + 1);
     }
@@ -317,31 +325,28 @@ export function GraphDetail() {
             onValueChange={setActiveTab}
             className="flex flex-col flex-1 min-h-0"
           >
-            <TabsList className="w-full px-0 h-10 shrink-0">
-              <TabsTrigger value="settings" className="text-xs gap-1 flex-1">
+            <TabsList className="w-full px-0 h-9 shrink-0">
+              <TabsTrigger value="settings" className="text-xs gap-1 flex-1 justify-center">
                 <Settings className="h-3 w-3" />
                 Settings
               </TabsTrigger>
-              {validationIssues.length > 0 && (
-                <TabsTrigger value="validation" className="text-xs gap-1 flex-1">
-                  <ShieldAlert className="h-3 w-3" />
-                  Issues ({validationIssues.length})
-                </TabsTrigger>
-              )}
+              <TabsTrigger value="validation" className="text-xs gap-1 flex-1 justify-center">
+                <ShieldAlert className="h-3 w-3" />
+                Issues{validationIssues.length > 0 ? ` (${validationIssues.length})` : ""}
+              </TabsTrigger>
             </TabsList>
 
             <div className="overflow-y-auto flex-1 min-h-0">
               <TabsContent value="settings" className="mt-0">
                 <GraphSettingsPanel
                   settings={graphSettings}
-                  nodes={currentNodes}
                   isEditMode={isEditMode}
                   onUpdate={handleUpdateSettings}
                 />
               </TabsContent>
 
-              {validationIssues.length > 0 && (
-                <TabsContent value="validation" className="mt-0">
+              <TabsContent value="validation" className="mt-0">
+                {validationIssues.length > 0 ? (
                   <div className="p-4 space-y-2">
                     {validationIssues.map((issue, idx) => (
                       <div
@@ -357,8 +362,13 @@ export function GraphDetail() {
                       </div>
                     ))}
                   </div>
-                </TabsContent>
-              )}
+                ) : (
+                  <div className="p-4 flex flex-col items-center justify-center text-muted-foreground">
+                    <CheckCircle className="h-5 w-5 mb-1.5 text-success" />
+                    <p className="text-xs">No issues found</p>
+                  </div>
+                )}
+              </TabsContent>
             </div>
           </Tabs>
         </div>

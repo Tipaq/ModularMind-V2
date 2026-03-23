@@ -1,6 +1,14 @@
 import type { Node } from "@xyflow/react";
 import type { ValidationIssue } from "@modularmind/api-client";
 
+function resolveAgentId(data: Record<string, unknown>): string | null {
+  const fromConfig = (data.config as Record<string, unknown> | undefined)
+    ?.agentId as string | undefined;
+  if (fromConfig) return fromConfig;
+  if (data.agent_id) return data.agent_id as string;
+  return null;
+}
+
 export function validateGraph(
   nodes: Node[],
   entryNodeId: string | null,
@@ -23,12 +31,13 @@ export function validateGraph(
   }
 
   for (const node of nodes) {
-    const nodeType = node.data?.type as string;
-    const label = (node.data?.label as string) || node.id;
+    const data = (node.data ?? {}) as Record<string, unknown>;
+    const nodeType = data.type as string;
+    const label = (data.label as string) || node.id;
 
     if (
       (nodeType === "agent" || nodeType === "supervisor") &&
-      !node.data?.agent_id
+      !resolveAgentId(data)
     ) {
       issues.push({
         type: "warning",
