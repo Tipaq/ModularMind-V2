@@ -16,6 +16,7 @@ import {
 import {
   Badge,
   Button,
+  ConfirmDialog,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -108,6 +109,8 @@ export function GraphDetail() {
   const [canvasKey, setCanvasKey] = useState(0);
   const [activeTab, setActiveTab] = useState("settings");
   const [executionActivities, setExecutionActivities] = useState<ExecutionActivity[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const handleActivitiesChange = useCallback(
     (activities: ExecutionActivity[]) => {
@@ -161,9 +164,15 @@ export function GraphDetail() {
   }, []);
 
   const handleDelete = useCallback(async () => {
-    if (!graph || !confirm(`Delete "${graph.name}"?`)) return;
-    await deleteGraph(graph.id);
-    navigate("/graphs");
+    if (!graph) return;
+    setDeleting(true);
+    try {
+      await deleteGraph(graph.id);
+      navigate("/graphs");
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   }, [graph, deleteGraph, navigate]);
 
   const handleCancelEdit = useCallback(() => {
@@ -190,7 +199,7 @@ export function GraphDetail() {
   return (
     <div className="flex flex-col h-[calc(100vh-48px)]">
       {/* Header */}
-      <div className="border-b border-border px-5 py-3">
+      <div className="border-b border-border px-5 py-3 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
@@ -218,7 +227,6 @@ export function GraphDetail() {
               v{graph.version}
             </Badge>
 
-            {/* Validation badge */}
             {isValid ? (
               <div className="flex items-center gap-1 text-success text-xs">
                 <CheckCircle className="h-3.5 w-3.5" />
@@ -268,7 +276,7 @@ export function GraphDetail() {
                   size="sm"
                   variant="outline"
                   className="text-destructive hover:text-destructive"
-                  onClick={handleDelete}
+                  onClick={() => setShowDeleteConfirm(true)}
                 >
                   <Trash2 className="h-4 w-4 mr-1" />
                   Delete
@@ -279,106 +287,104 @@ export function GraphDetail() {
         </div>
       </div>
 
-      {/* Content: 50/50 split */}
-      <div className="flex flex-1 min-h-0">
-        {/* Left: Canvas + Bottom Panel */}
-        <div className="flex flex-col w-1/2 min-w-0 border-r border-border">
-          {/* Canvas — 60% */}
-          <div className="min-h-0" style={{ flex: "0 0 60%" }}>
-            <Suspense
-              fallback={
-                <div className="flex h-full items-center justify-center">
-                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              }
-            >
-              <GraphCanvas
-                key={canvasKey}
-                graph={graph}
-                onSave={handleSave}
-                saving={saving}
-                isEditMode={isEditMode}
-                onNodesEdgesChange={handleNodesEdgesChange}
-                executionActivities={executionActivities}
-              />
-            </Suspense>
-          </div>
-
-          {/* Bottom Panel — 40% */}
-          <div className="border-t border-border overflow-hidden flex flex-col" style={{ flex: "0 0 40%" }}>
-            <Tabs
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="flex flex-col flex-1 min-h-0"
-            >
-              <TabsList className="w-full px-0 h-10">
-                <TabsTrigger
-                  value="settings"
-                  className="text-xs gap-1 flex-1"
-                >
-                  <Settings className="h-3 w-3" />
-                  Settings
-                </TabsTrigger>
-                {validationIssues.length > 0 && (
-                  <TabsTrigger
-                    value="validation"
-                    className="text-xs gap-1 flex-1"
-                  >
-                    <ShieldAlert className="h-3 w-3" />
-                    Issues ({validationIssues.length})
-                  </TabsTrigger>
-                )}
-              </TabsList>
-
-              <div className="overflow-y-auto flex-1 min-h-0">
-                <TabsContent value="settings" className="mt-0">
-                  <GraphSettingsPanel
-                    settings={graphSettings}
-                    nodes={currentNodes}
-                    isEditMode={isEditMode}
-                    onUpdate={handleUpdateSettings}
-                  />
-                </TabsContent>
-
-                {validationIssues.length > 0 && (
-                  <TabsContent value="validation" className="mt-0">
-                    <div className="p-4 space-y-2">
-                      {validationIssues.map((issue, idx) => (
-                        <div
-                          key={idx}
-                          className={`flex items-start gap-2 text-sm ${
-                            issue.type === "error"
-                              ? "text-destructive"
-                              : "text-warning"
-                          }`}
-                        >
-                          {issue.type === "error" ? (
-                            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                          ) : (
-                            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                          )}
-                          <span>{issue.message}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </TabsContent>
-                )}
+      {/* Top: Canvas (left) + Settings/Issues panel (right) */}
+      <div className="flex min-h-0" style={{ flex: "1 1 55%" }}>
+        {/* Canvas */}
+        <div className="flex-1 min-w-0 border-r border-border">
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center">
+                <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
-            </Tabs>
-          </div>
+            }
+          >
+            <GraphCanvas
+              key={canvasKey}
+              graph={graph}
+              onSave={handleSave}
+              saving={saving}
+              isEditMode={isEditMode}
+              onNodesEdgesChange={handleNodesEdgesChange}
+              executionActivities={executionActivities}
+            />
+          </Suspense>
         </div>
 
-        {/* Right: Playground */}
-        <div className="w-1/2 min-w-0 h-full overflow-hidden">
-          <GraphPlayground
-            graphId={graph.id}
-            graphName={graphSettings.name}
-            isValid={isValid}
-            validationIssues={validationIssues}
-            onActivitiesChange={handleActivitiesChange}
-          />
+        {/* Right panel: Settings + Validation */}
+        <div className="w-[320px] shrink-0 flex flex-col min-h-0">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="flex flex-col flex-1 min-h-0"
+          >
+            <TabsList className="w-full px-0 h-10 shrink-0">
+              <TabsTrigger value="settings" className="text-xs gap-1 flex-1">
+                <Settings className="h-3 w-3" />
+                Settings
+              </TabsTrigger>
+              {validationIssues.length > 0 && (
+                <TabsTrigger value="validation" className="text-xs gap-1 flex-1">
+                  <ShieldAlert className="h-3 w-3" />
+                  Issues ({validationIssues.length})
+                </TabsTrigger>
+              )}
+            </TabsList>
+
+            <div className="overflow-y-auto flex-1 min-h-0">
+              <TabsContent value="settings" className="mt-0">
+                <GraphSettingsPanel
+                  settings={graphSettings}
+                  nodes={currentNodes}
+                  isEditMode={isEditMode}
+                  onUpdate={handleUpdateSettings}
+                />
+              </TabsContent>
+
+              {validationIssues.length > 0 && (
+                <TabsContent value="validation" className="mt-0">
+                  <div className="p-4 space-y-2">
+                    {validationIssues.map((issue, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-start gap-2 text-sm ${
+                          issue.type === "error"
+                            ? "text-destructive"
+                            : "text-warning"
+                        }`}
+                      >
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                        <span>{issue.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                </TabsContent>
+              )}
+            </div>
+          </Tabs>
         </div>
       </div>
+
+      {/* Bottom: Playground */}
+      <div className="border-t border-border min-h-0" style={{ flex: "1 1 45%" }}>
+        <GraphPlayground
+          graphId={graph.id}
+          graphName={graphSettings.name}
+          isValid={isValid}
+          validationIssues={validationIssues}
+          onActivitiesChange={handleActivitiesChange}
+        />
+      </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title={`Delete "${graph.name}"?`}
+        description="This action cannot be undone. The graph and all its nodes will be permanently removed."
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
