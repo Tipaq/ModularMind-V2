@@ -1,4 +1,4 @@
-"""GatewayToolExecutor — routes gateway__ tool calls to the Gateway service.
+"""GatewayToolExecutor — routes tool calls to the Gateway service.
 
 Includes circuit breaker to gracefully degrade when Gateway is down.
 """
@@ -11,37 +11,27 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-GATEWAY_TOOL_PREFIX = "gateway__"
-GATEWAY_TOOLS = {
-    "gateway__fs_read",
-    "gateway__fs_read_media",
-    "gateway__fs_read_multiple",
-    "gateway__fs_list",
-    "gateway__fs_list_with_sizes",
-    "gateway__fs_tree",
-    "gateway__fs_info",
-    "gateway__fs_search",
-    "gateway__fs_write",
-    "gateway__fs_edit",
-    "gateway__fs_delete",
-    "gateway__fs_move",
-    "gateway__fs_mkdir",
-    "gateway__shell_exec",
-    "gateway__browser_browse",
-    "gateway__browser_search",
-    "gateway__net_request",
-}
-
-_CATEGORY_MAP = {
-    "fs": "filesystem",
-    "shell": "shell",
-    "browser": "browser",
-    "net": "network",
+GATEWAY_ROUTED_TOOLS: dict[str, tuple[str, str]] = {
+    "fs_read": ("filesystem", "read"),
+    "fs_read_media": ("filesystem", "read_media"),
+    "fs_read_multiple": ("filesystem", "read_multiple"),
+    "fs_list": ("filesystem", "list"),
+    "fs_list_with_sizes": ("filesystem", "list_with_sizes"),
+    "fs_tree": ("filesystem", "tree"),
+    "fs_info": ("filesystem", "info"),
+    "fs_search": ("filesystem", "search"),
+    "fs_write": ("filesystem", "write"),
+    "fs_edit": ("filesystem", "edit"),
+    "fs_delete": ("filesystem", "delete"),
+    "fs_move": ("filesystem", "move"),
+    "fs_mkdir": ("filesystem", "mkdir"),
+    "shell_exec": ("shell", "exec"),
+    "net_request": ("network", "request"),
 }
 
 
 class GatewayToolExecutor:
-    """Executes gateway tool calls by forwarding to the Gateway service.
+    """Executes tool calls by forwarding to the Gateway service.
 
     Matches MCPToolExecutor.execute(name, args) -> str interface.
     """
@@ -67,14 +57,13 @@ class GatewayToolExecutor:
 
         Returns string result (matches MCPToolExecutor interface).
         """
-        # Circuit breaker check
         if time.time() < self._circuit_open_until:
             return "Tool error: system access tools are temporarily unavailable."
 
-        # Parse category and action from tool name
-        parts = name.removeprefix(GATEWAY_TOOL_PREFIX).split("_", 1)
-        category = _CATEGORY_MAP.get(parts[0], parts[0])
-        action = parts[1] if len(parts) > 1 else "execute"
+        routing = GATEWAY_ROUTED_TOOLS.get(name)
+        if not routing:
+            return f"Tool error: unknown gateway tool '{name}'"
+        category, action = routing
 
         payload = {
             "request_id": str(uuid4()),
