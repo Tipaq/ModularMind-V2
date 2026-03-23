@@ -1,7 +1,8 @@
 """Redis Streams implementation of EventBus.
 
 Features: consumer groups, exponential backoff on failure,
-dead-letter queue (DLQ) for messages that exceed max retries.
+dead-letter queue (DLQ) for messages that exceed max retries,
+pending message recovery on startup (crash resilience).
 """
 
 import asyncio
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 DLQ_STREAM = "pipeline:dlq"
 INITIAL_BACKOFF = 1.0
 MAX_BACKOFF = 30.0
+STREAM_MAXLEN = 10_000
 
 
 class RedisStreamBus(EventBus):
@@ -31,7 +33,9 @@ class RedisStreamBus(EventBus):
         self._running = False
 
     async def publish(self, stream: str, data: dict[str, Any]) -> str:
-        return await self.redis.xadd(stream, data)
+        return await self.redis.xadd(
+            stream, data, maxlen=STREAM_MAXLEN, approximate=True,
+        )
 
     async def subscribe(
         self,
@@ -42,6 +46,7 @@ class RedisStreamBus(EventBus):
         max_retries: int = 3,
     ) -> None:
         await self.ensure_group(stream, group)
+        await self._recover_pending(stream, group, consumer, handler, max_retries)
         backoff = INITIAL_BACKOFF
 
         while self._running:
@@ -57,32 +62,9 @@ class RedisStreamBus(EventBus):
 
                 for _stream_name, entries in messages:
                     for msg_id, data in entries:
-                        retry_count = int(data.get("_retry_count", 0))
-                        try:
-                            await handler(data)
-                            await self.redis.xack(stream, group, msg_id)
-                        except Exception:  # noqa: BLE001 — Worker resilience: catch all to avoid stream consumer crash
-                            logger.exception(
-                                "Handler failed for %s msg_id=%s retry=%d",
-                                stream,
-                                msg_id,
-                                retry_count,
-                            )
-                            if retry_count >= max_retries:
-                                await self.redis.xadd(
-                                    DLQ_STREAM,
-                                    {
-                                        "original_stream": stream,
-                                        "original_id": msg_id,
-                                        "error": f"{retry_count} retries exhausted",
-                                        "data": str(data),
-                                    },
-                                )
-                                await self.redis.xack(stream, group, msg_id)
-                            else:
-                                data["_retry_count"] = str(retry_count + 1)
-                                await self.redis.xadd(stream, data)
-                                await self.redis.xack(stream, group, msg_id)
+                        await self._process_entry(
+                            stream, group, msg_id, data, handler, max_retries,
+                        )
 
             except (ConnectionError, OSError):
                 logger.warning("Redis connection lost, backoff=%.1fs", backoff)
@@ -92,6 +74,78 @@ class RedisStreamBus(EventBus):
                 logger.exception("Unexpected error in consumer %s/%s", stream, consumer)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, MAX_BACKOFF)
+
+    async def _process_entry(
+        self,
+        stream: str,
+        group: str,
+        msg_id: str,
+        data: dict[str, Any],
+        handler: Callable[[dict[str, Any]], Awaitable[None]],
+        max_retries: int,
+    ) -> None:
+        retry_count = int(data.get("_retry_count", 0))
+        try:
+            await handler(data)
+            await self.redis.xack(stream, group, msg_id)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Handler failed for %s msg_id=%s retry=%d",
+                stream, msg_id, retry_count,
+            )
+            if retry_count >= max_retries:
+                await self.redis.xadd(
+                    DLQ_STREAM,
+                    {
+                        "original_stream": stream,
+                        "original_id": msg_id,
+                        "error": f"{retry_count} retries exhausted",
+                        "data": str(data),
+                    },
+                )
+                await self.redis.xack(stream, group, msg_id)
+            else:
+                data["_retry_count"] = str(retry_count + 1)
+                await self.redis.xadd(stream, data)
+                await self.redis.xack(stream, group, msg_id)
+
+    async def _recover_pending(
+        self,
+        stream: str,
+        group: str,
+        consumer: str,
+        handler: Callable[[dict[str, Any]], Awaitable[None]],
+        max_retries: int,
+    ) -> None:
+        """Re-process messages left pending from a previous crash.
+
+        Reads with stream id "0" to fetch all unacknowledged entries for this
+        consumer, then processes each one through the normal handler/retry flow.
+        """
+        try:
+            pending = await self.redis.xreadgroup(
+                groupname=group,
+                consumername=consumer,
+                streams={stream: "0"},
+                count=100,
+            )
+            recovered = 0
+            for _stream_name, entries in pending:
+                for msg_id, data in entries:
+                    if not data:
+                        await self.redis.xack(stream, group, msg_id)
+                        continue
+                    await self._process_entry(
+                        stream, group, msg_id, data, handler, max_retries,
+                    )
+                    recovered += 1
+            if recovered:
+                logger.info(
+                    "Recovered %d pending message(s) from %s/%s",
+                    recovered, stream, consumer,
+                )
+        except (ConnectionError, OSError, ResponseError):
+            logger.warning("Pending recovery failed for %s/%s", stream, consumer)
 
     async def ensure_group(self, stream: str, group: str) -> None:
         with contextlib.suppress(ResponseError):  # Group already exists

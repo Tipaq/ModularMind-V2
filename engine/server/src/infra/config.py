@@ -340,6 +340,23 @@ class Settings(BaseSettings):
     FAIR_SCHEDULE_MAX_PER_TEAM: int = Field(default=10, ge=1, le=100)
     FAIR_SCHEDULE_GLOBAL_MAX: int = Field(default=50, ge=1, le=500)
 
+    # ---- Worker Sharding ----------------------------------------------------
+    WORKER_STREAMS: str = Field(
+        default="all",
+        description=(
+            "Comma-separated list of stream categories this worker consumes. "
+            "Values: executions, models, documents, memory, scheduled_tasks, all. "
+            "Default 'all' enables every stream (backwards compatible)."
+        ),
+    )
+    WORKER_SCHEDULER: bool = Field(
+        default=True,
+        description=(
+            "Enable APScheduler periodic jobs on this worker instance. "
+            "Only one worker in the cluster should have this set to true."
+        ),
+    )
+
     # ---- Gateway ------------------------------------------------------------
     GATEWAY_ENABLED: bool = Field(
         default=False,
