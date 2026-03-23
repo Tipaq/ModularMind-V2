@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { ACTIVITY_COLORS } from "../../lib/colors";
 import type { ExecutionActivity } from "../../types/chat";
 import type { EngineAgent, EngineGraph } from "../../types/engine";
 import { RoutingCard } from "./RoutingCard";
@@ -17,22 +18,13 @@ import { ParallelCard } from "./ParallelCard";
 import { LoopCard } from "./LoopCard";
 import { StepCard } from "./StepCard";
 
-const DOT_BG: Record<string, string> = {
-  routing: "bg-warning",
-  delegation: "bg-warning",
-  agent_execution: "bg-info",
-  graph_execution: "bg-success",
-  llm: "bg-primary",
-  tool: "bg-warning",
-  retrieval: "bg-info",
-  step: "bg-info",
-  parallel: "bg-primary",
-  loop: "bg-success",
-  error: "bg-destructive",
-  direct_response: "bg-success",
-  agent_created: "bg-primary",
-  compaction: "bg-info",
-};
+const DOT_BG: Record<string, string> = Object.fromEntries(
+  Object.entries(ACTIVITY_COLORS).map(([key, textClass]) => [
+    key,
+    textClass.replace("text-", "bg-"),
+  ]),
+);
+DOT_BG["graph_execution"] = "bg-success";
 
 function TimelineItem({
   activity,

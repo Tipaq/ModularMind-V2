@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Bot, Loader2, Pencil, RefreshCw, User } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { ExecutionActivity } from "../types/chat";
@@ -34,17 +34,12 @@ export interface ChatMessage {
   attachments?: AttachmentChipData[];
 }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
+const TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
+const SHORT_DATE_FORMAT: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" };
+const LONG_DATE_FORMAT: Intl.DateTimeFormatOptions = { weekday: "long", month: "long", day: "numeric" };
 
-/** Full date+time for tooltip — just time if today, otherwise date + time. */
-function formatTooltipTime(iso: string): string {
-  const d = new Date(iso);
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  if (isSameDay(iso, new Date().toISOString())) return time;
-  const date = d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
-  return `${date}, ${time}`;
+function formatShortTime(date: Date): string {
+  return date.toLocaleTimeString([], TIME_FORMAT);
 }
 
 function isSameDay(a: string, b: string): boolean {
@@ -53,15 +48,26 @@ function isSameDay(a: string, b: string): boolean {
   return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
 }
 
-function formatDateSeparator(iso: string): string {
+function formatTime(iso: string): string {
+  return formatShortTime(new Date(iso));
+}
+
+function formatTooltipTime(iso: string): string {
   const d = new Date(iso);
+  const time = formatShortTime(d);
+  if (isSameDay(iso, new Date().toISOString())) return time;
+  const date = d.toLocaleDateString([], SHORT_DATE_FORMAT);
+  return `${date}, ${time}`;
+}
+
+function formatDateSeparator(iso: string): string {
   const now = new Date();
   const yesterday = new Date();
   yesterday.setDate(now.getDate() - 1);
 
   if (isSameDay(iso, now.toISOString())) return "Today";
   if (isSameDay(iso, yesterday.toISOString())) return "Yesterday";
-  return d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  return new Date(iso).toLocaleDateString([], LONG_DATE_FORMAT);
 }
 
 /** Returns true if the gap between two ISO timestamps is >= TIMESTAMP_GAP_MINUTES. */
@@ -345,6 +351,13 @@ export const ChatMessages = memo(function ChatMessages({
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastMsg = messages[messages.length - 1];
 
+  const lastAssistantIdx = useMemo(() => {
+    for (let j = messages.length - 1; j >= 0; j--) {
+      if (messages[j].role === "assistant") return j;
+    }
+    return -1;
+  }, [messages]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, lastMsg?.content]);
@@ -361,12 +374,7 @@ export const ChatMessages = memo(function ChatMessages({
               />
             ) : (
               <div className="px-4 py-6 pb-32">
-                {(() => {
-                  let lastAssistantIdx = -1;
-                  for (let j = messages.length - 1; j >= 0; j--) {
-                    if (messages[j].role === "assistant") { lastAssistantIdx = j; break; }
-                  }
-                  return messages.map((msg, i) => {
+                {messages.map((msg, i) => {
                   const isLast = i === messages.length - 1;
                   const isUser = msg.role === "user";
                   const isAssistant = msg.role === "assistant";
@@ -407,8 +415,7 @@ export const ChatMessages = memo(function ChatMessages({
                       />
                     </div>
                   );
-                });
-                })()}
+                })}
                 {pendingApproval && onApprove && onReject && (
                   <div className="mt-4 max-w-2xl">
                     <ApprovalCard

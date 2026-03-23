@@ -7,6 +7,10 @@ import { cn } from "../lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 import { Paintbrush, X } from "lucide-react";
 
+const CANVAS_SIZE = 220;
+const SATURATION_MIN = 20;
+const SATURATION_MAX = 100;
+
 interface ThemeCustomizerProps {
   className?: string;
 }
@@ -197,8 +201,8 @@ function ColorPickerModal({ hue, saturation, onAccentChange, onClose }: ColorPic
         <div className="flex justify-center mb-4">
           <canvas
             ref={canvasRef}
-            width={220}
-            height={220}
+            width={CANVAS_SIZE}
+            height={CANVAS_SIZE}
             className="cursor-crosshair"
             onClick={handleCanvasInteraction}
             onMouseDown={() => setIsDragging(true)}
@@ -217,8 +221,8 @@ function ColorPickerModal({ hue, saturation, onAccentChange, onClose }: ColorPic
           </label>
           <input
             type="range"
-            min={20}
-            max={100}
+            min={SATURATION_MIN}
+            max={SATURATION_MAX}
             value={localSat}
             onChange={(e) => setLocalSat(Number(e.target.value))}
             className="w-full h-2 rounded-full appearance-none cursor-pointer"
