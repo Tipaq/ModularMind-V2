@@ -2,30 +2,29 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { ThemeProvider, ErrorBoundary, RouteLoader } from "@modularmind/ui";
 
-import DashboardLayout from "./layouts/DashboardLayout";
-import Login from "./pages/Login";
+import { DashboardLayout } from "./layouts/DashboardLayout";
+import { Login } from "./pages/Login";
 
-// Lazy-loaded routes
-const Setup = lazy(() => import("./pages/Setup"));
-const Monitoring = lazy(() => import("./pages/Monitoring"));
-const Configuration = lazy(() => import("./pages/Configuration"));
-const Models = lazy(() => import("./pages/Models"));
-const ModelDetail = lazy(() => import("./pages/ModelDetail"));
-const Knowledge = lazy(() => import("./pages/Knowledge"));
-const CollectionDetail = lazy(() => import("./pages/CollectionDetail"));
-const Users = lazy(() => import("./pages/Users"));
-const UserDetail = lazy(() => import("./pages/UserDetail"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Profile = lazy(() => import("./pages/Profile"));
-const Tools = lazy(() => import("./pages/Tools"));
-const MiniApps = lazy(() => import("./pages/MiniApps"));
-const MiniAppDetail = lazy(() => import("./pages/MiniAppDetail"));
-const ScheduledTasks = lazy(() => import("./pages/ScheduledTasks"));
-const ScheduledTaskDetail = lazy(() => import("./pages/ScheduledTaskDetail"));
-const Graphs = lazy(() => import("./pages/Graphs"));
-const GraphDetail = lazy(() => import("./pages/GraphDetail"));
-const Agents = lazy(() => import("./pages/Agents"));
-const AgentDetail = lazy(() => import("./pages/AgentDetail"));
+const Setup = lazy(() => import("./pages/Setup").then((m) => ({ default: m.Setup })));
+const Monitoring = lazy(() => import("./pages/Monitoring").then((m) => ({ default: m.Monitoring })));
+const Configuration = lazy(() => import("./pages/Configuration").then((m) => ({ default: m.Configuration })));
+const Models = lazy(() => import("./pages/Models").then((m) => ({ default: m.Models })));
+const ModelDetail = lazy(() => import("./pages/ModelDetail").then((m) => ({ default: m.ModelDetail })));
+const Knowledge = lazy(() => import("./pages/Knowledge").then((m) => ({ default: m.Knowledge })));
+const CollectionDetail = lazy(() => import("./pages/CollectionDetail").then((m) => ({ default: m.CollectionDetail })));
+const Users = lazy(() => import("./pages/Users").then((m) => ({ default: m.Users })));
+const UserDetail = lazy(() => import("./pages/UserDetail").then((m) => ({ default: m.UserDetail })));
+const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
+const Profile = lazy(() => import("./pages/Profile").then((m) => ({ default: m.Profile })));
+const Tools = lazy(() => import("./pages/Tools").then((m) => ({ default: m.Tools })));
+const MiniApps = lazy(() => import("./pages/MiniApps").then((m) => ({ default: m.MiniApps })));
+const MiniAppDetail = lazy(() => import("./pages/MiniAppDetail").then((m) => ({ default: m.MiniAppDetail })));
+const ScheduledTasks = lazy(() => import("./pages/ScheduledTasks").then((m) => ({ default: m.ScheduledTasks })));
+const ScheduledTaskDetail = lazy(() => import("./pages/ScheduledTaskDetail").then((m) => ({ default: m.ScheduledTaskDetail })));
+const Graphs = lazy(() => import("./pages/Graphs").then((m) => ({ default: m.Graphs })));
+const GraphDetail = lazy(() => import("./pages/GraphDetail").then((m) => ({ default: m.GraphDetail })));
+const Agents = lazy(() => import("./pages/Agents").then((m) => ({ default: m.Agents })));
+const AgentDetail = lazy(() => import("./pages/AgentDetail").then((m) => ({ default: m.AgentDetail })));
 
 function SetupGuard({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<"loading" | "initialized" | "needs-setup">("loading");
@@ -53,7 +52,7 @@ function SetupGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-export default function App() {
+export function App() {
   return (
     <ErrorBoundary>
     <ThemeProvider defaultMode="system">

@@ -3,7 +3,7 @@ import { Sidebar } from "../components/Sidebar";
 import { useAuth } from "@modularmind/ui";
 import { api } from "../lib/api";
 
-export default function DashboardLayout() {
+export function DashboardLayout() {
   const { user, isLoading } = useAuth({ requireAuth: true, api });
 
   if (isLoading) {
