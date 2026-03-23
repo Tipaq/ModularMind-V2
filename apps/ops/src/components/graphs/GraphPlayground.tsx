@@ -84,9 +84,11 @@ export function GraphPlayground({
     isStreaming,
     error,
     activities,
+    pendingPrompt,
     sendMessage,
     setInitialMessages,
     cancelStream,
+    respondToPrompt,
   } = useChat(conversationId, chatAdapter);
 
   const onActivitiesChangeRef = useRef(onActivitiesChange);
@@ -181,6 +183,8 @@ export function GraphPlayground({
             messages={messages}
             isStreaming={isStreaming}
             activities={activities}
+            pendingPrompt={pendingPrompt}
+            onRespondToPrompt={respondToPrompt}
           />
         )}
       </div>

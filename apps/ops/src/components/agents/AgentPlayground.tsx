@@ -70,6 +70,8 @@ export function AgentPlayground({ agentId, agentName }: AgentPlaygroundProps) {
     sendMessage,
     setInitialMessages,
     cancelStream,
+    pendingPrompt,
+    respondToPrompt,
   } = useChat(conversationId, chatAdapter);
 
   const createConversation = useCallback(async () => {
@@ -139,6 +141,8 @@ export function AgentPlayground({ agentId, agentName }: AgentPlaygroundProps) {
             messages={messages}
             isStreaming={isStreaming}
             activities={activities}
+            pendingPrompt={pendingPrompt}
+            onRespondToPrompt={respondToPrompt}
           />
         )}
       </div>
