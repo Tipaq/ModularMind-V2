@@ -1,28 +1,14 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import {
-  MessageSquare,
-  FolderKanban,
-  AppWindow,
-  BookOpen,
-  CalendarClock,
-  KeyRound,
-} from "lucide-react";
+import { Bot } from "lucide-react";
 import { UserButton, useAuthStore } from "@modularmind/ui";
-import type { LucideIcon } from "lucide-react";
 
-interface NavItem {
-  label: string;
-  to: string;
-  icon: LucideIcon;
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { label: "Chat", to: "/chat", icon: MessageSquare },
-  { label: "Projects", to: "/projects", icon: FolderKanban },
-  { label: "Apps", to: "/apps", icon: AppWindow },
-  { label: "Knowledge", to: "/knowledge", icon: BookOpen },
-  { label: "Tasks", to: "/tasks", icon: CalendarClock },
-  { label: "Secrets", to: "/secrets", icon: KeyRound },
+const NAV_ITEMS = [
+  { label: "Chat", to: "/chat" },
+  { label: "Projects", to: "/projects" },
+  { label: "Apps", to: "/apps" },
+  { label: "Knowledge", to: "/knowledge" },
+  { label: "Tasks", to: "/tasks" },
+  { label: "Secrets", to: "/secrets" },
 ];
 
 export function TopNav() {
@@ -30,33 +16,45 @@ export function TopNav() {
   const { user, logout } = useAuthStore();
 
   return (
-    <header className="h-12 border-b border-border bg-background shrink-0 flex items-center px-4 gap-4">
-      <span className="text-sm font-semibold text-foreground shrink-0 select-none">
-        ModularMind
-      </span>
+    <header className="h-14 border-b border-border/50 bg-background shrink-0 flex items-stretch px-5">
+      <div className="flex items-center shrink-0">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/60 mr-2">
+          <Bot className="h-5 w-5 text-white" />
+        </div>
+        <span className="text-lg font-semibold text-foreground select-none">
+          ModularMind
+        </span>
+      </div>
 
-      <nav className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-1 min-w-0">
+      <nav className="flex items-stretch justify-center gap-5 flex-1">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
-              `flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors whitespace-nowrap ${
+              `relative flex items-center text-[13px] transition-colors ${
                 isActive
-                  ? "text-primary border-b-2 border-primary bg-primary/5"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
               }`
             }
           >
-            <item.icon className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">{item.label}</span>
+            {({ isActive }) => (
+              <>
+                {item.label}
+                {isActive && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-full" />
+                )}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
-      <div className="shrink-0">
+      <div className="flex items-center shrink-0">
         {user && (
           <UserButton
+            variant="icon"
             user={{ email: user.email, role: user.role }}
             onSignOut={() => {
               logout();

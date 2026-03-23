@@ -1,7 +1,6 @@
 import { memo } from "react";
 import type { Conversation } from "@modularmind/api-client";
-import { useNavigate } from "react-router-dom";
-import { ConversationSidebar, UserButton, useAuthStore } from "@modularmind/ui";
+import { ConversationSidebar } from "@modularmind/ui";
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -20,9 +19,6 @@ export const ChatSidebar = memo(function ChatSidebar({
   onDelete,
   onRename,
 }: ChatSidebarProps) {
-  const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
-
   return (
     <ConversationSidebar
       conversations={conversations}
@@ -31,18 +27,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       onCreate={onCreate}
       onDelete={onDelete}
       onRename={onRename}
-      footer={
-        user ? (
-          <UserButton
-            user={{ email: user.email, role: user.role }}
-            onSignOut={() => {
-              logout();
-              window.location.href = "/login";
-            }}
-            onNavigate={(path) => navigate(`/${path}`)}
-          />
-        ) : null
-      }
+      footer={null}
     />
   );
 });
