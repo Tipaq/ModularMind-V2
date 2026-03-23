@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Copy, Trash2, Bot, RefreshCw, Save, X, Edit } from "lucide-react";
-import { Badge, Button, Separator } from "@modularmind/ui";
+import { ArrowLeft, Copy, Trash2, Bot, RefreshCw, Save, X, Pencil } from "lucide-react";
+import { Badge, Button } from "@modularmind/ui";
 import type { AgentUpdateInput } from "@modularmind/api-client";
 import { useAgentsStore } from "../stores/agents";
 import { AgentOverviewSection } from "../components/agents/AgentOverviewSection";
@@ -64,27 +64,36 @@ export default function AgentDetail() {
   if (loading || !agent) {
     return (
       <div className="flex h-full items-center justify-center">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-[calc(100vh-48px)]">
-      <div className="border-b border-border px-5 py-4">
-        <div className="flex items-center justify-between">
+      <div className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
               to="/agents"
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               Agents
             </Link>
             <div className="h-4 w-px bg-border" />
-            <Bot className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-semibold">{agent.name}</h1>
-            <Badge variant="outline" className="font-mono text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Bot className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-base font-semibold leading-tight">{agent.name}</h1>
+                <p className="text-xs text-muted-foreground leading-tight">
+                  {agent.description || "No description"}
+                </p>
+              </div>
+            </div>
+            <Badge variant="outline" className="font-mono text-[10px] ml-1">
               v{agent.version}
             </Badge>
           </div>
@@ -92,38 +101,43 @@ export default function AgentDetail() {
             {isEditing ? (
               <>
                 <Button size="sm" variant="ghost" onClick={handleCancel} disabled={saving}>
-                  <X className="h-4 w-4 mr-1" /> Cancel
+                  <X className="h-4 w-4 mr-1.5" />
+                  Cancel
                 </Button>
                 <Button size="sm" onClick={handleSave} disabled={saving}>
-                  <Save className="h-4 w-4 mr-1" /> {saving ? "Saving..." : "Save"}
+                  <Save className="h-4 w-4 mr-1.5" />
+                  {saving ? "Saving..." : "Save changes"}
                 </Button>
               </>
             ) : (
-              <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
-                <Edit className="h-4 w-4 mr-1" /> Edit
-              </Button>
+              <>
+                <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                  <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                  Edit
+                </Button>
+                <Button size="sm" variant="ghost" onClick={handleDuplicate}>
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={handleDelete}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
             )}
-            <Button size="sm" variant="outline" onClick={handleDuplicate}>
-              <Copy className="h-4 w-4 mr-1" /> Duplicate
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive hover:text-destructive"
-              onClick={handleDelete}
-            >
-              <Trash2 className="h-4 w-4 mr-1" /> Delete
-            </Button>
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <AgentOverviewSection agent={agent} isEditing={isEditing} onChange={handleChange} />
-        <Separator />
-        <AgentPromptSection agent={agent} isEditing={isEditing} onChange={handleChange} />
-        <Separator />
-        <AgentToolsSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+        <div className="max-w-3xl mx-auto py-6 px-6 space-y-6">
+          <AgentOverviewSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+          <AgentPromptSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+          <AgentToolsSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+        </div>
       </div>
     </div>
   );

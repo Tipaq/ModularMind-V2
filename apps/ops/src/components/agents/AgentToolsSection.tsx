@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Wrench } from "lucide-react";
-import { Switch } from "@modularmind/ui";
+import { Badge, Switch } from "@modularmind/ui";
 import type {
   AgentDetail,
   AgentUpdateInput,
@@ -21,16 +21,8 @@ const TOOL_CATEGORIES: { key: string; label: string; description: string }[] = [
   { key: "shell", label: "Shell", description: "Execute shell commands in sandbox" },
   { key: "network", label: "Network", description: "Make HTTP requests to external APIs" },
   { key: "file_storage", label: "File Storage", description: "Upload and manage S3/MinIO files" },
-  {
-    key: "human_interaction",
-    label: "Human Interaction",
-    description: "Request input or approval from users",
-  },
-  {
-    key: "image_generation",
-    label: "Image Generation",
-    description: "Generate images via AI models",
-  },
+  { key: "human_interaction", label: "Human Interaction", description: "Request input or approval from users" },
+  { key: "image_generation", label: "Image Generation", description: "Generate images via AI models" },
   { key: "custom_tools", label: "Custom Tools", description: "User-defined MCP tool servers" },
   { key: "mini_apps", label: "Mini Apps", description: "Execute mini app workflows" },
   { key: "github", label: "GitHub", description: "Interact with GitHub repositories and issues" },
@@ -52,6 +44,15 @@ function getToolEnabled(
   if (categoryValue === undefined || categoryValue === false) return false;
   if (categoryValue === true) return true;
   return categoryValue[toolName] ?? true;
+}
+
+function getEnabledToolCount(
+  categoryValue: boolean | Record<string, boolean> | undefined,
+  totalTools: number,
+): number {
+  if (categoryValue === undefined || categoryValue === false) return 0;
+  if (categoryValue === true) return totalTools;
+  return Object.values(categoryValue).filter(Boolean).length;
 }
 
 export function AgentToolsSection({ agent, isEditing, onChange }: AgentToolsSectionProps) {
@@ -124,29 +125,35 @@ export function AgentToolsSection({ agent, isEditing, onChange }: AgentToolsSect
   const enabledCount = Object.values(currentCategories).filter(isCategoryEnabled).length;
 
   return (
-    <div className="p-5 space-y-5">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        <Wrench className="h-3.5 w-3.5" />
-        Tool Categories ({enabledCount} enabled)
+    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <Wrench className="h-3.5 w-3.5" />
+          Tools
+        </div>
+        <Badge variant="secondary" className="text-[10px] tabular-nums">
+          {enabledCount} / {TOOL_CATEGORIES.length}
+        </Badge>
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {TOOL_CATEGORIES.map((cat) => {
           const categoryValue = currentCategories[cat.key];
           const isEnabled = isCategoryEnabled(categoryValue);
           const categoryTools = toolsByCategory[cat.key] || [];
           const hasTools = categoryTools.length > 0;
           const isExpanded = expandedCategories.has(cat.key);
+          const enabledToolCount = getEnabledToolCount(categoryValue, categoryTools.length);
 
           return (
             <div key={cat.key}>
-              <div className="flex items-center justify-between py-2.5 px-3 rounded-md hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/40 transition-colors group">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   {hasTools ? (
                     <button
                       type="button"
                       onClick={() => toggleExpand(cat.key)}
-                      className="p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+                      className="p-0.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                       aria-label={isExpanded ? "Collapse" : "Expand"}
                     >
                       {isExpanded ? (
@@ -158,9 +165,13 @@ export function AgentToolsSection({ agent, isEditing, onChange }: AgentToolsSect
                   ) : (
                     <span className="w-[22px]" />
                   )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{cat.label}</p>
-                    <p className="text-xs text-muted-foreground">{cat.description}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium">{cat.label}</span>
+                    {isEnabled && hasTools && (
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        {enabledToolCount}/{categoryTools.length}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <Switch
@@ -170,18 +181,20 @@ export function AgentToolsSection({ agent, isEditing, onChange }: AgentToolsSect
                 />
               </div>
 
-              {isExpanded && hasTools && isEnabled && (
-                <div className="ml-9 border-l border-border pl-3 py-1 space-y-0.5">
-                  {categoryTools.map((tool) => {
-                    const toolEnabled = getToolEnabled(categoryValue, tool.name);
+              {isExpanded && hasTools && (
+                <div className="ml-8 mb-1 rounded-lg bg-muted/20 border border-border/50 overflow-hidden">
+                  {categoryTools.map((tool, index) => {
+                    const toolEnabled = isEnabled && getToolEnabled(categoryValue, tool.name);
                     return (
                       <div
                         key={tool.name}
-                        className="flex items-center justify-between py-1.5 px-3 rounded-md hover:bg-muted/30 transition-colors"
+                        className={`flex items-center justify-between py-2 px-3.5 hover:bg-muted/30 transition-colors ${
+                          index < categoryTools.length - 1 ? "border-b border-border/30" : ""
+                        } ${!isEnabled ? "opacity-50" : ""}`}
                       >
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium font-mono">{tool.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">
+                        <div className="min-w-0 mr-3">
+                          <p className="text-xs font-medium font-mono text-foreground/80">{tool.name}</p>
+                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                             {tool.description}
                           </p>
                         </div>
@@ -190,7 +203,7 @@ export function AgentToolsSection({ agent, isEditing, onChange }: AgentToolsSect
                           onCheckedChange={(checked) =>
                             handleToolToggle(cat.key, tool.name, checked)
                           }
-                          disabled={!isEditing}
+                          disabled={!isEditing || !isEnabled}
                         />
                       </div>
                     );
