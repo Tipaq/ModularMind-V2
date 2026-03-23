@@ -21,7 +21,7 @@ MAX_SEARCH_RESULTS = 10
 MAX_DESCRIPTION_CHARS = 200
 
 # Virtual category names that are not in the extended tool registry
-VIRTUAL_CATEGORIES = {"mcp", "gateway", "builtin"}
+VIRTUAL_CATEGORIES = {"mcp", "builtin"}
 
 ALL_CATEGORY_NAMES = [
     "knowledge",
@@ -32,11 +32,12 @@ ALL_CATEGORY_NAMES = [
     "github",
     "git",
     "filesystem",
+    "shell",
+    "network",
     "human_interaction",
     "custom_tools",
     "mini_apps",
     "mcp",
-    "gateway",
     "builtin",
 ]
 
@@ -67,8 +68,8 @@ def get_discovery_tool_definitions() -> list[dict[str, Any]]:
                             "description": (
                                 "Filter by category: knowledge, scheduling, web, "
                                 "file_storage, image_generation, github, git, "
-                                "filesystem, human_interaction, custom_tools, "
-                                "mcp, gateway, builtin."
+                                "filesystem, shell, network, human_interaction, "
+                                "custom_tools, mcp, builtin."
                             ),
                         },
                     },
@@ -211,14 +212,6 @@ class ToolDiscoveryExecutor:
         ):
             collected.append(("mcp", self._mcp_tool_defs))
 
-        # Gateway tools (virtual category)
-        if (
-            self._is_category_allowed("gateway")
-            and self._gateway_tool_defs
-            and (not category_filter or category_filter == "gateway")
-        ):
-            collected.append(("gateway", self._gateway_tool_defs))
-
         # Builtin tools (virtual category)
         if (
             self._is_category_allowed("builtin")
@@ -258,7 +251,9 @@ class ToolDiscoveryExecutor:
         if name in self._builtin_names and self._builtin_fn:
             return await self._builtin_fn(name, args)
 
-        if name.startswith("gateway__") and self._gateway:
+        from src.gateway.executor import GATEWAY_ROUTED_TOOLS
+
+        if name in GATEWAY_ROUTED_TOOLS and self._gateway:
             return await self._gateway.execute(name, args)
 
         if self._extended and self._extended.handles(name):

@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_TOOL_CATEGORIES: dict[str, bool] = {
     "knowledge": True,
     "filesystem": False,
+    "shell": False,
+    "network": False,
     "file_storage": False,
     "human_interaction": True,
     "image_generation": False,
@@ -42,12 +44,16 @@ def get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
     )
     from src.tools.categories.knowledge import get_knowledge_tool_definitions
     from src.tools.categories.mini_apps import get_mini_app_tool_definitions
+    from src.tools.categories.network import get_network_tool_definitions
     from src.tools.categories.scheduling import get_scheduling_tool_definitions
+    from src.tools.categories.shell import get_shell_tool_definitions
     from src.tools.categories.web import get_web_tool_definitions
 
     return {
         "knowledge": get_knowledge_tool_definitions,
         "filesystem": get_filesystem_tool_definitions,
+        "shell": get_shell_tool_definitions,
+        "network": get_network_tool_definitions,
         "file_storage": get_file_storage_tool_definitions,
         "human_interaction": get_human_interaction_tool_definitions,
         "image_generation": get_image_generation_tool_definitions,
@@ -60,11 +66,16 @@ def get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
     }
 
 
-def resolve_tool_definitions(tool_categories: dict[str, bool]) -> list[dict[str, Any]]:
+def resolve_tool_definitions(
+    tool_categories: dict[str, bool | dict[str, bool]],
+) -> list[dict[str, Any]]:
     """Return tool definitions for all enabled categories.
 
     Args:
-        tool_categories: Map of category name to enabled flag.
+        tool_categories: Map of category name to enabled flag or per-tool overrides.
+            - ``True``: all tools in category enabled.
+            - ``False``: category disabled.
+            - ``dict[str, bool]``: per-tool overrides (category considered enabled).
 
     Returns:
         Combined list of OpenAI-compatible tool definitions.
@@ -73,13 +84,18 @@ def resolve_tool_definitions(tool_categories: dict[str, bool]) -> list[dict[str,
     tools: list[dict[str, Any]] = []
 
     for category, enabled in tool_categories.items():
-        if not enabled:
+        if enabled is False:
             continue
         definition_fn = registry.get(category)
         if not definition_fn:
             logger.warning("Unknown tool category: %s", category)
             continue
         category_tools = definition_fn()
+        if isinstance(enabled, dict):
+            category_tools = [
+                t for t in category_tools
+                if enabled.get(t["function"]["name"], True)
+            ]
         tools.extend(category_tools)
         logger.debug("Category '%s': %d tools", category, len(category_tools))
 

@@ -54,9 +54,13 @@ CATEGORY_META: dict[str, dict[str, str]] = {
         "label": "Git",
         "description": "Clone, commit, push, pull, and manage local repositories",
     },
-    "gateway": {
-        "label": "Gateway",
-        "description": "System access: shell, browser, network",
+    "shell": {
+        "label": "Shell",
+        "description": "Execute shell commands in sandbox",
+    },
+    "network": {
+        "label": "Network",
+        "description": "Make HTTP requests to external APIs",
     },
 }
 
@@ -102,18 +106,6 @@ def _collect_extended_tools() -> dict[str, list[ToolDefinitionResponse]]:
     return by_category
 
 
-def _collect_gateway_tools() -> list[ToolDefinitionResponse]:
-    from src.gateway.tool_definitions import get_gateway_tool_definitions
-
-    all_enabled_permissions = {
-        "shell": {"enabled": True},
-        "browser": {"enabled": True},
-        "network": {"enabled": True},
-    }
-    raw = get_gateway_tool_definitions(all_enabled_permissions)
-    return _extract_tool_defs(raw, "gateway", "gateway")
-
-
 async def _collect_mcp_tools() -> dict[str, list[ToolDefinitionResponse]]:
     from src.mcp.service import get_mcp_registry
 
@@ -148,7 +140,6 @@ async def _collect_mcp_tools() -> dict[str, list[ToolDefinitionResponse]]:
 async def list_tools() -> ToolsOverviewResponse:
     builtin = _collect_builtin_tools()
     extended = _collect_extended_tools()
-    gateway = _collect_gateway_tools()
 
     try:
         mcp_by_server = await _collect_mcp_tools()
@@ -160,7 +151,6 @@ async def list_tools() -> ToolsOverviewResponse:
     all_tools.extend(builtin)
     for tools in extended.values():
         all_tools.extend(tools)
-    all_tools.extend(gateway)
     for tools in mcp_by_server.values():
         all_tools.extend(tools)
 
@@ -187,16 +177,6 @@ async def list_tools() -> ToolsOverviewResponse:
                 enabled_by_default=DEFAULT_TOOL_CATEGORIES[cat_id],
             )
         )
-
-    categories.append(
-        ToolCategoryResponse(
-            id="gateway",
-            label=CATEGORY_META["gateway"]["label"],
-            description=CATEGORY_META["gateway"]["description"],
-            tool_count=len(gateway),
-            enabled_by_default=False,
-        )
-    )
 
     mcp_tool_count = sum(len(t) for t in mcp_by_server.values())
     if mcp_tool_count > 0:
