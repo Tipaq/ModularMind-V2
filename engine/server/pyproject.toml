@@ -79,6 +79,10 @@ ignore = ["E402"]  # late imports used to avoid circular dependencies
 "src/gateway/tool_definitions.py" = ["E501"]  # tool description strings
 "src/graph_engine/builtin_tools.py" = ["E501"]  # tool description strings
 
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
