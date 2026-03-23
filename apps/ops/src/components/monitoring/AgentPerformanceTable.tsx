@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { cn } from "@modularmind/ui";
 import type { AgentMetrics } from "@modularmind/api-client";
 import { thresholdColor, thresholdBarColor } from "../../lib/monitoringUtils";
-import { formatTokensShort, formatDurationMs } from "./ExecutionTable";
+import { formatTokensShort, formatDurationMs } from "../../lib/formatters";
 
 export function AgentPerformanceTable({ agents }: { agents: AgentMetrics[] }) {
   const sorted = useMemo(
