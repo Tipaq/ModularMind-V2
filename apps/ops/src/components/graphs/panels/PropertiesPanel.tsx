@@ -17,7 +17,7 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
-  stripProvider,
+  formatModelName,
   isLocalModel,
   formatDurationMs,
 } from "@modularmind/ui";
@@ -207,7 +207,7 @@ export function PropertiesPanel({
                   <div className="space-y-0.5">
                     <PropRow label="Model">
                       <span className="text-xs font-medium">
-                        {stripProvider(agentDetail.model_id)}
+                        {formatModelName(agentDetail.model_id)}
                       </span>
                     </PropRow>
                     <PropRow label="Type">
@@ -483,7 +483,7 @@ export function PropertiesPanel({
               {nodeActivity.model && (
                 <PropRow label="Model">
                   <span className="text-xs font-mono">
-                    {stripProvider(nodeActivity.model)}
+                    {formatModelName(nodeActivity.model)}
                   </span>
                 </PropRow>
               )}

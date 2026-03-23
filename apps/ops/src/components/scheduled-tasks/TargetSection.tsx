@@ -5,6 +5,7 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
+  formatModelName,
 } from "@modularmind/ui";
 import type { Agent, GraphListItem, TargetType } from "@modularmind/api-client";
 
@@ -67,7 +68,7 @@ function AgentPicker({
           <SelectItem key={agent.id} value={agent.id}>
             <div className="flex flex-col">
               <span>{agent.name}</span>
-              <span className="text-xs text-muted-foreground">{agent.model_id}</span>
+              <span className="text-xs text-muted-foreground">{formatModelName(agent.model_id)}</span>
             </div>
           </SelectItem>
         ))}
