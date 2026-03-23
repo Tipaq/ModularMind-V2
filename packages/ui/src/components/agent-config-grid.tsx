@@ -25,39 +25,25 @@ export function AgentConfigGrid({
   const s = SIZE_CLASSES[size];
 
   return (
-    <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
-      <div className="grid grid-cols-3 gap-3">
-        <ConfigCell
-          label="Model"
-          icon={Cpu}
-          sizeClasses={s}
+    <div className="grid grid-cols-3 gap-3">
+      <ConfigCell label="Model" icon={Cpu} sizeClasses={s}>
+        <span className={cn(s.value, "font-medium truncate")}>
+          {formatModelName(modelId)}
+        </span>
+      </ConfigCell>
+      <ConfigCell label="Timeout" icon={Clock} sizeClasses={s}>
+        <span className={s.value}>
+          {timeoutSeconds > 0 ? `${timeoutSeconds}s` : "None"}
+        </span>
+      </ConfigCell>
+      <ConfigCell label="Memory" icon={Brain} sizeClasses={s}>
+        <Badge
+          variant={memoryEnabled ? "default" : "secondary"}
+          className={cn(size === "sm" ? "text-[9px] py-0 px-1" : "text-[10px]")}
         >
-          <span className={cn(s.value, "font-medium truncate")}>
-            {formatModelName(modelId)}
-          </span>
-        </ConfigCell>
-        <ConfigCell
-          label="Timeout"
-          icon={Clock}
-          sizeClasses={s}
-        >
-          <span className={s.value}>
-            {timeoutSeconds > 0 ? `${timeoutSeconds}s` : "None"}
-          </span>
-        </ConfigCell>
-        <ConfigCell
-          label="Memory"
-          icon={Brain}
-          sizeClasses={s}
-        >
-          <Badge
-            variant={memoryEnabled ? "default" : "secondary"}
-            className={cn(size === "sm" ? "text-[9px] py-0 px-1" : "text-[10px]")}
-          >
-            {memoryEnabled ? (size === "sm" ? "On" : "Enabled") : (size === "sm" ? "Off" : "Disabled")}
-          </Badge>
-        </ConfigCell>
-      </div>
+          {memoryEnabled ? (size === "sm" ? "On" : "Enabled") : (size === "sm" ? "Off" : "Disabled")}
+        </Badge>
+      </ConfigCell>
     </div>
   );
 }
@@ -74,14 +60,14 @@ function ConfigCell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-0.5">
-      <p className={cn(sizeClasses.label, "font-medium text-muted-foreground uppercase tracking-wider")}>
-        {label}
-      </p>
+    <div className="flex flex-col items-center gap-1">
       <div className={cn("flex items-center", sizeClasses.gap)}>
         <Icon className={cn(sizeClasses.icon, "text-muted-foreground shrink-0")} />
-        {children}
+        <p className={cn(sizeClasses.label, "font-medium text-muted-foreground uppercase tracking-wider")}>
+          {label}
+        </p>
       </div>
+      {children}
     </div>
   );
 }
