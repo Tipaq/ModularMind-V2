@@ -273,7 +273,7 @@ async def _run_shell(tool: Any, tool_args: dict, gateway_executor: Any | None) -
     for key, value in tool_args.items():
         command = command.replace(f"{{{key}}}", str(value))
 
-    return await gateway_executor.execute("gateway__shell_exec", {"command": command})
+    return await gateway_executor.execute("shell_exec", {"command": command})
 
 
 async def _run_http(tool: Any, tool_args: dict) -> str:
@@ -323,7 +323,7 @@ async def _run_python(tool: Any, tool_args: dict, gateway_executor: Any | None) 
 
     encoded = base64.b64encode(wrapper.encode()).decode()
     command = f"echo {encoded} | base64 -d | python3"
-    return await gateway_executor.execute("gateway__shell_exec", {"command": command})
+    return await gateway_executor.execute("shell_exec", {"command": command})
 
 
 async def _update(args: dict, agent_id: str, session: AsyncSession) -> str:

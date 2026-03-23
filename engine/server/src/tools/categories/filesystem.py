@@ -1,7 +1,6 @@
-"""Filesystem tools — unified file operations delegated to Gateway.
+"""Filesystem tools — file operations delegated to Gateway.
 
-Replaces the separate filesystem + code_search gateway categories with a
-single, enriched tool set. Operations are split into two security groups:
+Operations are split into two security groups:
 
 - **safe** (read, list, search, metadata): can run via direct subprocess
 - **critical** (write, edit, delete, move, mkdir): routed through Docker sandbox
@@ -28,7 +27,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_read",
+                "name": "fs_read",
                 "description": (
                     "Read a text file from the workspace. "
                     "Supports head/tail to read only the first or last N lines."
@@ -56,7 +55,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_read_media",
+                "name": "fs_read_media",
                 "description": (
                     "Read a binary file (image, audio, etc.) and return it "
                     "as base64-encoded content with its MIME type."
@@ -76,7 +75,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_read_multiple",
+                "name": "fs_read_multiple",
                 "description": (
                     "Read multiple text files in one call. "
                     "Returns content for each file; individual failures are non-fatal."
@@ -97,7 +96,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_list",
+                "name": "fs_list",
                 "description": (
                     "List files and directories in a workspace directory. "
                     "Returns names, sizes, and types."
@@ -121,7 +120,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_list_with_sizes",
+                "name": "fs_list_with_sizes",
                 "description": (
                     "List files with sizes and sort options. "
                     "Useful for finding large files or recent changes."
@@ -146,7 +145,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_tree",
+                "name": "fs_tree",
                 "description": (
                     "Display the directory tree structure recursively. "
                     "Returns an indented tree view of files and directories."
@@ -178,7 +177,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_info",
+                "name": "fs_info",
                 "description": (
                     "Get file metadata: size, timestamps, permissions, and type."
                 ),
@@ -197,7 +196,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_search",
+                "name": "fs_search",
                 "description": (
                     "Search file contents using regex patterns. "
                     "Returns matching lines with file paths, line numbers, and context."
@@ -242,7 +241,7 @@ def _critical_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_write",
+                "name": "fs_write",
                 "description": (
                     "Write content to a file. Creates parent directories if needed. "
                     "Overwrites existing files."
@@ -266,7 +265,7 @@ def _critical_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_edit",
+                "name": "fs_edit",
                 "description": (
                     "Apply multiple text replacements to a file atomically. "
                     "All edits are validated before writing. Supports dry-run mode."
@@ -308,7 +307,7 @@ def _critical_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_delete",
+                "name": "fs_delete",
                 "description": "Delete a file from the workspace.",
                 "parameters": {
                     "type": "object",
@@ -325,7 +324,7 @@ def _critical_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_move",
+                "name": "fs_move",
                 "description": "Move or rename a file or directory.",
                 "parameters": {
                     "type": "object",
@@ -346,7 +345,7 @@ def _critical_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "gateway__fs_mkdir",
+                "name": "fs_mkdir",
                 "description": "Create a directory (with parent directories if needed).",
                 "parameters": {
                     "type": "object",
