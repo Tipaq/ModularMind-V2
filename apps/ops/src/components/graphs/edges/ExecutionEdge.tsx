@@ -59,4 +59,4 @@ function ExecutionEdgeComponent({
   );
 }
 
-export default memo(ExecutionEdgeComponent);
+export const ExecutionEdge = memo(ExecutionEdgeComponent);

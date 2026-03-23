@@ -12,8 +12,8 @@ import {
   type EdgeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import GraphNodeComponent from "./nodes/GraphNode";
-import ExecutionEdge from "./edges/ExecutionEdge";
+import { GraphNode as GraphNodeComponent } from "./nodes/GraphNode";
+import { ExecutionEdge } from "./edges/ExecutionEdge";
 import { GraphToolbar } from "./GraphToolbar";
 import { PropertiesPanel } from "./panels/PropertiesPanel";
 import type { NodeType } from "./nodes/nodeConfig";

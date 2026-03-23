@@ -89,4 +89,4 @@ function GraphNodeComponent({ data, selected }: GraphNodeProps) {
   );
 }
 
-export default memo(GraphNodeComponent);
+export const GraphNode = memo(GraphNodeComponent);
