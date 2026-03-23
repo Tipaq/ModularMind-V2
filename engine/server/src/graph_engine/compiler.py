@@ -502,6 +502,7 @@ class GraphCompiler:
                     executor_deps = ToolExecutorDeps(
                         gateway_executor=gateway_executor,
                         publish_fn=_extract_tool_publish_fn(config),
+                        execution_id=_exec_id,
                     )
                     extended_executor = ExtendedToolExecutor(
                         session_maker=async_session_maker,
@@ -831,6 +832,7 @@ class GraphCompiler:
                 executor_deps = ToolExecutorDeps(
                     gateway_executor=gateway_executor,
                     publish_fn=_extract_tool_publish_fn(config),
+                    execution_id=_exec_id,
                 )
                 extended_executor = ExtendedToolExecutor(
                     session_maker=async_session_maker,

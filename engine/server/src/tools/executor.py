@@ -26,6 +26,7 @@ class ToolExecutorDeps:
     object_store: ObjectStore | None = None
     gateway_executor: GatewayToolExecutor | None = None
     publish_fn: Callable[[dict[str, Any]], Awaitable[None]] | None = None
+    execution_id: str | None = None
 
 
 # Prefixes for routing tool calls to the correct handler
@@ -65,6 +66,7 @@ class ExtendedToolExecutor:
         self._object_store = resolved_deps.object_store
         self._gateway_executor = resolved_deps.gateway_executor
         self._publish_fn = resolved_deps.publish_fn
+        self._execution_id = resolved_deps.execution_id
 
     def handles(self, name: str) -> bool:
         """Check if this executor handles a tool name."""
@@ -134,6 +136,7 @@ class ExtendedToolExecutor:
             name,
             args,
             publish_fn=self._publish_fn,
+            execution_id=self._execution_id,
         )
 
     async def _handle_image_generation(self, name: str, args: dict[str, Any]) -> str:

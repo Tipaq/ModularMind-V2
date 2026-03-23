@@ -181,11 +181,15 @@ async def run_tool_loop(
                 _truncate(json.dumps(tool_args, default=str), 100),
             )
             start = time.perf_counter()
+            is_human_tool = tool_name.startswith("human_prompt")
             try:
-                result_text = await asyncio.wait_for(
-                    tool_executor.execute(tool_name, tool_args),
-                    timeout=loop_config.tool_call_timeout,
-                )
+                if is_human_tool:
+                    result_text = await tool_executor.execute(tool_name, tool_args)
+                else:
+                    result_text = await asyncio.wait_for(
+                        tool_executor.execute(tool_name, tool_args),
+                        timeout=loop_config.tool_call_timeout,
+                    )
             except TimeoutError:
                 timeout = loop_config.tool_call_timeout
                 logger.warning("Tool '%s' timed out after %.1fs", tool_name, timeout)

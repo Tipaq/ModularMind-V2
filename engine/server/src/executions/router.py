@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable
 
 import sqlalchemy.exc
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -572,6 +573,34 @@ async def reject_execution(
         )
         execution = result.scalar_one_or_none()
         return ExecutionResponse.model_validate(execution)
+    finally:
+        await redis_client.aclose()
+
+
+# ---------------------------------------------------------------------------
+# Human prompt response endpoint
+# ---------------------------------------------------------------------------
+
+
+class HumanPromptResponse(BaseModel):
+    prompt_id: str
+    response: str
+
+
+@router.post("/{execution_id}/respond")
+async def respond_to_prompt(
+    execution_id: str,
+    body: HumanPromptResponse,
+    user: CurrentUser,
+) -> dict[str, str]:
+    """Respond to a human_prompt tool call."""
+    from src.infra.redis import get_redis_client
+
+    redis_client = await get_redis_client()
+    try:
+        redis_key = f"human_response:{execution_id}:{body.prompt_id}"
+        await redis_client.set(redis_key, body.response, ex=600)
+        return {"status": "ok"}
     finally:
         await redis_client.aclose()
 
