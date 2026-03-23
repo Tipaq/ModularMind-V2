@@ -255,52 +255,48 @@ export function GraphCanvas({
 
   return (
     <div
-      className="flex flex-col h-full"
+      className="flex h-full"
       ref={containerRef}
       data-graph-canvas
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      <GraphToolbar
-        onAddNode={handleAddNode}
-        onDeleteSelected={handleDeleteSelected}
-        hasSelection={!!selectedNode}
-        nodeCount={nodes.length}
-        isEditMode={isEditMode}
-      />
+      <div className="relative flex-1 min-w-0">
+        <GraphToolbar
+          onAddNode={handleAddNode}
+          onDeleteSelected={handleDeleteSelected}
+          hasSelection={!!selectedNode}
+          isEditMode={isEditMode}
+        />
+        <ReactFlow
+          nodes={augmentedNodes}
+          edges={augmentedEdges}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={isEditMode ? onEdgesChange : undefined}
+          onConnect={onConnect}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          snapToGrid
+          snapGrid={[15, 15]}
+          fitView
+          deleteKeyCode={null}
+          nodesDraggable={isEditMode}
+          nodesConnectable={isEditMode}
+          elementsSelectable
+          proOptions={{ hideAttribution: true }}
+        />
+      </div>
 
-      <div className="flex flex-1 min-h-0">
-        <div className="flex-1">
-          <ReactFlow
-            nodes={augmentedNodes}
-            edges={augmentedEdges}
-            onNodesChange={handleNodesChange}
-            onEdgesChange={isEditMode ? onEdgesChange : undefined}
-            onConnect={onConnect}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            snapToGrid
-            snapGrid={[15, 15]}
-            fitView
-            deleteKeyCode={null}
-            nodesDraggable={isEditMode}
-            nodesConnectable={isEditMode}
-            elementsSelectable
-            proOptions={{ hideAttribution: true }}
+      {selectedNode && (
+        <div className="w-[280px] shrink-0 border-l border-border overflow-y-auto">
+          <PropertiesPanel
+            node={selectedNode}
+            onUpdateNode={handleUpdateNode}
+            isEditMode={isEditMode}
+            executionActivities={executionActivities}
           />
         </div>
-
-        {selectedNode && (
-          <div className="w-[280px] shrink-0 border-l border-border overflow-y-auto">
-            <PropertiesPanel
-              node={selectedNode}
-              onUpdateNode={handleUpdateNode}
-              isEditMode={isEditMode}
-              executionActivities={executionActivities}
-            />
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
