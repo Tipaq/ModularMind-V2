@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../components/chat-messages";
 import type { ApprovalRequest } from "../components/approval-card";
+import type { HumanPromptRequest } from "../components/prompt-card";
 import type { KnowledgeData, TokenUsage, ContextData } from "../types/chat";
 import type { ChatAdapter } from "./chat-adapter";
 import { useExecutionActivities } from "./useExecutionActivities";
@@ -17,6 +18,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null);
   const [approvalDecision, setApprovalDecision] = useState<"approved" | "rejected" | null>(null);
+  const [pendingPrompt, setPendingPrompt] = useState<HumanPromptRequest | null>(null);
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef("");
@@ -50,7 +52,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
     currentExecutionIdRef, currentKnowledgeRef, currentTokenUsageRef, currentContextDataRef,
   }, {
     setMessages, setIsStreaming, setError, setStreamingMsgId, setSelectedMessageId,
-    setExecutionDataMap, setPendingApproval, setApprovalDecision,
+    setExecutionDataMap, setPendingApproval, setApprovalDecision, setPendingPrompt,
     handleTraceEvent, resetActivities, finalizeActivities,
   });
 
@@ -151,6 +153,11 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
     setPendingApproval(null);
   }, [adapter]);
 
+  const respondToPrompt = useCallback(async (executionId: string, promptId: string, response: string) => {
+    await adapter.respondToPrompt(executionId, promptId, response);
+    setPendingPrompt(null);
+  }, [adapter]);
+
   const editMessage = useCallback(async (messageId: string, newContent: string) => {
     if (isStreaming || !conversationId) return;
     const msgIdx = messages.findIndex((m) => m.id === messageId);
@@ -180,7 +187,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
   return {
     messages, isStreaming, error, activities, executionDataMap,
     selectedMessageId, setSelectedMessageId, streamingMessageId,
-    pendingApproval, approvalDecision, sendMessage, setInitialMessages,
-    cancelStream, approveExecution, rejectExecution, regenerateLastMessage, editMessage,
+    pendingApproval, approvalDecision, pendingPrompt, sendMessage, setInitialMessages,
+    cancelStream, approveExecution, rejectExecution, respondToPrompt, regenerateLastMessage, editMessage,
   };
 }

@@ -29,6 +29,7 @@ export interface StreamCallbacks {
   setExecutionDataMap: React.Dispatch<React.SetStateAction<Record<string, MessageExecutionData>>>;
   setPendingApproval: React.Dispatch<React.SetStateAction<import("../components/approval-card").ApprovalRequest | null>>;
   setApprovalDecision: React.Dispatch<React.SetStateAction<"approved" | "rejected" | null>>;
+  setPendingPrompt: React.Dispatch<React.SetStateAction<import("../components/prompt-card").HumanPromptRequest | null>>;
   handleTraceEvent: (data: Record<string, unknown>) => void;
   resetActivities: () => void;
   finalizeActivities: () => void;
@@ -46,7 +47,7 @@ export function useStreamManagement(
 
   const {
     setMessages, setIsStreaming, setError, setStreamingMsgId, setSelectedMessageId,
-    setExecutionDataMap, setPendingApproval, setApprovalDecision,
+    setExecutionDataMap, setPendingApproval, setApprovalDecision, setPendingPrompt,
     handleTraceEvent, finalizeActivities,
   } = callbacks;
 
@@ -98,6 +99,17 @@ export function useStreamManagement(
           const data = JSON.parse(e.data);
           const eventType: string = data.type || "";
           handleTraceEvent(data);
+
+          if (eventType === "human_prompt") {
+            setPendingPrompt({
+              executionId: currentExecutionIdRef.current,
+              promptId: data.prompt_id || "",
+              promptType: data.prompt_type || "confirm",
+              question: data.question || "",
+              options: data.options || [],
+            });
+            return;
+          }
 
           if (eventType === "step" && data.event === "approval_required") {
             setPendingApproval({

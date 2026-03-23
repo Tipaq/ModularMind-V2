@@ -105,6 +105,8 @@ export { ExecutionActivityList } from "./components/execution-activity";
 export type { ExecutionActivityListProps } from "./components/execution-activity";
 export { ApprovalCard } from "./components/approval-card";
 export type { ApprovalCardProps, ApprovalRequest } from "./components/approval-card";
+export { PromptCard } from "./components/prompt-card";
+export type { PromptCardProps, HumanPromptRequest } from "./components/prompt-card";
 export { ChatPanel } from "./components/chat-panel";
 export type { ChatPanelProps, ChatPanelTab } from "./components/chat-panel";
 export { ChatInput } from "./components/chat-input";

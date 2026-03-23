@@ -8,6 +8,7 @@ import type { DetectedArtifact } from "../types/artifact";
 import { ExecutionActivityList } from "./execution-activity";
 import { AttachmentChip, type AttachmentChipData } from "./attachment-chip";
 import { ApprovalCard, type ApprovalRequest } from "./approval-card";
+import { PromptCard, type HumanPromptRequest } from "./prompt-card";
 import { ChatEmptyState } from "./chat-empty-state";
 import { CopyButton } from "./copy-button";
 import { MarkdownRenderer } from "./markdown-renderer";
@@ -318,6 +319,8 @@ export interface ChatMessagesProps {
   onSuggestionClick?: (prompt: string) => void;
   /** Pending approval request from a graph approval gate. */
   pendingApproval?: ApprovalRequest | null;
+  pendingPrompt?: HumanPromptRequest | null;
+  onRespondToPrompt?: (executionId: string, promptId: string, response: string) => Promise<void>;
   /** Decision already made for the current approval. */
   approvalDecision?: "approved" | "rejected" | null;
   /** Callback to approve the execution. */
@@ -341,9 +344,11 @@ export const ChatMessages = memo(function ChatMessages({
   suggestedPrompts,
   onSuggestionClick,
   pendingApproval,
+  pendingPrompt,
   approvalDecision,
   onApprove,
   onReject,
+  onRespondToPrompt,
   onRegenerate,
   onEditMessage,
   onArtifactDetected,
@@ -423,6 +428,14 @@ export const ChatMessages = memo(function ChatMessages({
                       onApprove={onApprove}
                       onReject={onReject}
                       decision={approvalDecision}
+                    />
+                  </div>
+                )}
+                {pendingPrompt && onRespondToPrompt && (
+                  <div className="mt-4 max-w-2xl">
+                    <PromptCard
+                      prompt={pendingPrompt}
+                      onRespond={onRespondToPrompt}
                     />
                   </div>
                 )}
