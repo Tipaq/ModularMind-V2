@@ -6,6 +6,10 @@
 @source "../../../packages/ui/src";
 
 @theme {
+  /* Typography */
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
   /* Surfaces */
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
