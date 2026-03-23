@@ -201,10 +201,12 @@ function CreateAgentDialog({ isOpen, onOpenChange, onCreated }: CreateAgentDialo
               </Badge>
             }
           >
-            <ToolCategoryPicker
-              categories={form.toolCategories}
-              onChange={handleToolCategoriesChange}
-            />
+            <div className="max-h-[240px] overflow-y-auto -mx-1 px-1">
+              <ToolCategoryPicker
+                categories={form.toolCategories}
+                onChange={handleToolCategoriesChange}
+              />
+            </div>
           </SectionCard>
 
           <DialogFooter>
