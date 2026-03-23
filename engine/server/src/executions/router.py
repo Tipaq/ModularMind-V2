@@ -11,8 +11,8 @@ from collections.abc import Awaitable, Callable
 
 import sqlalchemy.exc
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -504,8 +504,8 @@ async def approve_execution(
 
     redis_client = await get_redis_client()
     try:
-        # Signal the approval node polling loop via Redis
-        await redis_client.set(f"approval_decision:{execution_id}", "approved")
+        # Signal the approval node polling loop via Redis (TTL as safety net)
+        await redis_client.set(f"approval_decision:{execution_id}", "approved", ex=300)
 
         approval_svc = ApprovalService(db, redis_client)
         success = await approval_svc.approve(
@@ -550,8 +550,8 @@ async def reject_execution(
 
     redis_client = await get_redis_client()
     try:
-        # Signal the approval node polling loop via Redis
-        await redis_client.set(f"approval_decision:{execution_id}", "rejected")
+        # Signal the approval node polling loop via Redis (TTL as safety net)
+        await redis_client.set(f"approval_decision:{execution_id}", "rejected", ex=300)
 
         approval_svc = ApprovalService(db, redis_client)
         success = await approval_svc.reject(

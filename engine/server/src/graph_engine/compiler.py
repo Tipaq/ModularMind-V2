@@ -22,7 +22,7 @@ from src.graph_engine.state import GraphState
 # A compiled node function: async (GraphState) -> dict
 NodeFn = Callable[[GraphState], Awaitable[dict[str, Any]]]
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -779,10 +779,7 @@ class GraphCompiler:
             _graph_tool_cats = getattr(agent, "tool_categories", {}) if agent else {}
             extended_executor = None
             if _graph_tool_cats and any(_graph_tool_cats.values()):
-                from src.tools.registry import (
-                    resolve_registered_custom_tools,
-                    resolve_tool_definitions,
-                )
+                from src.tools.registry import resolve_tool_definitions
 
                 extended_defs = resolve_tool_definitions(_graph_tool_cats)
                 if extended_defs:
@@ -1228,7 +1225,10 @@ class GraphCompiler:
             import asyncio as _asyncio
             import json as _json
 
+            from src.infra.config import get_settings as _get_approval_settings
             from src.infra.redis import get_redis_client as _get_redis
+
+            settings = _get_approval_settings()
 
             # Use Redis for the entire approval flow to avoid asyncpg session
             # conflicts (the worker's DB session is tied to the outer generator).
@@ -1251,9 +1251,10 @@ class GraphCompiler:
                 # The approve/reject API endpoints will SET this Redis key.
 
                 decision_key = f"approval_decision:{exec_id}"
-                await r.set(decision_key, "pending")
+                approval_ttl = settings.MAX_EXECUTION_TIMEOUT + 120
+                await r.set(decision_key, "pending", ex=approval_ttl)
                 # Also store node_id so the API endpoints can reference it
-                await r.set(f"approval_node:{exec_id}", node_id)
+                await r.set(f"approval_node:{exec_id}", node_id, ex=approval_ttl)
 
                 # Publish approval_required to SSE stream.
                 # Use type="step" + event="approval_required" to match the

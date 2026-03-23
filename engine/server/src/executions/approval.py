@@ -318,7 +318,9 @@ class ApprovalService:
         doesn't filter out the event as already-seen.
         """
         try:
-            seq = await self.redis.incr(f"seq:{execution_id}")
+            seq_key = f"seq:{execution_id}"
+            seq = await self.redis.incr(seq_key)
+            await self.redis.expire(seq_key, 600)
             event["seq"] = seq
             event_json = json.dumps(event, default=str)
             buf_key = f"buffer:{execution_id}"

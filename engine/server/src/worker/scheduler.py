@@ -4,6 +4,7 @@ Configures interval and cron jobs for:
 - Platform sync polling (every SYNC_INTERVAL_SECONDS, runs immediately on startup)
 - Report to platform (every 15 minutes)
 - Stale execution cleanup (every 5 minutes)
+- Scheduler slot cleanup (every 60 seconds)
 - Profile synthesis (every PROFILE_SYNTHESIS_INTERVAL seconds)
 - RAG consolidation (every RAG_CONSOLIDATION_INTERVAL seconds)
 """
@@ -80,6 +81,15 @@ def create_scheduler() -> AsyncIOScheduler:
         seconds=3600,
         id="cleanup_orphaned_attachments",
         name="Delete unclaimed chat attachments from MinIO",
+    )
+
+    # Scheduler slot cleanup — release orphaned slots from crashed executions
+    scheduler.add_job(
+        cleanup_scheduler_slots,
+        "interval",
+        seconds=60,
+        id="cleanup_scheduler_slots",
+        name="Release orphaned scheduler slots",
     )
 
     return scheduler
@@ -239,6 +249,22 @@ async def cleanup_stale_executions() -> None:
             await session.commit()
     except sqlalchemy.exc.SQLAlchemyError:
         logger.exception("Stale execution cleanup failed")
+
+
+async def cleanup_scheduler_slots() -> None:
+    """Release orphaned scheduler slots from crashed or timed-out executions.
+
+    Scans scheduler:active_slots and releases any whose execution is in a
+    terminal state (COMPLETED, FAILED, STOPPED) or missing from the DB.
+    """
+    from src.executions.scheduler import fair_scheduler
+
+    try:
+        cleaned = await fair_scheduler.cleanup_stale_slots()
+        if cleaned:
+            logger.info("Released %d orphaned scheduler slot(s)", cleaned)
+    except (ConnectionError, OSError, redis.exceptions.RedisError):
+        logger.exception("Scheduler slot cleanup failed")
 
 
 async def profile_synthesis_scan() -> None:
