@@ -63,6 +63,9 @@ class RAGCollection(Base):
     owner_user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=True
     )  # Used when scope=AGENT
+    project_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     # Relationships
     documents: Mapped[list["RAGDocument"]] = relationship(

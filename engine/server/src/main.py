@@ -40,6 +40,7 @@ from src.mcp.usage_router import usage_router as mcp_usage_router
 from src.mini_apps.router import router as mini_apps_router
 from src.models.router import router as models_admin_router
 from src.models.usage_router import usage_router as models_usage_router
+from src.projects.router import router as projects_router
 from src.rag.router import router as rag_router
 from src.recall.router import router as recall_router
 from src.report.router import router as report_router
@@ -369,6 +370,7 @@ app.include_router(supervisor_router, prefix=API_PREFIX)
 app.include_router(groups_router, prefix=API_PREFIX)
 app.include_router(scheduled_tasks_router)
 app.include_router(mini_apps_router, prefix=API_PREFIX)
+app.include_router(projects_router, prefix=API_PREFIX)
 
 # ── Admin routers ────────────────────────────────────────────────────────
 app.include_router(internal_router, prefix=f"{API_PREFIX}/internal")

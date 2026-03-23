@@ -38,6 +38,10 @@ class Conversation(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
+    project_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     is_active: Mapped[bool] = mapped_column(default=True)
     supervisor_mode: Mapped[bool] = mapped_column(default=False)
     config: Mapped[dict[str, Any]] = mapped_column("config", JSONB, default=dict)

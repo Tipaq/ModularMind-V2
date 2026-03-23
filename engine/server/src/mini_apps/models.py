@@ -43,6 +43,9 @@ class MiniApp(Base):
     allowed_groups: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
     owner_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     agent_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    project_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)

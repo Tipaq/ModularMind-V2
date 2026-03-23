@@ -145,6 +145,9 @@ export type { MemoryTabProps } from "./components/insights";
 export { MiniAppViewer } from "./components/mini-app";
 export { MiniAppCard } from "./components/mini-app";
 
+// Shell layout
+export { SectionShell } from "./components/section-shell";
+
 // Shared layout components
 export { SectionCard } from "./components/section-card";
 export type { SectionCardProps } from "./components/section-card";

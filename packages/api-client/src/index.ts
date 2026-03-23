@@ -22,6 +22,7 @@ export type * from "./types/engine";
 export type * from "./types/tools";
 export type * from "./types/mini-apps";
 export type * from "./types/scheduled-tasks";
+export type * from "./types/projects";
 
 // Utils
 export { snakeToCamel, mapKeysToCamel } from "./utils";

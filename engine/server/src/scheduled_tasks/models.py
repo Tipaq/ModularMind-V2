@@ -56,6 +56,9 @@ class ScheduledTask(Base):
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     version: Mapped[int] = mapped_column(Integer, default=1)
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    project_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
