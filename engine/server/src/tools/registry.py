@@ -10,8 +10,6 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from src.infra.constants import DEFAULT_TOOL_CATEGORIES
-
 logger = logging.getLogger(__name__)
 
 

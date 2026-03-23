@@ -90,7 +90,8 @@ async def run_tool_loop(
             raise ExecutionCancelled()
 
         logger.info(
-            "Tool loop iteration %d/%d (messages=%d)", iteration + 1, max_iterations, len(msgs)
+            "Tool loop iteration %d/%d (messages=%d)",
+            iteration + 1, loop_config.max_iterations, len(msgs)
         )
         response: AIMessage = await llm.ainvoke(msgs)
         msgs.append(response)
