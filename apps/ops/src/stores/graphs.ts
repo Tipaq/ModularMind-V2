@@ -7,6 +7,7 @@ import type {
   GraphUpdateInput,
 } from "@modularmind/api-client";
 import { api } from "../lib/api";
+import { createPaginatedState, withLoading, withError, withErrorRethrow } from "./store-helpers";
 
 interface GraphsState {
   graphs: GraphListItem[];
@@ -31,13 +32,10 @@ export const useGraphsStore = create<GraphsState>((set, get) => ({
   selectedGraph: null,
   loading: false,
   error: null,
-  page: 1,
-  totalPages: 1,
-  total: 0,
+  ...createPaginatedState(),
 
   fetchGraphs: async (page = 1, search = "") => {
-    set({ loading: true, error: null });
-    try {
+    await withLoading(set, async () => {
       const params = new URLSearchParams({ page: String(page), page_size: "20" });
       if (search) params.set("search", search);
       const data = await api.get<PaginatedGraphList>(`/graphs?${params}`);
@@ -47,67 +45,44 @@ export const useGraphsStore = create<GraphsState>((set, get) => ({
         page: data.page,
         totalPages: data.total_pages,
       });
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to fetch graphs" });
-    } finally {
-      set({ loading: false });
-    }
+    }, "Failed to fetch graphs");
   },
 
   fetchGraph: async (id) => {
-    set({ loading: true, error: null });
-    try {
+    await withLoading(set, async () => {
       const graph = await api.get<Graph>(`/graphs/${id}`);
       set({ selectedGraph: graph });
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to fetch graph" });
-    } finally {
-      set({ loading: false });
-    }
+    }, "Failed to fetch graph");
   },
 
   createGraph: async (data) => {
-    set({ error: null });
-    try {
+    return withErrorRethrow(set, async () => {
       const graph = await api.post<Graph>("/graphs", data);
       get().fetchGraphs(get().page);
       return graph;
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to create graph" });
-      throw err;
-    }
+    }, "Failed to create graph");
   },
 
   updateGraph: async (id, data) => {
-    set({ error: null });
-    try {
+    await withErrorRethrow(set, async () => {
       const graph = await api.patch<Graph>(`/graphs/${id}`, data);
       set({ selectedGraph: graph });
       get().fetchGraphs(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to update graph" });
-      throw err;
-    }
+    }, "Failed to update graph");
   },
 
   deleteGraph: async (id) => {
-    set({ error: null });
-    try {
+    await withError(set, async () => {
       await api.delete(`/graphs/${id}`);
       get().fetchGraphs(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to delete graph" });
-    }
+    }, "Failed to delete graph");
   },
 
   duplicateGraph: async (id, name) => {
-    set({ error: null });
-    try {
+    await withError(set, async () => {
       await api.post(`/graphs/${id}/duplicate`, name ? { name } : {});
       get().fetchGraphs(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to duplicate graph" });
-    }
+    }, "Failed to duplicate graph");
   },
 
   clearError: () => set({ error: null }),

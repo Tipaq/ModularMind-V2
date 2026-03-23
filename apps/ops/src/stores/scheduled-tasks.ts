@@ -5,6 +5,7 @@ import type {
   ScheduledTaskRun,
 } from "@modularmind/api-client";
 import { api } from "../lib/api";
+import { createPaginatedState, withLoading, withError, withErrorRethrow } from "./store-helpers";
 
 interface ScheduledTasksState {
   tasks: ScheduledTask[];
@@ -34,13 +35,10 @@ export const useScheduledTasksStore = create<ScheduledTasksState>((set, get) => 
   taskRuns: [],
   loading: false,
   error: null,
-  page: 1,
-  totalPages: 1,
-  total: 0,
+  ...createPaginatedState(),
 
   fetchTasks: async (page = 1, search = "") => {
-    set({ loading: true, error: null });
-    try {
+    await withLoading(set, async () => {
       const params = new URLSearchParams({ page: String(page), page_size: "20" });
       if (search) params.set("search", search);
       const data = await api.get<ScheduledTaskListResponse>(
@@ -52,90 +50,61 @@ export const useScheduledTasksStore = create<ScheduledTasksState>((set, get) => 
         page: data.page,
         totalPages: data.total_pages,
       });
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to fetch tasks" });
-    } finally {
-      set({ loading: false });
-    }
+    }, "Failed to fetch tasks");
   },
 
   fetchTask: async (id) => {
-    set({ loading: true, error: null });
-    try {
+    await withLoading(set, async () => {
       const task = await api.get<ScheduledTask>(`/scheduled-tasks/${id}`);
       set({ selectedTask: task });
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to fetch task" });
-    } finally {
-      set({ loading: false });
-    }
+    }, "Failed to fetch task");
   },
 
   createTask: async (data) => {
-    set({ error: null });
-    try {
+    return withErrorRethrow(set, async () => {
       const task = await api.post<ScheduledTask>("/scheduled-tasks/", data);
       get().fetchTasks(get().page);
       return task;
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to create task" });
-      throw err;
-    }
+    }, "Failed to create task");
   },
 
   updateTask: async (id, data) => {
-    set({ error: null });
-    try {
+    await withErrorRethrow(set, async () => {
       const task = await api.patch<ScheduledTask>(`/scheduled-tasks/${id}`, data);
       set({ selectedTask: task });
       get().fetchTasks(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to update task" });
-      throw err;
-    }
+    }, "Failed to update task");
   },
 
   deleteTask: async (id) => {
-    set({ error: null });
-    try {
+    await withError(set, async () => {
       await api.delete(`/scheduled-tasks/${id}`);
       get().fetchTasks(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to delete task" });
-    }
+    }, "Failed to delete task");
   },
 
   duplicateTask: async (id) => {
-    set({ error: null });
-    try {
+    await withError(set, async () => {
       await api.post(`/scheduled-tasks/${id}/duplicate`, {});
       get().fetchTasks(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to duplicate task" });
-    }
+    }, "Failed to duplicate task");
   },
 
   toggleTask: async (id, enabled) => {
-    set({ error: null });
-    try {
+    await withError(set, async () => {
       await api.patch<ScheduledTask>(`/scheduled-tasks/${id}`, { enabled });
       const selected = get().selectedTask;
       if (selected?.id === id) {
         set({ selectedTask: { ...selected, enabled } });
       }
       get().fetchTasks(get().page);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to toggle task" });
-    }
+    }, "Failed to toggle task");
   },
 
   triggerTask: async (id) => {
-    set({ error: null });
-    try {
+    await withError(set, async () => {
       await api.post(`/scheduled-tasks/${id}/trigger`, {});
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Failed to trigger task" });
-    }
+    }, "Failed to trigger task");
   },
 
   fetchTaskRuns: async (id) => {
