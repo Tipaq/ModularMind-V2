@@ -1,30 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SendMessageResponse } from "@modularmind/api-client";
 import type { ChatMessage } from "../components/chat-messages";
 import type { ApprovalRequest } from "../components/approval-card";
-import type { KnowledgeData, TokenUsage, ContextData, MessageExecutionData } from "../types/chat";
+import type { KnowledgeData, TokenUsage, ContextData } from "../types/chat";
 import type { ChatAdapter } from "./chat-adapter";
-import { extractResponse } from "./useChatUtils";
 import { useExecutionActivities } from "./useExecutionActivities";
-import { mapKnowledgeData, mapContextData } from "../lib/mappers";
+import { useMessagePersistence } from "./useMessagePersistence";
+import { useStreamManagement } from "./useStreamManagement";
 
 export type Message = ChatMessage;
 
 export function useChat(conversationId: string | null, adapter: ChatAdapter) {
-  const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
-  const [executionDataMap, setExecutionDataMap] = useState<Record<string, MessageExecutionData>>({});
   const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null);
   const [approvalDecision, setApprovalDecision] = useState<"approved" | "rejected" | null>(null);
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef("");
 
-  // Refs for accumulating data during a single message exchange
   const currentAssistantIdRef = useRef("");
   const currentExecutionIdRef = useRef("");
   const currentKnowledgeRef = useRef<KnowledgeData | null>(null);
@@ -32,79 +28,31 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
   const currentContextDataRef = useRef<ContextData | null>(null);
 
   const {
-    activities,
-    handleEvent: handleTraceEvent,
-    reset: resetActivities,
-    finalize: finalizeActivities,
+    activities, handleEvent: handleTraceEvent,
+    reset: resetActivities, finalize: finalizeActivities,
   } = useExecutionActivities();
 
-  // ── Snapshot execution data into the map when streaming finishes ────────
-  useEffect(() => {
-    if (!isStreaming && currentAssistantIdRef.current) {
-      const id = currentAssistantIdRef.current;
-      const execId = currentExecutionIdRef.current;
-      currentAssistantIdRef.current = "";
-      currentExecutionIdRef.current = "";
-      const data: MessageExecutionData = {
-        activities: [...activities],
-        knowledgeData: currentKnowledgeRef.current,
-        tokenUsage: currentTokenUsageRef.current,
-        contextData: currentContextDataRef.current,
-      };
-      setExecutionDataMap((prev) => ({ ...prev, [id]: data }));
-      // Persist to localStorage so execution data survives hard refresh.
-      if (execId) {
-        try {
-          localStorage.setItem(`mm:exec:${execId}`, JSON.stringify(data));
-        } catch {
-          // Ignore storage errors (quota exceeded, etc.)
-        }
-      }
-    }
-  }, [isStreaming, activities]);
-
-  // ── Auto-restore execution data from localStorage on message load ──────
-  const restoredMsgIdsRef = useRef(new Set<string>());
-  useEffect(() => {
-    const newMessages = messages.filter(
-      (m) => m.role === "assistant" && !restoredMsgIdsRef.current.has(m.id),
-    );
-    if (newMessages.length === 0) return;
-
-    const restore = () => {
-      const toRestore: Record<string, MessageExecutionData> = {};
-      for (const msg of newMessages) {
-        restoredMsgIdsRef.current.add(msg.id);
-        try {
-          const execId = msg.metadata?.execution_id as string | undefined;
-          if (execId) {
-            const stored = localStorage.getItem(`mm:exec:${execId}`);
-            if (stored) { toRestore[msg.id] = JSON.parse(stored) as MessageExecutionData; continue; }
-          }
-          const stored = localStorage.getItem(`mm:exec:${msg.id}`);
-          if (stored) { toRestore[msg.id] = JSON.parse(stored) as MessageExecutionData; }
-        } catch { /* ignore parse/storage errors */ }
-      }
-      if (Object.keys(toRestore).length > 0) {
-        setExecutionDataMap((prev) => ({ ...prev, ...toRestore }));
-      }
-    };
-
-    if (typeof requestIdleCallback === "function") {
-      const handle = requestIdleCallback(restore);
-      return () => cancelIdleCallback(handle);
-    }
-    restore();
-  }, [messages]);
+  const {
+    messages, setMessages, executionDataMap, setExecutionDataMap, setInitialMessages: setInitialMessagesBase,
+  } = useMessagePersistence(
+    isStreaming, activities,
+    currentAssistantIdRef, currentExecutionIdRef,
+    currentKnowledgeRef, currentTokenUsageRef, currentContextDataRef,
+  );
 
   const setInitialMessages = useCallback((msgs: Message[]) => {
-    setMessages(msgs);
+    setInitialMessagesBase(msgs);
     setSelectedMessageId(null);
-    restoredMsgIdsRef.current.clear();
-    setExecutionDataMap({});
-  }, []);
+  }, [setInitialMessagesBase]);
 
-  // ── Send message ───────────────────────────────────────────────────────
+  const { handleSendResponse } = useStreamManagement(adapter, {
+    sourceRef, streamBufferRef, currentAssistantIdRef,
+    currentExecutionIdRef, currentKnowledgeRef, currentTokenUsageRef, currentContextDataRef,
+  }, {
+    setMessages, setIsStreaming, setError, setStreamingMsgId, setSelectedMessageId,
+    setExecutionDataMap, setPendingApproval, setApprovalDecision,
+    handleTraceEvent, resetActivities, finalizeActivities,
+  });
 
   const sendMessage = useCallback(
     async (content: string, overrideConversationId?: string, files?: File[], supervisorMode?: boolean, skipUserMessage?: boolean) => {
@@ -119,14 +67,11 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
       currentTokenUsageRef.current = null;
       currentContextDataRef.current = null;
 
-      // Upload attachments first
       let attachmentIds: string[] = [];
       let uploadedAttachments: { id: string; filename: string; content_type: string; size_bytes: number }[] = [];
       if (files && files.length > 0) {
         try {
-          const results = await Promise.all(
-            files.map((f) => adapter.uploadAttachment(targetConvId, f)),
-          );
+          const results = await Promise.all(files.map((f) => adapter.uploadAttachment(targetConvId, f)));
           attachmentIds = results.map((a) => a.id);
           uploadedAttachments = results;
         } catch (err) {
@@ -136,21 +81,16 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
         }
       }
 
-      // Optimistically add user message (skip when regenerating)
       let tempUserMsg: Message | null = null;
       if (!skipUserMessage) {
         tempUserMsg = {
-          id: `temp-${Date.now()}`,
-          role: "user",
-          content,
-          created_at: new Date().toISOString(),
-          metadata: {},
+          id: `temp-${Date.now()}`, role: "user", content,
+          created_at: new Date().toISOString(), metadata: {},
           attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
         };
         setMessages((prev) => [...prev, tempUserMsg!]);
       }
 
-      // Add placeholder assistant message
       const assistantId = `assistant-${Date.now()}`;
       currentAssistantIdRef.current = assistantId;
       setStreamingMsgId(assistantId);
@@ -160,291 +100,44 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
         { id: assistantId, role: "assistant" as const, content: "", created_at: new Date().toISOString(), metadata: {} },
       ]);
 
-      if (supervisorMode) {
-        handleTraceEvent({ type: "trace:supervisor_routing" });
-      }
+      if (supervisorMode) handleTraceEvent({ type: "trace:supervisor_routing" });
 
       const sendStartMs = Date.now();
-
-      // Send message to backend
       const body: { content: string; attachment_ids?: string[] } = { content };
       if (attachmentIds.length > 0) body.attachment_ids = attachmentIds;
 
-      let res: SendMessageResponse;
       try {
-        res = await adapter.sendMessage(targetConvId, body);
+        const res = await adapter.sendMessage(targetConvId, body);
+        if (tempUserMsg && res.user_message) {
+          setMessages((prev) => prev.map((m) => (m.id === tempUserMsg!.id ? res.user_message : m)));
+        }
+        handleSendResponse(res, assistantId, sendStartMs);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to send message");
         setMessages((prev) => prev.filter((m) => m.id !== assistantId && (!tempUserMsg || m.id !== tempUserMsg.id)));
         currentAssistantIdRef.current = "";
         setIsStreaming(false);
-        return;
       }
-
-      const {
-        execution_id, message_id, user_message, direct_response,
-        routing_strategy, delegated_to, ephemeral_agent,
-        knowledge_data: resKnowledge, context_data: resContext,
-      } = res;
-
-      // Track the stable key for localStorage persistence
-      if (execution_id) {
-        currentExecutionIdRef.current = execution_id;
-      } else if (message_id) {
-        currentExecutionIdRef.current = message_id;
-      }
-
-      // Capture context data from HTTP response (supervisor path)
-      if (resContext) {
-        currentContextDataRef.current = mapContextData(resContext);
-      }
-
-      // Capture knowledge data from HTTP response (DIRECT_RESPONSE path)
-      if (resKnowledge && resKnowledge.total_results > 0) {
-        currentKnowledgeRef.current = mapKnowledgeData(resKnowledge);
-      }
-
-      // Replace temp user message with real one
-      if (tempUserMsg) {
-        setMessages((prev) => prev.map((m) => (m.id === tempUserMsg!.id ? user_message : m)));
-      }
-
-      const routingDurationMs = Date.now() - sendStartMs;
-
-      // Direct response (no execution needed)
-      if (!execution_id && direct_response) {
-        handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy || "DIRECT_RESPONSE", duration_ms: routingDurationMs });
-        handleTraceEvent({ type: "trace:supervisor_direct", preview: direct_response.slice(0, 150), duration_ms: routingDurationMs });
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, content: direct_response, metadata: { routing_strategy, delegated_to, duration_ms: routingDurationMs } } : m,
-          ),
-        );
-        finalizeActivities();
-        setIsStreaming(false);
-        return;
-      }
-
-      if (!execution_id) {
-        setError("No execution started");
-        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-        currentAssistantIdRef.current = "";
-        setIsStreaming(false);
-        return;
-      }
-
-      // Emit routing traces
-      if (routing_strategy) {
-        handleTraceEvent({ type: "trace:supervisor_routed", strategy: routing_strategy, duration_ms: routingDurationMs });
-        if (ephemeral_agent) {
-          handleTraceEvent({ type: "trace:agent_created", agent_name: ephemeral_agent.name });
-        }
-        if (delegated_to) {
-          handleTraceEvent({ type: "trace:supervisor_delegate", agent_name: delegated_to });
-        }
-      }
-
-      // Debounced flush for live knowledge/context updates during streaming.
-      // Batches rapid trace events into a single state update.
-      let liveFlushTimer: ReturnType<typeof setTimeout> | null = null;
-      const scheduleLiveFlush = () => {
-        if (liveFlushTimer) return;
-        liveFlushTimer = setTimeout(() => {
-          liveFlushTimer = null;
-          setExecutionDataMap((prev) => ({
-            ...prev,
-            [assistantId]: {
-              ...(prev[assistantId] || { activities: [], knowledgeData: null, tokenUsage: null, contextData: null }),
-              knowledgeData: currentKnowledgeRef.current,
-              contextData: currentContextDataRef.current,
-            },
-          }));
-        }, 150);
-      };
-
-      // Connect to SSE stream
-      if (sourceRef.current) {
-        sourceRef.current.close();
-        sourceRef.current = null;
-      }
-
-      const streamUrl = adapter.getStreamUrl(execution_id);
-      const source = new EventSource(streamUrl, adapter.eventSourceInit);
-      sourceRef.current = source;
-
-      const cleanup = () => {
-        if (liveFlushTimer) { clearTimeout(liveFlushTimer); liveFlushTimer = null; }
-        source.removeEventListener("tokens", onEvent);
-        source.removeEventListener("trace", onEvent);
-        source.removeEventListener("step", onEvent);
-        source.removeEventListener("complete", onEvent);
-        source.removeEventListener("error", onError);
-        source.close();
-        if (sourceRef.current === source) {
-          sourceRef.current = null;
-        }
-      };
-
-      const onEvent = (e: MessageEvent) => {
-        try {
-          const data = JSON.parse(e.data);
-          const eventType: string = data.type || "";
-
-          handleTraceEvent(data);
-
-          // Approval gate events
-          if (eventType === "step" && data.event === "approval_required") {
-            setPendingApproval({
-              executionId: data.execution_id,
-              nodeId: data.node_id,
-              message: data.message || "Review and approve to continue.",
-              plan: data.plan || "",
-              timeoutSeconds: data.timeout_seconds || 0,
-            });
-            setApprovalDecision(null);
-            return;
-          }
-
-          if (eventType === "step" && data.event === "approval_granted") {
-            setApprovalDecision("approved");
-            setPendingApproval(null);
-            return;
-          }
-
-          if (eventType === "step") {
-            const output = data.output_data || data.output;
-            const response = extractResponse(output);
-            if (response) {
-              streamBufferRef.current = response;
-              setMessages((prev) =>
-                prev.map((m) => (m.id === assistantId ? { ...m, content: response } : m)),
-              );
-            }
-          }
-
-          if (eventType === "trace:knowledge") {
-            currentKnowledgeRef.current = mapKnowledgeData(data);
-            scheduleLiveFlush();
-          }
-
-          if (eventType === "trace:memory") {
-            currentContextDataRef.current = mapContextData(data);
-            scheduleLiveFlush();
-          }
-
-          if (eventType === "tokens") {
-            currentTokenUsageRef.current = {
-              prompt: data.prompt_tokens || 0,
-              completion: data.completion_tokens || 0,
-              total: data.total_tokens || 0,
-            };
-          }
-
-          if (eventType === "complete") {
-            const output = data.output_data || data.output;
-
-            // Cancelled execution — remove placeholder assistant message
-            if (data.status === "stopped") {
-              setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-              currentAssistantIdRef.current = "";
-              currentExecutionIdRef.current = "";
-              finalizeActivities();
-              setIsStreaming(false);
-              cleanup();
-              return;
-            }
-
-            const finalContent = extractResponse(output) || streamBufferRef.current;
-            if (routing_strategy && delegated_to) {
-              handleTraceEvent({ type: "trace:supervisor_delegate_end", duration_ms: data.duration_ms });
-            }
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, content: finalContent, metadata: { execution_id, duration_ms: data.duration_ms, routing_strategy, delegated_to, ...(output || {}) } }
-                  : m,
-              ),
-            );
-            finalizeActivities();
-            setIsStreaming(false);
-            cleanup();
-          }
-
-          if (eventType === "error") {
-            setError(data.message || "Execution error");
-            setIsStreaming(false);
-            cleanup();
-          }
-        } catch {
-          // Ignore parse errors
-        }
-      };
-
-      const onError = (e: Event) => {
-        const me = e as MessageEvent;
-        if (me.data) {
-          try {
-            const data = JSON.parse(me.data);
-            setError(data.message || "Execution error");
-          } catch {
-            setError("Stream connection error");
-          }
-        }
-        setIsStreaming(false);
-        cleanup();
-      };
-
-      source.addEventListener("tokens", onEvent);
-      source.addEventListener("trace", onEvent);
-      source.addEventListener("step", onEvent);
-      source.addEventListener("complete", onEvent);
-      source.addEventListener("error", onError);
-
-      source.onerror = () => {
-        setIsStreaming(false);
-      };
     },
-    [conversationId, isStreaming, adapter, handleTraceEvent, resetActivities, finalizeActivities],
+    [conversationId, isStreaming, adapter, handleTraceEvent, resetActivities, handleSendResponse, setMessages],
   );
 
-  // ── Cancel stream ──────────────────────────────────────────────────────
-
   const cancelStream = useCallback(() => {
-    if (sourceRef.current) {
-      sourceRef.current.close();
-      sourceRef.current = null;
-    }
-
+    if (sourceRef.current) { sourceRef.current.close(); sourceRef.current = null; }
     const execId = currentExecutionIdRef.current;
-    if (execId) {
-      adapter.stopExecution(execId).catch(() => {});
-      currentExecutionIdRef.current = "";
-    }
-
+    if (execId) { adapter.stopExecution(execId).catch(() => {}); currentExecutionIdRef.current = ""; }
     setMessages((prev) => {
       const last = prev[prev.length - 1];
-      if (last?.role === "assistant" && !last.content) {
-        return prev.slice(0, -1);
-      }
+      if (last?.role === "assistant" && !last.content) return prev.slice(0, -1);
       return prev;
     });
-
     currentAssistantIdRef.current = "";
     setIsStreaming(false);
-  }, [adapter]);
-
-  // ── Cleanup on unmount ─────────────────────────────────────────────────
+  }, [adapter, setMessages]);
 
   useEffect(() => {
-    return () => {
-      if (sourceRef.current) {
-        sourceRef.current.close();
-        sourceRef.current = null;
-      }
-    };
+    return () => { if (sourceRef.current) { sourceRef.current.close(); sourceRef.current = null; } };
   }, []);
-
-  // ── Approval actions ───────────────────────────────────────────────────
 
   const approveExecution = useCallback(async (executionId: string) => {
     await adapter.approveExecution(executionId);
@@ -462,11 +155,10 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
     if (isStreaming || !conversationId) return;
     const msgIdx = messages.findIndex((m) => m.id === messageId);
     if (msgIdx === -1) return;
-
     await adapter.deleteMessagesFrom(conversationId, messageId).catch(() => {});
     setMessages((prev) => prev.slice(0, msgIdx));
     sendMessage(newContent, conversationId, undefined, undefined, false);
-  }, [isStreaming, conversationId, messages, adapter, sendMessage]);
+  }, [isStreaming, conversationId, messages, adapter, sendMessage, setMessages]);
 
   const regenerateLastMessage = useCallback(async () => {
     if (isStreaming || !conversationId) return;
@@ -477,34 +169,18 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
       if (!lastUserMsg && messages[i].role === "user") lastUserMsg = messages[i];
       if (lastUserMsg && lastAssistant) break;
     }
-    if (!lastUserMsg) return;
-    if (!lastAssistant) return;
-    if (!lastAssistant) return;
-
+    if (!lastUserMsg || !lastAssistant) return;
     await adapter.deleteMessagesFrom(conversationId, lastAssistant.id).catch(() => {});
     setMessages((prev) => prev.filter((m) => m.id !== lastAssistant.id));
     sendMessage(lastUserMsg.content, conversationId, undefined, undefined, true);
-  }, [isStreaming, conversationId, messages, adapter, sendMessage]);
+  }, [isStreaming, conversationId, messages, adapter, sendMessage, setMessages]);
 
   const streamingMessageId = isStreaming ? streamingMsgId : null;
 
   return {
-    messages,
-    isStreaming,
-    error,
-    activities,
-    executionDataMap,
-    selectedMessageId,
-    setSelectedMessageId,
-    streamingMessageId,
-    pendingApproval,
-    approvalDecision,
-    sendMessage,
-    setInitialMessages,
-    cancelStream,
-    approveExecution,
-    rejectExecution,
-    regenerateLastMessage,
-    editMessage,
+    messages, isStreaming, error, activities, executionDataMap,
+    selectedMessageId, setSelectedMessageId, streamingMessageId,
+    pendingApproval, approvalDecision, sendMessage, setInitialMessages,
+    cancelStream, approveExecution, rejectExecution, regenerateLastMessage, editMessage,
   };
 }
