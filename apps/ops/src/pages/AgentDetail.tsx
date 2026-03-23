@@ -7,6 +7,7 @@ import { useAgentsStore } from "../stores/agents";
 import { AgentOverviewSection } from "../components/agents/AgentOverviewSection";
 import { AgentToolsSection } from "../components/agents/AgentToolsSection";
 import { AgentPromptSection } from "../components/agents/AgentPromptSection";
+import { AgentPlayground } from "../components/agents/AgentPlayground";
 
 export function AgentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -140,11 +141,16 @@ export function AgentDetail() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto py-6 px-6 space-y-6">
-          <AgentOverviewSection agent={agent} isEditing={isEditing} onChange={handleChange} />
-          <AgentPromptSection agent={agent} isEditing={isEditing} onChange={handleChange} />
-          <AgentToolsSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+      <div className="flex flex-1 min-h-0">
+        <div className="flex-[3] min-w-0 overflow-y-auto">
+          <div className="max-w-3xl mx-auto py-6 px-6 space-y-6">
+            <AgentOverviewSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+            <AgentPromptSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+            <AgentToolsSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+          </div>
+        </div>
+        <div className="flex-[2] min-w-0 border-l border-border">
+          <AgentPlayground agentId={agent.id} agentName={agent.name} />
         </div>
       </div>
 
