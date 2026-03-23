@@ -28,14 +28,14 @@ class AgentCreate(BaseModel):
     description: str = Field(default="", max_length=500)
     model_id: str = Field(
         min_length=1,
-        pattern=r"^[a-zA-Z0-9_-]+:[a-zA-Z0-9_./-]+$",
+        pattern=r"^[a-zA-Z0-9_-]+:[a-zA-Z0-9_./:+-]+$",
         description="Format: provider:model (e.g. ollama:llama3.2)",
     )
     system_prompt: str = Field(default="", max_length=10000)
     memory_enabled: bool = True
     timeout_seconds: int = Field(default=120, ge=10, le=600)
     rag_config: RAGConfigCreate | None = None
-    tool_categories: dict[str, bool] = Field(default_factory=dict)
+    tool_categories: dict[str, bool | dict[str, bool]] = Field(default_factory=dict)
     gateway_permissions: dict[str, Any] | None = None
     capabilities: list[str] = Field(default_factory=list)
     routing_metadata: dict[str, Any] = Field(default_factory=dict)
@@ -48,13 +48,13 @@ class AgentUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=500)
     model_id: str | None = Field(
         default=None,
-        pattern=r"^[a-zA-Z0-9_-]+:[a-zA-Z0-9_./-]+$",
+        pattern=r"^[a-zA-Z0-9_-]+:[a-zA-Z0-9_./:+-]+$",
     )
     system_prompt: str | None = Field(default=None, max_length=10000)
     memory_enabled: bool | None = None
     timeout_seconds: int | None = Field(default=None, ge=10, le=600)
     rag_config: RAGConfigCreate | None = None
-    tool_categories: dict[str, bool] | None = None
+    tool_categories: dict[str, bool | dict[str, bool]] | None = None
     gateway_permissions: dict[str, Any] | None = None
     capabilities: list[str] | None = None
     routing_metadata: dict[str, Any] | None = None
@@ -82,7 +82,7 @@ class AgentSummary(BaseModel):
     rag_collection_ids: list[str] = []
     rag_retrieval_count: int = 5
     rag_similarity_threshold: float = 0.7
-    tool_categories: dict[str, bool] = {}
+    tool_categories: dict[str, bool | dict[str, bool]] = {}
 
 
 class AgentDetail(AgentSummary):

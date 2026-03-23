@@ -762,12 +762,14 @@ class SuperSupervisorService:
         settings = get_settings()
         if settings.GATEWAY_URL:
             from src.gateway.executor import GatewayToolExecutor
-            from src.gateway.tool_definitions import get_gateway_tool_definitions
             from src.internal.auth import get_internal_bearer_token
+            from src.tools.categories.network import get_network_tool_definitions
+            from src.tools.categories.shell import get_shell_tool_definitions
 
-            gateway_tool_defs = get_gateway_tool_definitions(
-                {"shell": {"enabled": True}, "network": {"enabled": True}},
-            )
+            gateway_tool_defs = [
+                *get_shell_tool_definitions(),
+                *get_network_tool_definitions(),
+            ]
             gateway_executor = GatewayToolExecutor(
                 gateway_url=settings.GATEWAY_URL,
                 agent_id="supervisor",

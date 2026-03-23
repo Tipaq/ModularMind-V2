@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_TOOL_CATEGORIES: dict[str, bool] = {
     "knowledge": True,
     "filesystem": False,
+    "shell": False,
+    "network": False,
     "file_storage": False,
     "human_interaction": True,
     "image_generation": False,
