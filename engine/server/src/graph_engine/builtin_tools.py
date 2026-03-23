@@ -136,9 +136,11 @@ class UnifiedToolExecutor:
         self._extended = extended_executor
 
     async def execute(self, name: str, args: dict[str, Any]) -> str:
+        from src.gateway.executor import GATEWAY_ROUTED_TOOLS
+
         if name in self._names:
             return await self._builtin(name, args)
-        if name.startswith("gateway__") and self._gateway:
+        if name in GATEWAY_ROUTED_TOOLS and self._gateway:
             return await self._gateway.execute(name, args)
         if self._extended and self._extended.handles(name):
             return await self._extended.execute(name, args)

@@ -69,10 +69,12 @@ class AgentConfig(BaseModel):
         default=None,
         description="Gateway permissions for system access tools (filesystem, shell, etc.)",
     )
-    tool_categories: dict[str, bool] = Field(
+    tool_categories: dict[str, bool | dict[str, bool]] = Field(
         default_factory=lambda: {
             "knowledge": True,
             "filesystem": False,
+            "shell": False,
+            "network": False,
             "file_storage": False,
             "human_interaction": True,
             "image_generation": False,

@@ -421,11 +421,15 @@ class GraphCompiler:
             active_tools = list(_lc_tools)
             unified_executor = _mcp_executor
 
-            # Gateway tool executor — needed for gateway_permissions tools
-            # AND for filesystem category tools (which use gateway__ prefix).
+            # Gateway tool executor — needed for filesystem, shell, network tools.
             gateway_executor = None
             _tool_cats = getattr(agent, "tool_categories", {})
-            _needs_gateway = bool(agent.gateway_permissions) or _tool_cats.get("filesystem")
+            _needs_gateway = (
+                bool(agent.gateway_permissions)
+                or _tool_cats.get("filesystem")
+                or _tool_cats.get("shell")
+                or _tool_cats.get("network")
+            )
             if _needs_gateway:
                 from src.infra.config import get_settings as _get_settings
 
@@ -543,7 +547,7 @@ class GraphCompiler:
 
                         # If agent has search tools, require multiple searches
                         _search_tool_names = {
-                            "gateway__browser_search",
+                            "web_search",
                         }
                         _tool_fn_names = {
                             t.get("function", {}).get("name", "")
@@ -762,6 +766,8 @@ class GraphCompiler:
             _graph_needs_gw = (
                 bool(agent and agent.gateway_permissions)
                 or _graph_tool_cats.get("filesystem")
+                or _graph_tool_cats.get("shell")
+                or _graph_tool_cats.get("network")
             )
             if _graph_needs_gw:
                 from src.infra.config import get_settings as _get_settings
@@ -820,7 +826,7 @@ class GraphCompiler:
 
                         # Require multiple searches for agents with search tools
                         _search_tool_names = {
-                            "gateway__browser_search",
+                            "web_search",
                         }
                         _tool_fn_names = {
                             t.get("function", {}).get("name", "")
