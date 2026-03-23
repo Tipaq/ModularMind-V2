@@ -184,7 +184,7 @@ function PipelineCard({
   );
 }
 
-export default function EmbeddingsTab() {
+export function EmbeddingsTab() {
   const [settings, setSettings] = useState<LocalSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [embeddingModels, setEmbeddingModels] = useState<CatalogModel[]>([]);

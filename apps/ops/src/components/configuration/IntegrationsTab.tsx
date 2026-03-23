@@ -120,7 +120,7 @@ function getConnectorTargetName(
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export default function IntegrationsTab() {
+export function IntegrationsTab() {
   const [connectorTypes, setConnectorTypes] = useState<ConnectorTypeDef[]>([]);
   const [connectors, setConnectors] = useState<ConnectorData[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);

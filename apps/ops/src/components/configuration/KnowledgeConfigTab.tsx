@@ -55,7 +55,7 @@ const PROVIDERS = [
 
 // ── Main Component ───────────────────────────────────────────────
 
-export default function KnowledgeConfigTab() {
+export function KnowledgeConfigTab() {
   const [settings, setSettings] = useState<LocalSettings | null>(null);
   const [embeddingModels, setEmbeddingModels] = useState<CatalogModel[]>([]);
   const [loading, setLoading] = useState(true);

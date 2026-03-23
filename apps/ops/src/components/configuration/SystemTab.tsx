@@ -16,7 +16,7 @@ import {
 import type { LocalSettings } from "@modularmind/api-client";
 import { api } from "../../lib/api";
 
-export default function SystemTab() {
+export function SystemTab() {
   const [settings, setSettings] = useState<LocalSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState<string | null>(null);

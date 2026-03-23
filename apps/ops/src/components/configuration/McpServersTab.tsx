@@ -101,7 +101,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   finance: "Finance",
 };
 
-export default function McpServersTab() {
+export function McpServersTab() {
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [newServerUrl, setNewServerUrl] = useState("");
   const [newServerName, setNewServerName] = useState("");
