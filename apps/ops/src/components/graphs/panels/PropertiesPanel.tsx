@@ -33,7 +33,7 @@ import {
 import type { ExecutionActivity } from "@modularmind/ui";
 import type { Agent } from "@modularmind/api-client";
 import type { Node } from "@xyflow/react";
-import { NODE_CONFIG, type NodeType } from "../nodes/nodeConfig";
+import type { NodeType } from "../nodes/nodeConfig";
 import { api } from "../../../lib/api";
 import { useAgentsStore } from "../../../stores/agents";
 import {
