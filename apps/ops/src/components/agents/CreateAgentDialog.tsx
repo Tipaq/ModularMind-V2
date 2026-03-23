@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Brain, Clock } from "lucide-react";
+import { Brain, Clock, Wrench } from "lucide-react";
 import {
+  Badge,
   Button,
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
   DialogDescription,
   DialogFooter,
   Input,
+  SectionCard,
   Select,
   SelectContent,
   SelectItem,
@@ -18,9 +20,11 @@ import {
   ToggleRow,
   formatModelName,
 } from "@modularmind/ui";
-import type { AgentDetail } from "@modularmind/api-client";
+import type { AgentDetail, ToolCategories } from "@modularmind/api-client";
 import { useAgentsStore } from "../../stores/agents";
 import { useModelsStore } from "../../stores/models";
+import { TOOL_CATEGORIES, countEnabledCategories } from "./tool-categories";
+import { ToolCategoryPicker } from "./ToolCategoryPicker";
 
 interface CreateAgentDialogProps {
   isOpen: boolean;
@@ -36,6 +40,7 @@ interface AgentForm {
   memoryEnabled: boolean;
   timeoutEnabled: boolean;
   timeoutSeconds: number;
+  toolCategories: ToolCategories;
 }
 
 const INITIAL_FORM: AgentForm = {
@@ -46,6 +51,7 @@ const INITIAL_FORM: AgentForm = {
   memoryEnabled: false,
   timeoutEnabled: false,
   timeoutSeconds: 120,
+  toolCategories: {},
 };
 
 function CreateAgentDialog({ isOpen, onOpenChange, onCreated }: CreateAgentDialogProps) {
@@ -68,6 +74,12 @@ function CreateAgentDialog({ isOpen, onOpenChange, onCreated }: CreateAgentDialo
     onOpenChange(open);
   };
 
+  const handleToolCategoriesChange = (next: ToolCategories) => {
+    updateForm({ toolCategories: next });
+  };
+
+  const enabledCount = countEnabledCategories(form.toolCategories);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.modelId.trim()) return;
@@ -80,6 +92,7 @@ function CreateAgentDialog({ isOpen, onOpenChange, onCreated }: CreateAgentDialo
         system_prompt: form.systemPrompt.trim() || undefined,
         memory_enabled: form.memoryEnabled,
         timeout_seconds: form.timeoutEnabled ? form.timeoutSeconds : 0,
+        tool_categories: enabledCount > 0 ? form.toolCategories : undefined,
       });
       handleOpenChange(false);
       onCreated(agent);
@@ -90,13 +103,13 @@ function CreateAgentDialog({ isOpen, onOpenChange, onCreated }: CreateAgentDialo
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>New Agent</DialogTitle>
           <DialogDescription>Create a new AI agent with a model.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-1">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 py-1 overflow-y-auto min-h-0">
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Name"
@@ -177,6 +190,22 @@ function CreateAgentDialog({ isOpen, onOpenChange, onCreated }: CreateAgentDialo
               rows={3}
             />
           </div>
+
+          <SectionCard
+            icon={Wrench}
+            title="Tools"
+            variant="card"
+            trailing={
+              <Badge variant="secondary" className="text-[10px] tabular-nums">
+                {enabledCount} / {TOOL_CATEGORIES.length}
+              </Badge>
+            }
+          >
+            <ToolCategoryPicker
+              categories={form.toolCategories}
+              onChange={handleToolCategoriesChange}
+            />
+          </SectionCard>
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>
