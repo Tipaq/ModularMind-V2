@@ -51,9 +51,7 @@ async def cleanup_stale_workspaces() -> None:
         return
 
     try:
-        removed = await asyncio.to_thread(
-            _scan_and_remove_workspaces, root, retention_seconds
-        )
+        removed = await asyncio.to_thread(_scan_and_remove_workspaces, root, retention_seconds)
         if removed:
             logger.info("Workspace cleanup: removed %d stale workspace(s)", removed)
     except Exception:

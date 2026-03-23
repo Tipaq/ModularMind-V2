@@ -58,6 +58,7 @@ router = APIRouter()
 # Health
 # =============================================================================
 
+
 @router.get("/health", response_model=HealthResponse)
 async def health_check(db: DbSession) -> HealthResponse:
     """Health check endpoint."""
@@ -76,6 +77,7 @@ async def health_check(db: DbSession) -> HealthResponse:
 # =============================================================================
 # Execute (engine → gateway internal call)
 # =============================================================================
+
 
 @router.post("/api/v1/execute", response_model=ExecuteResponse)
 async def execute_tool(
@@ -110,9 +112,7 @@ async def execute_tool(
     if eval_result == EvalResult.AUTO_APPROVE:
         decision = "auto_approved"
         try:
-            result_str = await _execute_in_sandbox(
-                http_request, request, perm_engine
-            )
+            result_str = await _execute_in_sandbox(http_request, request, perm_engine)
             response_status = "allowed"
         except Exception as e:
             logger.error("Sandbox execution error: %s", e, exc_info=True)
@@ -127,10 +127,8 @@ async def execute_tool(
     elif eval_result == EvalResult.REQUIRES_APPROVAL:
         # Create pending approval and wait for admin decision
         try:
-            result_str, approval_id, decision, response_status, error = (
-                await _handle_approval_flow(
-                    http_request, request, perm_engine, db
-                )
+            result_str, approval_id, decision, response_status, error = await _handle_approval_flow(
+                http_request, request, perm_engine, db
             )
         except Exception as e:
             logger.error("Approval flow error: %s", e, exc_info=True)
@@ -146,9 +144,7 @@ async def execute_tool(
         action=request.action,
         decision=decision,
     ).inc()
-    gateway_request_duration_seconds.labels(category=request.category).observe(
-        duration_ms / 1000
-    )
+    gateway_request_duration_seconds.labels(category=request.category).observe(duration_ms / 1000)
 
     # Write audit log
     audit = GatewayAuditLog(
@@ -215,23 +211,27 @@ async def _handle_approval_flow(
         if decision_result == "approved":
             # Execute the tool call
             try:
-                result_str = await _execute_in_sandbox(
-                    http_request, request, perm_engine
-                )
+                result_str = await _execute_in_sandbox(http_request, request, perm_engine)
                 return result_str, approval_id, "approved", "allowed", None
             except Exception as e:
                 return None, approval_id, "error", "error", str(e)
 
         elif decision_result == "rejected":
             return (
-                None, approval_id, "rejected",
-                "denied", "Request rejected by admin",
+                None,
+                approval_id,
+                "rejected",
+                "denied",
+                "Request rejected by admin",
             )
 
         else:  # timeout or already_processed
             return (
-                None, approval_id, "timeout",
-                "denied", "Approval request timed out",
+                None,
+                approval_id,
+                "timeout",
+                "denied",
+                "Approval request timed out",
             )
     finally:
         await redis.aclose()
@@ -311,6 +311,7 @@ async def _execute_in_sandbox(
 # Release (engine → gateway internal call)
 # =============================================================================
 
+
 @router.post("/api/v1/release/{execution_id}")
 async def release_sandbox(
     execution_id: str,
@@ -332,6 +333,7 @@ async def release_sandbox(
 # Approval SSE Stream
 # =============================================================================
 
+
 @router.get("/api/v1/approvals/stream")
 async def stream_approvals(
     http_request: Request,
@@ -345,9 +347,7 @@ async def stream_approvals(
         await pubsub.subscribe("gateway:approvals")
         try:
             while not await http_request.is_disconnected():
-                msg = await pubsub.get_message(
-                    ignore_subscribe_messages=True, timeout=1.0
-                )
+                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
                 if msg and msg["type"] == "message":
                     data = msg["data"]
                     if isinstance(data, bytes):
@@ -375,6 +375,7 @@ async def stream_approvals(
 # =============================================================================
 # Approvals (admin endpoints)
 # =============================================================================
+
 
 @router.get("/api/v1/approvals/pending")
 async def list_pending_approvals(
@@ -483,6 +484,7 @@ async def reject_request(
 # Rules (admin endpoints)
 # =============================================================================
 
+
 @router.get("/api/v1/rules")
 async def list_rules(
     admin: AdminUser,
@@ -559,9 +561,7 @@ async def delete_rule(
     db: DbSession,
 ) -> None:
     """Delete a pre-approval rule."""
-    result = await db.execute(
-        delete(GatewayApprovalRule).where(GatewayApprovalRule.id == rule_id)
-    )
+    result = await db.execute(delete(GatewayApprovalRule).where(GatewayApprovalRule.id == rule_id))
     if result.rowcount == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

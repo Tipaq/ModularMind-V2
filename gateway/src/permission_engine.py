@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 class EvalResult(str, Enum):
     """Permission evaluation result."""
+
     AUTO_APPROVE = "auto_approve"
     AUTO_DENY = "auto_deny"
     REQUIRES_APPROVAL = "requires_approval"
@@ -180,8 +181,7 @@ class PermissionEngine:
         # 2. Explicit allow — map actions to read or write permission patterns
         _write_actions = {"write", "edit", "delete", "move", "mkdir"}
         allow_patterns = (
-            perms.filesystem.write if action in _write_actions
-            else perms.filesystem.read
+            perms.filesystem.write if action in _write_actions else perms.filesystem.read
         )
         for pattern in allow_patterns:
             if fnmatch.fnmatch(normalized, pattern):
@@ -330,8 +330,7 @@ class PermissionEngine:
                 GatewayApprovalRule.is_active == True,  # noqa: E712
                 GatewayApprovalRule.category == category,
                 GatewayApprovalRule.action == action,
-                (GatewayApprovalRule.agent_id == agent_id)
-                | (GatewayApprovalRule.agent_id == None),  # noqa: E711 — global rules
+                (GatewayApprovalRule.agent_id == agent_id) | (GatewayApprovalRule.agent_id == None),  # noqa: E711 — global rules
             )
         )
         rules = result.scalars().all()
@@ -375,6 +374,4 @@ class PermissionEngine:
                 )
                 .values(is_active=False)
             )
-            logger.info(
-                "Invalidated rules for agent %s categories: %s", agent_id, changes
-            )
+            logger.info("Invalidated rules for agent %s categories: %s", agent_id, changes)

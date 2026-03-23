@@ -86,18 +86,41 @@ async def export_audit_csv(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "id", "request_id", "agent_id", "execution_id", "user_id",
-        "category", "action", "tool_name", "decision", "status",
-        "error", "duration_ms", "created_at",
-    ])
+    writer.writerow(
+        [
+            "id",
+            "request_id",
+            "agent_id",
+            "execution_id",
+            "user_id",
+            "category",
+            "action",
+            "tool_name",
+            "decision",
+            "status",
+            "error",
+            "duration_ms",
+            "created_at",
+        ]
+    )
     for e in entries:
-        writer.writerow([
-            e.id, e.request_id, e.agent_id, e.execution_id, e.user_id,
-            e.category, e.action, e.tool_name, e.decision, e.status,
-            e.error or "", e.duration_ms or "",
-            e.created_at.isoformat() if e.created_at else "",
-        ])
+        writer.writerow(
+            [
+                e.id,
+                e.request_id,
+                e.agent_id,
+                e.execution_id,
+                e.user_id,
+                e.category,
+                e.action,
+                e.tool_name,
+                e.decision,
+                e.status,
+                e.error or "",
+                e.duration_ms or "",
+                e.created_at.isoformat() if e.created_at else "",
+            ]
+        )
 
     output.seek(0)
     return StreamingResponse(

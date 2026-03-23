@@ -55,8 +55,12 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )
         except TimeoutError:
-            logger.warning("Request timed out after %ds: %s %s",
-                           REQUEST_TIMEOUT_SECONDS, request.method, request.url.path)
+            logger.warning(
+                "Request timed out after %ds: %s %s",
+                REQUEST_TIMEOUT_SECONDS,
+                request.method,
+                request.url.path,
+            )
             return JSONResponse(
                 status_code=504,
                 content={"detail": f"Request timed out after {REQUEST_TIMEOUT_SECONDS}s"},
@@ -70,8 +74,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     - Other endpoints: 120 req/min per IP
     """
 
-    EXECUTE_LIMIT = 60      # requests per window
-    DEFAULT_LIMIT = 120     # requests per window
+    EXECUTE_LIMIT = 60  # requests per window
+    DEFAULT_LIMIT = 120  # requests per window
     WINDOW_SECONDS = 60
 
     CLEANUP_INTERVAL = 100

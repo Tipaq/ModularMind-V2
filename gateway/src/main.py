@@ -98,7 +98,8 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(
         _run_approval_cleanup,
         "cron",
-        hour=3, minute=0,
+        hour=3,
+        minute=0,
         id="approval_cleanup",
         max_instances=1,
         misfire_grace_time=60,
@@ -106,7 +107,8 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(
         cleanup_stale_workspaces,
         "cron",
-        hour=4, minute=0,
+        hour=4,
+        minute=0,
         id="workspace_cleanup",
         max_instances=1,
         misfire_grace_time=60,
@@ -114,7 +116,8 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(
         _run_audit_cleanup,
         "cron",
-        hour=3, minute=30,
+        hour=3,
+        minute=30,
         id="audit_cleanup",
         max_instances=1,
         misfire_grace_time=60,
@@ -169,8 +172,11 @@ async def _run_audit_cleanup() -> None:
             )
             await session.commit()
             if result.rowcount:
-                logger.info("Audit cleanup: deleted %d entries older than %d days",
-                            result.rowcount, settings.APPROVAL_RETENTION_DAYS)
+                logger.info(
+                    "Audit cleanup: deleted %d entries older than %d days",
+                    result.rowcount,
+                    settings.APPROVAL_RETENTION_DAYS,
+                )
     except Exception:
         logger.warning("Audit cleanup job failed", exc_info=True)
 

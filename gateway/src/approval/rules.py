@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-MAX_PATTERN_DEPTH = 3        # max ** segments
-MAX_RULES_PER_AGENT = 100   # prevent rule explosion
+MAX_PATTERN_DEPTH = 3  # max ** segments
+MAX_RULES_PER_AGENT = 100  # prevent rule explosion
 FORBIDDEN_PATTERNS = {"/**", "**/*", "*", "**", "/*"}
 
 

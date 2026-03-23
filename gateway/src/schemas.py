@@ -9,17 +9,18 @@ from pydantic import BaseModel, Field
 # Permission Models (stored in agent config JSONB)
 # =============================================================================
 
+
 class FilesystemPermissions(BaseModel):
-    read: list[str] = []       # glob patterns for allowed read paths
-    write: list[str] = []      # glob patterns for allowed write paths
-    deny: list[str] = []       # glob patterns — highest priority, always denied
+    read: list[str] = []  # glob patterns for allowed read paths
+    write: list[str] = []  # glob patterns for allowed write paths
+    deny: list[str] = []  # glob patterns — highest priority, always denied
     max_file_size_bytes: int = 10_485_760  # 10MB
 
 
 class ShellPermissions(BaseModel):
     enabled: bool = False
-    allow: list[str] = []      # command glob patterns
-    deny: list[str] = []       # command deny patterns
+    allow: list[str] = []  # command glob patterns
+    deny: list[str] = []  # command deny patterns
     require_approval: bool = True
     max_execution_seconds: int = 30
 
@@ -50,8 +51,10 @@ class GatewayPermissions(BaseModel):
 # API Request/Response Schemas
 # =============================================================================
 
+
 class ExecuteRequest(BaseModel):
     """Request to execute a gateway tool."""
+
     request_id: str = Field(..., description="Unique request ID (UUID)")
     agent_id: str = Field(..., description="Agent ID to load permissions for")
     execution_id: str = Field(..., description="Execution ID for sandbox reuse")
@@ -65,6 +68,7 @@ class ExecuteRequest(BaseModel):
 
 class ExecuteResponse(BaseModel):
     """Response from a gateway tool execution."""
+
     request_id: str
     status: str  # allowed, denied, pending_approval, error, timeout
     result: str | None = None
@@ -74,6 +78,7 @@ class ExecuteResponse(BaseModel):
 
 class ApprovalDecisionRequest(BaseModel):
     """Request to approve or reject a pending approval."""
+
     notes: str | None = None
     remember: bool = False
     remember_pattern: str | None = None
@@ -81,6 +86,7 @@ class ApprovalDecisionRequest(BaseModel):
 
 class ApprovalResponse(BaseModel):
     """Response from an approval decision."""
+
     approval_id: str
     status: str  # approved, rejected, already_processed
     message: str | None = None
@@ -88,6 +94,7 @@ class ApprovalResponse(BaseModel):
 
 class RuleCreateRequest(BaseModel):
     """Request to manually create a pre-approval rule."""
+
     agent_id: str | None = None
     category: str
     action: str
@@ -97,6 +104,7 @@ class RuleCreateRequest(BaseModel):
 
 class RuleResponse(BaseModel):
     """Response for a pre-approval rule."""
+
     id: str
     agent_id: str | None
     category: str
@@ -111,6 +119,7 @@ class RuleResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Health check response."""
+
     status: str = "ok"
     version: str
     sandboxes_active: int = 0

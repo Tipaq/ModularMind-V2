@@ -55,6 +55,7 @@ async def close_http_client() -> None:
         await _http_client.aclose()
     _http_client = None
 
+
 # Tags whose content should be removed entirely
 BLOCK_TAG_PATTERNS = {
     tag: re.compile(rf"<{tag}[^>]*>", re.IGNORECASE)

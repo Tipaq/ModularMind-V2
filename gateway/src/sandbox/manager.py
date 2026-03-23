@@ -122,7 +122,8 @@ class SandboxManager:
                     source = mount.get("Source", "")
                     logger.info(
                         "Detected workspace host path: %s (type=%s)",
-                        source, mount.get("Type"),
+                        source,
+                        mount.get("Type"),
                     )
                     return source
         except Exception:
@@ -209,9 +210,9 @@ class SandboxManager:
                     cap_drop=["ALL"],
                     security_opt=["no-new-privileges"],
                     mem_limit="256m",
-                    memswap_limit="256m",   # No swap — hard memory cap
+                    memswap_limit="256m",  # No swap — hard memory cap
                     cpu_period=100000,
-                    cpu_quota=50000,         # 50% of one CPU core
+                    cpu_quota=50000,  # 50% of one CPU core
                     pids_limit=100,
                     tmpfs={"/tmp": "size=64m,noexec,nosuid"},
                 ),
@@ -224,7 +225,9 @@ class SandboxManager:
 
         logger.info(
             "Created sandbox %s for execution %s (agent %s)",
-            container_name, execution_id, agent_id,
+            container_name,
+            execution_id,
+            agent_id,
         )
 
         return SandboxContainer(
@@ -242,9 +245,7 @@ class SandboxManager:
         sees HOST paths, not container paths. This translates WORKSPACE_ROOT-relative
         paths to their host equivalents using the detected volume source.
         """
-        if self._host_workspace_root and container_path.startswith(
-            self._settings.WORKSPACE_ROOT
-        ):
+        if self._host_workspace_root and container_path.startswith(self._settings.WORKSPACE_ROOT):
             relative = container_path[len(self._settings.WORKSPACE_ROOT) :]
             return self._host_workspace_root + relative
         return container_path
@@ -268,9 +269,7 @@ class SandboxManager:
 
         # Shared workspace (read-only, opt-in)
         shared_dir = os.path.join(self._settings.WORKSPACE_ROOT, "shared")
-        if os.path.exists(shared_dir) and any(
-            "shared" in p for p in permissions.filesystem.read
-        ):
+        if os.path.exists(shared_dir) and any("shared" in p for p in permissions.filesystem.read):
             host_shared = self._resolve_host_path(shared_dir)
             mounts[host_shared] = {"bind": "/workspace/shared", "mode": "ro"}
 
@@ -296,9 +295,7 @@ class SandboxManager:
                 )
             logger.info("Released sandbox %s", container.container_name)
         except Exception:
-            logger.warning(
-                "Error releasing sandbox %s", container.container_name, exc_info=True
-            )
+            logger.warning("Error releasing sandbox %s", container.container_name, exc_info=True)
 
         gateway_sandboxes_active.set(len(self._active))
         return True
@@ -363,10 +360,7 @@ class SandboxManager:
         """Remove sandboxes that have been idle beyond the timeout."""
         timeout = self._settings.SANDBOX_TIMEOUT_SECONDS
         now = time.time()
-        stale = [
-            eid for eid, sb in self._active.items()
-            if now - sb.last_used > timeout
-        ]
+        stale = [eid for eid, sb in self._active.items() if now - sb.last_used > timeout]
 
         for eid in stale:
             await self.release(eid)

@@ -108,22 +108,28 @@ class GatewayApprovalService:
         gateway_approvals_pending.inc()
 
         # Publish SSE event for admin UI
-        event_data = json.dumps({
-            "type": "approval_required",
-            "approval_id": approval_id,
-            "agent_id": agent_id,
-            "execution_id": execution_id,
-            "category": category,
-            "action": action,
-            "tool_name": tool_name,
-            "args_preview": args_preview,
-            "timeout_seconds": timeout,
-        })
+        event_data = json.dumps(
+            {
+                "type": "approval_required",
+                "approval_id": approval_id,
+                "agent_id": agent_id,
+                "execution_id": execution_id,
+                "category": category,
+                "action": action,
+                "tool_name": tool_name,
+                "args_preview": args_preview,
+                "timeout_seconds": timeout,
+            }
+        )
         await self._redis.publish("gateway:approvals", event_data)
 
         logger.info(
             "Created approval %s for %s/%s (agent %s, timeout %ds)",
-            approval_id, category, action, agent_id, timeout,
+            approval_id,
+            category,
+            action,
+            agent_id,
+            timeout,
         )
         return approval_id
 
@@ -163,9 +169,7 @@ class GatewayApprovalService:
         gateway_approvals_pending.dec()
 
         # Notify waiting handler via Redis pub/sub
-        await self._redis.publish(
-            f"gateway:decision:{approval_id}", "approved"
-        )
+        await self._redis.publish(f"gateway:decision:{approval_id}", "approved")
 
         # "Approve & Remember" → create pre-approval rule
         if remember and remember_pattern:
@@ -206,9 +210,7 @@ class GatewayApprovalService:
         gateway_approvals_pending.dec()
 
         # Notify waiting handler
-        await self._redis.publish(
-            f"gateway:decision:{approval_id}", "rejected"
-        )
+        await self._redis.publish(f"gateway:decision:{approval_id}", "rejected")
 
         logger.info("Approval %s rejected by %s", approval_id, admin_id)
         return True
@@ -231,9 +233,7 @@ class GatewayApprovalService:
             while time.time() < deadline:
                 remaining = max(0.1, deadline - time.time())
                 wait_time = min(remaining, 0.1)
-                msg = await pubsub.get_message(
-                    ignore_subscribe_messages=True, timeout=wait_time
-                )
+                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=wait_time)
                 if msg and msg["type"] == "message":
                     decision = msg["data"]
                     if isinstance(decision, bytes):
@@ -277,9 +277,7 @@ class GatewayApprovalService:
         """Create a pre-approval rule from an "Approve & Remember" decision."""
         # Load the approval to get context
         result = await self._db.execute(
-            select(GatewayPendingApproval).where(
-                GatewayPendingApproval.id == approval_id
-            )
+            select(GatewayPendingApproval).where(GatewayPendingApproval.id == approval_id)
         )
         approval = result.scalar_one_or_none()
         if not approval:
@@ -288,9 +286,7 @@ class GatewayApprovalService:
         # Validate the pattern
         error = validate_remember_pattern(pattern, approval.agent_id)
         if error:
-            logger.warning(
-                "Skipping rule creation for approval %s: %s", approval_id, error
-            )
+            logger.warning("Skipping rule creation for approval %s: %s", approval_id, error)
             return
 
         # Check rule limit per agent
@@ -306,7 +302,9 @@ class GatewayApprovalService:
         if rule_count >= MAX_RULES_PER_AGENT:
             logger.warning(
                 "Agent %s has %d rules (max %d), skipping rule creation",
-                approval.agent_id, rule_count, MAX_RULES_PER_AGENT,
+                approval.agent_id,
+                rule_count,
+                MAX_RULES_PER_AGENT,
             )
             return
 
@@ -326,7 +324,11 @@ class GatewayApprovalService:
 
         logger.info(
             "Created rule %s from approval %s: %s/%s pattern=%s",
-            rule.id, approval_id, approval.category, approval.action, pattern,
+            rule.id,
+            approval_id,
+            approval.category,
+            approval.action,
+            pattern,
         )
 
     async def timeout_expired_approvals(self) -> int:

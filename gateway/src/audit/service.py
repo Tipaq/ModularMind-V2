@@ -49,11 +49,13 @@ class AuditService:
         total = (await self._db.execute(count_base)).scalar_one()
 
         rows = (
-            await self._db.execute(
-                base.order_by(GatewayAuditLog.created_at.desc())
-                .limit(limit)
-                .offset(offset)
+            (
+                await self._db.execute(
+                    base.order_by(GatewayAuditLog.created_at.desc()).limit(limit).offset(offset)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         return rows, total

@@ -28,10 +28,18 @@ MAX_GREP_RESULTS = 500
 MAX_EDITS = 50
 MAX_BATCH_FILES = 20
 
-SAFE_ACTIONS = frozenset({
-    "read", "read_media", "read_multiple",
-    "list", "list_with_sizes", "tree", "info", "search",
-})
+SAFE_ACTIONS = frozenset(
+    {
+        "read",
+        "read_media",
+        "read_multiple",
+        "list",
+        "list_with_sizes",
+        "tree",
+        "info",
+        "search",
+    }
+)
 
 
 class FilesystemExecutor(BaseExecutor):
@@ -102,9 +110,7 @@ class FilesystemExecutor(BaseExecutor):
     # Safe actions (read-only, non-destructive)
     # -----------------------------------------------------------------
 
-    async def _read(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _read(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         path = args.get("path", "")
         if not path:
             return "Error: path is required."
@@ -119,33 +125,25 @@ class FilesystemExecutor(BaseExecutor):
         else:
             cmd = f"cat {shlex.quote(path)}"
 
-        exit_code, output = await self._exec(
-            sandbox_mgr, execution_id, cmd, is_safe=True
-        )
+        exit_code, output = await self._exec(sandbox_mgr, execution_id, cmd, is_safe=True)
         if exit_code != 0:
             return f"Error reading file: {output.strip()}"
         if len(output) > MAX_READ_SIZE:
             return output[:MAX_READ_SIZE] + "\n... [truncated]"
         return output
 
-    async def _read_media(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _read_media(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         path = args.get("path", "")
         if not path:
             return "Error: path is required."
 
         cmd = f"base64 {shlex.quote(path)}"
-        exit_code, output = await self._exec(
-            sandbox_mgr, execution_id, cmd, is_safe=True
-        )
+        exit_code, output = await self._exec(sandbox_mgr, execution_id, cmd, is_safe=True)
         if exit_code != 0:
             return f"Error reading media file: {output.strip()}"
 
         mime_cmd = f"file --mime-type -b {shlex.quote(path)}"
-        _, mime = await self._exec(
-            sandbox_mgr, execution_id, mime_cmd, is_safe=True
-        )
+        _, mime = await self._exec(sandbox_mgr, execution_id, mime_cmd, is_safe=True)
 
         return f"data:{mime.strip()};base64,{output.strip()}"
 
@@ -161,9 +159,7 @@ class FilesystemExecutor(BaseExecutor):
         results = []
         for file_path in paths:
             cmd = f"cat {shlex.quote(file_path)}"
-            exit_code, output = await self._exec(
-                sandbox_mgr, execution_id, cmd, is_safe=True
-            )
+            exit_code, output = await self._exec(sandbox_mgr, execution_id, cmd, is_safe=True)
             if exit_code != 0:
                 results.append(f"--- {file_path} ---\nError: {output.strip()}")
             else:
@@ -172,9 +168,7 @@ class FilesystemExecutor(BaseExecutor):
 
         return "\n\n".join(results)
 
-    async def _list(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _list(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         path = args.get("path", "/workspace")
         recursive = args.get("recursive", False)
 
@@ -183,9 +177,7 @@ class FilesystemExecutor(BaseExecutor):
         else:
             cmd = f"ls -la {shlex.quote(path)}"
 
-        exit_code, output = await self._exec(
-            sandbox_mgr, execution_id, cmd, is_safe=True
-        )
+        exit_code, output = await self._exec(sandbox_mgr, execution_id, cmd, is_safe=True)
         if exit_code != 0:
             return f"Error listing directory: {output.strip()}"
         return _truncate_lines(output, MAX_LIST_ENTRIES)
@@ -199,16 +191,12 @@ class FilesystemExecutor(BaseExecutor):
         sort_flag = {"size": "-lS", "time": "-lt", "name": "-l"}.get(sort, "-l")
         cmd = f"ls {sort_flag} {shlex.quote(path)}"
 
-        exit_code, output = await self._exec(
-            sandbox_mgr, execution_id, cmd, is_safe=True
-        )
+        exit_code, output = await self._exec(sandbox_mgr, execution_id, cmd, is_safe=True)
         if exit_code != 0:
             return f"Error listing directory: {output.strip()}"
         return _truncate_lines(output, MAX_LIST_ENTRIES)
 
-    async def _tree(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _tree(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         path = args.get("path", "/workspace")
         max_depth = min(max(int(args.get("max_depth", 3)), 1), 5)
         excludes = args.get("exclude", [])
@@ -220,31 +208,23 @@ class FilesystemExecutor(BaseExecutor):
         prune = " ".join(prune_parts)
         cmd = f"find {shlex.quote(path)} -maxdepth {max_depth} {prune} -print"
 
-        exit_code, output = await self._exec(
-            sandbox_mgr, execution_id, cmd, is_safe=True
-        )
+        exit_code, output = await self._exec(sandbox_mgr, execution_id, cmd, is_safe=True)
         if exit_code != 0:
             return f"Error building tree: {output.strip()}"
         return _truncate_lines(output, MAX_LIST_ENTRIES)
 
-    async def _info(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _info(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         path = args.get("path", "")
         if not path:
             return "Error: path is required."
 
         cmd = f"stat {shlex.quote(path)}"
-        exit_code, output = await self._exec(
-            sandbox_mgr, execution_id, cmd, is_safe=True
-        )
+        exit_code, output = await self._exec(sandbox_mgr, execution_id, cmd, is_safe=True)
         if exit_code != 0:
             return f"Error getting file info: {output.strip()}"
         return output
 
-    async def _search(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _search(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         pattern = args.get("pattern", "")
         if not pattern:
             return "Error: pattern is required."
@@ -263,9 +243,7 @@ class FilesystemExecutor(BaseExecutor):
         cmd_parts.extend(["-e", shlex.quote(pattern), shlex.quote(path)])
 
         cmd = " ".join(cmd_parts)
-        exit_code, output = await self._exec(
-            sandbox_mgr, execution_id, cmd, is_safe=True
-        )
+        exit_code, output = await self._exec(sandbox_mgr, execution_id, cmd, is_safe=True)
 
         if not output or not output.strip():
             return "No matches found."
@@ -276,9 +254,7 @@ class FilesystemExecutor(BaseExecutor):
     # Critical actions (write / destructive — always sandbox)
     # -----------------------------------------------------------------
 
-    async def _write(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _write(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         path = args.get("path", "")
         content = args.get("content", "")
         if not path:
@@ -287,7 +263,8 @@ class FilesystemExecutor(BaseExecutor):
         parent = "/".join(path.split("/")[:-1])
         if parent:
             await self._exec(
-                sandbox_mgr, execution_id,
+                sandbox_mgr,
+                execution_id,
                 f"mkdir -p {shlex.quote(parent)}",
             )
 
@@ -298,9 +275,7 @@ class FilesystemExecutor(BaseExecutor):
             return f"Error writing file: {output.strip()}"
         return f"File written: {path} ({len(content)} bytes)"
 
-    async def _edit(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _edit(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         path = args.get("path", "")
         if not path:
             return "Error: path is required."
@@ -313,9 +288,7 @@ class FilesystemExecutor(BaseExecutor):
 
         dry_run = args.get("dry_run", False)
 
-        exit_code, content = await self._exec(
-            sandbox_mgr, execution_id, f"cat {shlex.quote(path)}"
-        )
+        exit_code, content = await self._exec(sandbox_mgr, execution_id, f"cat {shlex.quote(path)}")
         if exit_code != 0:
             return f"Error reading file: {content}"
 
@@ -344,9 +317,7 @@ class FilesystemExecutor(BaseExecutor):
             return f"Error writing file: {output}"
         return f"Applied {len(edits)} edits to {path}."
 
-    async def _delete(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _delete(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         path = args.get("path", "")
         if not path:
             return "Error: path is required."
@@ -354,16 +325,15 @@ class FilesystemExecutor(BaseExecutor):
             return "Error: cannot delete workspace root."
 
         exit_code, output = await self._exec(
-            sandbox_mgr, execution_id,
+            sandbox_mgr,
+            execution_id,
             f"rm -f {shlex.quote(path)}",
         )
         if exit_code != 0:
             return f"Error deleting file: {output.strip()}"
         return f"File deleted: {path}"
 
-    async def _move(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _move(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         source = args.get("source", "")
         destination = args.get("destination", "")
         if not source or not destination:
@@ -375,9 +345,7 @@ class FilesystemExecutor(BaseExecutor):
             return f"Error moving file: {output.strip()}"
         return f"Moved: {source} → {destination}"
 
-    async def _mkdir(
-        self, args: dict, sandbox_mgr: SandboxManager, execution_id: str
-    ) -> str:
+    async def _mkdir(self, args: dict, sandbox_mgr: SandboxManager, execution_id: str) -> str:
         path = args.get("path", "")
         if not path:
             return "Error: path is required."
