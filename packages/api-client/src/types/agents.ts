@@ -1,5 +1,7 @@
 import type { PaginatedResponse } from "./common";
 
+export type ToolCategories = Record<string, boolean | Record<string, boolean>>;
+
 // ─── Engine API types (match Python AgentSummary / AgentDetail) ──────────────
 
 export interface Agent {
@@ -15,7 +17,7 @@ export interface Agent {
   rag_collection_ids: string[];
   rag_retrieval_count: number;
   rag_similarity_threshold: number;
-  tool_categories: Record<string, boolean>;
+  tool_categories: ToolCategories;
 }
 
 export interface AgentDetail extends Agent {
@@ -45,7 +47,7 @@ export interface AgentCreateInput {
   memory_enabled?: boolean;
   timeout_seconds?: number;
   rag_config?: RAGConfigInput;
-  tool_categories?: Record<string, boolean>;
+  tool_categories?: ToolCategories;
   gateway_permissions?: Record<string, unknown> | null;
   capabilities?: string[];
   routing_metadata?: Record<string, unknown>;
@@ -59,7 +61,7 @@ export interface AgentUpdateInput {
   memory_enabled?: boolean;
   timeout_seconds?: number;
   rag_config?: RAGConfigInput;
-  tool_categories?: Record<string, boolean>;
+  tool_categories?: ToolCategories;
   gateway_permissions?: Record<string, unknown> | null;
   capabilities?: string[];
   routing_metadata?: Record<string, unknown>;
