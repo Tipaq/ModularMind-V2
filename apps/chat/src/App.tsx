@@ -5,6 +5,8 @@ import { ThemeProvider, ErrorBoundary, RouteLoader } from "@modularmind/ui";
 import ChatLayout from "./layouts/ChatLayout";
 import Login from "./pages/Login";
 
+const SETUP_CHECK_TIMEOUT_MS = 5000;
+
 // Lazy-loaded routes
 const Chat = lazy(() => import("./pages/Chat"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -18,7 +20,7 @@ function SetupRedirect({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (ready) return;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), SETUP_CHECK_TIMEOUT_MS);
 
     fetch("/api/v1/setup/status", { signal: controller.signal })
       .then((r) => r.json())
