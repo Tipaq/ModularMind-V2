@@ -101,7 +101,7 @@ export function Chat() {
   }), [chatConfig, effectiveModelId]);
 
   const handleCompact = useCallback(async () => {
-    if (!activeConversationId) return;
+    if (!activeConversationId) return { summary_preview: "", compacted_count: 0, duration_ms: 0 };
     return conversationAdapter.compactConversation(activeConversationId);
   }, [activeConversationId]);
 

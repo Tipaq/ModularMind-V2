@@ -74,7 +74,7 @@ export const conversationAdapter: ConversationAdapter = {
   },
 
   async compactConversation(id) {
-    return api.post(`/conversations/${id}/compact`);
+    return api.post<{ summary_preview: string; compacted_count: number; duration_ms: number }>(`/conversations/${id}/compact`);
   },
 };
 
