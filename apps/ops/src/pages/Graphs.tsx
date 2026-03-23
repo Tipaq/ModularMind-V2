@@ -48,7 +48,15 @@ export function Graphs() {
     if (creating) return;
     setCreating(true);
     try {
-      const graph = await createGraph({ name: "Untitled Graph" });
+      const graph = await createGraph({
+        name: "Untitled Graph",
+        entry_node_id: "start-1",
+        nodes: [
+          { id: "start-1", type: "start", data: { type: "start", label: "Start", position: { x: 250, y: 50 } } },
+          { id: "end-1", type: "end", data: { type: "end", label: "End", position: { x: 250, y: 300 } } },
+        ],
+        edges: [],
+      });
       navigate(`/graphs/${graph.id}?edit=true`);
     } finally {
       setCreating(false);
