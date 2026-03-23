@@ -14,6 +14,7 @@ from pathlib import Path
 
 from src.infra.config import get_settings
 from src.mcp import MCPClientError, MCPRegistry
+from src.mcp.sidecar import SidecarError
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +204,7 @@ async def _auto_deploy_free_catalog_entries() -> None:
                     entry.name,
                     config.transport.value,
                 )
-            except (OSError, RuntimeError, ConnectionError, TimeoutError, ValueError) as e:
+            except (OSError, RuntimeError, ConnectionError, TimeoutError, ValueError, SidecarError) as e:
                 logger.warning("MCP auto-deploy: failed to deploy %s: %s", entry.name, e)
                 continue
 
@@ -239,7 +240,7 @@ async def startup_mcp(*, leader_only: bool = False) -> None:
         if settings.MCP_AUTO_DEPLOY_FREE:
             try:
                 await _auto_deploy_free_catalog_entries()
-            except (OSError, RuntimeError, ConnectionError, TimeoutError, ValueError) as e:
+            except (OSError, RuntimeError, ConnectionError, TimeoutError, ValueError, SidecarError) as e:
                 logger.warning("MCP free auto-deploy failed (non-fatal): %s", e)
         return
 
@@ -250,7 +251,7 @@ async def startup_mcp(*, leader_only: bool = False) -> None:
             recovered = await manager.recover_sidecars()
             if recovered:
                 logger.info("Recovered %d MCP sidecar(s) from previous run", len(recovered))
-        except (OSError, RuntimeError) as e:
+        except (OSError, RuntimeError, SidecarError) as e:
             logger.warning("MCP sidecar recovery failed (Docker may not be available): %s", e)
     else:
         logger.info("Docker SDK not available — MCP sidecar auto-provisioning disabled")

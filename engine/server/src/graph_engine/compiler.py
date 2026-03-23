@@ -5,6 +5,8 @@ Compiles graph configurations into executable LangGraph StateGraphs.
 Supports: agent, tool, subgraph, condition, parallel, merge, loop nodes.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json as json_module
 import logging
