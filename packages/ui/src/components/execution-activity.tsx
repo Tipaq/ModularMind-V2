@@ -43,17 +43,25 @@ const ACTIVITY_ICON: Record<ActivityType, React.ElementType> = {
   graph_execution: Workflow,
 };
 
-const ActivityItem = memo(function ActivityItem({ activity }: { activity: ExecutionActivity }) {
-  const [expanded, setExpanded] = useState(false);
-  const Icon = ACTIVITY_ICON[activity.type] || Bot;
-  const color = ACTIVITY_COLORS[activity.type] || "text-muted-foreground";
+function flattenActivities(activities: ExecutionActivity[]): ExecutionActivity[] {
+  const result: ExecutionActivity[] = [];
+  for (const activity of activities) {
+    if (activity.type === "graph_execution") {
+      result.push({ ...activity, type: "graph_execution" });
+      if (activity.children?.length) {
+        result.push(...activity.children);
+      }
+    } else {
+      result.push(activity);
+    }
+  }
+  return result;
+}
 
+function GraphHeader({ activity }: { activity: ExecutionActivity }) {
+  const color = ACTIVITY_COLORS.graph_execution || "text-muted-foreground";
   return (
-    <div
-      className="flex items-start gap-2 py-1 cursor-pointer"
-      onClick={() => activity.preview && setExpanded(!expanded)}
-    >
-      {/* Status indicator */}
+    <div className="flex items-center gap-2 py-1">
       <div className="mt-0.5">
         {activity.status === "running" ? (
           <Loader2 className={cn("h-3.5 w-3.5 animate-spin", color)} />
@@ -63,28 +71,51 @@ const ActivityItem = memo(function ActivityItem({ activity }: { activity: Execut
           <CheckCircle2 className={cn("h-3.5 w-3.5", color)} />
         )}
       </div>
+      <Workflow className={cn("h-3.5 w-3.5 shrink-0", color)} />
+      <span className="text-xs font-medium">{activity.label}</span>
+      {activity.durationMs != null && (
+        <span className="ml-auto text-[10px] text-muted-foreground">
+          {formatDurationMs(activity.durationMs)}
+        </span>
+      )}
+    </div>
+  );
+}
 
-      {/* Icon */}
-      <Icon className={cn("h-3.5 w-3.5 mt-0.5 shrink-0", color)} />
+const ActivityChildItem = memo(function ActivityChildItem({ activity }: { activity: ExecutionActivity }) {
+  const [expanded, setExpanded] = useState(false);
+  const Icon = ACTIVITY_ICON[activity.type] || Bot;
+  const color = ACTIVITY_COLORS[activity.type] || "text-muted-foreground";
 
-      {/* Content */}
+  return (
+    <div
+      className="flex items-start gap-2 py-0.5 cursor-pointer"
+      onClick={() => activity.preview && setExpanded(!expanded)}
+    >
+      <div className="mt-0.5">
+        {activity.status === "running" ? (
+          <Loader2 className={cn("h-3 w-3 animate-spin", color)} />
+        ) : activity.status === "failed" ? (
+          <XCircle className="h-3 w-3 text-destructive" />
+        ) : (
+          <CheckCircle2 className={cn("h-3 w-3", color)} />
+        )}
+      </div>
+      <Icon className={cn("h-3 w-3 mt-0.5 shrink-0", color)} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-medium truncate">{activity.label}</span>
+          <span className="text-[11px] truncate">{activity.label}</span>
           {activity.detail && (
-            <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded shrink-0">
+            <span className="text-[9px] text-muted-foreground bg-muted px-1 rounded shrink-0">
               {activity.detail}
             </span>
           )}
           <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
             {activity.durationMs != null ? formatDurationMs(activity.durationMs) : ""}
           </span>
-          {activity.preview && (
-            expanded ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-          )}
         </div>
         {expanded && activity.preview && (
-          <p className="text-[11px] text-muted-foreground mt-1 whitespace-pre-wrap break-words bg-muted/50 rounded p-1.5">
+          <p className="text-[10px] text-muted-foreground mt-1 whitespace-pre-wrap break-words bg-muted/50 rounded p-1.5">
             {activity.preview}
           </p>
         )}
@@ -93,10 +124,76 @@ const ActivityItem = memo(function ActivityItem({ activity }: { activity: Execut
   );
 });
 
+const ActivityItem = memo(function ActivityItem({ activity }: { activity: ExecutionActivity }) {
+  const [expanded, setExpanded] = useState(activity.status === "running");
+  const Icon = ACTIVITY_ICON[activity.type] || Bot;
+  const color = ACTIVITY_COLORS[activity.type] || "text-muted-foreground";
+  const hasChildren = (activity.children?.length ?? 0) > 0;
+  const isExpandable = hasChildren || !!activity.preview;
+
+  return (
+    <div>
+      <div
+        className={cn("flex items-start gap-2 py-1", isExpandable && "cursor-pointer")}
+        onClick={() => isExpandable && setExpanded(!expanded)}
+      >
+        <div className="mt-0.5">
+          {activity.status === "running" ? (
+            <Loader2 className={cn("h-3.5 w-3.5 animate-spin", color)} />
+          ) : activity.status === "failed" ? (
+            <XCircle className="h-3.5 w-3.5 text-destructive" />
+          ) : (
+            <CheckCircle2 className={cn("h-3.5 w-3.5", color)} />
+          )}
+        </div>
+        <Icon className={cn("h-3.5 w-3.5 mt-0.5 shrink-0", color)} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium truncate">{activity.label}</span>
+            {activity.detail && (
+              <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded shrink-0">
+                {activity.detail}
+              </span>
+            )}
+            <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
+              {activity.durationMs != null ? formatDurationMs(activity.durationMs) : ""}
+            </span>
+            {isExpandable && (
+              expanded
+                ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+            )}
+          </div>
+        </div>
+      </div>
+      {expanded && activity.preview && (
+        <div className="ml-9 mb-1">
+          <p className="text-[11px] text-muted-foreground whitespace-pre-wrap break-words bg-muted/50 rounded p-1.5">
+            {activity.preview}
+          </p>
+        </div>
+      )}
+      {expanded && hasChildren && (
+        <div className="ml-6 pl-3 border-l border-border/50 space-y-0">
+          {activity.children!.map((child) => (
+            <ActivityChildItem key={child.id} activity={child} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+function renderActivityItem(activity: ExecutionActivity) {
+  if (activity.type === "graph_execution") {
+    return <GraphHeader key={activity.id} activity={activity} />;
+  }
+  return <ActivityItem key={activity.id} activity={activity} />;
+}
+
 export interface ExecutionActivityListProps {
   activities: ExecutionActivity[];
   isStreaming: boolean;
-  /** When true, skip the collapsible summary and always show all items (used inside panels). */
   flat?: boolean;
 }
 
@@ -106,10 +203,11 @@ export const ExecutionActivityList = memo(function ExecutionActivityList({
   flat,
 }: ExecutionActivityListProps) {
   const [expanded, setExpanded] = useState(false);
+  const items = flattenActivities(activities);
 
-  if (activities.length === 0 && !isStreaming) return null;
+  if (items.length === 0 && !isStreaming) return null;
 
-  if (activities.length === 0 && isStreaming) {
+  if (items.length === 0 && isStreaming) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Loader2 className="h-3 w-3 animate-spin" />
@@ -118,10 +216,9 @@ export const ExecutionActivityList = memo(function ExecutionActivityList({
     );
   }
 
-  // While streaming: show last 10
   if (isStreaming) {
-    const visible = activities.slice(-MAX_VISIBLE_ACTIVITIES);
-    const hidden = activities.length - visible.length;
+    const visible = items.slice(-MAX_VISIBLE_ACTIVITIES);
+    const hidden = items.length - visible.length;
     return (
       <div className="space-y-0.5">
         {hidden > 0 && (
@@ -129,36 +226,31 @@ export const ExecutionActivityList = memo(function ExecutionActivityList({
             +{hidden} earlier steps
           </p>
         )}
-        {visible.map((a) => (
-          <ActivityItem key={a.id} activity={a} />
-        ))}
+        {visible.map((a) => renderActivityItem(a))}
       </div>
     );
   }
 
-  // flat mode (inside panel): show all items directly, no inner collapse
   if (flat) {
     return (
       <div className="space-y-0.5">
-        {activities.map((a) => (
-          <ActivityItem key={a.id} activity={a} />
-        ))}
+        {items.map((a) => renderActivityItem(a))}
       </div>
     );
   }
 
-  // After completion: collapsible summary
-  const llmCount = activities.filter((a) => a.type === "llm").length;
-  const toolCount = activities.filter((a) => a.type === "tool").length;
-  const totalMs = activities.reduce((sum, a) => sum + (a.durationMs || 0), 0);
+  const agentCount = items.filter((a) => a.type === "agent_execution").length;
+  const llmCount = items.filter((a) => a.type === "llm").length;
+  const toolCount = items.filter((a) => a.type === "tool").length;
+  const totalMs = items.reduce((sum, a) => sum + (a.durationMs || 0), 0);
   const parts: string[] = [];
-  parts.push(`${activities.length} steps`);
+  if (agentCount > 0) parts.push(`${agentCount} agents`);
+  else parts.push(`${items.length} steps`);
   if (llmCount > 0) parts.push(`${llmCount} LLM`);
   if (toolCount > 0) parts.push(`${toolCount} tools`);
 
   return (
     <div>
-      {/* Button mirrors ActivityItem layout: [status-col] [icon-col] [content-col] */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-start gap-2 py-1 w-full text-muted-foreground hover:text-foreground transition-colors"
@@ -176,7 +268,7 @@ export const ExecutionActivityList = memo(function ExecutionActivityList({
       </button>
       {expanded && (
         <div className="mt-0.5 space-y-0.5">
-          {activities.map((a) => (
+          {items.map((a) => (
             <ActivityItem key={a.id} activity={a} />
           ))}
         </div>

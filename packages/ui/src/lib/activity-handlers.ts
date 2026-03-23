@@ -1,5 +1,6 @@
 import type { ExecutionActivity } from "../types/chat";
 import { truncate, completeLastRunning, appendChild, updateChildDeep } from "./activity-tree";
+import { formatModelName } from "./utils";
 
 type SetActivities = React.Dispatch<React.SetStateAction<ExecutionActivity[]>>;
 type SeqRef = React.MutableRefObject<number>;
@@ -10,7 +11,7 @@ export function handleLlmStart(data: EventData, agentParent: string | null, seqR
   const id = `llm-${++seqRef.current}`;
   const model = (data.model as string) || "LLM";
   const activity: ExecutionActivity = {
-    id, type: "llm", status: "running", label: `Calling ${model}`,
+    id, type: "llm", status: "running", label: `Calling ${formatModelName(model)}`,
     detail: data.message_count ? `${data.message_count} messages` : undefined,
     model, preview: data.prompt_preview ? truncate(data.prompt_preview as string, 120) : undefined,
     startedAt: Date.now(),
