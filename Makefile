@@ -23,7 +23,7 @@ dev: ## Start all backend services (Docker, attached)
 	docker compose -f docker/docker-compose.dev.yml up --build
 
 dev-all: build-sandbox ## Start everything (Docker backend + frontends)
-	docker compose -f docker/docker-compose.dev.yml up -d --build engine worker gateway && \
+	docker compose -f docker/docker-compose.dev.yml up -d --build engine worker-exec worker-pipeline gateway && \
 	npx concurrently -n chat,ops -c cyan,magenta \
 		"pnpm dev:chat" \
 		"pnpm dev:ops"

@@ -52,7 +52,7 @@ services:
     entrypoint: ["sh", "/app/entrypoint.sh"]
     command: uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
-  worker:
+  worker-exec:
     image: modularmind/engine:dev
     volumes:
       - ../engine/server/src:/app/src
@@ -65,6 +65,28 @@ services:
       <<: *engine-env
       GATEWAY_ENABLED: "true"
       GATEWAY_URL: http://gateway:8200
+      WORKER_STREAMS: executions,models,scheduled_tasks
+      WORKER_SCHEDULER: "true"
+    depends_on:
+      engine:
+        condition: service_started
+      <<: *engine-depends
+    entrypoint: []
+    command: watchfiles --filter python "python -m src.worker.runner" /app/src
+
+  worker-pipeline:
+    image: modularmind/engine:dev
+    volumes:
+      - ../engine/server/src:/app/src
+      - ../engine/server/seed:/app/seed
+      - ../engine/server/seeds:/app/seeds
+      - ../shared/src:/tmp/shared-src
+      - engine-config:/data/config
+    environment:
+      <<: *engine-env
+      WORKER_STREAMS: documents,memory
+      WORKER_SCHEDULER: "false"
+      WORKER_HEALTH_PORT: "8002"
     depends_on:
       engine:
         condition: service_started
