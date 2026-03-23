@@ -1,15 +1,9 @@
-/**
- * Base HTTP client for Engine API.
- *
- * Features:
- * - HttpOnly cookie auth (no Authorization header)
- * - Automatic token refresh on 401
- * - Refresh mutex to prevent concurrent refresh requests
- * - Dispatches "auth:session-expired" event when refresh fails
- */
-
-/** Event name dispatched on window when the session cannot be refreshed. */
 export const AUTH_SESSION_EXPIRED_EVENT = "auth:session-expired";
+
+const CONTENT_TYPE_JSON = "application/json";
+const HTTP_NO_CONTENT = 204;
+const EMPTY_CONTENT_LENGTH = "0";
+const HTTP_UNAUTHORIZED = 401;
 
 type RequestOptions = {
   method?: string;
@@ -17,6 +11,30 @@ type RequestOptions = {
   headers?: Record<string, string>;
   signal?: AbortSignal;
 };
+
+type FormDataFactory = () => FormData;
+
+function serializeBody(body: unknown): string | undefined {
+  if (body === undefined || body === null) return undefined;
+  if (typeof body === "string") return body;
+  return JSON.stringify(body);
+}
+
+function isEmptyResponse(response: Response): boolean {
+  return (
+    response.status === HTTP_NO_CONTENT ||
+    response.headers.get("content-length") === EMPTY_CONTENT_LENGTH
+  );
+}
+
+async function parseJsonSafely<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new ApiError(response.status, text);
+  }
+}
 
 export class ApiClient {
   private baseUrl: string;
@@ -26,49 +44,68 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  async request<T>(path: string, options: RequestOptions = {}): Promise<T | undefined> {
     const { method = "GET", body, headers = {}, signal } = options;
+    const serializedBody = serializeBody(body);
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
+    const buildFetchOptions = (): RequestInit => ({
       method,
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
-      body: body ? JSON.stringify(body) : undefined,
+      headers: { "Content-Type": CONTENT_TYPE_JSON, ...headers },
+      body: serializedBody,
       signal,
     });
 
-    if (response.status === 401) {
+    const response = await fetch(`${this.baseUrl}${path}`, buildFetchOptions());
+
+    if (response.status === HTTP_UNAUTHORIZED) {
       const refreshed = await this.refresh();
-      if (!refreshed) {
-        throw new ApiError(401, "Session expired");
-      }
-      // Retry once after refresh
-      const retry = await fetch(`${this.baseUrl}${path}`, {
-        method,
-        credentials: "include",
-        headers: { "Content-Type": "application/json", ...headers },
-        body: body ? JSON.stringify(body) : undefined,
-        signal,
-      });
-      if (!retry.ok) throw new ApiError(retry.status, await retry.text());
-      if (retry.status === 204 || retry.headers.get("content-length") === "0") {
-        return undefined as T;
-      }
-      return retry.json();
+      if (!refreshed) throw new ApiError(HTTP_UNAUTHORIZED, "Session expired");
+      return this.handleResponse<T>(
+        await fetch(`${this.baseUrl}${path}`, buildFetchOptions()),
+      );
     }
 
-    if (!response.ok) {
-      throw new ApiError(response.status, await response.text());
+    return this.handleResponse<T>(response);
+  }
+
+  async upload<T>(
+    path: string,
+    formDataOrFactory: FormData | FormDataFactory,
+  ): Promise<T | undefined> {
+    const buildFormData = typeof formDataOrFactory === "function"
+      ? formDataOrFactory
+      : (): FormData => {
+          const cloned = new FormData();
+          for (const [key, value] of formDataOrFactory.entries()) {
+            cloned.append(key, value);
+          }
+          return cloned;
+        };
+
+    const buildFetchOptions = (): RequestInit => ({
+      method: "POST",
+      credentials: "include",
+      body: buildFormData(),
+    });
+
+    const response = await fetch(`${this.baseUrl}${path}`, buildFetchOptions());
+
+    if (response.status === HTTP_UNAUTHORIZED) {
+      const refreshed = await this.refresh();
+      if (!refreshed) throw new ApiError(HTTP_UNAUTHORIZED, "Session expired");
+      return this.handleResponse<T>(
+        await fetch(`${this.baseUrl}${path}`, buildFetchOptions()),
+      );
     }
 
-    if (response.status === 204 || response.headers.get("content-length") === "0") {
-      return undefined as T;
-    }
+    return this.handleResponse<T>(response);
+  }
 
-    return response.json();
+  private async handleResponse<T>(response: Response): Promise<T | undefined> {
+    if (!response.ok) throw new ApiError(response.status, await response.text());
+    if (isEmptyResponse(response)) return undefined;
+    return parseJsonSafely<T>(response);
   }
 
   private async refresh(): Promise<boolean> {
@@ -106,30 +143,6 @@ export class ApiClient {
 
   delete<T>(path: string) {
     return this.request<T>(path, { method: "DELETE" });
-  }
-
-  /** Upload a FormData payload (multipart/form-data). Content-Type is set by the browser. */
-  async upload<T>(path: string, formData: FormData): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-
-    if (response.status === 401) {
-      const refreshed = await this.refresh();
-      if (!refreshed) throw new ApiError(401, "Session expired");
-      const retry = await fetch(`${this.baseUrl}${path}`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-      if (!retry.ok) throw new ApiError(retry.status, await retry.text());
-      return retry.json();
-    }
-
-    if (!response.ok) throw new ApiError(response.status, await response.text());
-    return response.json();
   }
 }
 

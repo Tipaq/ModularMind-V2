@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClient, ApiError, AUTH_SESSION_EXPIRED_EVENT } from "./client";
 
-// Mock fetch globally
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-// Mock window.dispatchEvent
 const mockDispatchEvent = vi.fn();
 vi.stubGlobal("window", { dispatchEvent: mockDispatchEvent });
 
@@ -32,8 +30,6 @@ describe("ApiClient", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  // ---- Successful requests ----
 
   it("makes a GET request with credentials", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ id: 1 }));
@@ -85,8 +81,6 @@ describe("ApiClient", () => {
     expect(result).toBeUndefined();
   });
 
-  // ---- Error handling ----
-
   it("throws ApiError on non-OK response", async () => {
     mockFetch.mockResolvedValueOnce(textResponse("Not Found", 404));
 
@@ -106,14 +100,31 @@ describe("ApiClient", () => {
     }
   });
 
-  // ---- 401 + Token refresh ----
+  it("throws ApiError on malformed JSON response", async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response("not-json{", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(api.get("/bad-json")).rejects.toThrow(ApiError);
+  });
+
+  it("does not double-stringify a string body", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    await api.request("/raw", { method: "POST", body: '{"pre":"stringified"}' });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ body: '{"pre":"stringified"}' }),
+    );
+  });
 
   it("retries after successful token refresh on 401", async () => {
-    // First call: 401
     mockFetch.mockResolvedValueOnce(textResponse("Unauthorized", 401));
-    // Refresh call: success
     mockFetch.mockResolvedValueOnce(new Response(null, { status: 200 }));
-    // Retry call: success
     mockFetch.mockResolvedValueOnce(jsonResponse({ refreshed: true }));
 
     const result = await api.get("/protected");
@@ -123,9 +134,7 @@ describe("ApiClient", () => {
   });
 
   it("dispatches session-expired event when refresh fails", async () => {
-    // First call: 401
     mockFetch.mockResolvedValueOnce(textResponse("Unauthorized", 401));
-    // Refresh call: fails
     mockFetch.mockResolvedValueOnce(new Response(null, { status: 401 }));
 
     await expect(api.get("/protected")).rejects.toThrow(ApiError);
@@ -135,12 +144,9 @@ describe("ApiClient", () => {
   });
 
   it("deduplicates concurrent refresh attempts", async () => {
-    // Both calls get 401
     mockFetch.mockResolvedValueOnce(textResponse("Unauthorized", 401));
     mockFetch.mockResolvedValueOnce(textResponse("Unauthorized", 401));
-    // Single refresh call
     mockFetch.mockResolvedValueOnce(new Response(null, { status: 200 }));
-    // Both retry calls succeed
     mockFetch.mockResolvedValueOnce(jsonResponse({ a: 1 }));
     mockFetch.mockResolvedValueOnce(jsonResponse({ b: 2 }));
 
@@ -151,11 +157,8 @@ describe("ApiClient", () => {
 
     expect(r1).toEqual({ a: 1 });
     expect(r2).toEqual({ b: 2 });
-    // 2 original + 1 refresh (deduplicated) + 2 retries = 5
     expect(mockFetch).toHaveBeenCalledTimes(5);
   });
-
-  // ---- HTTP methods ----
 
   it("put sends PUT method", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ updated: true }));
@@ -188,6 +191,68 @@ describe("ApiClient", () => {
       expect.any(String),
       expect.objectContaining({ method: "DELETE" }),
     );
+  });
+});
+
+describe("ApiClient.upload", () => {
+  let api: ApiClient;
+
+  beforeEach(() => {
+    api = new ApiClient("http://test/api/v1");
+    mockFetch.mockReset();
+    mockDispatchEvent.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("uploads FormData with POST", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ uploaded: true }));
+
+    const formData = new FormData();
+    formData.append("file", "content");
+
+    const result = await api.upload("/upload", formData);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://test/api/v1/upload",
+      expect.objectContaining({ method: "POST", credentials: "include" }),
+    );
+    expect(result).toEqual({ uploaded: true });
+  });
+
+  it("retries upload with cloned FormData on 401", async () => {
+    mockFetch.mockResolvedValueOnce(textResponse("Unauthorized", 401));
+    mockFetch.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    mockFetch.mockResolvedValueOnce(jsonResponse({ retried: true }));
+
+    const formData = new FormData();
+    formData.append("file", "content");
+
+    const result = await api.upload("/upload", formData);
+
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(result).toEqual({ retried: true });
+  });
+
+  it("accepts a factory function for FormData", async () => {
+    mockFetch.mockResolvedValueOnce(textResponse("Unauthorized", 401));
+    mockFetch.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    mockFetch.mockResolvedValueOnce(jsonResponse({ factory: true }));
+
+    let callCount = 0;
+    const factory = () => {
+      callCount++;
+      const fd = new FormData();
+      fd.append("file", "content");
+      return fd;
+    };
+
+    const result = await api.upload("/upload", factory);
+
+    expect(result).toEqual({ factory: true });
+    expect(callCount).toBe(2);
   });
 });
 
