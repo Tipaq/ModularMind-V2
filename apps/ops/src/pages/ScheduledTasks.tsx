@@ -13,6 +13,7 @@ import {
   ResourceTable,
   ResourceFilters,
   Switch,
+  ConfirmDialog,
 } from "@modularmind/ui";
 import type { ResourceColumn, ResourceFilterConfig } from "@modularmind/ui";
 import type { ScheduledTask } from "@modularmind/api-client";
@@ -58,6 +59,8 @@ export function ScheduledTasks() {
 
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ScheduledTask | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchTasks(1);
@@ -76,13 +79,16 @@ export function ScheduledTasks() {
     [navigate],
   );
 
-  const handleDelete = useCallback(
-    async (task: ScheduledTask) => {
-      if (!confirm(`Delete "${task.name}"?`)) return;
-      await deleteTask(task.id);
-    },
-    [deleteTask],
-  );
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteTask(deleteTarget.id);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  }, [deleteTarget, deleteTask]);
 
   const columns: ResourceColumn<ScheduledTask>[] = [
     {
@@ -194,7 +200,7 @@ export function ScheduledTasks() {
               <DropdownMenuItem onClick={() => duplicateTask(t.id)}>
                 <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleDelete(t)} className="text-destructive">
+              <DropdownMenuItem onClick={() => setDeleteTarget(t)} className="text-destructive">
                 <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -206,6 +212,17 @@ export function ScheduledTasks() {
         isOpen={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         onCreated={(task) => navigate(`/scheduled-tasks/${task.id}`)}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title={`Delete "${deleteTarget?.name}"?`}
+        description="This action cannot be undone. The scheduled task will be permanently removed."
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDeleteConfirm}
       />
     </div>
   );

@@ -13,6 +13,7 @@ import {
   ResourceTable,
   ResourceFilters,
   formatModelName,
+  ConfirmDialog,
 } from "@modularmind/ui";
 import type { ResourceColumn, ResourceFilterConfig } from "@modularmind/ui";
 import type { GraphListItem } from "@modularmind/api-client";
@@ -31,6 +32,8 @@ export function Graphs() {
 
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<GraphListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchGraphs(1);
@@ -68,13 +71,16 @@ export function Graphs() {
     [navigate],
   );
 
-  const handleDelete = useCallback(
-    async (graph: GraphListItem) => {
-      if (!confirm(`Delete "${graph.name}"?`)) return;
-      await deleteGraph(graph.id);
-    },
-    [deleteGraph],
-  );
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteGraph(deleteTarget.id);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  }, [deleteTarget, deleteGraph]);
 
   const columns: ResourceColumn<GraphListItem>[] = [
     {
@@ -184,12 +190,23 @@ export function Graphs() {
               <DropdownMenuItem onClick={() => duplicateGraph(g.id)}>
                 <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleDelete(g)} className="text-destructive">
+              <DropdownMenuItem onClick={() => setDeleteTarget(g)} className="text-destructive">
                 <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title={`Delete "${deleteTarget?.name}"?`}
+        description="This action cannot be undone. The graph and all its nodes will be permanently removed."
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDeleteConfirm}
       />
     </div>
   );

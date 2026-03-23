@@ -13,6 +13,7 @@ import {
   ResourceTable,
   ResourceFilters,
   formatModelName,
+  ConfirmDialog,
 } from "@modularmind/ui";
 import type { ResourceColumn, ResourceFilterConfig } from "@modularmind/ui";
 import type { Agent } from "@modularmind/api-client";
@@ -51,6 +52,8 @@ export function Agents() {
 
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchAgents(1);
@@ -69,13 +72,16 @@ export function Agents() {
     [navigate],
   );
 
-  const handleDelete = useCallback(
-    async (agent: Agent) => {
-      if (!confirm(`Delete "${agent.name}"?`)) return;
-      await deleteAgent(agent.id);
-    },
-    [deleteAgent],
-  );
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteAgent(deleteTarget.id);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  }, [deleteTarget, deleteAgent]);
 
   const columns: ResourceColumn<Agent>[] = [
     {
@@ -176,7 +182,7 @@ export function Agents() {
               <DropdownMenuItem onClick={() => duplicateAgent(a.id)}>
                 <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleDelete(a)} className="text-destructive">
+              <DropdownMenuItem onClick={() => setDeleteTarget(a)} className="text-destructive">
                 <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -188,6 +194,17 @@ export function Agents() {
         isOpen={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         onCreated={(agent) => navigate(`/agents/${agent.id}`)}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title={`Delete "${deleteTarget?.name}"?`}
+        description="This action cannot be undone. The agent and its configuration will be permanently removed."
+        confirmLabel="Delete"
+        destructive
+        loading={deleting}
+        onConfirm={handleDeleteConfirm}
       />
     </div>
   );
