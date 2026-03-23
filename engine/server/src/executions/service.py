@@ -421,7 +421,11 @@ class ExecutionService:
                 node_types = [n.type for n in graph_config.nodes] if graph_config else []
                 logger.info(
                     "Execution %s: graph=%s has_approval=%s timeout=%s node_types=%s",
-                    execution_id, execution.graph_id, has_approval, timeout, node_types,
+                    execution_id,
+                    execution.graph_id,
+                    has_approval,
+                    timeout,
+                    node_types,
                 )
 
             # Use a sentinel to distinguish execution-level timeout from internal ones
@@ -444,9 +448,7 @@ class ExecutionService:
                 _execution_timed_out = True
 
             if _execution_timed_out:
-                logger.error(
-                    "Execution %s timed out after %ds", execution_id, timeout
-                )
+                logger.error("Execution %s timed out after %ds", execution_id, timeout)
                 execution.status = ExecutionStatus.FAILED
                 execution.error_message = f"Execution timed out after {timeout}s"
                 execution.completed_at = utcnow()
@@ -823,12 +825,14 @@ class ExecutionService:
         def _node_started(nid: str, model: str | None) -> None:
             info = node_info.get(nid)
             if info and info["type"] not in ("start", "end"):
-                merged_queue.put_nowait({
-                    "_type": "step_started",
-                    "node_id": nid,
-                    "agent_name": info.get("label", nid),
-                    "model": model or info.get("model_id"),
-                })
+                merged_queue.put_nowait(
+                    {
+                        "_type": "step_started",
+                        "node_id": nid,
+                        "agent_name": info.get("label", nid),
+                        "model": model or info.get("model_id"),
+                    }
+                )
 
         config = {
             "configurable": {
@@ -854,12 +858,14 @@ class ExecutionService:
                         info = node_info.get(nid)
                         if not info or info["type"] in ("start", "end"):
                             continue
-                        merged_queue.put_nowait({
-                            "_type": "node_completed",
-                            "node_id": nid,
-                            "output": output,
-                            "step_number": step_number,
-                        })
+                        merged_queue.put_nowait(
+                            {
+                                "_type": "node_completed",
+                                "node_id": nid,
+                                "output": output,
+                                "step_number": step_number,
+                            }
+                        )
             except Exception as e:
                 stream_error = e
             finally:
@@ -920,17 +926,23 @@ class ExecutionService:
                 if isinstance(output, dict):
                     for k, v in output.items():
                         if k == "messages":
-                            safe_output[k] = [
-                                {
-                                    "role": getattr(m, "type", "unknown"),
-                                    "content": str(getattr(m, "content", m)),
-                                }
-                                if hasattr(m, "content") else str(m)
-                                for m in v
-                            ] if isinstance(v, list) else str(v)
+                            safe_output[k] = (
+                                [
+                                    {
+                                        "role": getattr(m, "type", "unknown"),
+                                        "content": str(getattr(m, "content", m)),
+                                    }
+                                    if hasattr(m, "content")
+                                    else str(m)
+                                    for m in v
+                                ]
+                                if isinstance(v, list)
+                                else str(v)
+                            )
                         else:
                             try:
                                 import json
+
                                 json.dumps(v)
                                 safe_output[k] = v
                             except (TypeError, ValueError):
@@ -990,12 +1002,14 @@ class ExecutionService:
                             "role": getattr(m, "type", "unknown"),
                             "content": str(getattr(m, "content", m)),
                         }
-                        if hasattr(m, "content") else str(m)
+                        if hasattr(m, "content")
+                        else str(m)
                         for m in v
                     ]
                 else:
                     try:
                         import json
+
                         json.dumps(v)
                         safe_final[k] = v
                     except (TypeError, ValueError):

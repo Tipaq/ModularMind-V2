@@ -30,8 +30,7 @@ def get_custom_tool_definitions() -> list[dict[str, Any]]:
                         "name": {
                             "type": "string",
                             "description": (
-                                "Tool name (lowercase, alphanumeric "
-                                "+ underscores, max 64 chars)."
+                                "Tool name (lowercase, alphanumeric + underscores, max 64 chars)."
                             ),
                         },
                         "description": {
@@ -200,8 +199,7 @@ async def _register(args: dict, agent_id: str, session: AsyncSession) -> str:
         return "Error: python executor requires 'code' in executor_config."
 
     existing_result = await session.execute(
-        select(CustomTool)
-        .where(CustomTool.agent_id == agent_id, CustomTool.name == tool_name)
+        select(CustomTool).where(CustomTool.agent_id == agent_id, CustomTool.name == tool_name)
     )
     existing_tool = existing_result.scalar_one_or_none()
 
@@ -243,8 +241,7 @@ async def _run(
     tool_args = args.get("args", {})
 
     result = await session.execute(
-        select(CustomTool)
-        .where(
+        select(CustomTool).where(
             CustomTool.agent_id == agent_id,
             CustomTool.name == tool_name,
             CustomTool.is_active.is_(True),
@@ -288,7 +285,10 @@ async def _run_http(tool: Any, tool_args: dict) -> str:
     try:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.request(
-                method, url, headers=headers, json=tool_args if tool_args else None,
+                method,
+                url,
+                headers=headers,
+                json=tool_args if tool_args else None,
             )
             status = response.status_code
             body = response.text[:5000]
@@ -313,11 +313,7 @@ async def _run_python(tool: Any, tool_args: dict, gateway_executor: Any | None) 
     code = tool.executor_config.get("code", "")
     args_json = json.dumps(tool_args)
 
-    wrapper = (
-        f"import json, sys\n"
-        f"args = json.loads('{args_json}')\n"
-        f"{code}\n"
-    )
+    wrapper = f"import json, sys\nargs = json.loads('{args_json}')\n{code}\n"
 
     import base64
 
@@ -335,8 +331,7 @@ async def _update(args: dict, agent_id: str, session: AsyncSession) -> str:
         return "Error: tool_name is required."
 
     result = await session.execute(
-        select(CustomTool)
-        .where(CustomTool.agent_id == agent_id, CustomTool.name == tool_name)
+        select(CustomTool).where(CustomTool.agent_id == agent_id, CustomTool.name == tool_name)
     )
     tool = result.scalar_one_or_none()
     if not tool:
@@ -380,9 +375,7 @@ async def _list(agent_id: str, session: AsyncSession) -> str:
     parts = []
     for t in tools:
         status = "active" if t.is_active else "inactive"
-        parts.append(
-            f"- **{t.name}** ({t.executor_type}, {status}): {t.description}"
-        )
+        parts.append(f"- **{t.name}** ({t.executor_type}, {status}): {t.description}")
     return "\n".join(parts)
 
 
@@ -395,8 +388,7 @@ async def _delete(args: dict, agent_id: str, session: AsyncSession) -> str:
         return "Error: tool_name is required."
 
     result = await session.execute(
-        select(CustomTool)
-        .where(CustomTool.agent_id == agent_id, CustomTool.name == tool_name)
+        select(CustomTool).where(CustomTool.agent_id == agent_id, CustomTool.name == tool_name)
     )
     tool = result.scalar_one_or_none()
     if not tool:

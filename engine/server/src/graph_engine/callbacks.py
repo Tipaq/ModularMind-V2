@@ -135,7 +135,11 @@ def _extract_token_usage(
     gen = response.generations[0][0] if response.generations and response.generations[0] else None
     if gen:
         # Path 2: generation_info["token_usage"]
-        if hasattr(gen, "generation_info") and gen.generation_info and "token_usage" in gen.generation_info:  # noqa: E501
+        if (
+            hasattr(gen, "generation_info")
+            and gen.generation_info
+            and "token_usage" in gen.generation_info
+        ):  # noqa: E501
             usage = gen.generation_info["token_usage"]
             return usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0), False
 

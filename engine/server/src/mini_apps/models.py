@@ -48,13 +48,16 @@ class MiniApp(Base):
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
     files: Mapped[list["MiniAppFile"]] = relationship(
-        back_populates="app", cascade="all, delete-orphan",
+        back_populates="app",
+        cascade="all, delete-orphan",
     )
     storage: Mapped[list["MiniAppStorage"]] = relationship(
-        back_populates="app", cascade="all, delete-orphan",
+        back_populates="app",
+        cascade="all, delete-orphan",
     )
     snapshots: Mapped[list["MiniAppSnapshot"]] = relationship(
-        back_populates="app", cascade="all, delete-orphan",
+        back_populates="app",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (
@@ -71,7 +74,9 @@ class MiniAppFile(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     app_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("mini_apps.id", ondelete="CASCADE"), nullable=False,
+        String(36),
+        ForeignKey("mini_apps.id", ondelete="CASCADE"),
+        nullable=False,
     )
     path: Mapped[str] = mapped_column(String(500))
     content: Mapped[str] = mapped_column(Text, default="")
@@ -82,9 +87,7 @@ class MiniAppFile(Base):
 
     app: Mapped["MiniApp"] = relationship(back_populates="files")
 
-    __table_args__ = (
-        UniqueConstraint("app_id", "path", name="uq_mini_app_files_app_path"),
-    )
+    __table_args__ = (UniqueConstraint("app_id", "path", name="uq_mini_app_files_app_path"),)
 
 
 class MiniAppStorage(Base):
@@ -94,7 +97,9 @@ class MiniAppStorage(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     app_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("mini_apps.id", ondelete="CASCADE"), nullable=False,
+        String(36),
+        ForeignKey("mini_apps.id", ondelete="CASCADE"),
+        nullable=False,
     )
     key: Mapped[str] = mapped_column(String(256))
     value: Mapped[dict] = mapped_column(JSONB, default=dict)
@@ -115,7 +120,9 @@ class MiniAppSnapshot(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     app_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("mini_apps.id", ondelete="CASCADE"), nullable=False,
+        String(36),
+        ForeignKey("mini_apps.id", ondelete="CASCADE"),
+        nullable=False,
     )
     version: Mapped[int] = mapped_column()
     label: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -124,6 +131,4 @@ class MiniAppSnapshot(Base):
 
     app: Mapped["MiniApp"] = relationship(back_populates="snapshots")
 
-    __table_args__ = (
-        Index("ix_mini_app_snapshots_app", "app_id"),
-    )
+    __table_args__ = (Index("ix_mini_app_snapshots_app", "app_id"),)

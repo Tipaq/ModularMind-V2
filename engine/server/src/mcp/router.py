@@ -192,8 +192,6 @@ async def deploy_from_catalog(
     return _server_to_response(config, status_info)
 
 
-
-
 @router.get("/sidecar-status", dependencies=[RequireOwner])
 async def get_sidecar_availability(user: CurrentUser) -> dict[str, Any]:
     """Check if Docker sidecar auto-provisioning is available."""
@@ -294,6 +292,7 @@ async def list_mcp_servers(
             connected=False,
             tools_count=0,
         )
+
     return [
         _server_to_response(cfg, status_map.get(cfg.id, default_status(cfg))) for cfg in servers
     ]

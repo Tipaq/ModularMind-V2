@@ -66,7 +66,7 @@ def _filter_mcp_for_agent(
         catalog = getattr(server, "catalog_id", None) or ""
 
         if catalog in ("brave-search", "puppeteer") and perms.get("browser", {}).get("enabled"):
-                filtered.append(sid)
+            filtered.append(sid)
         # Skip all other servers (github, filesystem, git, memory, shell)
         # These are handled natively by tool categories or gateway
 
@@ -374,7 +374,8 @@ class GraphCompiler:
                 _tool_filter = _perms.get("mcp_tool_filter")
                 if _tool_filter and lc_tools:
                     lc_tools = [
-                        t for t in lc_tools
+                        t
+                        for t in lc_tools
                         if any(
                             t.get("function", {}).get("name", "").endswith(f"_{tn}")
                             for tn in _tool_filter
@@ -445,9 +446,7 @@ class GraphCompiler:
                     from src.internal.auth import get_internal_bearer_token
 
                     if agent.gateway_permissions:
-                        gateway_tool_defs = get_gateway_tool_definitions(
-                            agent.gateway_permissions
-                        )
+                        gateway_tool_defs = get_gateway_tool_definitions(agent.gateway_permissions)
                         active_tools.extend(gateway_tool_defs)
                     gateway_executor = GatewayToolExecutor(
                         gateway_url=_settings.GATEWAY_URL,
@@ -471,7 +470,8 @@ class GraphCompiler:
                     active_tools.extend(extended_defs)
                     logger.info(
                         "Agent '%s': %d extended tools from %d categories",
-                        agent.name, len(extended_defs),
+                        agent.name,
+                        len(extended_defs),
                         sum(1 for v in tool_categories.values() if v),
                     )
 
@@ -484,7 +484,8 @@ class GraphCompiler:
                         active_tools.extend(registered_defs)
                         logger.info(
                             "Agent '%s': %d registered custom tools loaded",
-                            agent.name, len(registered_defs),
+                            agent.name,
+                            len(registered_defs),
                         )
 
             if user_id:
@@ -534,7 +535,7 @@ class GraphCompiler:
                         _mcp_executor,
                         set(),
                         gateway_executor=gateway_executor,
-                        )
+                    )
 
             try:
                 llm = await self.llm_provider.get_model(effective_model)
@@ -556,8 +557,7 @@ class GraphCompiler:
                             "web_search",
                         }
                         _tool_fn_names = {
-                            t.get("function", {}).get("name", "")
-                            for t in active_tools
+                            t.get("function", {}).get("name", "") for t in active_tools
                         }
                         _has_search = bool(_search_tool_names & _tool_fn_names)
 
@@ -667,9 +667,7 @@ class GraphCompiler:
         mcp_tools: list[dict] = []
         mcp_executor = None
         if agent and self.mcp_registry:
-            all_server_ids = [
-                s.id for s in self.mcp_registry.list_servers() if s.enabled
-            ]
+            all_server_ids = [s.id for s in self.mcp_registry.list_servers() if s.enabled]
             if all_server_ids:
                 filtered_ids = _filter_mcp_for_agent(all_server_ids, agent, self.mcp_registry)
                 if filtered_ids:
@@ -677,14 +675,16 @@ class GraphCompiler:
                         from src.mcp.tool_adapter import discover_and_convert
 
                         mcp_tools, mcp_executor = await discover_and_convert(
-                            self.mcp_registry, filtered_ids,
+                            self.mcp_registry,
+                            filtered_ids,
                         )
                         # Apply per-agent tool whitelist if configured
                         _agent_perms = agent.gateway_permissions or {}
                         tool_filter = _agent_perms.get("mcp_tool_filter")
                         if tool_filter and mcp_tools:
                             mcp_tools = [
-                                t for t in mcp_tools
+                                t
+                                for t in mcp_tools
                                 if any(
                                     t.get("function", {}).get("name", "").endswith(f"_{tn}")
                                     for tn in tool_filter
@@ -693,12 +693,16 @@ class GraphCompiler:
                         if mcp_tools:
                             logger.info(
                                 "Graph agent '%s' (%s): bound %d MCP tools from %d servers",
-                                agent.name, node_id, len(mcp_tools), len(filtered_ids),
+                                agent.name,
+                                node_id,
+                                len(mcp_tools),
+                                len(filtered_ids),
                             )
                     except Exception as e:
                         logger.warning(
                             "Failed to discover MCP tools for graph agent '%s': %s",
-                            agent.name, e,
+                            agent.name,
+                            e,
                         )
 
         async def agent_node(state: GraphState, config: RunnableConfig | None = None) -> dict:
@@ -788,9 +792,7 @@ class GraphCompiler:
                     from src.internal.auth import get_internal_bearer_token
 
                     if agent and agent.gateway_permissions:
-                        gateway_tool_defs = get_gateway_tool_definitions(
-                            agent.gateway_permissions
-                        )
+                        gateway_tool_defs = get_gateway_tool_definitions(agent.gateway_permissions)
                         active_tools.extend(gateway_tool_defs)
                     user_id = (state.get("metadata") or {}).get("user_id")
                     gateway_executor = GatewayToolExecutor(
@@ -806,9 +808,7 @@ class GraphCompiler:
                 from src.graph_engine.builtin_tools import UnifiedToolExecutor
 
                 unified_executor = UnifiedToolExecutor(
-                    lambda *a: (_ for _ in ()).throw(
-                        ValueError("No builtin tools in graph node")
-                    ),
+                    lambda *a: (_ for _ in ()).throw(ValueError("No builtin tools in graph node")),
                     mcp_executor,
                     set(),
                     gateway_executor=gateway_executor,
@@ -837,8 +837,7 @@ class GraphCompiler:
                             "web_search",
                         }
                         _tool_fn_names = {
-                            t.get("function", {}).get("name", "")
-                            for t in active_tools
+                            t.get("function", {}).get("name", "") for t in active_tools
                         }
                         _has_search = bool(_search_tool_names & _tool_fn_names)
 
@@ -1231,19 +1230,24 @@ class GraphCompiler:
                 # format of other step events (step_started, step_completed).
                 # The SSE normalizer emits event: step which the frontend
                 # already listens to.
-                await r.xadd(stream_key, {"data": _json.dumps({
-                    "type": "step",
-                    "event": "approval_required",
-                    "node_id": node_id,
-                    "execution_id": exec_id,
-                    "message": gate_message,
-                    "plan": plan_summary[:4000],
-                    "timeout_seconds": timeout_seconds,
-                })})
-
-                logger.info(
-                    "Approval gate %s: published approval_required event", node_id
+                await r.xadd(
+                    stream_key,
+                    {
+                        "data": _json.dumps(
+                            {
+                                "type": "step",
+                                "event": "approval_required",
+                                "node_id": node_id,
+                                "execution_id": exec_id,
+                                "message": gate_message,
+                                "plan": plan_summary[:4000],
+                                "timeout_seconds": timeout_seconds,
+                            }
+                        )
+                    },
                 )
+
+                logger.info("Approval gate %s: published approval_required event", node_id)
 
                 # 2. Poll Redis for approval decision
                 poll_interval = 2.0
@@ -1256,6 +1260,7 @@ class GraphCompiler:
                     revoke = await r.get(f"revoke_intent:{exec_id}")
                     if revoke and revoke.decode() == "cancel":
                         from src.executions.cancel import ExecutionCancelled
+
                         raise ExecutionCancelled()
 
                     # Check approval decision
@@ -1271,23 +1276,27 @@ class GraphCompiler:
 
                 # 3. Handle decision
                 if decision == "approved":
-                    logger.info(
-                        "Approval gate %s: APPROVED, continuing", node_id
+                    logger.info("Approval gate %s: APPROVED, continuing", node_id)
+                    await r.xadd(
+                        stream_key,
+                        {
+                            "data": _json.dumps(
+                                {
+                                    "type": "step",
+                                    "event": "approval_granted",
+                                    "node_id": node_id,
+                                    "execution_id": exec_id,
+                                }
+                            )
+                        },
                     )
-                    await r.xadd(stream_key, {"data": _json.dumps({
-                        "type": "step",
-                        "event": "approval_granted",
-                        "node_id": node_id,
-                        "execution_id": exec_id,
-                    })})
                     # Clean up Redis keys
                     await r.delete(decision_key, f"approval_node:{exec_id}")
                 else:
-                    logger.info(
-                        "Approval gate %s: REJECTED, stopping", node_id
-                    )
+                    logger.info("Approval gate %s: REJECTED, stopping", node_id)
                     await r.delete(decision_key, f"approval_node:{exec_id}")
                     from src.executions.cancel import ExecutionCancelled
+
                     raise ExecutionCancelled()
             finally:
                 await r.aclose()

@@ -116,20 +116,22 @@ async def _human_prompt(
         options = options[:10]
 
     if publish_fn:
-        await publish_fn({
-            "type": "human_prompt",
-            "prompt_type": prompt_type,
-            "question": question,
-            "options": options,
-        })
+        await publish_fn(
+            {
+                "type": "human_prompt",
+                "prompt_type": prompt_type,
+                "question": question,
+                "options": options,
+            }
+        )
         return (
-            f"Prompt sent to user: \"{question}\" "
+            f'Prompt sent to user: "{question}" '
             f"({prompt_type} with {len(options)} options). "
             "Waiting for their response..."
         )
 
     return (
-        f"I need to ask the user: \"{question}\" "
+        f'I need to ask the user: "{question}" '
         f"(options: {', '.join(o['label'] for o in options)}). "
         "However, the notification channel is not available."
     )
@@ -147,10 +149,12 @@ async def _human_notify(
         return "Error: title is required."
 
     if publish_fn:
-        await publish_fn({
-            "type": "notification",
-            "title": title,
-            "body": body,
-        })
+        await publish_fn(
+            {
+                "type": "notification",
+                "title": title,
+                "body": body,
+            }
+        )
 
     return f"Notification sent: {title}"

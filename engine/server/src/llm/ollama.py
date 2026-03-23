@@ -108,9 +108,7 @@ class OllamaProvider(LLMProvider):
                         "context_length": m.get("context_length", 0),
                         "details": {
                             "parameter_size": details.get("parameter_size", ""),
-                            "quantization_level": details.get(
-                                "quantization_level", ""
-                            ),
+                            "quantization_level": details.get("quantization_level", ""),
                             "family": details.get("family", ""),
                         },
                     }

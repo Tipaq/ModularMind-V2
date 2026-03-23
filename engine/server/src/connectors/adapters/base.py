@@ -55,9 +55,7 @@ class PlatformAdapter(ABC):
     """Base class all platform adapters must implement."""
 
     @abstractmethod
-    async def verify_signature(
-        self, request: Request, body: bytes, connector: Connector
-    ) -> None:
+    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
         """Raise HTTPException(401/403) if the request signature is invalid."""
 
     @abstractmethod

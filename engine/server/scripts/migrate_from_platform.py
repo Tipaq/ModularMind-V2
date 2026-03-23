@@ -28,30 +28,31 @@ logger = logging.getLogger(__name__)
 
 async def fetch_platform_agents(conn: asyncpg.Connection) -> list[dict[str, Any]]:
     rows = await conn.fetch(
-        'SELECT id, name, description, model, provider, config, version, tags '
+        "SELECT id, name, description, model, provider, config, version, tags "
         'FROM "Agent" ORDER BY "createdAt"'
     )
     agents = []
     for r in rows:
         config_raw = r["config"]
         config = json.loads(config_raw) if isinstance(config_raw, str) else (config_raw or {})
-        agents.append({
-            "id": r["id"],
-            "name": r["name"],
-            "description": r["description"] or "",
-            "model": r["model"],
-            "provider": r["provider"],
-            "config": config,
-            "version": r["version"],
-            "tags": r["tags"] or [],
-        })
+        agents.append(
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "description": r["description"] or "",
+                "model": r["model"],
+                "provider": r["provider"],
+                "config": config,
+                "version": r["version"],
+                "tags": r["tags"] or [],
+            }
+        )
     return agents
 
 
 async def fetch_platform_graphs(conn: asyncpg.Connection) -> list[dict[str, Any]]:
     rows = await conn.fetch(
-        'SELECT id, name, description, nodes, edges, version '
-        'FROM "Graph" ORDER BY "createdAt"'
+        'SELECT id, name, description, nodes, edges, version FROM "Graph" ORDER BY "createdAt"'
     )
     graphs = []
     for r in rows:
@@ -59,14 +60,16 @@ async def fetch_platform_graphs(conn: asyncpg.Connection) -> list[dict[str, Any]
         edges_raw = r["edges"]
         nodes = json.loads(nodes_raw) if isinstance(nodes_raw, str) else (nodes_raw or [])
         edges = json.loads(edges_raw) if isinstance(edges_raw, str) else (edges_raw or [])
-        graphs.append({
-            "id": r["id"],
-            "name": r["name"],
-            "description": r["description"] or "",
-            "nodes": nodes,
-            "edges": edges,
-            "version": r["version"],
-        })
+        graphs.append(
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "description": r["description"] or "",
+                "nodes": nodes,
+                "edges": edges,
+                "version": r["version"],
+            }
+        )
     return graphs
 
 

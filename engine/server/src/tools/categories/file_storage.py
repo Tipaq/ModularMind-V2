@@ -179,8 +179,11 @@ async def execute_storage_tool(
 
 
 async def _storage_upload(
-    args: dict, user_id: str, agent_id: str,
-    session: AsyncSession, object_store: Any,
+    args: dict,
+    user_id: str,
+    agent_id: str,
+    session: AsyncSession,
+    object_store: Any,
 ) -> str:
     from src.tools.models import StoredFile
 
@@ -229,15 +232,17 @@ async def _storage_get(args: dict, session: AsyncSession, object_store: Any) -> 
         return f"Error: file '{file_id}' not found."
 
     url = await object_store.presigned_url(stored.s3_bucket, stored.s3_key)
-    return json.dumps({
-        "id": stored.id,
-        "name": stored.name,
-        "description": stored.description,
-        "content_type": stored.content_type,
-        "size_bytes": stored.size_bytes,
-        "created_at": stored.created_at.isoformat() if stored.created_at else None,
-        "url": url,
-    })
+    return json.dumps(
+        {
+            "id": stored.id,
+            "name": stored.name,
+            "description": stored.description,
+            "content_type": stored.content_type,
+            "size_bytes": stored.size_bytes,
+            "created_at": stored.created_at.isoformat() if stored.created_at else None,
+            "url": url,
+        }
+    )
 
 
 async def _storage_list(args: dict, user_id: str, session: AsyncSession) -> str:
@@ -315,7 +320,9 @@ async def _storage_update(args: dict, session: AsyncSession) -> str:
 
 
 async def _storage_delete(
-    args: dict, session: AsyncSession, object_store: Any,
+    args: dict,
+    session: AsyncSession,
+    object_store: Any,
 ) -> str:
     from src.tools.models import StoredFile
 

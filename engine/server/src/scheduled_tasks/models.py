@@ -31,15 +31,18 @@ class ScheduledTask(Base):
 
     # Scheduling
     schedule_type: Mapped[str] = mapped_column(
-        String(20), default="manual",
+        String(20),
+        default="manual",
     )  # "interval" | "one_shot" | "manual"
     interval_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
     interval_unit: Mapped[str | None] = mapped_column(
-        String(20), nullable=True,
+        String(20),
+        nullable=True,
     )  # "minutes" | "hours" | "days"
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     start_at: Mapped[str | None] = mapped_column(
-        String(5), nullable=True,
+        String(5),
+        nullable=True,
     )  # Anchor time for intervals, e.g. "09:00" or "00:30"
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -55,7 +58,9 @@ class ScheduledTask(Base):
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=utcnow, onupdate=utcnow,
+        DateTime,
+        default=utcnow,
+        onupdate=utcnow,
     )
 
 

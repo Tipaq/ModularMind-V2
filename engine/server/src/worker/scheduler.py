@@ -349,9 +349,7 @@ async def rag_consolidation() -> None:
 
             async def _check_collection(cid: str) -> int:
                 async with semaphore, async_session_maker() as coll_session:
-                    obsolete = await consolidator.detect_obsolete_documents(
-                        cid, coll_session
-                    )
+                    obsolete = await consolidator.detect_obsolete_documents(cid, coll_session)
                     return len(obsolete)
 
             results = await asyncio.gather(

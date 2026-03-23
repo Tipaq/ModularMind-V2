@@ -173,7 +173,9 @@ class MiniAppService:
         return {"path": path, "size": len(content)}
 
     async def read_file(
-        self, app_id: str, path: str,
+        self,
+        app_id: str,
+        path: str,
     ) -> dict[str, str] | None:
         file = await self._get_file(app_id, path)
         if not file:
@@ -190,9 +192,7 @@ class MiniAppService:
 
     async def list_files(self, app_id: str) -> list[MiniAppFile]:
         result = await self._db.execute(
-            select(MiniAppFile)
-            .where(MiniAppFile.app_id == app_id)
-            .order_by(MiniAppFile.path),
+            select(MiniAppFile).where(MiniAppFile.app_id == app_id).order_by(MiniAppFile.path),
         )
         return list(result.scalars().all())
 
@@ -208,7 +208,10 @@ class MiniAppService:
     # ── Storage ──────────────────────────────────────────────────────────
 
     async def set_storage_value(
-        self, app_id: str, key: str, value: Any,
+        self,
+        app_id: str,
+        key: str,
+        value: Any,
     ) -> None:
         json_str = json.dumps(value)
         if len(json_str) > MAX_STORAGE_VALUE_SIZE:
@@ -237,7 +240,9 @@ class MiniAppService:
         await self._db.flush()
 
     async def get_storage_value(
-        self, app_id: str, key: str,
+        self,
+        app_id: str,
+        key: str,
     ) -> Any | None:
         entry = await self._get_storage_entry(app_id, key)
         return entry.value if entry else None
@@ -259,7 +264,9 @@ class MiniAppService:
         return list(result.scalars().all())
 
     async def _get_storage_entry(
-        self, app_id: str, key: str,
+        self,
+        app_id: str,
+        key: str,
     ) -> MiniAppStorage | None:
         result = await self._db.execute(
             select(MiniAppStorage).where(
@@ -272,7 +279,9 @@ class MiniAppService:
     # ── Snapshots ────────────────────────────────────────────────────────
 
     async def create_snapshot(
-        self, app_id: str, label: str | None = None,
+        self,
+        app_id: str,
+        label: str | None = None,
     ) -> MiniAppSnapshot:
         app = await self.get_app(app_id)
         if not app:
@@ -324,7 +333,9 @@ class MiniAppService:
         return list(result.scalars().all())
 
     async def rollback_snapshot(
-        self, app_id: str, version: int,
+        self,
+        app_id: str,
+        version: int,
     ) -> dict[str, int]:
         result = await self._db.execute(
             select(MiniAppSnapshot).where(
@@ -365,7 +376,9 @@ class MiniAppService:
     # ── Serve ────────────────────────────────────────────────────────────
 
     async def render_serve_html(
-        self, app_id: str, theme: str | None = None,
+        self,
+        app_id: str,
+        theme: str | None = None,
     ) -> str | None:
         app = await self.get_app(app_id)
         if not app or not app.is_active:

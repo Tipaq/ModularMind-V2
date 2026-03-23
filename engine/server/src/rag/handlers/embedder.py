@@ -63,9 +63,7 @@ async def document_embed_handler(data: dict) -> None:
             all_embeddings.extend(batch_embeddings)
 
         # Store embeddings in PG embedding_cache column (batch load)
-        chunk_result = await session.execute(
-            select(RAGChunk).where(RAGChunk.id.in_(id_list))
-        )
+        chunk_result = await session.execute(select(RAGChunk).where(RAGChunk.id.in_(id_list)))
         chunk_map = {c.id: c for c in chunk_result.scalars().all()}
         for j, cid in enumerate(id_list):
             chunk = chunk_map.get(cid)

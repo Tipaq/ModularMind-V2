@@ -242,11 +242,13 @@ async def action_stop_all_executions(user: CurrentUser) -> ActionResponse:
         async with async_session_maker() as session:
             result = await session.execute(
                 select(ExecutionRun.id).where(
-                    ExecutionRun.status.in_([
-                        ExecutionStatus.RUNNING,
-                        ExecutionStatus.PENDING,
-                        ExecutionStatus.AWAITING_APPROVAL,
-                    ])
+                    ExecutionRun.status.in_(
+                        [
+                            ExecutionStatus.RUNNING,
+                            ExecutionStatus.PENDING,
+                            ExecutionStatus.AWAITING_APPROVAL,
+                        ]
+                    )
                 )
             )
             exec_ids = [row[0] for row in result.all()]

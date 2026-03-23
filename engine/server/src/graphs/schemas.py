@@ -6,10 +6,20 @@ from pydantic import BaseModel, Field
 
 from src.infra.schemas import PaginatedResponse
 
-VALID_NODE_TYPES = frozenset({
-    "start", "end", "agent", "tool", "subgraph",
-    "condition", "parallel", "merge", "loop", "supervisor",
-})
+VALID_NODE_TYPES = frozenset(
+    {
+        "start",
+        "end",
+        "agent",
+        "tool",
+        "subgraph",
+        "condition",
+        "parallel",
+        "merge",
+        "loop",
+        "supervisor",
+    }
+)
 
 
 class NodeCreate(BaseModel):

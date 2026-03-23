@@ -48,17 +48,18 @@ async def list_tasks(
 async def get_task(task_id: str) -> ScheduledTask | None:
     """Get a scheduled task by ID."""
     async with async_session_maker() as session:
-        result = await session.execute(
-            select(ScheduledTask).where(ScheduledTask.id == task_id)
-        )
+        result = await session.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
         return result.scalar_one_or_none()
 
 
 async def create_task(data: ScheduledTaskCreate) -> ScheduledTask:
     """Create a new scheduled task."""
     next_run = compute_next_run_at(
-        data.schedule_type, data.interval_value, data.interval_unit,
-        data.scheduled_at, data.start_at,
+        data.schedule_type,
+        data.interval_value,
+        data.interval_unit,
+        data.scheduled_at,
+        data.start_at,
     )
     async with async_session_maker() as session:
         task = ScheduledTask(
@@ -87,9 +88,7 @@ async def create_task(data: ScheduledTaskCreate) -> ScheduledTask:
 async def update_task(task_id: str, data: ScheduledTaskUpdate) -> ScheduledTask | None:
     """Update a scheduled task. Returns None if not found."""
     async with async_session_maker() as session:
-        result = await session.execute(
-            select(ScheduledTask).where(ScheduledTask.id == task_id)
-        )
+        result = await session.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
         task = result.scalar_one_or_none()
         if not task:
             return None
@@ -122,17 +121,22 @@ async def update_task(task_id: str, data: ScheduledTaskUpdate) -> ScheduledTask 
             task.tags = data.tags
 
         # Recompute next_run_at if schedule changed
-        schedule_changed = any([
-            data.schedule_type is not None,
-            data.interval_value is not None,
-            data.interval_unit is not None,
-            data.scheduled_at is not None,
-            data.start_at is not None,
-        ])
+        schedule_changed = any(
+            [
+                data.schedule_type is not None,
+                data.interval_value is not None,
+                data.interval_unit is not None,
+                data.scheduled_at is not None,
+                data.start_at is not None,
+            ]
+        )
         if schedule_changed:
             task.next_run_at = compute_next_run_at(
-                task.schedule_type, task.interval_value, task.interval_unit,
-                task.scheduled_at, task.start_at,
+                task.schedule_type,
+                task.interval_value,
+                task.interval_unit,
+                task.scheduled_at,
+                task.start_at,
             )
 
         task.version += 1
@@ -145,9 +149,7 @@ async def update_task(task_id: str, data: ScheduledTaskUpdate) -> ScheduledTask 
 async def delete_task(task_id: str) -> bool:
     """Delete a scheduled task. Returns True if deleted."""
     async with async_session_maker() as session:
-        result = await session.execute(
-            select(ScheduledTask).where(ScheduledTask.id == task_id)
-        )
+        result = await session.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
         task = result.scalar_one_or_none()
         if not task:
             return False
@@ -159,9 +161,7 @@ async def delete_task(task_id: str) -> bool:
 async def duplicate_task(task_id: str) -> ScheduledTask | None:
     """Duplicate a scheduled task. Returns None if source not found."""
     async with async_session_maker() as session:
-        result = await session.execute(
-            select(ScheduledTask).where(ScheduledTask.id == task_id)
-        )
+        result = await session.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
         source = result.scalar_one_or_none()
         if not source:
             return None

@@ -32,39 +32,58 @@ USER_AGENT = (
 def get_web_tool_definitions() -> list[dict[str, Any]]:
     """Return tool definitions for the web category."""
     return [
-        _tool("web_search", (
-            "Search the web. Uses DuckDuckGo by default, "
-            "or Brave/Tavily/Serper if configured."
-        ), {
-            "query": _str("Search query"),
-            "provider": _str("Provider: auto, duckduckgo, brave, tavily, serper (default: auto)"),
-            "max_results": _int("Max results to return (1-20, default: 10)"),
-        }, ["query"]),
-        _tool("browse_url", "Fetch a web page and extract its content as clean markdown or text.", {
-            "url": _str("URL to browse"),
-            "format": _str("Output format: markdown, text, raw (default: markdown)"),
-            "render_js": {
-                "type": "boolean",
-                "description": (
-                    "Render JavaScript via headless browser "
-                    "(default: false). Requires Puppeteer MCP."
+        _tool(
+            "web_search",
+            ("Search the web. Uses DuckDuckGo by default, or Brave/Tavily/Serper if configured."),
+            {
+                "query": _str("Search query"),
+                "provider": _str(
+                    "Provider: auto, duckduckgo, brave, tavily, serper (default: auto)"
                 ),
+                "max_results": _int("Max results to return (1-20, default: 10)"),
             },
-        }, ["url"]),
-        _tool("screenshot_url", "Take a screenshot of a web page. Requires Puppeteer MCP server.", {
-            "url": _str("URL to capture"),
-            "width": _int("Viewport width in pixels (default: 1280)"),
-            "height": _int("Viewport height in pixels (default: 720)"),
-            "full_page": {
-                "type": "boolean",
-                "description": "Capture full page height (default: false)",
+            ["query"],
+        ),
+        _tool(
+            "browse_url",
+            "Fetch a web page and extract its content as clean markdown or text.",
+            {
+                "url": _str("URL to browse"),
+                "format": _str("Output format: markdown, text, raw (default: markdown)"),
+                "render_js": {
+                    "type": "boolean",
+                    "description": (
+                        "Render JavaScript via headless browser "
+                        "(default: false). Requires Puppeteer MCP."
+                    ),
+                },
             },
-        }, ["url"]),
-        _tool("extract_links", "Extract all links from a web page with optional regex filtering.", {
-            "url": _str("URL to extract links from"),
-            "filter": _str("Regex pattern to filter URLs (optional)"),
-            "max_links": _int("Max links to return (1-200, default: 50)"),
-        }, ["url"]),
+            ["url"],
+        ),
+        _tool(
+            "screenshot_url",
+            "Take a screenshot of a web page. Requires Puppeteer MCP server.",
+            {
+                "url": _str("URL to capture"),
+                "width": _int("Viewport width in pixels (default: 1280)"),
+                "height": _int("Viewport height in pixels (default: 720)"),
+                "full_page": {
+                    "type": "boolean",
+                    "description": "Capture full page height (default: false)",
+                },
+            },
+            ["url"],
+        ),
+        _tool(
+            "extract_links",
+            "Extract all links from a web page with optional regex filtering.",
+            {
+                "url": _str("URL to extract links from"),
+                "filter": _str("Regex pattern to filter URLs (optional)"),
+                "max_links": _int("Max links to return (1-200, default: 50)"),
+            },
+            ["url"],
+        ),
     ]
 
 
@@ -128,6 +147,7 @@ def _http_headers() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # web_search
 # ---------------------------------------------------------------------------
+
 
 class _SearchRateLimitError(Exception):
     """Raised when a search provider returns 429."""
@@ -232,9 +252,7 @@ async def _search_serper(query: str, max_results: int, api_key: str) -> str:
     return _format_search_results(query, results, "Serper")
 
 
-def _format_search_results(
-    query: str, results: list[dict], provider: str
-) -> str:
+def _format_search_results(query: str, results: list[dict], provider: str) -> str:
     if not results:
         return f"No results found for: {query}"
 
@@ -252,6 +270,7 @@ def _format_search_results(
 # ---------------------------------------------------------------------------
 # browse_url
 # ---------------------------------------------------------------------------
+
 
 async def _browse_url(args: dict, mcp_executor: Any | None = None) -> str:
     url = args.get("url", "").strip()
@@ -295,9 +314,9 @@ async def _browse_with_puppeteer(url: str, mcp_executor: Any) -> str:
     """Use MCP Puppeteer to render JS and extract content."""
     try:
         result = await mcp_executor.execute("puppeteer_navigate", {"url": url})
-        content = await mcp_executor.execute("puppeteer_evaluate", {
-            "script": "document.body.innerText"
-        })
+        content = await mcp_executor.execute(
+            "puppeteer_evaluate", {"script": "document.body.innerText"}
+        )
         return content[:MAX_OUTPUT] if content else result[:MAX_OUTPUT]
     except Exception as e:
         return f"Error: Puppeteer navigation failed: {e}"
@@ -307,8 +326,12 @@ def _extract_markdown(html: str, base_url: str) -> str:
     """Extract content as markdown using trafilatura."""
     try:
         import trafilatura
+
         result = trafilatura.extract(
-            html, output_format="markdown", include_links=True, include_tables=True,
+            html,
+            output_format="markdown",
+            include_links=True,
+            include_tables=True,
         )
         return result if result else _extract_text_simple(html)
     except ImportError:
@@ -335,6 +358,7 @@ def _extract_text_simple(html: str) -> str:
 # screenshot_url
 # ---------------------------------------------------------------------------
 
+
 async def _screenshot_url(args: dict, mcp_executor: Any | None = None) -> str:
     url = args.get("url", "").strip()
     if not url:
@@ -352,10 +376,13 @@ async def _screenshot_url(args: dict, mcp_executor: Any | None = None) -> str:
 
     try:
         await mcp_executor.execute("puppeteer_navigate", {"url": url})
-        result = await mcp_executor.execute("puppeteer_screenshot", {
-            "width": width,
-            "height": height,
-        })
+        result = await mcp_executor.execute(
+            "puppeteer_screenshot",
+            {
+                "width": width,
+                "height": height,
+            },
+        )
         return result
     except Exception as e:
         return f"Error: screenshot failed: {e}"
@@ -364,6 +391,7 @@ async def _screenshot_url(args: dict, mcp_executor: Any | None = None) -> str:
 # ---------------------------------------------------------------------------
 # extract_links
 # ---------------------------------------------------------------------------
+
 
 async def _extract_links(args: dict) -> str:
     url = args.get("url", "").strip()
@@ -425,6 +453,7 @@ _HANDLERS: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Definition helpers
 # ---------------------------------------------------------------------------
+
 
 def _str(desc: str) -> dict:
     return {"type": "string", "description": desc}

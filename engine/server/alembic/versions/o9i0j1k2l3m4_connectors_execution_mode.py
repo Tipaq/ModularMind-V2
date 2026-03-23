@@ -21,9 +21,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column("connectors", sa.Column("graph_id", sa.String(36), nullable=True))
-    op.add_column(
-        "connectors", sa.Column("supervisor_mode", sa.Boolean(), server_default="false")
-    )
+    op.add_column("connectors", sa.Column("supervisor_mode", sa.Boolean(), server_default="false"))
     op.alter_column("connectors", "agent_id", existing_type=sa.String(36), nullable=True)
 
 

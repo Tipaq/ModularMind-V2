@@ -44,9 +44,7 @@ async def _create_execution(
 
     model_id = (connector.config or {}).get("model_id", "")
     if model_id:
-        return await exec_service.start_raw_execution(
-            model_id=model_id, data=data, user_id=user_id
-        )
+        return await exec_service.start_raw_execution(model_id=model_id, data=data, user_id=user_id)
 
     raise HTTPException(
         status_code=500,
@@ -97,9 +95,7 @@ class _DirectResponse:
         self.text = text
 
 
-async def _dispatch_and_collect(
-    db: AsyncSession, exec_service: ExecutionService, execution
-) -> str:
+async def _dispatch_and_collect(db: AsyncSession, exec_service: ExecutionService, execution) -> str:
     """Dispatch execution and wait for response inline."""
     acquired = await fair_scheduler.acquire("webhook", execution.id)
     if not acquired:
@@ -161,9 +157,7 @@ async def _run_background(
                 config=connector_config,
             )
             response_text = await execute_and_collect(db, fake_connector, message)
-            await adapter.send_response(
-                None, message.platform_context, response_text
-            )
+            await adapter.send_response(None, message.platform_context, response_text)
         except Exception:
             logger.exception("Background webhook execution failed for %s", connector_id)
             await adapter.send_response(

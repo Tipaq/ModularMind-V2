@@ -42,7 +42,11 @@ class GitHubPRSource:
         for repo in repos:
             try:
                 repo_items = await self._fetch_repo_prs(
-                    repo, token, skip_labels, require_labels, branches,
+                    repo,
+                    token,
+                    skip_labels,
+                    require_labels,
+                    branches,
                 )
                 items.extend(repo_items)
             except Exception:
@@ -152,7 +156,11 @@ class GitHubPRSource:
             return set()
 
     def _build_prompt(
-        self, pr: dict, repo: str, diff: str, files: list,
+        self,
+        pr: dict,
+        repo: str,
+        diff: str,
+        files: list,
     ) -> str:
         """Build a prompt for the execution agent/graph."""
         file_list = "\n".join(

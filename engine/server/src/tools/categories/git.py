@@ -28,52 +28,100 @@ _GIT_NOT_INSTALLED = (
 def get_git_tool_definitions() -> list[dict[str, Any]]:
     """Return tool definitions for the git category."""
     return [
-        _tool("git_clone", "Clone a git repository into the projects directory.", {
-            "url": _str("Repository URL (HTTPS)"),
-            "directory": _str("Target directory name (optional, defaults to repo name)"),
-        }, ["url"]),
-        _tool("git_status", "Show the working tree status of a repository.", {
-            "repo": _str("Repository directory name in projects"),
-        }, ["repo"]),
-        _tool("git_diff", "Show file changes in a repository.", {
-            "repo": _str("Repository directory name"),
-            "staged": {
-                "type": "boolean",
-                "description": "Show staged changes only (default: false)",
+        _tool(
+            "git_clone",
+            "Clone a git repository into the projects directory.",
+            {
+                "url": _str("Repository URL (HTTPS)"),
+                "directory": _str("Target directory name (optional, defaults to repo name)"),
             },
-            "file": _str("Specific file to diff (optional)"),
-        }, ["repo"]),
-        _tool("git_log", "Show commit history.", {
-            "repo": _str("Repository directory name"),
-            "limit": _int("Number of commits to show (default: 20, max: 100)"),
-            "branch": _str("Branch name (optional, defaults to current)"),
-        }, ["repo"]),
-        _tool("git_branch", "List branches or create a new branch.", {
-            "repo": _str("Repository directory name"),
-            "create": _str("Name of new branch to create (optional)"),
-            "all": {"type": "boolean", "description": "Show remote branches too (default: false)"},
-        }, ["repo"]),
-        _tool("git_checkout", "Switch to a branch or commit.", {
-            "repo": _str("Repository directory name"),
-            "ref": _str("Branch name, tag, or commit SHA to checkout"),
-        }, ["repo", "ref"]),
-        _tool("git_commit", "Stage and commit changes.", {
-            "repo": _str("Repository directory name"),
-            "message": _str("Commit message"),
-            "files": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Files to stage (default: all changes)",
+            ["url"],
+        ),
+        _tool(
+            "git_status",
+            "Show the working tree status of a repository.",
+            {
+                "repo": _str("Repository directory name in projects"),
             },
-        }, ["repo", "message"]),
-        _tool("git_push", "Push commits to remote.", {
-            "repo": _str("Repository directory name"),
-            "branch": _str("Branch to push (optional, defaults to current)"),
-        }, ["repo"]),
-        _tool("git_pull", "Pull changes from remote.", {
-            "repo": _str("Repository directory name"),
-            "branch": _str("Branch to pull (optional, defaults to current)"),
-        }, ["repo"]),
+            ["repo"],
+        ),
+        _tool(
+            "git_diff",
+            "Show file changes in a repository.",
+            {
+                "repo": _str("Repository directory name"),
+                "staged": {
+                    "type": "boolean",
+                    "description": "Show staged changes only (default: false)",
+                },
+                "file": _str("Specific file to diff (optional)"),
+            },
+            ["repo"],
+        ),
+        _tool(
+            "git_log",
+            "Show commit history.",
+            {
+                "repo": _str("Repository directory name"),
+                "limit": _int("Number of commits to show (default: 20, max: 100)"),
+                "branch": _str("Branch name (optional, defaults to current)"),
+            },
+            ["repo"],
+        ),
+        _tool(
+            "git_branch",
+            "List branches or create a new branch.",
+            {
+                "repo": _str("Repository directory name"),
+                "create": _str("Name of new branch to create (optional)"),
+                "all": {
+                    "type": "boolean",
+                    "description": "Show remote branches too (default: false)",
+                },
+            },
+            ["repo"],
+        ),
+        _tool(
+            "git_checkout",
+            "Switch to a branch or commit.",
+            {
+                "repo": _str("Repository directory name"),
+                "ref": _str("Branch name, tag, or commit SHA to checkout"),
+            },
+            ["repo", "ref"],
+        ),
+        _tool(
+            "git_commit",
+            "Stage and commit changes.",
+            {
+                "repo": _str("Repository directory name"),
+                "message": _str("Commit message"),
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Files to stage (default: all changes)",
+                },
+            },
+            ["repo", "message"],
+        ),
+        _tool(
+            "git_push",
+            "Push commits to remote.",
+            {
+                "repo": _str("Repository directory name"),
+                "branch": _str("Branch to push (optional, defaults to current)"),
+            },
+            ["repo"],
+        ),
+        _tool(
+            "git_pull",
+            "Pull changes from remote.",
+            {
+                "repo": _str("Repository directory name"),
+                "branch": _str("Branch to pull (optional, defaults to current)"),
+            },
+            ["repo"],
+        ),
     ]
 
 
@@ -102,6 +150,7 @@ async def execute_git_tool(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _repo_path(repo: str) -> str:
     """Resolve repo name to absolute path, preventing traversal."""
@@ -144,6 +193,7 @@ async def _run(
 # ---------------------------------------------------------------------------
 # Tool handlers
 # ---------------------------------------------------------------------------
+
 
 async def _git_clone(args: dict, token: str | None) -> str:
     url = args.get("url", "").strip()
@@ -224,7 +274,8 @@ async def _git_branch(args: dict, token: str | None) -> str:
 
     if args.get("create"):
         code, output = await _run(
-            ["git", "checkout", "-b", args["create"]], cwd=repo,
+            ["git", "checkout", "-b", args["create"]],
+            cwd=repo,
         )
         if code != 0:
             return f"Error creating branch: {output}"
@@ -324,6 +375,7 @@ _HANDLERS: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Definition helpers
 # ---------------------------------------------------------------------------
+
 
 def _str(desc: str) -> dict:
     return {"type": "string", "description": desc}

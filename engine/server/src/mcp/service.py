@@ -205,8 +205,12 @@ async def _auto_deploy_free_catalog_entries() -> None:
                     config.transport.value,
                 )
             except (
-                OSError, RuntimeError, ConnectionError,
-                TimeoutError, ValueError, SidecarError,
+                OSError,
+                RuntimeError,
+                ConnectionError,
+                TimeoutError,
+                ValueError,
+                SidecarError,
             ) as e:
                 logger.warning("MCP auto-deploy: failed to deploy %s: %s", entry.name, e)
                 continue
@@ -244,8 +248,12 @@ async def startup_mcp(*, leader_only: bool = False) -> None:
             try:
                 await _auto_deploy_free_catalog_entries()
             except (
-                OSError, RuntimeError, ConnectionError,
-                TimeoutError, ValueError, SidecarError,
+                OSError,
+                RuntimeError,
+                ConnectionError,
+                TimeoutError,
+                ValueError,
+                SidecarError,
             ) as e:
                 logger.warning("MCP free auto-deploy failed (non-fatal): %s", e)
         return

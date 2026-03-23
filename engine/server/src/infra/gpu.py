@@ -233,15 +233,17 @@ def _detect_via_docker_ollama() -> GPUInfo | None:
         container_id = containers[0]["Id"]
 
         # Create exec instance
-        exec_body = _json.dumps({
-            "AttachStdout": True,
-            "AttachStderr": True,
-            "Cmd": [
-                "nvidia-smi",
-                "--query-gpu=count,memory.total",
-                "--format=csv,noheader,nounits",
-            ],
-        }).encode()
+        exec_body = _json.dumps(
+            {
+                "AttachStdout": True,
+                "AttachStderr": True,
+                "Cmd": [
+                    "nvidia-smi",
+                    "--query-gpu=count,memory.total",
+                    "--format=csv,noheader,nounits",
+                ],
+            }
+        ).encode()
         conn.request(
             "POST",
             f"/containers/{container_id}/exec",

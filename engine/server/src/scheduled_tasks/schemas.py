@@ -29,7 +29,9 @@ def _parse_anchor_time(start_at: str) -> tuple[int, int]:
 
 
 def _compute_anchored_next_run(
-    interval_value: int, interval_unit: str, start_at: str,
+    interval_value: int,
+    interval_unit: str,
+    start_at: str,
 ) -> datetime:
     """Compute next run aligned to anchor time (start_at='HH:MM')."""
     now = datetime.utcnow()

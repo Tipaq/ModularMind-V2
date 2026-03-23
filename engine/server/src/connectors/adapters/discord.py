@@ -23,9 +23,7 @@ DISCORD_MESSAGE_LIMIT = 2000
 class DiscordAdapter(PlatformAdapter):
     """Adapter for Discord interactions (slash commands + message components)."""
 
-    async def verify_signature(
-        self, request: Request, body: bytes, connector: Connector
-    ) -> None:
+    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
         signature = request.headers.get("X-Signature-Ed25519")
         timestamp = request.headers.get("X-Signature-Timestamp")
         if not signature or not timestamp:
@@ -113,9 +111,7 @@ class DiscordAdapter(PlatformAdapter):
             ],
             fields=[
                 ConnectorFieldDef(key="bot_token", label="Bot Token", is_secret=True),
-                ConnectorFieldDef(
-                    key="application_id", label="Application ID", is_secret=False
-                ),
+                ConnectorFieldDef(key="application_id", label="Application ID", is_secret=False),
                 ConnectorFieldDef(key="public_key", label="Public Key", is_secret=False),
                 ConnectorFieldDef(
                     key="guild_id", label="Guild ID", is_secret=False, is_required=False
@@ -127,9 +123,7 @@ class DiscordAdapter(PlatformAdapter):
         )
 
 
-def _verify_ed25519(
-    body: bytes, signature: str, timestamp: str, public_key_hex: str
-) -> bool:
+def _verify_ed25519(body: bytes, signature: str, timestamp: str, public_key_hex: str) -> bool:
     try:
         from nacl.exceptions import BadSignatureError
         from nacl.signing import VerifyKey

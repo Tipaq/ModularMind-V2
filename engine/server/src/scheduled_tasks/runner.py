@@ -65,8 +65,11 @@ class ScheduledTaskRunner:
                 return
             seconds = interval_to_seconds(task.interval_value, task.interval_unit)
             next_run = compute_next_run_at(
-                task.schedule_type, task.interval_value, task.interval_unit,
-                task.scheduled_at, task.start_at,
+                task.schedule_type,
+                task.interval_value,
+                task.interval_unit,
+                task.scheduled_at,
+                task.start_at,
             )
             self._scheduler.add_job(
                 self.execute_trigger,
@@ -80,7 +83,9 @@ class ScheduledTaskRunner:
             )
             logger.info(
                 "Scheduled task '%s' every %d %s (anchor=%s)",
-                task.name, task.interval_value, task.interval_unit,
+                task.name,
+                task.interval_value,
+                task.interval_unit,
                 task.start_at or "none",
             )
         elif task.schedule_type == "one_shot":
@@ -97,7 +102,9 @@ class ScheduledTaskRunner:
                 replace_existing=True,
             )
             logger.info(
-                "Scheduled task '%s' at %s", task.name, task.scheduled_at,
+                "Scheduled task '%s' at %s",
+                task.name,
+                task.scheduled_at,
             )
         elif task.schedule_type == "manual":
             pass
@@ -214,7 +221,9 @@ class ScheduledTaskRunner:
         logger.info("Enqueued direct execution for task %s, run %s", task.id, run_id)
 
     async def _execute_source_trigger(
-        self, task: ScheduledTask, config: dict[str, Any],
+        self,
+        task: ScheduledTask,
+        config: dict[str, Any],
     ) -> None:
         """Execute trigger with a source handler (e.g. GitHub PRs)."""
         from src.scheduled_tasks.schemas import ScheduledTaskConfig

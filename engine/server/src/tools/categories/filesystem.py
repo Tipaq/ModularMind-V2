@@ -165,8 +165,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
                             "type": "array",
                             "items": {"type": "string"},
                             "description": (
-                                "Glob patterns to exclude "
-                                "(e.g. ['node_modules', '.git'])."
+                                "Glob patterns to exclude (e.g. ['node_modules', '.git'])."
                             ),
                         },
                     },
@@ -178,9 +177,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "fs_info",
-                "description": (
-                    "Get file metadata: size, timestamps, permissions, and type."
-                ),
+                "description": ("Get file metadata: size, timestamps, permissions, and type."),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -223,8 +220,7 @@ def _safe_tool_definitions() -> list[dict[str, Any]]:
                         "context": {
                             "type": "integer",
                             "description": (
-                                "Lines of context before/after each match "
-                                "(0-5, default: 0)."
+                                "Lines of context before/after each match (0-5, default: 0)."
                             ),
                         },
                     },
@@ -363,11 +359,25 @@ def _critical_tool_definitions() -> list[dict[str, Any]]:
 
 
 # Tool names by security group — used by the gateway to decide execution mode.
-SAFE_ACTIONS = frozenset({
-    "read", "read_media", "read_multiple",
-    "list", "list_with_sizes", "tree", "info", "search",
-})
+SAFE_ACTIONS = frozenset(
+    {
+        "read",
+        "read_media",
+        "read_multiple",
+        "list",
+        "list_with_sizes",
+        "tree",
+        "info",
+        "search",
+    }
+)
 
-CRITICAL_ACTIONS = frozenset({
-    "write", "edit", "delete", "move", "mkdir",
-})
+CRITICAL_ACTIONS = frozenset(
+    {
+        "write",
+        "edit",
+        "delete",
+        "move",
+        "mkdir",
+    }
+)

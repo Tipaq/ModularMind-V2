@@ -25,9 +25,7 @@ SLACK_REPLAY_WINDOW_SECONDS = 300
 class SlackAdapter(PlatformAdapter):
     """Adapter for Slack Events API webhooks."""
 
-    async def verify_signature(
-        self, request: Request, body: bytes, connector: Connector
-    ) -> None:
+    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
         signature = request.headers.get("X-Slack-Signature")
         timestamp = request.headers.get("X-Slack-Request-Timestamp")
         if not signature or not timestamp:
@@ -133,9 +131,7 @@ class SlackAdapter(PlatformAdapter):
         )
 
 
-def _verify_slack_hmac(
-    body: bytes, timestamp: str, signature: str, signing_secret: str
-) -> bool:
+def _verify_slack_hmac(body: bytes, timestamp: str, signature: str, signing_secret: str) -> bool:
     try:
         ts = int(timestamp)
     except (ValueError, TypeError):
@@ -145,7 +141,5 @@ def _verify_slack_hmac(
         return False
 
     sig_basestring = f"v0:{timestamp}:{body.decode('utf-8')}"
-    digest = hmac.new(
-        signing_secret.encode(), sig_basestring.encode(), hashlib.sha256
-    ).hexdigest()
+    digest = hmac.new(signing_secret.encode(), sig_basestring.encode(), hashlib.sha256).hexdigest()
     return hmac.compare_digest(f"v0={digest}", signature)

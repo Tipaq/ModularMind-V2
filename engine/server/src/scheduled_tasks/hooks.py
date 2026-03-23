@@ -137,7 +137,9 @@ async def _github_commit(
 
     logger.info(
         "Committing %d file changes to %s branch %s",
-        len(file_changes), run.source_ref, branch,
+        len(file_changes),
+        run.source_ref,
+        branch,
     )
 
 

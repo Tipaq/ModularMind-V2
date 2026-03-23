@@ -191,8 +191,7 @@ async def _list_crons(args: dict) -> str:
 
     result = await service.list_tasks(search=args.get("search", ""))
     items = [
-        ScheduledTaskResponse.model_validate(t).model_dump(mode="json")
-        for t in result["items"]
+        ScheduledTaskResponse.model_validate(t).model_dump(mode="json") for t in result["items"]
     ]
     return json.dumps({"items": items, "total": result["total"]})
 
@@ -202,10 +201,7 @@ async def _get_cron_journal(args: dict) -> str:
     from src.scheduled_tasks.schemas import ScheduledTaskRunResponse
 
     runs = await service.get_task_runs(args["id"], limit=args.get("limit", 10))
-    items = [
-        ScheduledTaskRunResponse.model_validate(r).model_dump(mode="json")
-        for r in runs
-    ]
+    items = [ScheduledTaskRunResponse.model_validate(r).model_dump(mode="json") for r in runs]
     return json.dumps({"runs": items})
 
 

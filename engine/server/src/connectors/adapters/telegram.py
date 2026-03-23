@@ -22,9 +22,7 @@ TELEGRAM_MESSAGE_LIMIT = 4096
 class TelegramAdapter(PlatformAdapter):
     """Adapter for Telegram Bot API webhooks."""
 
-    async def verify_signature(
-        self, request: Request, body: bytes, connector: Connector
-    ) -> None:
+    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
         token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
         if not token:
             raise HTTPException(status_code=401, detail="Missing Telegram secret token header")

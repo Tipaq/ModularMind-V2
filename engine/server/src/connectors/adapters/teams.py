@@ -20,9 +20,7 @@ logger = logging.getLogger(__name__)
 class TeamsAdapter(PlatformAdapter):
     """Adapter for Microsoft Teams Bot Framework webhooks."""
 
-    async def verify_signature(
-        self, request: Request, body: bytes, connector: Connector
-    ) -> None:
+    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
         secret = request.headers.get("X-Webhook-Secret", "")
         if not secret:
             raise HTTPException(status_code=401, detail="Missing X-Webhook-Secret header")

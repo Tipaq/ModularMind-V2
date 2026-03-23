@@ -27,6 +27,7 @@ class ToolExecutorDeps:
     gateway_executor: GatewayToolExecutor | None = None
     publish_fn: Callable[[dict[str, Any]], Awaitable[None]] | None = None
 
+
 # Prefixes for routing tool calls to the correct handler
 _CATEGORY_PREFIXES = (
     "knowledge_",
@@ -104,7 +105,8 @@ class ExtendedToolExecutor:
 
         async with self._session_maker() as session:
             return await execute_knowledge_tool(
-                name, args,
+                name,
+                args,
                 user_id=self._user_id,
                 session=session,
                 rag_retriever=self._rag_retriever,
@@ -115,7 +117,8 @@ class ExtendedToolExecutor:
 
         async with self._session_maker() as session:
             return await execute_storage_tool(
-                name, args,
+                name,
+                args,
                 user_id=self._user_id,
                 agent_id=self._agent_id,
                 session=session,
@@ -128,7 +131,9 @@ class ExtendedToolExecutor:
         )
 
         return await execute_human_interaction_tool(
-            name, args, publish_fn=self._publish_fn,
+            name,
+            args,
+            publish_fn=self._publish_fn,
         )
 
     async def _handle_image_generation(self, name: str, args: dict[str, Any]) -> str:
@@ -137,7 +142,9 @@ class ExtendedToolExecutor:
         )
 
         return await execute_image_generation_tool(
-            name, args, object_store=self._object_store,
+            name,
+            args,
+            object_store=self._object_store,
         )
 
     async def _handle_custom_tools(self, name: str, args: dict[str, Any]) -> str:
@@ -145,7 +152,8 @@ class ExtendedToolExecutor:
 
         async with self._session_maker() as session:
             return await execute_custom_tool(
-                name, args,
+                name,
+                args,
                 agent_id=self._agent_id,
                 session=session,
                 gateway_executor=self._gateway_executor,
@@ -156,7 +164,8 @@ class ExtendedToolExecutor:
 
         async with self._session_maker() as session:
             return await execute_mini_app_tool(
-                name, args,
+                name,
+                args,
                 agent_id=self._agent_id,
                 session=session,
             )
@@ -166,13 +175,16 @@ class ExtendedToolExecutor:
 
         search_keys = await self._get_search_api_keys()
         return await execute_web_tool(
-            name, args, search_api_keys=search_keys,
+            name,
+            args,
+            search_api_keys=search_keys,
         )
 
     async def _get_search_api_keys(self) -> dict[str, str]:
         """Load search API keys from settings."""
         try:
             from src.infra.secrets import secrets_store
+
             return {
                 "brave": secrets_store.get("SEARCH_BRAVE_API_KEY", ""),
                 "tavily": secrets_store.get("SEARCH_TAVILY_API_KEY", ""),
@@ -189,6 +201,7 @@ class ExtendedToolExecutor:
             await self._get_search_api_keys()
             async with self._session_maker() as session:
                 from src.tools.categories.github import resolve_token
+
                 github_token = await resolve_token(session, self._agent_id)
         except (ImportError, KeyError, ValueError, ConnectionError, RuntimeError):
             pass
@@ -199,7 +212,10 @@ class ExtendedToolExecutor:
 
         async with self._session_maker() as session:
             return await execute_github_tool(
-                name, args, session=session, agent_id=self._agent_id,
+                name,
+                args,
+                session=session,
+                agent_id=self._agent_id,
             )
 
     async def _handle_scheduling(self, name: str, args: dict[str, Any]) -> str:
@@ -207,7 +223,8 @@ class ExtendedToolExecutor:
 
         async with self._session_maker() as session:
             return await execute_scheduling_tool(
-                name, args,
+                name,
+                args,
                 user_id=self._user_id,
                 agent_id=self._agent_id,
                 session=session,

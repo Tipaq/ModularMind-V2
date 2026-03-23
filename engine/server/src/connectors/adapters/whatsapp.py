@@ -26,9 +26,7 @@ GRAPH_API_VERSION = "v21.0"
 class WhatsAppAdapter(PlatformAdapter):
     """Adapter for WhatsApp Cloud API (Meta Business) webhooks."""
 
-    async def verify_signature(
-        self, request: Request, body: bytes, connector: Connector
-    ) -> None:
+    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
         signature_header = request.headers.get("X-Hub-Signature-256", "")
         if not signature_header:
             raise HTTPException(status_code=401, detail="Missing X-Hub-Signature-256 header")
@@ -37,9 +35,7 @@ class WhatsAppAdapter(PlatformAdapter):
         if not app_secret:
             raise HTTPException(status_code=500, detail="WhatsApp app_secret not configured")
 
-        expected = "sha256=" + hmac.new(
-            app_secret.encode(), body, hashlib.sha256
-        ).hexdigest()
+        expected = "sha256=" + hmac.new(app_secret.encode(), body, hashlib.sha256).hexdigest()
 
         if not hmac.compare_digest(expected, signature_header):
             raise HTTPException(status_code=403, detail="Invalid WhatsApp signature")
@@ -49,9 +45,7 @@ class WhatsAppAdapter(PlatformAdapter):
     ) -> HandshakeResult:
         return HandshakeResult(is_handshake=False)
 
-    async def handle_get_handshake(
-        self, request: Request, connector: Connector
-    ) -> HandshakeResult:
+    async def handle_get_handshake(self, request: Request, connector: Connector) -> HandshakeResult:
         """Handle WhatsApp GET webhook verification (hub.challenge)."""
         params = request.query_params
         mode = params.get("hub.mode")
@@ -134,9 +128,7 @@ class WhatsAppAdapter(PlatformAdapter):
                     },
                 )
                 if resp.status_code >= 400:
-                    logger.warning(
-                        "WhatsApp send failed (%s): %s", resp.status_code, resp.text
-                    )
+                    logger.warning("WhatsApp send failed (%s): %s", resp.status_code, resp.text)
         except httpx.HTTPError:
             logger.exception("Failed to send WhatsApp response")
 
@@ -172,8 +164,6 @@ class WhatsAppAdapter(PlatformAdapter):
                     is_secret=False,
                     placeholder="any-string-you-choose",
                 ),
-                ConnectorFieldDef(
-                    key="phone_number_id", label="Phone Number ID", is_secret=False
-                ),
+                ConnectorFieldDef(key="phone_number_id", label="Phone Number ID", is_secret=False),
             ],
         )

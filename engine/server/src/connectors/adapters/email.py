@@ -20,9 +20,7 @@ logger = logging.getLogger(__name__)
 class EmailAdapter(PlatformAdapter):
     """Adapter for email webhook integrations."""
 
-    async def verify_signature(
-        self, request: Request, body: bytes, connector: Connector
-    ) -> None:
+    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
         secret = request.headers.get("X-Webhook-Secret", "")
         if not secret:
             raise HTTPException(status_code=401, detail="Missing X-Webhook-Secret header")
@@ -72,12 +70,8 @@ class EmailAdapter(PlatformAdapter):
                 "Fill in the credentials below and click Connect",
             ],
             fields=[
-                ConnectorFieldDef(
-                    key="address", label="Email Address", is_secret=False
-                ),
-                ConnectorFieldDef(
-                    key="smtp_host", label="SMTP Host", is_secret=False
-                ),
+                ConnectorFieldDef(key="address", label="Email Address", is_secret=False),
+                ConnectorFieldDef(key="smtp_host", label="SMTP Host", is_secret=False),
                 ConnectorFieldDef(
                     key="smtp_port", label="SMTP Port", is_secret=False, is_required=False
                 ),

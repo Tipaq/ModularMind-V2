@@ -31,8 +31,7 @@ def get_image_generation_tool_definitions() -> list[dict[str, Any]]:
                         "model_id": {
                             "type": "string",
                             "description": (
-                                "Image model ID (e.g., 'openai:dall-e-3'). "
-                                "Uses default if omitted."
+                                "Image model ID (e.g., 'openai:dall-e-3'). Uses default if omitted."
                             ),
                         },
                         "size": {
@@ -118,18 +117,22 @@ async def _image_generate(args: dict, object_store: Any | None) -> str:
             s3_key = f"generated-images/{file_id}.png"
             await object_store.upload("agent-files", s3_key, image_bytes, "image/png")
             url = await object_store.presigned_url("agent-files", s3_key)
-            return json.dumps({
-                "url": url,
+            return json.dumps(
+                {
+                    "url": url,
+                    "size": len(image_bytes),
+                    "revised_prompt": revised_prompt,
+                }
+            )
+
+        return json.dumps(
+            {
+                "status": "generated",
                 "size": len(image_bytes),
                 "revised_prompt": revised_prompt,
-            })
-
-        return json.dumps({
-            "status": "generated",
-            "size": len(image_bytes),
-            "revised_prompt": revised_prompt,
-            "note": "Image generated but no storage configured for URL.",
-        })
+                "note": "Image generated but no storage configured for URL.",
+            }
+        )
 
     except Exception as e:
         logger.exception("Image generation failed")

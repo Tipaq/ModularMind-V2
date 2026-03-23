@@ -113,7 +113,8 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 if cancelled:
                     await _handle_cancellation(session, r, execution_id, stream_key)
                     await _update_scheduled_task_run(
-                        execution_id, "skipped",
+                        execution_id,
+                        "skipped",
                         error_message="Cancelled by user",
                     )
                 else:
@@ -146,7 +147,8 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
             finally:
                 await r2.aclose()
             await _update_scheduled_task_run(
-                execution_id, "skipped",
+                execution_id,
+                "skipped",
                 error_message="Cancelled by user",
             )
 
@@ -169,7 +171,8 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
             )
             await session.commit()
             await _update_scheduled_task_run(
-                execution_id, "failed",
+                execution_id,
+                "failed",
                 error_message="Execution failed",
             )
             raise  # Re-raise to trigger retry/DLQ
@@ -389,7 +392,8 @@ async def _update_scheduled_task_run(
 
     except Exception:
         logger.exception(
-            "Failed to update scheduled task run for execution %s", execution_id,
+            "Failed to update scheduled task run for execution %s",
+            execution_id,
         )
 
 

@@ -82,10 +82,7 @@ def _config_to_detail(
     config_version: int | None = None,
     config_hash: str | None = None,
 ) -> GraphDetail:
-    nodes = [
-        NodeDetail(id=n.id, type=n.type, data=n.data)
-        for n in config.nodes
-    ]
+    nodes = [NodeDetail(id=n.id, type=n.type, data=n.data) for n in config.nodes]
     edges = [
         EdgeDetail(
             id=e.id,
@@ -229,12 +226,14 @@ async def duplicate_graph(
 
     new_edges = []
     for edge in config.get("edges", []):
-        new_edges.append({
-            **edge,
-            "id": str(uuid4())[:8],
-            "source": id_mapping.get(edge["source"], edge["source"]),
-            "target": id_mapping.get(edge["target"], edge["target"]),
-        })
+        new_edges.append(
+            {
+                **edge,
+                "id": str(uuid4())[:8],
+                "source": id_mapping.get(edge["source"], edge["source"]),
+                "target": id_mapping.get(edge["target"], edge["target"]),
+            }
+        )
 
     old_entry = config.get("entry_node_id")
     new_entry = id_mapping.get(old_entry, old_entry) if old_entry else None

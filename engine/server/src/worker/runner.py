@@ -117,8 +117,10 @@ async def main() -> None:
                     STREAM_DOCUMENTS, "rag-extractors", "ext-1", document_extract_handler
                 ),
                 bus.subscribe(
-                    STREAM_RAG_EXTRACTED, "rag-embedders",
-                    "emb-1", document_embed_handler,
+                    STREAM_RAG_EXTRACTED,
+                    "rag-embedders",
+                    "emb-1",
+                    document_embed_handler,
                 ),
                 bus.subscribe(STREAM_RAG_EMBEDDED, "rag-storers", "stor-1", document_store_handler),
             ]

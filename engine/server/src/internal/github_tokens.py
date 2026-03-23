@@ -44,9 +44,7 @@ class GitHubTokenResponse(BaseModel):
 @router.get("", response_model=list[GitHubTokenResponse], dependencies=[RequireOwner])
 async def list_tokens(db: DbSession) -> list[GitHubTokenResponse]:
     """List all GitHub tokens (token values masked)."""
-    result = await db.execute(
-        select(GitHubToken).order_by(GitHubToken.created_at.desc())
-    )
+    result = await db.execute(select(GitHubToken).order_by(GitHubToken.created_at.desc()))
     tokens = result.scalars().all()
     return [_to_response(t) for t in tokens]
 
@@ -73,7 +71,9 @@ async def create_token(body: GitHubTokenCreate, db: DbSession) -> GitHubTokenRes
 
 @router.patch("/{token_id}", response_model=GitHubTokenResponse, dependencies=[RequireOwner])
 async def update_token(
-    token_id: str, body: GitHubTokenUpdate, db: DbSession,
+    token_id: str,
+    body: GitHubTokenUpdate,
+    db: DbSession,
 ) -> GitHubTokenResponse:
     """Update a GitHub token's metadata."""
     result = await db.execute(select(GitHubToken).where(GitHubToken.id == token_id))

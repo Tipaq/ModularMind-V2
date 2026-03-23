@@ -425,8 +425,13 @@ class SuperSupervisorService:
             return self._parse_routing_response(response)
 
         except (
-            httpx.HTTPError, ConnectionError, TimeoutError,
-            ValidationError, ValueError, RuntimeError, KeyError,
+            httpx.HTTPError,
+            ConnectionError,
+            TimeoutError,
+            ValidationError,
+            ValueError,
+            RuntimeError,
+            KeyError,
         ) as e:
             logger.error("LLM routing failed: %s", e, exc_info=True)
             return RoutingDecision(
@@ -555,7 +560,11 @@ class SuperSupervisorService:
         match decision.strategy:
             case RoutingStrategy.DIRECT_RESPONSE:
                 return await self._handle_direct_response(
-                    decision, conv_id, content, user_id, conv_config,
+                    decision,
+                    conv_id,
+                    content,
+                    user_id,
+                    conv_config,
                 )
             case RoutingStrategy.TOOL_RESPONSE:
                 return await self._handle_tool_response(
@@ -654,11 +663,16 @@ class SuperSupervisorService:
         from src.graph_engine.tool_loop import ToolLoopConfig, run_tool_loop, try_bind_tools
 
         execution, publish_fn = await self._setup_tool_execution(
-            conv_id, content, user_id,
+            conv_id,
+            content,
+            user_id,
         )
 
         discovery_defs, discovery_executor = await self._create_discovery_tools(
-            user_id, conv_config, publish_fn, execution.id,
+            user_id,
+            conv_config,
+            publish_fn,
+            execution.id,
         )
 
         _, model_name = self._resolve_model_name(conv_config)
@@ -670,7 +684,11 @@ class SuperSupervisorService:
             if not tools_bound:
                 logger.info("Model %s doesn't support tools, falling back", model_name)
                 return await self._handle_direct_response(
-                    decision, conv_id, content, user_id, conv_config,
+                    decision,
+                    conv_id,
+                    content,
+                    user_id,
+                    conv_config,
                 )
 
             memory_context = await self._get_memory_context(user_id)
@@ -719,8 +737,12 @@ class SuperSupervisorService:
             }
 
         except (
-            httpx.HTTPError, ConnectionError, TimeoutError,
-            ValueError, RuntimeError, KeyError,
+            httpx.HTTPError,
+            ConnectionError,
+            TimeoutError,
+            ValueError,
+            RuntimeError,
+            KeyError,
         ) as e:
             logger.error("TOOL_RESPONSE execution failed: %s", e, exc_info=True)
             await publish_fn(
@@ -732,7 +754,11 @@ class SuperSupervisorService:
                 }
             )
             return await self._handle_direct_response(
-                decision, conv_id, content, user_id, conv_config,
+                decision,
+                conv_id,
+                content,
+                user_id,
+                conv_config,
             )
 
     async def _create_discovery_tools(
@@ -995,8 +1021,12 @@ class SuperSupervisorService:
                 return formatted, knowledge_data
 
         except (
-            SQLAlchemyError, httpx.HTTPError, ConnectionError,
-            TimeoutError, RuntimeError, ValueError,
+            SQLAlchemyError,
+            httpx.HTTPError,
+            ConnectionError,
+            TimeoutError,
+            RuntimeError,
+            ValueError,
         ) as e:
             logger.warning("Knowledge retrieval for supervisor failed: %s", e, exc_info=True)
             return "", None

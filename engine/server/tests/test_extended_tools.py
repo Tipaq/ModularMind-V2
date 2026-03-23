@@ -60,10 +60,17 @@ class TestToolRegistry:
     def test_all_definitions_have_valid_format(self):
         from src.tools.registry import resolve_tool_definitions
 
-        categories = {k: True for k in [
-            "knowledge", "filesystem", "file_storage",
-            "human_interaction", "image_generation", "custom_tools",
-        ]}
+        categories = {
+            k: True
+            for k in [
+                "knowledge",
+                "filesystem",
+                "file_storage",
+                "human_interaction",
+                "image_generation",
+                "custom_tools",
+            ]
+        }
         tools = resolve_tool_definitions(categories)
 
         for tool in tools:
@@ -79,10 +86,17 @@ class TestToolRegistry:
     def test_no_duplicate_tool_names(self):
         from src.tools.registry import resolve_tool_definitions
 
-        categories = {k: True for k in [
-            "knowledge", "filesystem", "file_storage",
-            "human_interaction", "image_generation", "custom_tools",
-        ]}
+        categories = {
+            k: True
+            for k in [
+                "knowledge",
+                "filesystem",
+                "file_storage",
+                "human_interaction",
+                "image_generation",
+                "custom_tools",
+            ]
+        }
         tools = resolve_tool_definitions(categories)
         names = [t["function"]["name"] for t in tools]
         assert len(names) == len(set(names)), f"Duplicate names: {names}"

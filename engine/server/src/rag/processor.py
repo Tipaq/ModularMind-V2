@@ -126,13 +126,9 @@ async def extract_text(file_content: bytes, filename: str) -> str:
     ext = Path(filename).suffix.lower()
 
     if ext == ".pdf":
-        return await asyncio.wait_for(
-            asyncio.to_thread(extract_pdf, file_content), timeout=120.0
-        )
+        return await asyncio.wait_for(asyncio.to_thread(extract_pdf, file_content), timeout=120.0)
     elif ext == ".docx":
-        return await asyncio.wait_for(
-            asyncio.to_thread(extract_docx, file_content), timeout=120.0
-        )
+        return await asyncio.wait_for(asyncio.to_thread(extract_docx, file_content), timeout=120.0)
     elif ext in (".txt", ".text"):
         return file_content.decode("utf-8", errors="replace")
     elif ext in (".md", ".markdown"):

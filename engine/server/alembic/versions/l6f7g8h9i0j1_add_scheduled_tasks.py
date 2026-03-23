@@ -32,10 +32,16 @@ def upgrade() -> None:
         sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("tags", ARRAY(sa.String()), nullable=False, server_default="{}"),
         sa.Column(
-            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now(),
+            "created_at",
+            sa.DateTime(),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
         sa.Column(
-            "updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now(),
+            "updated_at",
+            sa.DateTime(),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
     )
 
@@ -48,14 +54,8 @@ def upgrade() -> None:
     )
 
     # Drop old enum type and create new one
-    op.execute(
-        "ALTER TABLE scheduled_task_runs "
-        "ALTER COLUMN status DROP DEFAULT"
-    )
-    op.execute(
-        "ALTER TABLE scheduled_task_runs "
-        "ALTER COLUMN status TYPE VARCHAR(20)"
-    )
+    op.execute("ALTER TABLE scheduled_task_runs ALTER COLUMN status DROP DEFAULT")
+    op.execute("ALTER TABLE scheduled_task_runs ALTER COLUMN status TYPE VARCHAR(20)")
     op.execute("DROP TYPE IF EXISTS automationrunstatus")
     op.execute(
         "CREATE TYPE scheduledtaskrunstatus AS ENUM "
@@ -85,7 +85,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint(
-        "fk_scheduled_task_runs_task_id", "scheduled_task_runs", type_="foreignkey",
+        "fk_scheduled_task_runs_task_id",
+        "scheduled_task_runs",
+        type_="foreignkey",
     )
 
     op.alter_column(
@@ -95,10 +97,7 @@ def downgrade() -> None:
         nullable=False,
     )
 
-    op.execute(
-        "ALTER TABLE scheduled_task_runs "
-        "ALTER COLUMN status TYPE VARCHAR(20)"
-    )
+    op.execute("ALTER TABLE scheduled_task_runs ALTER COLUMN status TYPE VARCHAR(20)")
     op.execute("DROP TYPE IF EXISTS scheduledtaskrunstatus")
     op.execute(
         "CREATE TYPE automationrunstatus AS ENUM "

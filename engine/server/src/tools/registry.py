@@ -76,10 +76,7 @@ def resolve_tool_definitions(
             continue
         category_tools = definition_fn()
         if isinstance(enabled, dict):
-            category_tools = [
-                t for t in category_tools
-                if enabled.get(t["function"]["name"], True)
-            ]
+            category_tools = [t for t in category_tools if enabled.get(t["function"]["name"], True)]
         tools.extend(category_tools)
         logger.debug("Category '%s': %d tools", category, len(category_tools))
 
@@ -87,7 +84,8 @@ def resolve_tool_definitions(
 
 
 async def resolve_registered_custom_tools(
-    agent_id: str, session_maker: Callable,
+    agent_id: str,
+    session_maker: Callable,
 ) -> list[dict[str, Any]]:
     """Load agent's registered custom tools from DB and return as LLM tool definitions.
 
@@ -101,8 +99,9 @@ async def resolve_registered_custom_tools(
     try:
         async with session_maker() as session:
             result = await session.execute(
-                select(CustomTool)
-                .where(CustomTool.agent_id == agent_id, CustomTool.is_active.is_(True))
+                select(CustomTool).where(
+                    CustomTool.agent_id == agent_id, CustomTool.is_active.is_(True)
+                )
             )
             tools = list(result.scalars().all())
 
@@ -112,20 +111,28 @@ async def resolve_registered_custom_tools(
         definitions = []
         for tool in tools:
             has_params = isinstance(tool.parameters, dict) and tool.parameters
-            parameters = tool.parameters if has_params else {
-                "type": "object", "properties": {}, "required": [],
-            }
+            parameters = (
+                tool.parameters
+                if has_params
+                else {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                }
+            )
             if "type" not in parameters:
                 parameters = {"type": "object", "properties": parameters, "required": []}
 
-            definitions.append({
-                "type": "function",
-                "function": {
-                    "name": f"custom__{tool.name}",
-                    "description": f"[Custom Tool] {tool.description}",
-                    "parameters": parameters,
-                },
-            })
+            definitions.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": f"custom__{tool.name}",
+                        "description": f"[Custom Tool] {tool.description}",
+                        "parameters": parameters,
+                    },
+                }
+            )
 
         logger.info("Agent '%s': loaded %d registered custom tools", agent_id, len(definitions))
         return definitions

@@ -36,9 +36,7 @@ async def list_tasks(
     search: str = Query(""),
 ) -> dict:
     result = await service.list_tasks(search=search, page=page, page_size=page_size)
-    result["items"] = [
-        ScheduledTaskResponse.model_validate(t) for t in result["items"]
-    ]
+    result["items"] = [ScheduledTaskResponse.model_validate(t) for t in result["items"]]
     return result
 
 

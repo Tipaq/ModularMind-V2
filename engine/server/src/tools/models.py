@@ -16,7 +16,9 @@ class CustomTool(Base):
     __tablename__ = "custom_tools"
 
     id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4()),
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid4()),
     )
     agent_id: Mapped[str] = mapped_column(String(36), nullable=False)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -26,7 +28,8 @@ class CustomTool(Base):
     executor_config: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'"))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(),
+        DateTime(timezone=True),
+        server_default=func.now(),
     )
 
     __table_args__ = (
@@ -41,22 +44,25 @@ class GitHubToken(Base):
     __tablename__ = "github_tokens"
 
     id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4()),
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid4()),
     )
     label: Mapped[str] = mapped_column(String(100), nullable=False)
     token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     scopes: Mapped[list[str]] = mapped_column(ARRAY(String), server_default=text("'{}'"))
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(),
+        DateTime(timezone=True),
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(),
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
-    __table_args__ = (
-        Index("ix_github_tokens_is_default", "is_default"),
-    )
+    __table_args__ = (Index("ix_github_tokens_is_default", "is_default"),)
 
 
 class StoredFile(Base):
@@ -65,23 +71,30 @@ class StoredFile(Base):
     __tablename__ = "stored_files"
 
     id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4()),
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid4()),
     )
     agent_id: Mapped[str] = mapped_column(String(36), nullable=False)
     user_id: Mapped[str] = mapped_column(String(36), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_type: Mapped[str] = mapped_column(
-        String(128), nullable=False, default="application/octet-stream",
+        String(128),
+        nullable=False,
+        default="application/octet-stream",
     )
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     s3_bucket: Mapped[str] = mapped_column(String(128), nullable=False)
     s3_key: Mapped[str] = mapped_column(String(512), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(),
+        DateTime(timezone=True),
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(),
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     __table_args__ = (
