@@ -1,44 +1,37 @@
 """Graph execution state definitions."""
 
-from typing import Any, TypedDict
+import operator
+from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import BaseMessage
+from langgraph.graph import add_messages
+
+
+def _last_value(current: str | None, update: str | None) -> str | None:
+    return update
+
+
+def _merge_dicts(current: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
+    return {**current, **update}
+
+
+def _replace_list(current: list[dict[str, Any]], update: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return update
 
 
 class GraphState(TypedDict, total=False):
-    """State passed through graph nodes during execution.
-
-    This TypedDict defines the shape of state that flows through
-    the LangGraph execution. All fields are optional to allow
-    incremental state building.
-
-    Attributes:
-        messages: Conversation message history
-        input_prompt: Original user prompt
-        input_data: Additional input context/data
-        current_node: ID of currently executing node
-        node_outputs: Mapping of node_id -> output data
-        should_interrupt: Flag to pause execution
-        error: Error message if execution failed
-        metadata: Additional execution metadata
-        branch_results: Results from parallel branch execution
-        loop_state: Current loop iteration state
-        delegation_context: Supervisor delegation tracking
-        approval_context: HITL approval tracking (node_id, status, approved_by, notes)
-    """
-
-    messages: list[BaseMessage]
+    messages: Annotated[list[BaseMessage], add_messages]
     input_prompt: str
     input_data: dict[str, Any]
-    current_node: str | None
-    node_outputs: dict[str, Any]
-    should_interrupt: bool
-    error: str | None
-    metadata: dict[str, Any]
-    branch_results: list[dict[str, Any]]
-    loop_state: dict[str, Any]
-    delegation_context: dict[str, Any]
-    approval_context: dict[str, Any]
+    current_node: Annotated[str | None, _last_value]
+    node_outputs: Annotated[dict[str, Any], _merge_dicts]
+    should_interrupt: Annotated[bool, operator.or_]
+    error: Annotated[str | None, _last_value]
+    metadata: Annotated[dict[str, Any], _merge_dicts]
+    branch_results: Annotated[list[dict[str, Any]], _replace_list]
+    loop_state: Annotated[dict[str, Any], _merge_dicts]
+    delegation_context: Annotated[dict[str, Any], _merge_dicts]
+    approval_context: Annotated[dict[str, Any], _merge_dicts]
 
 
 def create_initial_state(
@@ -46,16 +39,6 @@ def create_initial_state(
     input_data: dict[str, Any] | None = None,
     messages: list[BaseMessage] | None = None,
 ) -> GraphState:
-    """Create initial graph state for execution.
-
-    Args:
-        prompt: The user's input prompt
-        input_data: Optional additional context data
-        messages: Optional existing message history
-
-    Returns:
-        Initialized GraphState ready for execution
-    """
     return GraphState(
         messages=messages or [],
         input_prompt=prompt,

@@ -403,7 +403,7 @@ class GraphCompiler:
         _lc_tools = lc_tools
         _mcp_executor = tool_executor
 
-        async def agent_node(state: GraphState, config: RunnableConfig | None = None) -> dict:
+        async def agent_node(state: GraphState, config: RunnableConfig) -> dict:
             # Allow per-conversation model override via input_data
             effective_model = state.get("input_data", {}).get("_model_override") or model_id
             logger.info("Executing agent: %s with model: %s", agent.name, effective_model)
@@ -591,7 +591,7 @@ class GraphCompiler:
                 response_text = f"[Error] Failed to get response from {effective_model}: {str(e)}"
 
             return {
-                "messages": messages + [AIMessage(content=response_text)],
+                "messages": [AIMessage(content=response_text)],
                 "current_node": "agent",
                 "node_outputs": {"agent": {"response": response_text, "model": effective_model}},
             }
@@ -705,13 +705,13 @@ class GraphCompiler:
                             e,
                         )
 
-        async def agent_node(state: GraphState, config: RunnableConfig | None = None) -> dict:
+        async def agent_node(state: GraphState, config: RunnableConfig) -> dict:
             # Allow per-conversation model override via input_data
             effective_model = state.get("input_data", {}).get("_model_override") or model_id
             logger.info("Executing agent node: %s with model: %s", node_id, effective_model)
 
             # Signal that this agent node has started (for real-time Activity tracking)
-            configurable = (config.get("configurable") or {}) if config else {}
+            configurable = config.get("configurable") or {}
             _started_fn = configurable.get("_node_started_fn")
             if _started_fn:
                 _started_fn(node_id, effective_model)
@@ -770,12 +770,30 @@ class GraphCompiler:
 
                 return await check_revoke_intent(_exec_id) == "cancel"
 
-            # Build tool executor for this agent (MCP + gateway)
+            # Build tool executor for this agent (MCP + extended + gateway)
             active_tools: list[dict] = list(mcp_tools)
             unified_executor = mcp_executor
 
-            gateway_executor = None
+            # Resolve extended tools (github, git, knowledge, filesystem, etc.)
             _graph_tool_cats = getattr(agent, "tool_categories", {}) if agent else {}
+            extended_executor = None
+            if _graph_tool_cats and any(_graph_tool_cats.values()):
+                from src.tools.registry import (
+                    resolve_registered_custom_tools,
+                    resolve_tool_definitions,
+                )
+
+                extended_defs = resolve_tool_definitions(_graph_tool_cats)
+                if extended_defs:
+                    active_tools.extend(extended_defs)
+                    logger.info(
+                        "Graph agent '%s' (%s): %d extended tools from categories",
+                        agent.name if agent else "?",
+                        node_id,
+                        len(extended_defs),
+                    )
+
+            gateway_executor = None
             _graph_needs_gw = (
                 bool(agent and agent.gateway_permissions)
                 or _graph_tool_cats.get("filesystem")
@@ -803,8 +821,26 @@ class GraphCompiler:
                         internal_token=get_internal_bearer_token(),
                     )
 
-            # Build unified executor combining MCP + gateway
-            if active_tools and (mcp_executor or gateway_executor):
+            # Build extended executor for tool categories
+            if _graph_tool_cats and any(_graph_tool_cats.values()):
+                from src.tools.executor import ExtendedToolExecutor, ToolExecutorDeps
+
+                user_id = (state.get("metadata") or {}).get("user_id")
+                from src.infra.database import async_session_maker
+
+                executor_deps = ToolExecutorDeps(
+                    gateway_executor=gateway_executor,
+                    publish_fn=_extract_tool_publish_fn(config),
+                )
+                extended_executor = ExtendedToolExecutor(
+                    session_maker=async_session_maker,
+                    user_id=user_id or "",
+                    agent_id=agent.id if agent else "",
+                    deps=executor_deps,
+                )
+
+            # Build unified executor combining MCP + extended + gateway
+            if active_tools and (mcp_executor or gateway_executor or extended_executor):
                 from src.graph_engine.builtin_tools import UnifiedToolExecutor
 
                 unified_executor = UnifiedToolExecutor(
@@ -812,6 +848,7 @@ class GraphCompiler:
                     mcp_executor,
                     set(),
                     gateway_executor=gateway_executor,
+                    extended_executor=extended_executor,
                 )
 
             try:
@@ -870,8 +907,7 @@ class GraphCompiler:
                 logger.error("Agent %s LLM error: %s", node_id, e)
                 response_text = f"[Error] Failed to get response from {effective_model}: {str(e)}"
 
-            # Build returned messages: include contextual input if present
-            new_messages = list(messages)
+            new_messages: list[BaseMessage] = []
             if agent_input_msg:
                 new_messages.append(agent_input_msg)
             new_messages.append(AIMessage(content=response_text))
@@ -879,10 +915,7 @@ class GraphCompiler:
             return {
                 "messages": new_messages,
                 "current_node": node_id,
-                "node_outputs": {
-                    **state.get("node_outputs", {}),
-                    node_id: {"response": response_text, "model": effective_model},
-                },
+                "node_outputs": {node_id: {"response": response_text, "model": effective_model}},
             }
 
         return agent_node
@@ -918,7 +951,7 @@ class GraphCompiler:
             registry = self.mcp_registry
 
             async def mcp_tool_node(
-                state: GraphState, runnable_config: RunnableConfig | None = None
+                state: GraphState, runnable_config: RunnableConfig
             ) -> dict:
                 from src.mcp import MCPToolCallRequest
 
@@ -969,7 +1002,6 @@ class GraphCompiler:
                 return {
                     "current_node": node_id,
                     "node_outputs": {
-                        **state.get("node_outputs", {}),
                         node_id: output,
                     },
                 }
@@ -979,7 +1011,7 @@ class GraphCompiler:
         else:
             # Non-MCP tool (function, api, custom) — placeholder for future impl
             async def tool_node(
-                state: GraphState, runnable_config: RunnableConfig | None = None
+                state: GraphState, runnable_config: RunnableConfig
             ) -> dict:
                 logger.info("Executing tool node: %s (type=%s)", node_id, tool_type)
                 result = {
@@ -991,7 +1023,6 @@ class GraphCompiler:
                 return {
                     "current_node": node_id,
                     "node_outputs": {
-                        **state.get("node_outputs", {}),
                         node_id: result,
                     },
                 }
@@ -1046,7 +1077,7 @@ class GraphCompiler:
         """
         branch_ids = branch_node_ids or []
 
-        async def parallel_node(state: GraphState, config: RunnableConfig | None = None) -> dict:
+        async def parallel_node(state: GraphState, config: RunnableConfig) -> dict:
             logger.info("Parallel %s: executing %d branches", node_id, len(branch_ids))
 
             async def run_branch(bid: str) -> dict[str, Any]:
@@ -1092,7 +1123,7 @@ class GraphCompiler:
         """
         strategy = node_data.get("config", {}).get("merge_strategy", "combine_outputs")
 
-        async def merge_node(state: GraphState, config: RunnableConfig | None = None) -> dict:
+        async def merge_node(state: GraphState, config: RunnableConfig) -> dict:
             branch_results = state.get("branch_results", [])
             logger.info(
                 "Merge %s: %d branches, strategy=%s", node_id, len(branch_results), strategy
@@ -1111,9 +1142,8 @@ class GraphCompiler:
             if strategy == "concat_messages":
                 return {
                     "current_node": node_id,
-                    "messages": state.get("messages", []) + merged_messages,
+                    "messages": merged_messages,
                     "node_outputs": {
-                        **state.get("node_outputs", {}),
                         node_id: {"merged": len(branch_results)},
                     },
                     "branch_results": [],
@@ -1137,7 +1167,6 @@ class GraphCompiler:
                 return {
                     "current_node": node_id,
                     "node_outputs": {
-                        **state.get("node_outputs", {}),
                         node_id: {"branches": branch_results},
                     },
                     "branch_results": [],
@@ -1151,7 +1180,6 @@ class GraphCompiler:
                 return {
                     "current_node": node_id,
                     "node_outputs": {
-                        **state.get("node_outputs", {}),
                         node_id: combined,
                     },
                     "branch_results": [],
@@ -1178,7 +1206,7 @@ class GraphCompiler:
         timeout_seconds = node_config.get("approvalTimeout", 0)  # 0 = no timeout
         gate_message = node_config.get("message", "Review the plan above and approve to continue.")
 
-        async def approval_node(state: GraphState, config: RunnableConfig | None = None) -> dict:
+        async def approval_node(state: GraphState, config: RunnableConfig) -> dict:
             exec_id = (config or {}).get("configurable", {}).get("thread_id")
             if not exec_id:
                 logger.warning("Approval node %s: no execution_id, skipping gate", node_id)
@@ -1330,7 +1358,7 @@ class GraphCompiler:
         target_node_id = config.get("target_node")
 
         async def loop_node(
-            state: GraphState, runnable_config: RunnableConfig | None = None
+            state: GraphState, runnable_config: RunnableConfig
         ) -> dict:
             collection = _resolve_dot_path(state, source_path)
             if collection is None:
@@ -1428,7 +1456,7 @@ class GraphCompiler:
 
         invoker = AgentInvoker(self.config_provider, self.llm_provider)
 
-        async def supervisor_node(state: GraphState, config: RunnableConfig | None = None) -> dict:
+        async def supervisor_node(state: GraphState, config: RunnableConfig) -> dict:
             logger.info("Supervisor %s: analyzing input for routing", node_id)
 
             # 1. Get available workers
@@ -1446,7 +1474,6 @@ class GraphCompiler:
                     "current_node": node_id,
                     "error": "No worker agents available",
                     "node_outputs": {
-                        **state.get("node_outputs", {}),
                         node_id: {"error": "No worker agents available"},
                     },
                 }
@@ -1607,7 +1634,7 @@ class GraphCompiler:
 
             # 7. Build return state
             return {
-                "messages": state.get("messages", []) + [AIMessage(content=final_response)],
+                "messages": [AIMessage(content=final_response)],
                 "current_node": node_id,
                 "node_outputs": {
                     **state.get("node_outputs", {}),

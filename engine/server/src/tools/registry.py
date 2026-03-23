@@ -10,6 +10,8 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from src.infra.constants import DEFAULT_TOOL_CATEGORIES  # noqa: F401 — re-exported
+
 logger = logging.getLogger(__name__)
 
 
