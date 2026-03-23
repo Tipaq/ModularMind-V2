@@ -143,6 +143,16 @@ export type { MemoryTabProps } from "./components/insights";
 export { MiniAppViewer } from "./components/mini-app";
 export { MiniAppCard } from "./components/mini-app";
 
+// Shared layout components
+export { SectionCard } from "./components/section-card";
+export type { SectionCardProps } from "./components/section-card";
+export { AgentConfigGrid } from "./components/agent-config-grid";
+export type { AgentConfigGridProps } from "./components/agent-config-grid";
+export { PromptDisplay } from "./components/prompt-display";
+export type { PromptDisplayProps } from "./components/prompt-display";
+export { ToggleRow } from "./components/toggle-row";
+export type { ToggleRowProps } from "./components/toggle-row";
+
 // Code & copy components
 export { CopyButton } from "./components/copy-button";
 export { CodeBlock } from "./components/code-block";
