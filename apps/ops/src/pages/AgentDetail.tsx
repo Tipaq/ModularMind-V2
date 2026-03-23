@@ -1,26 +1,19 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Copy, Trash2, Bot, RefreshCw } from "lucide-react";
-import { Badge, Button, cn } from "@modularmind/ui";
+import { ArrowLeft, Copy, Trash2, Bot, RefreshCw, Save, X, Edit } from "lucide-react";
+import { Badge, Button, Separator } from "@modularmind/ui";
 import type { AgentUpdateInput } from "@modularmind/api-client";
 import { useAgentsStore } from "../stores/agents";
-import { AgentOverviewTab } from "../components/agents/AgentOverviewTab";
-import { AgentToolsTab } from "../components/agents/AgentToolsTab";
-import { AgentPromptTab } from "../components/agents/AgentPromptTab";
-
-type TabKey = "overview" | "tools" | "gateway" | "prompt";
-
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "overview", label: "Overview" },
-  { key: "tools", label: "Tools" },
-  { key: "gateway", label: "Gateway" },
-  { key: "prompt", label: "Prompt" },
-];
+import { AgentOverviewSection } from "../components/agents/AgentOverviewSection";
+import { AgentToolsSection } from "../components/agents/AgentToolsSection";
+import { AgentPromptSection } from "../components/agents/AgentPromptSection";
 
 export default function AgentDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const pendingChanges = useRef<AgentUpdateInput>({});
 
   const {
     selectedAgent: agent,
@@ -35,6 +28,27 @@ export default function AgentDetail() {
     if (id) fetchAgent(id);
   }, [id, fetchAgent]);
 
+  const handleChange = useCallback((data: AgentUpdateInput) => {
+    pendingChanges.current = { ...pendingChanges.current, ...data };
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await updateAgent(id, pendingChanges.current);
+      pendingChanges.current = {};
+      setIsEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }, [id, updateAgent]);
+
+  const handleCancel = useCallback(() => {
+    pendingChanges.current = {};
+    setIsEditing(false);
+  }, []);
+
   const handleDelete = useCallback(async () => {
     if (!agent || !confirm(`Delete "${agent.name}"?`)) return;
     await deleteAgent(agent.id);
@@ -46,14 +60,6 @@ export default function AgentDetail() {
     await duplicateAgent(agent.id);
     navigate("/agents");
   }, [agent, duplicateAgent, navigate]);
-
-  const handleSave = useCallback(
-    async (data: AgentUpdateInput) => {
-      if (!id) return;
-      await updateAgent(id, data);
-    },
-    [id, updateAgent],
-  );
 
   if (loading || !agent) {
     return (
@@ -83,6 +89,20 @@ export default function AgentDetail() {
             </Badge>
           </div>
           <div className="flex items-center gap-2">
+            {isEditing ? (
+              <>
+                <Button size="sm" variant="ghost" onClick={handleCancel} disabled={saving}>
+                  <X className="h-4 w-4 mr-1" /> Cancel
+                </Button>
+                <Button size="sm" onClick={handleSave} disabled={saving}>
+                  <Save className="h-4 w-4 mr-1" /> {saving ? "Saving..." : "Save"}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                <Edit className="h-4 w-4 mr-1" /> Edit
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={handleDuplicate}>
               <Copy className="h-4 w-4 mr-1" /> Duplicate
             </Button>
@@ -96,40 +116,14 @@ export default function AgentDetail() {
             </Button>
           </div>
         </div>
-
-        <div className="flex gap-6 mt-4">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={cn(
-                "pb-2 text-sm font-medium border-b-2 transition-colors",
-                activeTab === tab.key
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {activeTab === "overview" && (
-          <AgentOverviewTab agent={agent} onSave={handleSave} />
-        )}
-        {activeTab === "tools" && (
-          <AgentToolsTab agent={agent} onSave={handleSave} />
-        )}
-        {activeTab === "gateway" && (
-          <div className="p-5 text-sm text-muted-foreground">
-            Gateway permissions configuration coming soon.
-          </div>
-        )}
-        {activeTab === "prompt" && (
-          <AgentPromptTab agent={agent} onSave={handleSave} />
-        )}
+        <AgentOverviewSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+        <Separator />
+        <AgentPromptSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+        <Separator />
+        <AgentToolsSection agent={agent} isEditing={isEditing} onChange={handleChange} />
       </div>
     </div>
   );

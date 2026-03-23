@@ -12,6 +12,7 @@ import {
   EmptyState,
   ResourceTable,
   ResourceFilters,
+  formatModelName,
 } from "@modularmind/ui";
 import type { ResourceColumn, ResourceFilterConfig } from "@modularmind/ui";
 import type { Agent } from "@modularmind/api-client";
@@ -23,24 +24,17 @@ const filterConfigs: ResourceFilterConfig[] = [
 ];
 
 function ModelBadge({ modelId }: { modelId: string }) {
-  const [provider, model] = modelId.includes(":")
-    ? [modelId.split(":")[0], modelId.split(":").slice(1).join(":")]
-    : ["unknown", modelId];
-
   return (
-    <div className="flex items-center gap-1">
-      <Badge variant="outline" className="text-[10px] py-0 px-1.5">
-        {provider}
-      </Badge>
-      <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
-        {model}
-      </Badge>
-    </div>
+    <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+      {formatModelName(modelId)}
+    </Badge>
   );
 }
 
-function ToolCount({ categories }: { categories: Record<string, boolean> }) {
-  const count = Object.values(categories).filter(Boolean).length;
+function ToolCount({ categories }: { categories: Record<string, boolean | Record<string, boolean>> }) {
+  const count = Object.values(categories).filter((v) =>
+    typeof v === "boolean" ? v : Object.values(v).some(Boolean),
+  ).length;
   return (
     <Badge variant="outline" className="text-[10px] py-0 px-1.5">
       {count} tool{count !== 1 ? "s" : ""}
