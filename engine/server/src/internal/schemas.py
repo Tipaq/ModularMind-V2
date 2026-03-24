@@ -348,6 +348,9 @@ class SettingsResponse(BaseModel):
     auto_sync: bool
     sync_interval_minutes: int
     ollama_keep_alive: str
+    ollama_enabled: bool
+    ollama_gpu_mode: bool
+    ollama_running: bool
     max_execution_timeout: int
     knowledge_embedding_provider: str
     knowledge_embedding_model: str

@@ -49,9 +49,8 @@ def _load_persisted_overrides() -> None:
             pass
 
 
-def build_settings_response() -> SettingsResponse:
+async def build_settings_response() -> SettingsResponse:
     """Build the current settings response with masked keys."""
-    # Ensure persisted overrides are loaded
     _load_persisted_overrides()
 
     providers = secrets_store.get_configured_providers()
@@ -64,6 +63,18 @@ def build_settings_response() -> SettingsResponse:
         else:
             masked_keys[provider] = ""
 
+    ollama_enabled = secrets_store.get("OLLAMA_ENABLED") == "true"
+    ollama_gpu = secrets_store.get("OLLAMA_GPU_MODE") == "true"
+    ollama_running = False
+    if ollama_enabled:
+        try:
+            from src.ollama.manager import ollama_manager
+
+            ollama_status = await ollama_manager.status()
+            ollama_running = ollama_status.running
+        except Exception:
+            pass
+
     return SettingsResponse(
         llm_api_keys=masked_keys,
         default_model=settings.DEFAULT_LLM_PROVIDER,
@@ -71,6 +82,9 @@ def build_settings_response() -> SettingsResponse:
         auto_sync=True,
         sync_interval_minutes=5,
         ollama_keep_alive=settings.OLLAMA_KEEP_ALIVE,
+        ollama_enabled=ollama_enabled,
+        ollama_gpu_mode=ollama_gpu,
+        ollama_running=ollama_running,
         max_execution_timeout=settings.MAX_EXECUTION_TIMEOUT,
         knowledge_embedding_provider=(
             settings.KNOWLEDGE_EMBEDDING_PROVIDER or settings.EMBEDDING_PROVIDER
@@ -88,7 +102,7 @@ async def get_settings_endpoint(user: CurrentUser) -> SettingsResponse:
 
     API key values are masked - only shows whether keys are configured.
     """
-    return build_settings_response()
+    return await build_settings_response()
 
 
 @router.patch("/settings", dependencies=[RequireAdmin])
@@ -129,4 +143,4 @@ async def update_settings_endpoint(update: SettingsUpdate, user: CurrentUser) ->
             setattr(settings, upper_attr, value)
             secrets_store.set(upper_attr, value)
 
-    return build_settings_response()
+    return await build_settings_response()
