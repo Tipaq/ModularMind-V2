@@ -87,6 +87,7 @@ services:
       - proxy-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - engine-data:/data
     ports:
       - "${PROXY_PORT:-8080}:8000"
     environment:
@@ -110,6 +111,7 @@ services:
     depends_on: *engine-depends
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - engine-data:/data
     environment:
       <<: *engine-env
       WORKER_STREAMS: executions,models,scheduled_tasks
@@ -125,6 +127,8 @@ services:
     image: ghcr.io/tipaq/modularmind-engine:${MM_VERSION:-latest}
     command: python -m src.worker.runner
     depends_on: *engine-depends
+    volumes:
+      - engine-data:/data
     environment:
       <<: *engine-env
       WORKER_STREAMS: documents,memory
@@ -254,6 +258,7 @@ volumes:
   qdrant-data:
   ollama-data:
   minio-data:
+  engine-data:
   gateway-workspaces:
   prometheus-data:
   grafana-data:
