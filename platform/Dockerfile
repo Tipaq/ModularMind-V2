@@ -37,9 +37,8 @@ COPY --from=builder /app/platform/public ./platform/public
 COPY install.sh ./install.sh
 COPY docker/docker-compose.client.yml ./docker/docker-compose.client.yml
 
-RUN adduser -u 1000 -D -s /bin/sh appuser \
-    && chown -R appuser:appuser /app
-USER appuser
+RUN chown -R node:node /app
+USER node
 
 EXPOSE 3000
 CMD ["node", "platform/server.js"]
