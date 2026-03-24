@@ -62,9 +62,6 @@ stop-monitoring: ## Stop monitoring stack
 build: ## Build all apps
 	pnpm build
 
-build-docker: ## Build Docker images (from source)
-	docker compose -f docker/docker-compose.build.yml build
-
 build-platform: ## Build Platform Docker image
 	docker compose -f docker/docker-compose.platform.yml build
 
