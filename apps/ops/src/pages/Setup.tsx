@@ -134,35 +134,46 @@ export function Setup() {
 
   const handleFinish = async () => {
     setError("");
+    setLoading(true);
 
     if (ollamaEnabled) {
-      apiFetch("/internal/ollama/start", {
-        method: "POST",
-        body: JSON.stringify({ gpu_enabled: ollamaGpu }),
-      })
-        .then(async (res) => {
-          if (!res.ok) return;
+      try {
+        const res = await apiFetch("/internal/ollama/start", {
+          method: "POST",
+          body: JSON.stringify({ gpu_enabled: ollamaGpu }),
+        });
+
+        if (res.ok) {
+          const pullPromises: Promise<unknown>[] = [];
 
           for (const modelId of selectedModels) {
-            await apiFetch("/models/pull", {
-              method: "POST",
-              body: JSON.stringify({ model_name: modelId }),
-            }).catch(() => {});
+            pullPromises.push(
+              apiFetch("/models/pull", {
+                method: "POST",
+                body: JSON.stringify({ model_name: modelId }),
+              }).catch(() => {}),
+            );
           }
 
           if (embeddingModel) {
-            await apiFetch("/internal/settings", {
-              method: "PATCH",
-              body: JSON.stringify({ knowledge_embedding_model: embeddingModel }),
-            }).catch(() => {});
-
-            await apiFetch("/models/pull", {
-              method: "POST",
-              body: JSON.stringify({ model_name: embeddingModel }),
-            }).catch(() => {});
+            pullPromises.push(
+              apiFetch("/internal/settings", {
+                method: "PATCH",
+                body: JSON.stringify({ knowledge_embedding_model: embeddingModel }),
+              }).then(() =>
+                apiFetch("/models/pull", {
+                  method: "POST",
+                  body: JSON.stringify({ model_name: embeddingModel }),
+                }),
+              ).catch(() => {}),
+            );
           }
-        })
-        .catch(() => {});
+
+          await Promise.all(pullPromises);
+        }
+      } catch {
+        // Ollama start failed — continue to dashboard anyway
+      }
     }
 
     window.location.href = "/ops/configuration";
@@ -225,6 +236,7 @@ export function Setup() {
   return (
     <KnowledgeStep
       {...sharedProps}
+      loading={loading}
       ollamaEnabled={ollamaEnabled}
       embeddingModel={embeddingModel}
       onSelectEmbedding={setEmbeddingModel}

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, BookOpen, Check, Server } from "lucide-react";
+import { ArrowLeft, BookOpen, Check, Loader2, Server } from "lucide-react";
 import { type Step, EMBEDDING_MODELS, BTN_PRIMARY, BTN_SECONDARY } from "./types";
 import { SetupLayout } from "./SetupLayout";
 
@@ -8,6 +8,7 @@ interface KnowledgeStepProps {
   step: Step;
   stepIndex: number;
   error: string;
+  loading: boolean;
   ollamaEnabled: boolean;
   embeddingModel: string;
   onSelectEmbedding: (modelId: string) => void;
@@ -19,6 +20,7 @@ export function KnowledgeStep({
   step,
   stepIndex,
   error,
+  loading,
   ollamaEnabled,
   embeddingModel,
   onSelectEmbedding,
@@ -82,11 +84,18 @@ export function KnowledgeStep({
         )}
 
         <div className="flex gap-3 pt-1">
-          <button onClick={onBack} className={`${BTN_SECONDARY} flex-1`}>
+          <button onClick={onBack} disabled={loading} className={`${BTN_SECONDARY} flex-1`}>
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
-          <button onClick={onFinish} className={`${BTN_PRIMARY} flex-1`}>
-            {ollamaEnabled ? "Finish Setup" : "Skip & Finish"}
+          <button onClick={onFinish} disabled={loading} className={`${BTN_PRIMARY} flex-1`}>
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {ollamaEnabled ? "Starting Ollama..." : "Finishing..."}
+              </>
+            ) : (
+              ollamaEnabled ? "Finish Setup" : "Skip & Finish"
+            )}
           </button>
         </div>
       </div>
