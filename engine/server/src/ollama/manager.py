@@ -104,15 +104,24 @@ class OllamaManager:
         return secrets_store
 
     def _is_enabled(self) -> bool:
-        return self._get_secrets_store().get(SECRET_KEY_ENABLED) == "true"
+        try:
+            return self._get_secrets_store().get(SECRET_KEY_ENABLED) == "true"
+        except Exception:
+            return False
 
     def _is_gpu(self) -> bool:
-        return self._get_secrets_store().get(SECRET_KEY_GPU) == "true"
+        try:
+            return self._get_secrets_store().get(SECRET_KEY_GPU) == "true"
+        except Exception:
+            return False
 
     def _persist_state(self, enabled: bool, gpu: bool) -> None:
-        store = self._get_secrets_store()
-        store.set(SECRET_KEY_ENABLED, "true" if enabled else "false")
-        store.set(SECRET_KEY_GPU, "true" if gpu else "false")
+        try:
+            store = self._get_secrets_store()
+            store.set(SECRET_KEY_ENABLED, "true" if enabled else "false")
+            store.set(SECRET_KEY_GPU, "true" if gpu else "false")
+        except Exception as e:
+            logger.warning("Failed to persist Ollama state: %s", e)
 
     async def start(self, gpu_enabled: bool = False) -> OllamaStatus:
         client = await self._get_docker()

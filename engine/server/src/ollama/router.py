@@ -55,6 +55,9 @@ async def start_ollama(
         status = await ollama_manager.start(gpu_enabled=body.gpu_enabled)
     except OllamaError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Unexpected error starting Ollama")
+        raise HTTPException(status_code=500, detail=str(e)) from e
     return _to_response(status)
 
 
@@ -63,5 +66,8 @@ async def stop_ollama(user: CurrentUser) -> OllamaStatusResponse:
     try:
         status = await ollama_manager.stop()
     except OllamaError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Unexpected error stopping Ollama")
         raise HTTPException(status_code=500, detail=str(e)) from e
     return _to_response(status)
