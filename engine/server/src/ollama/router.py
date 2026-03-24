@@ -8,7 +8,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.auth.dependencies import RequireAdmin
+from src.auth.dependencies import CurrentUser, RequireAdmin
 from src.ollama.manager import OllamaError, OllamaStatus, ollama_manager
 
 logger = logging.getLogger(__name__)
@@ -40,16 +40,16 @@ def _to_response(status: OllamaStatus) -> OllamaStatusResponse:
     )
 
 
-@router.get("/status", response_model=OllamaStatusResponse)
-async def get_ollama_status(user: RequireAdmin) -> OllamaStatusResponse:
+@router.get("/status", response_model=OllamaStatusResponse, dependencies=[RequireAdmin])
+async def get_ollama_status(user: CurrentUser) -> OllamaStatusResponse:
     status = await ollama_manager.status()
     return _to_response(status)
 
 
-@router.post("/start", response_model=OllamaStatusResponse)
+@router.post("/start", response_model=OllamaStatusResponse, dependencies=[RequireAdmin])
 async def start_ollama(
     body: OllamaStartRequest,
-    user: RequireAdmin,
+    user: CurrentUser,
 ) -> OllamaStatusResponse:
     try:
         status = await ollama_manager.start(gpu_enabled=body.gpu_enabled)
@@ -58,8 +58,8 @@ async def start_ollama(
     return _to_response(status)
 
 
-@router.post("/stop", response_model=OllamaStatusResponse)
-async def stop_ollama(user: RequireAdmin) -> OllamaStatusResponse:
+@router.post("/stop", response_model=OllamaStatusResponse, dependencies=[RequireAdmin])
+async def stop_ollama(user: CurrentUser) -> OllamaStatusResponse:
     try:
         status = await ollama_manager.stop()
     except OllamaError as e:
