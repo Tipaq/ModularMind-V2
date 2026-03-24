@@ -84,7 +84,8 @@ COPY engine/server/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
 RUN useradd -u 1000 -m -s /bin/bash appuser \
-    && chown -R appuser:appuser /app
+    && mkdir -p /data/config \
+    && chown -R appuser:appuser /app /data
 USER appuser
 
 EXPOSE 8000
