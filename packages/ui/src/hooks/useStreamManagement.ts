@@ -223,6 +223,7 @@ export function useStreamManagement(
       currentContextDataRef, setMessages, setIsStreaming, setError,
       setExecutionDataMap, setPendingApproval, setApprovalDecision,
       handleTraceEvent, finalizeActivities, setStreamingMsgId, setSelectedMessageId,
+      setPendingPrompt,
     ],
   );
 

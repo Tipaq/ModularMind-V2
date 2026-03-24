@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, memo, type ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { Plus, Trash2, MessageSquare, Check, X } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
@@ -30,8 +30,6 @@ export interface ConversationSidebarProps {
   onCreate: () => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
-  /** Optional footer content (e.g. UserButton). Rendered below the conversation list. */
-  footer?: ReactNode;
   className?: string;
 }
 
@@ -134,7 +132,6 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   onCreate,
   onDelete,
   onRename,
-  footer,
   className,
 }: ConversationSidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);

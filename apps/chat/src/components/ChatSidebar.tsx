@@ -27,7 +27,6 @@ export const ChatSidebar = memo(function ChatSidebar({
       onCreate={onCreate}
       onDelete={onDelete}
       onRename={onRename}
-      footer={null}
     />
   );
 });
