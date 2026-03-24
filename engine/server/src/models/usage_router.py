@@ -224,7 +224,6 @@ async def list_catalog(
 
         if provider == "ollama":
             if model_id_raw in ollama_details:
-                # Model is pulled — enrich with live data
                 info = ollama_details[model_id_raw]
                 size = info.get("parameter_size") or size
                 disk_size = _format_bytes(info.get("size_bytes")) or disk_size
@@ -233,11 +232,12 @@ async def list_catalog(
                 pull_status = "ready"
                 pull_progress = 100
             else:
-                # Not pulled — check Redis for download progress
-                raw_progress = await svc.get_pull_progress(model_id_raw)
-                pull_status, pull_progress, pull_error = _decode_progress(raw_progress)
+                try:
+                    raw_progress = await svc.get_pull_progress(model_id_raw)
+                    pull_status, pull_progress, pull_error = _decode_progress(raw_progress)
+                except (ConnectionError, OSError, Exception):
+                    logger.warning("Failed to get pull progress for %s", model_id_raw)
         else:
-            # Cloud model — pull status not applicable
             pull_status = "ready" if configured_providers.get(provider) else None
 
         catalog.append(
@@ -310,8 +310,11 @@ async def get_catalog_model(model_id: str, user: CurrentUser) -> CatalogModelRes
             pull_status = "ready"
             pull_progress = 100
         else:
-            raw_progress = await svc.get_pull_progress(model_id_raw)
-            pull_status, pull_progress, pull_error = _decode_progress(raw_progress)
+            try:
+                raw_progress = await svc.get_pull_progress(model_id_raw)
+                pull_status, pull_progress, pull_error = _decode_progress(raw_progress)
+            except (ConnectionError, OSError, Exception):
+                logger.warning("Failed to get pull progress for %s", model_id_raw)
     else:
         from src.infra.secrets import secrets_store
 
