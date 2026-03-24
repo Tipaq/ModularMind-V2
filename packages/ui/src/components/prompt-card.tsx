@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { MessageSquare, Send, Loader2, CheckCircle2 } from "lucide-react";
+import { MessageSquare, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export interface HumanPromptRequest {

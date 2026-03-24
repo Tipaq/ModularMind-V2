@@ -92,10 +92,8 @@ export function GraphPlayground({
   } = useChat(conversationId, chatAdapter);
 
   useEffect(() => {
-    if (pendingPrompt) {
-      console.log("[GraphPlayground] pendingPrompt:", pendingPrompt);
-    }
-  }, [pendingPrompt]);
+    console.log("[GraphPlayground] pendingPrompt:", pendingPrompt, "activities:", activities.length, "isStreaming:", isStreaming);
+  }, [pendingPrompt, activities, isStreaming]);
 
   const onActivitiesChangeRef = useRef(onActivitiesChange);
 
