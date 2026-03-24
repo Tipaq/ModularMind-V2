@@ -15,7 +15,9 @@ def _merge_dicts(current: dict[str, Any], update: dict[str, Any]) -> dict[str, A
     return {**current, **update}
 
 
-def _replace_list(current: list[dict[str, Any]], update: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _replace_list(
+    current: list[dict[str, Any]], update: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     return update
 
 

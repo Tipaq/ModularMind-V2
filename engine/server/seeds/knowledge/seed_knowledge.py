@@ -46,7 +46,10 @@ COLLECTIONS = [
     {
         "dir": "02-api-reference",
         "name": "API Reference",
-        "description": "Documentation de l'API REST ModularMind (auth, conversations, RAG, memory, webhooks)",
+        "description": (
+            "Documentation de l'API REST ModularMind"
+            " (auth, conversations, RAG, memory, webhooks)"
+        ),
         "scope": RAGScope.GLOBAL,
         "allowed_groups": [],
     },
@@ -88,14 +91,20 @@ COLLECTIONS = [
     {
         "dir": "08-standards-dev",
         "name": "Standards de Développement",
-        "description": "Guides de style Python/TypeScript, conventions Git, code review, tests, accessibilité",
+        "description": (
+            "Guides de style Python/TypeScript,"
+            " conventions Git, code review, tests, accessibilité"
+        ),
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "backend", "frontend", "qa"],
     },
     {
         "dir": "09-securite-conformite",
         "name": "Sécurité & Conformité",
-        "description": "Charte sécurité, gestion des secrets, RGPD, SOC 2, plan de réponse incidents",
+        "description": (
+            "Charte sécurité, gestion des secrets,"
+            " RGPD, SOC 2, plan de réponse incidents"
+        ),
         "scope": RAGScope.GROUP,
         "allowed_groups": ["security", "engineering", "devops", "management"],
     },
@@ -145,7 +154,10 @@ COLLECTIONS = [
     {
         "dir": "P1-projet-phoenix",
         "name": "Projet Phoenix — Refonte UI v4",
-        "description": "Brief, architecture, comptes-rendus et plan de tests du projet Phoenix (refonte interface)",
+        "description": (
+            "Brief, architecture, comptes-rendus et plan de tests"
+            " du projet Phoenix (refonte interface)"
+        ),
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "frontend", "product"],
         "category": "project",
@@ -153,7 +165,10 @@ COLLECTIONS = [
     {
         "dir": "P2-projet-atlas",
         "name": "Projet Atlas — Migration Kubernetes",
-        "description": "Brief, architecture K8s, runbooks et bilans du projet Atlas (migration infrastructure)",
+        "description": (
+            "Brief, architecture K8s, runbooks et bilans"
+            " du projet Atlas (migration infrastructure)"
+        ),
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "devops", "backend"],
         "category": "project",
@@ -161,7 +176,10 @@ COLLECTIONS = [
     {
         "dir": "P3-projet-mercury",
         "name": "Projet Mercury — API Gateway & Marketplace",
-        "description": "Brief, architecture API Gateway, spec marketplace et plans de tests du projet Mercury",
+        "description": (
+            "Brief, architecture API Gateway, spec marketplace"
+            " et plans de tests du projet Mercury"
+        ),
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "backend", "product"],
         "category": "project",
@@ -169,7 +187,10 @@ COLLECTIONS = [
     {
         "dir": "P4-projet-titan",
         "name": "Projet Titan — Analytics & Reporting",
-        "description": "Brief, architecture pipeline analytics, spécifications export et plan de tests du projet Titan",
+        "description": (
+            "Brief, architecture pipeline analytics,"
+            " spécifications export et plan de tests du projet Titan"
+        ),
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "data", "backend"],
         "category": "project",
@@ -177,7 +198,10 @@ COLLECTIONS = [
     {
         "dir": "P5-projet-orion",
         "name": "Projet Orion — Application Mobile",
-        "description": "Brief, architecture React Native, spec notifications push et plan de tests du projet Orion",
+        "description": (
+            "Brief, architecture React Native, spec notifications push"
+            " et plan de tests du projet Orion"
+        ),
         "scope": RAGScope.GROUP,
         "allowed_groups": ["engineering", "frontend", "product"],
         "category": "project",

@@ -157,7 +157,8 @@ async def _human_prompt(
 
             revoke_key = f"revoke_intent:{execution_id}"
             revoke = await r.get(revoke_key)
-            if revoke and (revoke.decode() if isinstance(revoke, bytes) else str(revoke)) == "cancel":
+            revoke_value = revoke.decode() if isinstance(revoke, bytes) else str(revoke)
+            if revoke and revoke_value == "cancel":
                 await r.aclose()
                 from src.executions.cancel import ExecutionCancelled
                 raise ExecutionCancelled()

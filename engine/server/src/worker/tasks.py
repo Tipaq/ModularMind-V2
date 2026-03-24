@@ -56,7 +56,9 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
 
         # Skip executions that were already cancelled/failed (stale queue messages)
         from sqlalchemy import select as sa_sel
-        from src.executions.models import ExecutionRun as _ER, ExecutionStatus as _ES
+
+        from src.executions.models import ExecutionRun as _ER
+        from src.executions.models import ExecutionStatus as _ES
         _status_row = (await session.execute(
             sa_sel(_ER.status).where(_ER.id == execution_id)
         )).first()

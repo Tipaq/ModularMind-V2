@@ -1,12 +1,10 @@
-"""Seed script — reads YAML files from seeds/agents/ and seeds/graphs/ and creates them via the Engine API.
+"""Seed script — reads YAML definitions and creates them via the Engine API.
 
 Usage:
     python seeds/seed.py --url http://localhost:8000 --email user@example.com --password secret
 """
 
 import argparse
-import json
-import sys
 from pathlib import Path
 
 import requests
