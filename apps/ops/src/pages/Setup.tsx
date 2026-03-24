@@ -19,7 +19,7 @@ export function Setup() {
 
   const [ollamaEnabled, setOllamaEnabled] = useState(false);
   const [ollamaGpu, setOllamaGpu] = useState(false);
-  const [gpuAvailable, setGpuAvailable] = useState(false);
+  const [gpuReady, setGpuReady] = useState(false);
   const [gpuName, setGpuName] = useState<string | null>(null);
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set(["qwen3:8b"]));
 
@@ -94,8 +94,9 @@ export function Setup() {
       apiFetch("/internal/ollama/status")
         .then((r) => r.json())
         .then((data) => {
-          setGpuAvailable(data.gpu_available ?? false);
-          setGpuName(data.gpu_name ?? null);
+          const gpu = data.gpu ?? {};
+          setGpuReady(gpu.ready ?? false);
+          setGpuName(gpu.hardware_name ?? null);
         })
         .catch(() => {});
     }
@@ -196,7 +197,7 @@ export function Setup() {
         {...sharedProps}
         ollamaEnabled={ollamaEnabled}
         ollamaGpu={ollamaGpu}
-        gpuAvailable={gpuAvailable}
+        gpuReady={gpuReady}
         gpuName={gpuName}
         selectedModels={selectedModels}
         apiKeys={apiKeys}

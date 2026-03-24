@@ -30,7 +30,7 @@ interface ProvidersStepProps {
   error: string;
   ollamaEnabled: boolean;
   ollamaGpu: boolean;
-  gpuAvailable: boolean;
+  gpuReady: boolean;
   gpuName: string | null;
   selectedModels: Set<string>;
   apiKeys: Record<string, string>;
@@ -92,7 +92,7 @@ export function ProvidersStep({
   error,
   ollamaEnabled,
   ollamaGpu,
-  gpuAvailable,
+  gpuReady,
   gpuName,
   selectedModels,
   apiKeys,
@@ -156,7 +156,7 @@ export function ProvidersStep({
 
           {ollamaEnabled && (
             <div className="space-y-3 pl-1">
-              {gpuAvailable && (
+              {gpuReady && (
                 <button
                   type="button"
                   onClick={() => onOllamaGpuChange(!ollamaGpu)}
