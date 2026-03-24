@@ -334,7 +334,8 @@ class TestHumanInteractionTools:
             },
             publish_fn=publish,
         )
-        assert "Prompt sent" in result
+        assert "blocking is not available" in result
+        publish.assert_called_once()
         event = publish.call_args[0][0]
         assert event["type"] == "human_prompt"
         assert event["prompt_type"] == "confirm"
