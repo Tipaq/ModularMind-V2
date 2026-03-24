@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, X, Server, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, X, Loader2 } from "lucide-react";
 import { type Step, PASSWORD_RULES, INPUT_CLASS, BTN_PRIMARY, BTN_SECONDARY } from "./types";
 import { SetupLayout } from "./SetupLayout";
 
@@ -11,12 +11,10 @@ interface AccountStepProps {
   email: string;
   password: string;
   confirmPassword: string;
-  runtimeName: string;
   loading: boolean;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onConfirmPasswordChange: (value: string) => void;
-  onRuntimeNameChange: (value: string) => void;
   onBack: () => void;
   onCreateAccount: () => void;
 }
@@ -28,23 +26,24 @@ export function AccountStep({
   email,
   password,
   confirmPassword,
-  runtimeName,
   loading,
   onEmailChange,
   onPasswordChange,
   onConfirmPasswordChange,
-  onRuntimeNameChange,
   onBack,
   onCreateAccount,
 }: AccountStepProps) {
   const allPasswordRulesPass = PASSWORD_RULES.every((rule) => rule.test(password));
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
-  const canProceed =
-    allPasswordRulesPass && passwordsMatch && email.includes("@") && runtimeName.trim().length > 0;
+  const canProceed = allPasswordRulesPass && passwordsMatch && email.includes("@");
 
   return (
     <SetupLayout step={step} stepIndex={stepIndex} error={error}>
       <div className="space-y-4">
+        <p className="text-sm text-muted-foreground text-center">
+          Create the admin account for your instance.
+        </p>
+
         <div className="space-y-2">
           <label htmlFor="setup-email" className="text-sm font-medium">
             Email
@@ -113,25 +112,6 @@ export function AccountStep({
             })}
           </div>
         )}
-
-        <div className="space-y-2">
-          <label htmlFor="setup-runtime" className="text-sm font-medium">
-            Instance Name
-          </label>
-          <div className="relative">
-            <Server className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              id="setup-runtime"
-              type="text"
-              value={runtimeName}
-              onChange={(e) => onRuntimeNameChange(e.target.value)}
-              required
-              className={`${INPUT_CLASS} pl-9`}
-              placeholder="My Server"
-              maxLength={100}
-            />
-          </div>
-        </div>
 
         <div className="flex gap-3 pt-2">
           <button onClick={onBack} className={`${BTN_SECONDARY} flex-1`}>

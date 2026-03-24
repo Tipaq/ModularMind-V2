@@ -15,7 +15,7 @@ class SetupInitialize(BaseModel):
 
     email: EmailStr
     password: str = Field(min_length=10)
-    runtime_name: str = Field(min_length=1, max_length=100)
+    runtime_name: str = Field(default="ModularMind", max_length=100)
     default_provider: str = Field(default="ollama", pattern="^(ollama|openai|anthropic)$")
 
 
@@ -24,4 +24,3 @@ class SetupResponse(BaseModel):
 
     message: str
     email: str
-    runtime_name: str

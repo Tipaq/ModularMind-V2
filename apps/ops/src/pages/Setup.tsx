@@ -7,10 +7,7 @@ import { type Step, STEPS, apiFetch } from "./setup/types";
 import { WelcomeStep } from "./setup/WelcomeStep";
 import { AccountStep } from "./setup/AccountStep";
 import { ProvidersStep } from "./setup/ProvidersStep";
-import { OllamaStep } from "./setup/OllamaStep";
-import { ModelsStep } from "./setup/ModelsStep";
-import { EmbeddingStep } from "./setup/EmbeddingStep";
-import { CompleteStep } from "./setup/CompleteStep";
+import { KnowledgeStep } from "./setup/KnowledgeStep";
 
 export function Setup() {
   const navigate = useNavigate();
@@ -19,19 +16,16 @@ export function Setup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [runtimeName, setRuntimeName] = useState("");
+
+  const [ollamaEnabled, setOllamaEnabled] = useState(false);
+  const [ollamaGpu, setOllamaGpu] = useState(false);
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set(["qwen3:8b"]));
 
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
-
-  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set(["qwen3:8b"]));
-  const [pullingModels, setPullingModels] = useState<Set<string>>(new Set());
-
-  const [ollamaEnabled, setOllamaEnabled] = useState(false);
-  const [ollamaGpu, setOllamaGpu] = useState(false);
 
   const [embeddingModel, setEmbeddingModel] = useState("nomic-embed-text");
 
@@ -46,16 +40,8 @@ export function Setup() {
   };
 
   const goNext = () => {
-    const currentIdx = STEPS.indexOf(step);
-    const nextStep = STEPS[currentIdx + 1];
-    if (!nextStep) return;
-
-    if (step === "ollama" && !ollamaEnabled) {
-      goTo("complete");
-      return;
-    }
-
-    goTo(nextStep);
+    const next = STEPS[stepIndex + 1];
+    if (next) goTo(next);
   };
 
   const goBack = () => {
@@ -73,7 +59,7 @@ export function Setup() {
         body: JSON.stringify({
           email,
           password,
-          runtime_name: runtimeName.trim(),
+          runtime_name: "ModularMind",
           default_provider: "ollama",
         }),
       });
@@ -131,58 +117,40 @@ export function Setup() {
     });
   };
 
-  const handlePullModels = async () => {
-    setLoading(true);
+  const handleFinish = async () => {
     setError("");
-    const toPull = [...selectedModels];
-    let dispatched = 0;
 
-    for (const modelId of toPull) {
-      setPullingModels((prev) => new Set(prev).add(modelId));
-      try {
-        const res = await apiFetch("/models/pull", {
-          method: "POST",
-          body: JSON.stringify({ model_name: modelId }),
-        });
-        if (res.ok) dispatched++;
-        else setError(`Failed to queue ${modelId} for download`);
-      } catch {
-        setError(`Failed to queue ${modelId} for download`);
-      }
-    }
-
-    setLoading(false);
-    if (dispatched > 0) goNext();
-  };
-
-  const handleSaveEmbedding = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const settingsRes = await apiFetch("/internal/settings", {
-        method: "PATCH",
-        body: JSON.stringify({ knowledge_embedding_model: embeddingModel }),
-      });
-      if (!settingsRes.ok) {
-        setError("Failed to save embedding configuration");
-        setLoading(false);
-        return;
-      }
-
-      const pullRes = await apiFetch("/models/pull", {
+    if (ollamaEnabled) {
+      apiFetch("/internal/ollama/start", {
         method: "POST",
-        body: JSON.stringify({ model_name: embeddingModel }),
-      });
-      if (!pullRes.ok) {
-        setError("Embedding saved but failed to queue model download");
-      }
-    } catch {
-      setError("Failed to save embedding configuration");
-      setLoading(false);
-      return;
+        body: JSON.stringify({ gpu_enabled: ollamaGpu }),
+      })
+        .then(async (res) => {
+          if (!res.ok) return;
+
+          for (const modelId of selectedModels) {
+            await apiFetch("/models/pull", {
+              method: "POST",
+              body: JSON.stringify({ model_name: modelId }),
+            }).catch(() => {});
+          }
+
+          if (embeddingModel) {
+            await apiFetch("/internal/settings", {
+              method: "PATCH",
+              body: JSON.stringify({ knowledge_embedding_model: embeddingModel }),
+            }).catch(() => {});
+
+            await apiFetch("/models/pull", {
+              method: "POST",
+              body: JSON.stringify({ model_name: embeddingModel }),
+            }).catch(() => {});
+          }
+        })
+        .catch(() => {});
     }
-    setLoading(false);
-    goNext();
+
+    navigate("/configuration", { replace: true });
   };
 
   const sharedProps = { step, stepIndex, error };
@@ -198,12 +166,10 @@ export function Setup() {
         email={email}
         password={password}
         confirmPassword={confirmPassword}
-        runtimeName={runtimeName}
         loading={loading}
         onEmailChange={setEmail}
         onPasswordChange={setPassword}
         onConfirmPasswordChange={setConfirmPassword}
-        onRuntimeNameChange={setRuntimeName}
         onBack={goBack}
         onCreateAccount={handleCreateAccount}
       />
@@ -214,11 +180,17 @@ export function Setup() {
     return (
       <ProvidersStep
         {...sharedProps}
+        ollamaEnabled={ollamaEnabled}
+        ollamaGpu={ollamaGpu}
+        selectedModels={selectedModels}
         apiKeys={apiKeys}
         savedKeys={savedKeys}
         savingKey={savingKey}
         visibleKeys={visibleKeys}
         expandedProvider={expandedProvider}
+        onOllamaEnabledChange={setOllamaEnabled}
+        onOllamaGpuChange={setOllamaGpu}
+        onToggleModel={toggleModel}
         onApiKeyChange={(providerId, value) =>
           setApiKeys((prev) => ({ ...prev, [providerId]: value }))
         }
@@ -233,57 +205,14 @@ export function Setup() {
     );
   }
 
-  if (step === "ollama") {
-    return (
-      <OllamaStep
-        {...sharedProps}
-        ollamaEnabled={ollamaEnabled}
-        ollamaGpu={ollamaGpu}
-        onOllamaEnabledChange={setOllamaEnabled}
-        onOllamaGpuChange={setOllamaGpu}
-        onBack={goBack}
-        onNext={goNext}
-      />
-    );
-  }
-
-  if (step === "models") {
-    return (
-      <ModelsStep
-        {...sharedProps}
-        selectedModels={selectedModels}
-        pullingModels={pullingModels}
-        loading={loading}
-        onToggleModel={toggleModel}
-        onBack={goBack}
-        onPullModels={handlePullModels}
-        onSkip={goNext}
-      />
-    );
-  }
-
-  if (step === "embedding") {
-    return (
-      <EmbeddingStep
-        {...sharedProps}
-        embeddingModel={embeddingModel}
-        loading={loading}
-        onSelectEmbedding={setEmbeddingModel}
-        onBack={goBack}
-        onSaveEmbedding={handleSaveEmbedding}
-      />
-    );
-  }
-
   return (
-    <CompleteStep
+    <KnowledgeStep
       {...sharedProps}
-      email={email}
-      runtimeName={runtimeName}
-      configuredProviderCount={Object.keys(savedKeys).length}
-      selectedModelsCount={selectedModels.size}
-      embeddingModel={embeddingModel}
       ollamaEnabled={ollamaEnabled}
+      embeddingModel={embeddingModel}
+      onSelectEmbedding={setEmbeddingModel}
+      onBack={goBack}
+      onFinish={handleFinish}
     />
   );
 }

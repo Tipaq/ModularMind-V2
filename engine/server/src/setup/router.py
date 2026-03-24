@@ -75,5 +75,4 @@ async def initialize(data: SetupInitialize, db: DbSession) -> SetupResponse:
     return SetupResponse(
         message="Runtime initialized successfully",
         email=user.email,
-        runtime_name=data.runtime_name,
     )

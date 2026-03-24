@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Server, Cloud, Brain } from "lucide-react";
+import { ArrowRight, KeyRound, Server, BookOpen } from "lucide-react";
 import { type Step, BTN_PRIMARY } from "./types";
 import { SetupLayout } from "./SetupLayout";
 
@@ -12,9 +12,9 @@ interface WelcomeStepProps {
 }
 
 const SETUP_FEATURES = [
-  { icon: Server, label: "Account" },
-  { icon: Cloud, label: "Providers" },
-  { icon: Brain, label: "Models" },
+  { icon: KeyRound, label: "Account" },
+  { icon: Server, label: "AI Providers" },
+  { icon: BookOpen, label: "Knowledge" },
 ];
 
 export function WelcomeStep({ step, stepIndex, error, onNext }: WelcomeStepProps) {
@@ -25,7 +25,7 @@ export function WelcomeStep({ step, stepIndex, error, onNext }: WelcomeStepProps
           <h2 className="text-lg font-semibold">Welcome</h2>
           <p className="text-sm text-muted-foreground">
             Let's set up your ModularMind instance. You'll create an admin
-            account and configure your AI models.
+            account and configure your AI providers.
           </p>
         </div>
         <div className="grid grid-cols-3 gap-3 text-center">
