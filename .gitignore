@@ -41,6 +41,7 @@ docker/volumes/
 
 # Test
 .coverage
+coverage/
 htmlcov/
 .pytest_cache/
 
