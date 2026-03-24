@@ -54,6 +54,16 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
     async with async_session_maker() as session:
         service = ExecutionService(session)
 
+        # Skip executions that were already cancelled/failed (stale queue messages)
+        from sqlalchemy import select as sa_sel
+        from src.executions.models import ExecutionRun as _ER, ExecutionStatus as _ES
+        _status_row = (await session.execute(
+            sa_sel(_ER.status).where(_ER.id == execution_id)
+        )).first()
+        if _status_row and _status_row[0] not in (_ES.PENDING, _ES.RUNNING):
+            logger.info("Skipping execution %s (status=%s)", execution_id, _status_row[0])
+            return
+
         # Inject model override into the execution's input_data so the
         # compiler picks it up via state["input_data"]["_model_override"].
         if ab_model_override:
