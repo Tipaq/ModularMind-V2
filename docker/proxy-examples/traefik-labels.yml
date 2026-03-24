@@ -6,7 +6,7 @@
 # 1. Remove 'proxy' from COMPOSE_PROFILES in .env
 # 2. Set DOMAIN=mm.example.com in .env
 # 3. Run:
-#    docker compose -f docker-compose.client.yml -f proxy-examples/traefik-labels.yml up -d
+#    docker compose -f docker-compose.yml -f proxy-examples/traefik-labels.yml up -d
 #
 # This routes all traffic through Traefik → engine:8000 directly.
 # Chat and Ops SPAs are served by the nginx container (still needed).

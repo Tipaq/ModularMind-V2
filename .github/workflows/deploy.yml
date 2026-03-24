@@ -266,16 +266,16 @@ jobs:
               --env-file docker/.env.platform up -d
 
             # --- Run engine DB migrations (Alembic) ---
-            docker compose -f docker/docker-compose.client.yml \
+            docker compose -f docker/docker-compose.yml \
               --env-file docker/.env run --rm engine alembic upgrade head
 
             # --- Deploy client stack ---
-            docker compose -f docker/docker-compose.client.yml --env-file docker/.env up -d
+            docker compose -f docker/docker-compose.yml --env-file docker/.env up -d
 
             # --- Health check (wait for Docker healthchecks) ---
             echo "Waiting for services to become healthy..."
-            timeout 120 bash -c 'until docker compose -f docker/docker-compose.client.yml --env-file docker/.env ps engine --format "{{.Health}}" | grep -q healthy; do sleep 5; done' \
-              || { echo "Engine health check timed out"; docker compose -f docker/docker-compose.client.yml --env-file docker/.env logs engine --tail 50; exit 1; }
+            timeout 120 bash -c 'until docker compose -f docker/docker-compose.yml --env-file docker/.env ps engine --format "{{.Health}}" | grep -q healthy; do sleep 5; done' \
+              || { echo "Engine health check timed out"; docker compose -f docker/docker-compose.yml --env-file docker/.env logs engine --tail 50; exit 1; }
             echo "Engine healthy"
             curl -sf http://localhost:3000 || echo "Platform not reachable (may be on separate host)"
 

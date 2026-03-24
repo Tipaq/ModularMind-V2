@@ -35,7 +35,7 @@ COPY --from=builder /app/platform/.next/standalone ./
 COPY --from=builder /app/platform/.next/static ./platform/.next/static
 COPY --from=builder /app/platform/public ./platform/public
 COPY install.sh ./install.sh
-COPY docker/docker-compose.client.yml ./docker/docker-compose.client.yml
+COPY docker/docker-compose.yml ./docker/docker-compose.yml
 
 RUN chown -R node:node /app
 USER node

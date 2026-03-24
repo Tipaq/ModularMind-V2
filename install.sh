@@ -487,7 +487,7 @@ EOF
 # --- Pull & start -------------------------------------------------------------
 
 start_services() {
-    # Create proxy-network if it doesn't exist (required by docker-compose.client.yml)
+    # Create proxy-network if it doesn't exist (required by docker-compose.yml)
     docker network create proxy-network 2>/dev/null || true
 
     info "Pulling images (this may take a few minutes)..."
