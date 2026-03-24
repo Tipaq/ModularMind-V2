@@ -70,8 +70,8 @@ class Settings(BaseSettings):
 
     # ---- LLM ----------------------------------------------------------------
     OLLAMA_BASE_URL: str = Field(
-        default="http://localhost:11434",
-        description="Ollama server URL",
+        default="http://mm-ollama:11434",
+        description="Ollama server URL (default: engine-managed container)",
     )
     OLLAMA_KEEP_ALIVE: str = Field(
         default="24h",

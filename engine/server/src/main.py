@@ -133,7 +133,15 @@ async def lifespan(app: FastAPI):
     except (OSError, ConnectionError, RuntimeError) as exc:
         logger.warning("MCP startup failed (non-fatal): %s", exc)
 
-    # 6. Initialize sync service
+    # 6. Recover Ollama container if enabled
+    from src.ollama.manager import ollama_manager
+
+    try:
+        await ollama_manager.recover()
+    except Exception as exc:
+        logger.warning("Ollama recovery failed (non-fatal): %s", exc)
+
+    # 7. Initialize sync service
     from src.sync.service import SyncService
 
     sync_service = SyncService()
@@ -142,7 +150,7 @@ async def lifespan(app: FastAPI):
     except (OSError, ConnectionError, ValueError) as exc:
         logger.warning("Sync service initialization failed (non-fatal): %s", exc)
 
-    # 7. MCP leader-only phase (auto-deploy free catalog entries)
+    # 8. MCP leader-only phase (auto-deploy free catalog entries)
     try:
         await startup_mcp(leader_only=True)
     except (OSError, ConnectionError, RuntimeError) as exc:
@@ -377,6 +385,10 @@ app.include_router(internal_router, prefix=f"{API_PREFIX}/internal")
 app.include_router(fine_tuning_router, prefix=API_PREFIX)
 app.include_router(mcp_admin_router, prefix=f"{API_PREFIX}/internal")
 app.include_router(tools_admin_router, prefix=f"{API_PREFIX}/internal")
+
+from src.ollama.router import router as ollama_router
+
+app.include_router(ollama_router, prefix=API_PREFIX)
 app.include_router(models_admin_router, prefix=API_PREFIX)
 app.include_router(admin_user_router, prefix=f"{API_PREFIX}/admin")
 app.include_router(conversations_admin_router, prefix=f"{API_PREFIX}/admin")

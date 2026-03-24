@@ -1,0 +1,154 @@
+# =============================================================================
+# ModularMind V2 — Client Deployment (Engine + Workers + Gateway + Infra)
+# =============================================================================
+# 8 containers: engine, worker-exec, worker-pipeline, gateway, db, redis, qdrant, ollama
+# Chat + Ops are static SPAs baked into the engine image
+
+name: modularmind
+
+x-engine-env: &engine-env
+  DATABASE_URL: postgresql+asyncpg://${DB_USER:-modularmind}:${DB_PASSWORD}@db:5432/modularmind
+  REDIS_URL: redis://redis:6379/0
+  QDRANT_URL: http://qdrant:6333
+  OLLAMA_BASE_URL: http://ollama:11434
+  S3_ENDPOINT: http://minio:9000
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+  SECRET_KEY: ${SECRET_KEY}
+  PLATFORM_URL: ${PLATFORM_URL:-}
+  ENGINE_API_KEY: ${ENGINE_API_KEY:-}
+
+x-engine-depends: &engine-depends
+  db: { condition: service_healthy }
+  redis: { condition: service_healthy }
+  qdrant: { condition: service_healthy }
+  minio: { condition: service_healthy }
+
+services:
+  # --- Infrastructure ---
+  db:
+    image: postgres:16-alpine
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    environment:
+      POSTGRES_DB: modularmind
+      POSTGRES_USER: ${DB_USER:-modularmind}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-modularmind}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes: [redis-data:/data]
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.0
+    volumes: [qdrant-data:/qdrant/storage]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+
+  minio:
+    image: minio/minio:latest
+    command: server /data
+    volumes: [minio-data:/data]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-24h}"
+    volumes: [ollama-data:/root/.ollama]
+    profiles: [ollama]
+
+  # --- Engine (single image, 2 services) ---
+  engine:
+    build:
+      context: ..
+      dockerfile: engine/server/Dockerfile
+    image: modularmind/engine:latest
+    depends_on: *engine-depends
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      <<: *engine-env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  worker-exec:
+    image: modularmind/engine:latest
+    command: python -m src.worker.runner
+    depends_on: *engine-depends
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      <<: *engine-env
+      WORKER_STREAMS: executions,models,scheduled_tasks
+      WORKER_SCHEDULER: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  worker-pipeline:
+    image: modularmind/engine:latest
+    command: python -m src.worker.runner
+    depends_on: *engine-depends
+    environment:
+      <<: *engine-env
+      WORKER_STREAMS: documents,memory
+      WORKER_SCHEDULER: "false"
+      WORKER_HEALTH_PORT: "8002"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # --- Gateway (secure system access for agents) ---
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    image: modularmind/gateway:latest
+    depends_on: *engine-depends
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - gateway-workspaces:/data/workspaces
+    environment:
+      <<: *engine-env
+      GATEWAY_PORT: "8200"
+      GATEWAY_SANDBOX_IMAGE: modularmind/gateway-sandbox:latest
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8200/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    # CRITICAL: single worker to maintain sandbox state consistency
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8200 --workers 1
+
+
+volumes:
+  postgres-data:
+  redis-data:
+  qdrant-data:
+  minio-data:
+  ollama-data:
+  gateway-workspaces:

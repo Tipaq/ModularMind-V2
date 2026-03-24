@@ -1,32 +1,54 @@
 # =============================================================================
-# ModularMind V2 — Client Deployment (Engine + Workers + Gateway + Infra)
+# ModularMind V2 — Client Deployment (pre-built images)
 # =============================================================================
-# 8 containers: engine, worker-exec, worker-pipeline, gateway, db, redis, qdrant, ollama
-# Chat + Ops are static SPAs baked into the engine image
+# Infrastructure-agnostic client stack. Uses pre-built GHCR images.
+# Clients put their own reverse proxy (Traefik, Caddy, etc.) in front.
+#
+# Profiles (set COMPOSE_PROFILES in .env):
+#   ollama     - Ollama LLM runtime (CPU)
+#   gpu        - Ollama with NVIDIA GPU (use instead of 'ollama')
+#   storage    - Built-in MinIO S3
+#   monitoring - Prometheus + Grafana
+#
+# Quick start:
+#   cp .env.client.example .env   # fill in secrets
+#   docker compose up -d
+#
+# Or use the installer:
+#   curl -sSL https://get.modularmind.dev | bash -s -- --key mmk_xxx
+# =============================================================================
 
 name: modularmind
+
+x-common: &common
+  restart: unless-stopped
 
 x-engine-env: &engine-env
   DATABASE_URL: postgresql+asyncpg://${DB_USER:-modularmind}:${DB_PASSWORD}@db:5432/modularmind
   REDIS_URL: redis://redis:6379/0
   QDRANT_URL: http://qdrant:6333
-  OLLAMA_BASE_URL: http://ollama:11434
-  S3_ENDPOINT: http://minio:9000
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+  S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
   S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
   S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
   SECRET_KEY: ${SECRET_KEY}
   PLATFORM_URL: ${PLATFORM_URL:-}
   ENGINE_API_KEY: ${ENGINE_API_KEY:-}
+  GATEWAY_ENABLED: ${GATEWAY_ENABLED:-true}
+  GATEWAY_URL: http://gateway:8200
 
 x-engine-depends: &engine-depends
   db: { condition: service_healthy }
   redis: { condition: service_healthy }
   qdrant: { condition: service_healthy }
-  minio: { condition: service_healthy }
 
 services:
-  # --- Infrastructure ---
+  # ==========================================================================
+  # CORE (always running)
+  # ==========================================================================
+
   db:
+    <<: *common
     image: postgres:16-alpine
     volumes: [postgres-data:/var/lib/postgresql/data]
     environment:
@@ -40,6 +62,7 @@ services:
       retries: 5
 
   redis:
+    <<: *common
     image: redis:7-alpine
     volumes: [redis-data:/data]
     command: redis-server --appendonly yes
@@ -48,55 +71,47 @@ services:
       interval: 10s
 
   qdrant:
+    <<: *common
     image: qdrant/qdrant:v1.13.0
     volumes: [qdrant-data:/qdrant/storage]
     healthcheck:
       test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333' || exit 1"]
       interval: 10s
 
-  minio:
-    image: minio/minio:latest
-    command: server /data
-    volumes: [minio-data:/data]
-    environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  ollama:
-    image: ollama/ollama:latest
-    environment:
-      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-24h}"
-    volumes: [ollama-data:/root/.ollama]
-    profiles: [ollama]
-
-  # --- Engine (single image, 2 services) ---
   engine:
-    build:
-      context: ..
-      dockerfile: engine/server/Dockerfile
-    image: modularmind/engine:latest
+    <<: *common
+    image: ghcr.io/tipaq/modularmind-engine:${MM_VERSION:-latest}
     depends_on: *engine-depends
+    networks:
+      - default
+      - proxy-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - engine-data:/data
+    ports:
+      - "${PROXY_PORT:-8080}:8000"
     environment:
       <<: *engine-env
+    labels:
+      traefik.enable: "${TRAEFIK_ENABLED:-false}"
+      traefik.http.routers.modularmind.entrypoints: websecure
+      traefik.http.routers.modularmind.rule: "Host(`${DOMAIN:-localhost}`)"
+      traefik.http.routers.modularmind.tls.certresolver: letsencrypt
+      traefik.http.services.modularmind.loadbalancer.server.port: "8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
       interval: 15s
       timeout: 5s
       retries: 3
 
   worker-exec:
-    image: modularmind/engine:latest
+    <<: *common
+    image: ghcr.io/tipaq/modularmind-engine:${MM_VERSION:-latest}
     command: python -m src.worker.runner
     depends_on: *engine-depends
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - engine-data:/data
     environment:
       <<: *engine-env
       WORKER_STREAMS: executions,models,scheduled_tasks
@@ -108,9 +123,12 @@ services:
       retries: 3
 
   worker-pipeline:
-    image: modularmind/engine:latest
+    <<: *common
+    image: ghcr.io/tipaq/modularmind-engine:${MM_VERSION:-latest}
     command: python -m src.worker.runner
     depends_on: *engine-depends
+    volumes:
+      - engine-data:/data
     environment:
       <<: *engine-env
       WORKER_STREAMS: documents,memory
@@ -122,12 +140,44 @@ services:
       timeout: 5s
       retries: 3
 
-  # --- Gateway (secure system access for agents) ---
+  # ==========================================================================
+  # PROFILE: ollama — LLM runtime (CPU)
+  # ==========================================================================
+
+  ollama:
+    <<: *common
+    image: ollama/ollama:latest
+    profiles: [ollama]
+    environment:
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-24h}"
+    volumes: [ollama-data:/root/.ollama]
+
+  # ==========================================================================
+  # PROFILE: gpu — LLM runtime with NVIDIA GPU
+  # ==========================================================================
+
+  ollama-gpu:
+    <<: *common
+    image: ollama/ollama:latest
+    profiles: [gpu]
+    environment:
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-24h}"
+    volumes: [ollama-data:/root/.ollama]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ==========================================================================
+  # Gateway — Secure tool execution sandbox
+  # ==========================================================================
+
   gateway:
-    build:
-      context: ..
-      dockerfile: gateway/Dockerfile
-    image: modularmind/gateway:latest
+    <<: *common
+    image: ghcr.io/tipaq/modularmind-gateway:${MM_VERSION:-latest}
     depends_on: *engine-depends
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -135,7 +185,7 @@ services:
     environment:
       <<: *engine-env
       GATEWAY_PORT: "8200"
-      GATEWAY_SANDBOX_IMAGE: modularmind/gateway-sandbox:latest
+      GATEWAY_SANDBOX_IMAGE: ghcr.io/tipaq/modularmind-gateway-sandbox:${MM_VERSION:-latest}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8200/health"]
       interval: 15s
@@ -144,11 +194,71 @@ services:
     # CRITICAL: single worker to maintain sandbox state consistency
     command: uvicorn src.main:app --host 0.0.0.0 --port 8200 --workers 1
 
+  # ==========================================================================
+  # PROFILE: storage — Built-in MinIO S3
+  # ==========================================================================
+
+  minio:
+    <<: *common
+    image: minio/minio:latest
+    profiles: [storage]
+    command: server /data
+    volumes: [minio-data:/data]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # PROFILE: monitoring — Prometheus + Grafana
+  # ==========================================================================
+
+  prometheus:
+    <<: *common
+    image: prom/prometheus:v3.2.1
+    profiles: [monitoring]
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+
+  grafana:
+    <<: *common
+    image: grafana/grafana:11.5.2
+    profiles: [monitoring]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-modularmind}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/overview.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3333}:3000"
+    depends_on: [prometheus]
+
+networks:
+  default:
+  proxy-network:
+    external: true
+    name: ${PROXY_NETWORK:-proxy-network}
 
 volumes:
   postgres-data:
   redis-data:
   qdrant-data:
-  minio-data:
   ollama-data:
+  minio-data:
+  engine-data:
   gateway-workspaces:
+  prometheus-data:
+  grafana-data:
