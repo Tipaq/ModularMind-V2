@@ -165,7 +165,7 @@ export function Setup() {
         .catch(() => {});
     }
 
-    navigate("/configuration", { replace: true });
+    window.location.href = "/ops/configuration";
   };
 
   const sharedProps = { step, stepIndex, error };
