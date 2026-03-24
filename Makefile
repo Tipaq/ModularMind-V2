@@ -46,8 +46,8 @@ dev-worker: ## Start Worker process (auto-reload)
 dev-gateway: ## Start Gateway service (uvicorn --reload)
 	cd gateway && uvicorn src.main:app --reload --host 0.0.0.0 --port 8200
 
-dev-infra: build-sandbox ## Start infra only (db, redis, qdrant, minio, ollama) + ensure sandbox image
-	docker compose -f docker/docker-compose.dev.yml up db redis qdrant minio ollama
+dev-infra: build-sandbox ## Start infra only (db, redis, qdrant, minio) + ensure sandbox image
+	docker compose -f docker/docker-compose.dev.yml up db redis qdrant minio
 
 dev-monitoring: ## Start monitoring (Prometheus + Grafana + exporters)
 	docker compose -f docker/docker-compose.monitoring.yml up -d
@@ -62,8 +62,8 @@ stop-monitoring: ## Stop monitoring stack
 build: ## Build all apps
 	pnpm build
 
-build-docker: ## Build Docker images (client deployment)
-	docker compose -f docker/docker-compose.yml build
+build-docker: ## Build Docker images (from source)
+	docker compose -f docker/docker-compose.build.yml build
 
 build-platform: ## Build Platform Docker image
 	docker compose -f docker/docker-compose.platform.yml build
@@ -80,17 +80,14 @@ build-gateway: ## Build Gateway Docker image
 build-sandbox: ## Build Gateway sandbox Docker image
 	docker build -t modularmind/gateway-sandbox:latest -f gateway/sandbox/Dockerfile .
 
-deploy: ## Deploy client stack
+deploy: ## Deploy production stack (pre-built images)
 	docker compose -f docker/docker-compose.yml up -d
 
 deploy-platform: ## Deploy platform stack
 	docker compose -f docker/docker-compose.platform.yml up -d
 
-deploy-client: ## Deploy client stack (pre-built images)
-	docker compose -f docker/docker-compose.client.yml up -d
-
-stop-client: ## Stop client stack
-	docker compose -f docker/docker-compose.client.yml down
+stop: ## Stop production stack
+	docker compose -f docker/docker-compose.yml down
 
 # --- Test ---
 
