@@ -30,6 +30,8 @@ interface ProvidersStepProps {
   error: string;
   ollamaEnabled: boolean;
   ollamaGpu: boolean;
+  gpuAvailable: boolean;
+  gpuName: string | null;
   selectedModels: Set<string>;
   apiKeys: Record<string, string>;
   savedKeys: Record<string, boolean>;
@@ -90,6 +92,8 @@ export function ProvidersStep({
   error,
   ollamaEnabled,
   ollamaGpu,
+  gpuAvailable,
+  gpuName,
   selectedModels,
   apiKeys,
   savedKeys,
@@ -152,23 +156,30 @@ export function ProvidersStep({
 
           {ollamaEnabled && (
             <div className="space-y-3 pl-1">
-              <button
-                type="button"
-                onClick={() => onOllamaGpuChange(!ollamaGpu)}
-                className={`flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all ${
-                  ollamaGpu ? "border-warning bg-warning/5" : "border-border hover:border-muted-foreground/30"
-                }`}
-              >
-                <Zap className={`h-3.5 w-3.5 ${ollamaGpu ? "text-warning" : "text-muted-foreground"}`} />
-                <span className="text-xs font-medium flex-1">GPU Acceleration</span>
-                <div className={`h-4 w-7 rounded-full transition-colors ${
-                  ollamaGpu ? "bg-warning" : "bg-muted"
-                }`}>
-                  <div className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform mt-0.5 ${
-                    ollamaGpu ? "translate-x-3.5" : "translate-x-0.5"
-                  }`} />
-                </div>
-              </button>
+              {gpuAvailable && (
+                <button
+                  type="button"
+                  onClick={() => onOllamaGpuChange(!ollamaGpu)}
+                  className={`flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all ${
+                    ollamaGpu ? "border-warning bg-warning/5" : "border-border hover:border-muted-foreground/30"
+                  }`}
+                >
+                  <Zap className={`h-3.5 w-3.5 ${ollamaGpu ? "text-warning" : "text-muted-foreground"}`} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-medium">GPU Acceleration</span>
+                    {gpuName && (
+                      <p className="text-[10px] text-muted-foreground">{gpuName}</p>
+                    )}
+                  </div>
+                  <div className={`h-4 w-7 rounded-full transition-colors ${
+                    ollamaGpu ? "bg-warning" : "bg-muted"
+                  }`}>
+                    <div className={`h-3 w-3 rounded-full bg-white shadow-sm transition-transform mt-0.5 ${
+                      ollamaGpu ? "translate-x-3.5" : "translate-x-0.5"
+                    }`} />
+                  </div>
+                </button>
+              )}
 
               <div className="space-y-1.5">
                 <p className="text-xs font-medium text-muted-foreground">Models to download</p>

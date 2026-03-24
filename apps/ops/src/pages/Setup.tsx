@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@modularmind/ui";
 import { type Step, STEPS, apiFetch } from "./setup/types";
@@ -19,6 +19,8 @@ export function Setup() {
 
   const [ollamaEnabled, setOllamaEnabled] = useState(false);
   const [ollamaGpu, setOllamaGpu] = useState(false);
+  const [gpuAvailable, setGpuAvailable] = useState(false);
+  const [gpuName, setGpuName] = useState<string | null>(null);
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set(["qwen3:8b"]));
 
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
@@ -86,6 +88,18 @@ export function Setup() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (step === "providers") {
+      apiFetch("/internal/ollama/status")
+        .then((r) => r.json())
+        .then((data) => {
+          setGpuAvailable(data.gpu_available ?? false);
+          setGpuName(data.gpu_name ?? null);
+        })
+        .catch(() => {});
+    }
+  }, [step]);
 
   const handleSaveKey = async (providerId: string) => {
     const key = apiKeys[providerId]?.trim();
@@ -182,6 +196,8 @@ export function Setup() {
         {...sharedProps}
         ollamaEnabled={ollamaEnabled}
         ollamaGpu={ollamaGpu}
+        gpuAvailable={gpuAvailable}
+        gpuName={gpuName}
         selectedModels={selectedModels}
         apiKeys={apiKeys}
         savedKeys={savedKeys}

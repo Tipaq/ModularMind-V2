@@ -13,6 +13,8 @@ import {
 import { api } from "../../lib/api";
 
 interface OllamaStatus {
+  gpu_available: boolean;
+  gpu_name: string | null;
   running: boolean;
   enabled: boolean;
   gpu_enabled: boolean;
@@ -124,22 +126,24 @@ export function InfrastructureTab() {
 
           {status?.enabled && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-warning" />
-                  <div>
-                    <p className="text-sm font-medium">GPU Acceleration</p>
-                    <p className="text-xs text-muted-foreground">
-                      Requires NVIDIA drivers and container toolkit
-                    </p>
+              {status.gpu_available && (
+                <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-warning" />
+                    <div>
+                      <p className="text-sm font-medium">GPU Acceleration</p>
+                      <p className="text-xs text-muted-foreground">
+                        {status.gpu_name || "NVIDIA GPU detected"}
+                      </p>
+                    </div>
                   </div>
+                  <Switch
+                    checked={status.gpu_enabled}
+                    onCheckedChange={handleToggleGpu}
+                    disabled={togglingGpu || toggling}
+                  />
                 </div>
-                <Switch
-                  checked={status.gpu_enabled}
-                  onCheckedChange={handleToggleGpu}
-                  disabled={togglingGpu || toggling}
-                />
-              </div>
+              )}
 
               {togglingGpu && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
