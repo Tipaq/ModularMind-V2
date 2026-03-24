@@ -13,6 +13,7 @@ interface CompleteStepProps {
   configuredProviderCount: number;
   selectedModelsCount: number;
   embeddingModel: string;
+  ollamaEnabled?: boolean;
 }
 
 export function CompleteStep({
@@ -24,6 +25,7 @@ export function CompleteStep({
   configuredProviderCount,
   selectedModelsCount,
   embeddingModel,
+  ollamaEnabled,
 }: CompleteStepProps) {
   const embeddingModelName = EMBEDDING_MODELS.find((model) => model.id === embeddingModel)?.name;
 
@@ -49,6 +51,10 @@ export function CompleteStep({
           <div className="flex justify-between">
             <span className="text-muted-foreground">Instance</span>
             <span className="font-medium">{runtimeName}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Ollama</span>
+            <span className="font-medium">{ollamaEnabled ? "Enabled" : "Disabled"}</span>
           </div>
           {configuredProviderCount > 0 && (
             <div className="flex justify-between">

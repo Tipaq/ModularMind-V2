@@ -7,6 +7,7 @@ import { type Step, STEPS, apiFetch } from "./setup/types";
 import { WelcomeStep } from "./setup/WelcomeStep";
 import { AccountStep } from "./setup/AccountStep";
 import { ProvidersStep } from "./setup/ProvidersStep";
+import { OllamaStep } from "./setup/OllamaStep";
 import { ModelsStep } from "./setup/ModelsStep";
 import { EmbeddingStep } from "./setup/EmbeddingStep";
 import { CompleteStep } from "./setup/CompleteStep";
@@ -29,6 +30,9 @@ export function Setup() {
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set(["qwen3:8b"]));
   const [pullingModels, setPullingModels] = useState<Set<string>>(new Set());
 
+  const [ollamaEnabled, setOllamaEnabled] = useState(false);
+  const [ollamaGpu, setOllamaGpu] = useState(false);
+
   const [embeddingModel, setEmbeddingModel] = useState("nomic-embed-text");
 
   const [error, setError] = useState("");
@@ -42,8 +46,16 @@ export function Setup() {
   };
 
   const goNext = () => {
-    const next = STEPS[stepIndex + 1];
-    if (next) goTo(next);
+    const currentIdx = STEPS.indexOf(step);
+    const nextStep = STEPS[currentIdx + 1];
+    if (!nextStep) return;
+
+    if (step === "ollama" && !ollamaEnabled) {
+      goTo("complete");
+      return;
+    }
+
+    goTo(nextStep);
   };
 
   const goBack = () => {
@@ -221,6 +233,20 @@ export function Setup() {
     );
   }
 
+  if (step === "ollama") {
+    return (
+      <OllamaStep
+        {...sharedProps}
+        ollamaEnabled={ollamaEnabled}
+        ollamaGpu={ollamaGpu}
+        onOllamaEnabledChange={setOllamaEnabled}
+        onOllamaGpuChange={setOllamaGpu}
+        onBack={goBack}
+        onNext={goNext}
+      />
+    );
+  }
+
   if (step === "models") {
     return (
       <ModelsStep
@@ -257,6 +283,7 @@ export function Setup() {
       configuredProviderCount={Object.keys(savedKeys).length}
       selectedModelsCount={selectedModels.size}
       embeddingModel={embeddingModel}
+      ollamaEnabled={ollamaEnabled}
     />
   );
 }

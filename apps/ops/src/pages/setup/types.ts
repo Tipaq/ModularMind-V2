@@ -3,14 +3,15 @@
 import type { LucideIcon } from "lucide-react";
 import { Brain, Code, Cpu, Sparkles } from "lucide-react";
 
-export type Step = "welcome" | "account" | "providers" | "models" | "embedding" | "complete";
+export type Step = "welcome" | "account" | "providers" | "ollama" | "models" | "embedding" | "complete";
 
-export const STEPS: Step[] = ["welcome", "account", "providers", "models", "embedding", "complete"];
+export const STEPS: Step[] = ["welcome", "account", "providers", "ollama", "models", "embedding", "complete"];
 
 export const STEP_LABELS: Record<Step, string> = {
   welcome: "Welcome",
   account: "Admin Account",
   providers: "LLM Providers",
+  ollama: "Local Models",
   models: "Models",
   embedding: "Embedding",
   complete: "Complete",
