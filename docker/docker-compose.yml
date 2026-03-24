@@ -77,6 +77,8 @@ services:
     <<: *common
     image: ghcr.io/tipaq/modularmind-engine:${MM_VERSION:-latest}
     depends_on: *engine-depends
+    group_add:
+      - ${DOCKER_GID:-0}
     networks:
       - default
       - proxy-network
@@ -104,6 +106,8 @@ services:
     image: ghcr.io/tipaq/modularmind-engine:${MM_VERSION:-latest}
     command: python -m src.worker.runner
     depends_on: *engine-depends
+    group_add:
+      - ${DOCKER_GID:-0}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - engine-data:/data
@@ -143,6 +147,8 @@ services:
     <<: *common
     image: ghcr.io/tipaq/modularmind-gateway:${MM_VERSION:-latest}
     depends_on: *engine-depends
+    group_add:
+      - ${DOCKER_GID:-0}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - gateway-workspaces:/data/workspaces
