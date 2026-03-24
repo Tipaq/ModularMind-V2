@@ -65,6 +65,7 @@ docker/            Docker Compose stacks + Nginx
 
 ### Backend
 - **Workers**: `worker-exec` (executions, models, scheduled tasks, APScheduler) + `worker-pipeline` (documents, memory). Controlled by `WORKER_STREAMS` and `WORKER_SCHEDULER` env vars.
+- **Ollama**: managed dynamically by the engine via Docker SDK (container `mm-ollama`). Toggled via setup wizard or Configuration > Infrastructure tab. State persisted in SecretsStore.
 - **Streams**: `tasks:executions`, `tasks:models`, `tasks:documents`, `memory:raw`, `memory:extracted`
 - **Config**: `ConfigProvider` reads from DB, synced from Platform
 - **Auth**: JWT (HttpOnly cookies), engine↔platform via HMAC-SHA256
