@@ -35,7 +35,6 @@ services:
       - "8000:8000"
     volumes:
       - ../engine/server/src:/app/src
-      - ../engine/server/seed:/app/seed
       - ../engine/server/seeds:/app/seeds
       - ../engine/server/alembic:/app/alembic
       - ../engine/server/alembic.ini:/app/alembic.ini
@@ -56,7 +55,6 @@ services:
     image: modularmind/engine:dev
     volumes:
       - ../engine/server/src:/app/src
-      - ../engine/server/seed:/app/seed
       - ../engine/server/seeds:/app/seeds
       - ../shared/src:/tmp/shared-src
       - /var/run/docker.sock:/var/run/docker.sock
@@ -78,7 +76,6 @@ services:
     image: modularmind/engine:dev
     volumes:
       - ../engine/server/src:/app/src
-      - ../engine/server/seed:/app/seed
       - ../engine/server/seeds:/app/seeds
       - ../shared/src:/tmp/shared-src
       - engine-config:/data/config
