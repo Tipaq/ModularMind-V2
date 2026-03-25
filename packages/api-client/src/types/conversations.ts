@@ -46,6 +46,9 @@ export interface ConversationConfig {
   enabled_agent_ids?: string[];
   enabled_graph_ids?: string[];
   supervisor_tool_categories?: string[];
+  system_prompt?: string;
+  temperature?: number;
+  max_tokens?: number;
 }
 
 // ─── Requests ────────────────────────────────────────────────────────────────

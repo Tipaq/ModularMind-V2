@@ -27,6 +27,9 @@ class ConversationConfig(TypedDict, total=False):
     enabled_graphs: list[str]
     supervisor_prompt: str
     supervisor_tool_categories: list[str]
+    system_prompt: str
+    temperature: float
+    max_tokens: int
 
 
 class ConversationCreate(BaseModel):
