@@ -11,7 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "./dropdown-menu";
-import type { EngineAgent, EngineGraph } from "../types/engine";
+import type { EngineAgent, EngineGraph } from "@modularmind/api-client";
 
 interface AgentGraphSelectorProps {
   agents: EngineAgent[];

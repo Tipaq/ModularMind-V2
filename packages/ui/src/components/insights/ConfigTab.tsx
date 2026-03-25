@@ -14,7 +14,7 @@ import { Badge } from "../badge";
 import { SectionCard } from "../section-card";
 import { cn } from "../../lib/utils";
 import type { BudgetOverview } from "../../types/chat";
-import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "../../types/engine";
+import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "@modularmind/api-client";
 import { ModelSelector } from "./ModelSelector";
 import { SupervisorSection } from "./SupervisorSection";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "../types/engine";
+import type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "@modularmind/api-client";
 import type { ChatConfigAdapter } from "./chat-config-adapter";
 
 export function useChatConfig(adapter: ChatConfigAdapter) {

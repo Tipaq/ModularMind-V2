@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "../dialog";
 import type { ExecutionActivity } from "../../types/chat";
-import type { EngineGraph } from "../../types/engine";
+import type { EngineGraph } from "@modularmind/api-client";
 import { DurationBadge, formatK } from "./shared";
 
 export interface GraphDetailModalProps {

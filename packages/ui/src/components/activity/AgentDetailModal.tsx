@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "../dialog";
 import type { ExecutionActivity } from "../../types/chat";
-import type { EngineAgent } from "../../types/engine";
+import type { EngineAgent } from "@modularmind/api-client";
 import { formatModelName } from "../../lib/utils";
 import { DurationBadge, formatK } from "./shared";
 

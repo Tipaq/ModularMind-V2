@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Activity } from "lucide-react";
 import type { ExecutionActivity } from "../../types/chat";
-import type { EngineAgent, EngineGraph } from "../../types/engine";
+import type { EngineAgent, EngineGraph } from "@modularmind/api-client";
 import { ExecutionSummaryHeader, computeSummary } from "./ExecutionSummaryHeader";
 import { ExecutionTimeline } from "./ExecutionTimeline";
 

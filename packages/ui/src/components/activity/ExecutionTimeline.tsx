@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { ACTIVITY_COLORS } from "../../lib/colors";
 import type { ExecutionActivity } from "../../types/chat";
-import type { EngineAgent, EngineGraph } from "../../types/engine";
+import type { EngineAgent, EngineGraph } from "@modularmind/api-client";
 import { RoutingCard } from "./RoutingCard";
 import { DelegationCard } from "./DelegationCard";
 import { AgentExecutionCard } from "./AgentExecutionCard";

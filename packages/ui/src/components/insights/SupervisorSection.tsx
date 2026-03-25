@@ -8,7 +8,7 @@ import { Switch } from "../switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../tooltip";
 import { cn } from "../../lib/utils";
 import { ALL_TOOL_CATEGORIES } from "../../lib/chat-config";
-import type { SupervisorLayer } from "../../types/engine";
+import type { SupervisorLayer } from "@modularmind/api-client";
 
 interface LayerEditorProps {
   layer: SupervisorLayer;

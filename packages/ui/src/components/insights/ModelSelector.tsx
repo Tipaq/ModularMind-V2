@@ -8,7 +8,7 @@ import { Switch } from "../switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../tooltip";
 import { formatModelName } from "../../lib/utils";
 import type { BudgetOverview } from "../../types/chat";
-import type { EngineAgent, EngineModel } from "../../types/engine";
+import type { EngineAgent, EngineModel } from "@modularmind/api-client";
 import { BudgetOverviewSection } from "./BudgetOverview";
 
 interface ModelSelectorProps {

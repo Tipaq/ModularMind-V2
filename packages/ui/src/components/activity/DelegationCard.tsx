@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Bot, Cpu } from "lucide-react";
 import { Badge } from "../badge";
 import type { ExecutionActivity } from "../../types/chat";
-import type { EngineAgent } from "../../types/engine";
+import type { EngineAgent } from "@modularmind/api-client";
 import { StatusIcon, DurationBadge, ChevronToggle } from "./shared";
 import { AgentDetailModal } from "./AgentDetailModal";
 import { formatModelName } from "../../lib/utils";

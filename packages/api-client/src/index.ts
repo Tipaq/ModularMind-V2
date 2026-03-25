@@ -24,6 +24,10 @@ export type * from "./types/mini-apps";
 export type * from "./types/scheduled-tasks";
 export type * from "./types/projects";
 
+// Adapters (shared transport implementations)
+export { chatAdapter, conversationAdapter, chatConfigAdapter, createChatConfigAdapter } from "./adapters";
+export type { ChatAdapter, UploadedAttachment, ConversationAdapter, ChatConfigAdapter, ChatConfigData } from "./adapters";
+
 // Utils
 export { snakeToCamel, mapKeysToCamel } from "./utils";
 

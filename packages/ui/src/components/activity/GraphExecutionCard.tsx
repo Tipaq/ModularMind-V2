@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Workflow, Settings2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { ExecutionActivity } from "../../types/chat";
-import type { EngineAgent, EngineGraph } from "../../types/engine";
+import type { EngineAgent, EngineGraph } from "@modularmind/api-client";
 import { StatusIcon, DurationBadge, ChevronToggle } from "./shared";
 import { AgentExecutionCard } from "./AgentExecutionCard";
 import { LlmCallCard } from "./LlmCallCard";
