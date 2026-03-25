@@ -384,6 +384,19 @@ CURATED_CLOUD_MODELS: dict[str, list[dict]] = {
     ],
     "anthropic": [
         {
+            "model_name": "claude-opus-4-20250514",
+            "display_name": "Claude Opus 4",
+            "context_window": 200000,
+            "max_output_tokens": 32768,
+            "capabilities": {
+                "chat": True,
+                "vision": True,
+                "function_calling": True,
+                "code": True,
+                "reasoning": True,
+            },
+        },
+        {
             "model_name": "claude-sonnet-4-20250514",
             "display_name": "Claude Sonnet 4",
             "context_window": 200000,
@@ -394,6 +407,13 @@ CURATED_CLOUD_MODELS: dict[str, list[dict]] = {
                 "function_calling": True,
                 "code": True,
             },
+        },
+        {
+            "model_name": "claude-haiku-4-5-20251001",
+            "display_name": "Claude Haiku 4.5",
+            "context_window": 200000,
+            "max_output_tokens": 8192,
+            "capabilities": {"chat": True, "function_calling": True, "code": True},
         },
         {
             "model_name": "claude-3-5-sonnet-20241022",

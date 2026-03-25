@@ -35,7 +35,7 @@ export const CLOUD_PROVIDERS = [
     name: "Anthropic",
     color: "bg-warning",
     placeholder: "sk-ant-...",
-    models: "Claude Sonnet, Haiku, Opus",
+    models: "Opus 4, Sonnet 4, Haiku 4.5, 3.5 Sonnet",
   },
   {
     id: "google",
