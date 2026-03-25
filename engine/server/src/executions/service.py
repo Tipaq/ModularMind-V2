@@ -514,6 +514,11 @@ class ExecutionService:
             from src.graph_engine.interfaces import AgentConfig, RAGConfig
 
             raw_system_prompt = input_data.get("_raw_system_prompt", "")
+            raw_llm_kwargs: dict = {}
+            if "_raw_temperature" in input_data:
+                raw_llm_kwargs["temperature"] = float(input_data["_raw_temperature"])
+            if "_raw_max_tokens" in input_data:
+                raw_llm_kwargs["max_tokens"] = int(input_data["_raw_max_tokens"])
             agent = AgentConfig(
                 id="__raw__",
                 name="Raw LLM",
@@ -524,6 +529,7 @@ class ExecutionService:
                 capabilities=[],
                 gateway_permissions=None,
             )
+            input_data["_raw_llm_kwargs"] = raw_llm_kwargs
         else:
             agent = await self.config_provider.get_agent_config(execution.agent_id)
             if not agent:
@@ -557,7 +563,8 @@ class ExecutionService:
         compiler = GraphCompiler(
             self.config_provider, llm_provider, mcp_registry=get_mcp_registry()
         )
-        graph = await compiler.compile_agent_graph(agent)
+        raw_llm_kwargs = input_data.get("_raw_llm_kwargs", {})
+        graph = await compiler.compile_agent_graph(agent, llm_kwargs=raw_llm_kwargs)
 
         # Build memory/RAG context layers for the agent
         from src.prompt_layers.context import AgentContextBuilder, ContextBuildParams

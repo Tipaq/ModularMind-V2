@@ -817,6 +817,16 @@ async def _handle_direct_execution(
         model_id = conv_config.get("model_id")
         if not model_id:
             raise ValueError("No agent, no graph, and no model_id configured")
+        raw_params: dict = {}
+        if conv_config.get("system_prompt"):
+            raw_params["_raw_system_prompt"] = conv_config["system_prompt"]
+        if conv_config.get("temperature") is not None:
+            raw_params["_raw_temperature"] = conv_config["temperature"]
+        if conv_config.get("max_tokens") is not None:
+            raw_params["_raw_max_tokens"] = conv_config["max_tokens"]
+        if raw_params:
+            existing = execution_data.input_data or {}
+            execution_data.input_data = {**existing, **raw_params}
         execution = await exec_service.start_raw_execution(
             model_id=model_id,
             data=execution_data,

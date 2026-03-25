@@ -624,14 +624,19 @@ class SuperSupervisorService:
 
         model_id = conv_config.get("model_id", "ollama:qwen3:8b")
 
+        raw_input: dict = {
+            "routing_strategy": "DIRECT_RESPONSE",
+            "_supervisor_direct": True,
+            "_raw_system_prompt": get_supervisor_identity(),
+        }
+        if conv_config.get("temperature") is not None:
+            raw_input["_raw_temperature"] = conv_config["temperature"]
+        if conv_config.get("max_tokens") is not None:
+            raw_input["_raw_max_tokens"] = conv_config["max_tokens"]
         execution_data = ExecutionCreate(
             prompt=content,
             session_id=conv_id,
-            input_data={
-                "routing_strategy": "DIRECT_RESPONSE",
-                "_supervisor_direct": True,
-                "_raw_system_prompt": get_supervisor_identity(),
-            },
+            input_data=raw_input,
         )
         execution = await self.exec_service.start_raw_execution(
             model_id=model_id,
