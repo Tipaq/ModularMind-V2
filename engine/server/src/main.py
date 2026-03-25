@@ -393,6 +393,10 @@ app.include_router(models_admin_router, prefix=API_PREFIX)
 app.include_router(admin_user_router, prefix=f"{API_PREFIX}/admin")
 app.include_router(conversations_admin_router, prefix=f"{API_PREFIX}/admin")
 
+from src.internal.claude_debug import router as claude_debug_router
+
+app.include_router(claude_debug_router, prefix=f"{API_PREFIX}/internal")
+
 # ---------------------------------------------------------------------------
 # Static SPA files (Chat + Ops) — only if built into image
 # ---------------------------------------------------------------------------

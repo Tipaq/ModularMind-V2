@@ -216,6 +216,20 @@ services:
       - "${GRAFANA_PORT:-3333}:3000"
     depends_on: [prometheus]
 
+  # ==========================================================================
+  # PROFILE: debug — Claude Code bridge (sidecar)
+  # ==========================================================================
+
+  claude-bridge:
+    <<: *common
+    image: ghcr.io/tipaq/modularmind-claude-bridge:${MM_VERSION:-latest}
+    container_name: mm-claude-bridge
+    profiles: [debug]
+    volumes:
+      - ${CLAUDE_CONFIG_PATH:-~/.claude}:/home/node/.claude
+    labels:
+      modularmind.claude-bridge: "true"
+
 networks:
   default:
   proxy-network:

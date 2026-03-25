@@ -161,6 +161,23 @@ services:
       <<: *engine-depends
     command: uvicorn src.main:app --reload --host 0.0.0.0 --port 8200 --workers 1
 
+  # ==========================================================================
+  # PROFILE: debug — Claude Code bridge (sidecar)
+  # ==========================================================================
+
+  claude-bridge:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.claude-bridge
+    container_name: mm-claude-bridge
+    profiles: ["debug"]
+    volumes:
+      - ${CLAUDE_CONFIG_PATH:-~/.claude}:/home/node/.claude
+      - ../engine/server/src:/workspace/src:ro
+    labels:
+      modularmind.claude-bridge: "true"
+    restart: unless-stopped
+
 volumes:
   gateway-workspaces:
   engine-config:
