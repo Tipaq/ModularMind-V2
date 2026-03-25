@@ -79,10 +79,19 @@ class AnthropicProvider(LLMProvider):
     ) -> BaseChatModel:
         """Get an Anthropic chat model."""
         _, model_name = self.parse_model_id(model_id)
+
+        from .bridge_exec import is_bridge_available
+
+        if await is_bridge_available():
+            from .claude_bridge import ChatClaudeBridge
+
+            return ChatClaudeBridge(model_name=model_name)
+
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
-                "No Anthropic API key — configure in Settings or sync via Claude Bridge"
+                "No Anthropic API key — configure in Settings"
+                " or start the Claude Bridge sidecar"
             )
 
         return ChatAnthropic(
@@ -116,4 +125,8 @@ class AnthropicProvider(LLMProvider):
 
     async def is_available(self) -> bool:
         """Check if Anthropic API is accessible."""
+        from .bridge_exec import is_bridge_available
+
+        if await is_bridge_available():
+            return True
         return bool(self._resolve_api_key())

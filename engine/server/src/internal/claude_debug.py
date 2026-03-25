@@ -5,7 +5,6 @@ Handles OAuth authentication flow and credential sync to SecretsStore.
 Only available when the sidecar is running (profile: debug).
 """
 
-import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -16,12 +15,16 @@ from pydantic import BaseModel, Field
 
 from src.auth.dependencies import CurrentUser, require_min_role
 from src.auth.models import UserRole
+from src.llm.bridge_exec import (
+    CONTAINER_NAME,
+    exec_in_bridge,
+    is_bridge_available,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/debug/claude", tags=["debug"])
 
-CONTAINER_NAME = "mm-claude-bridge"
 CREDENTIALS_PATH = "/home/node/.claude/.credentials.json"
 
 
@@ -29,58 +32,34 @@ class ClaudePromptRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=10000)
 
 
-def _get_docker_client():
-    try:
-        import docker
+def _require_bridge():
+    import docker
 
+    try:
         client = docker.from_env()
         client.ping()
-        return client
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Docker daemon not available",
-        ) from exc
-
-
-def _get_bridge_container(client):
-    try:
         container = client.containers.get(CONTAINER_NAME)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="claude-bridge container not running (start with --profile debug)",
+            detail="claude-bridge not running (start with --profile debug)",
         ) from exc
     if container.status != "running":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"claude-bridge container is {container.status}, not running",
+            detail=f"claude-bridge is {container.status}, not running",
         )
     return container
 
 
-async def _exec_in_bridge(command: list[str]) -> str:
-    client = _get_docker_client()
-    container = _get_bridge_container(client)
+async def _stream_claude_exec(
+    prompt: str,
+) -> AsyncGenerator[str, None]:
+    import asyncio
+    import docker
 
-    exec_id = await asyncio.to_thread(
-        client.api.exec_create,
-        container.id,
-        command,
-        stdin=False,
-        tty=False,
-    )
-    output = await asyncio.to_thread(
-        client.api.exec_start,
-        exec_id,
-        stream=False,
-    )
-    return output.decode("utf-8", errors="replace")
-
-
-async def _stream_claude_exec(prompt: str) -> AsyncGenerator[str, None]:
-    client = _get_docker_client()
-    container = _get_bridge_container(client)
+    client = docker.from_env()
+    container = client.containers.get(CONTAINER_NAME)
 
     exec_id = await asyncio.to_thread(
         client.api.exec_create,
@@ -105,14 +84,16 @@ async def claude_bridge_status(
     user: CurrentUser,
     _: None = Depends(require_min_role(UserRole.OWNER)),
 ) -> dict:
-    try:
-        client = _get_docker_client()
-        container = _get_bridge_container(client)
-    except HTTPException:
-        return {"available": False, "authenticated": False, "status": "not_running"}
+    available = await is_bridge_available()
+    if not available:
+        return {
+            "available": False,
+            "authenticated": False,
+            "status": "not_running",
+        }
 
     try:
-        auth_output = await _exec_in_bridge(["claude", "auth", "status"])
+        auth_output = await exec_in_bridge(["claude", "auth", "status"])
         auth_data = json.loads(auth_output)
         is_authenticated = auth_data.get("loggedIn", False)
         subscription = auth_data.get("subscriptionType")
@@ -120,16 +101,12 @@ async def claude_bridge_status(
         is_authenticated = False
         subscription = None
 
-    from src.infra.secrets import secrets_store
-
-    has_synced_key = secrets_store.has("ANTHROPIC_API_KEY")
-
     return {
         "available": True,
         "authenticated": is_authenticated,
         "subscription": subscription,
-        "status": container.status,
-        "credentials_synced": has_synced_key,
+        "status": "running",
+        "credentials_synced": is_authenticated,
     }
 
 
@@ -138,7 +115,10 @@ async def start_oauth_flow(
     user: CurrentUser,
     _: None = Depends(require_min_role(UserRole.OWNER)),
 ) -> dict:
-    output = await _exec_in_bridge(["claude", "auth", "login", "--no-open"])
+    _require_bridge()
+    output = await exec_in_bridge(
+        ["claude", "auth", "login", "--no-open"]
+    )
     return {"output": output.strip()}
 
 
@@ -147,7 +127,8 @@ async def sync_credentials(
     user: CurrentUser,
     _: None = Depends(require_min_role(UserRole.OWNER)),
 ) -> dict:
-    raw = await _exec_in_bridge(["cat", CREDENTIALS_PATH])
+    _require_bridge()
+    raw = await exec_in_bridge(["cat", CREDENTIALS_PATH])
 
     try:
         credentials = json.loads(raw)
@@ -183,6 +164,7 @@ async def run_claude_prompt(
     user: CurrentUser,
     _: None = Depends(require_min_role(UserRole.OWNER)),
 ) -> StreamingResponse:
+    _require_bridge()
     return StreamingResponse(
         _stream_claude_exec(body.prompt),
         media_type="text/plain; charset=utf-8",
