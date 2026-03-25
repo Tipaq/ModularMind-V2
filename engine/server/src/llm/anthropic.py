@@ -16,11 +16,13 @@ logger = logging.getLogger(__name__)
 
 # Known Anthropic models with context lengths
 ANTHROPIC_MODELS = {
-    "claude-opus-4-20250514": {"name": "Claude Opus 4", "context_length": 200000},
-    "claude-sonnet-4-20250514": {"name": "Claude Sonnet 4", "context_length": 200000},
+    "claude-opus-4-6": {"name": "Claude Opus 4.6", "context_length": 1000000},
+    "claude-sonnet-4-6": {"name": "Claude Sonnet 4.6", "context_length": 1000000},
+    "claude-opus-4-5-20251101": {"name": "Claude Opus 4.5", "context_length": 200000},
+    "claude-sonnet-4-5-20250929": {"name": "Claude Sonnet 4.5", "context_length": 1000000},
     "claude-haiku-4-5-20251001": {"name": "Claude Haiku 4.5", "context_length": 200000},
-    "claude-3-5-sonnet-20241022": {"name": "Claude 3.5 Sonnet", "context_length": 200000},
-    "claude-3-5-haiku-20241022": {"name": "Claude 3.5 Haiku", "context_length": 200000},
+    "claude-opus-4-20250514": {"name": "Claude Opus 4", "context_length": 200000},
+    "claude-sonnet-4-20250514": {"name": "Claude Sonnet 4", "context_length": 1000000},
 }
 
 
