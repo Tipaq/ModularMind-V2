@@ -1,19 +1,17 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import {
-  useChat,
+  usePlayground,
   ChatMessages,
   ChatInput,
   ChatEmptyState,
   Button,
 } from "@modularmind/ui";
-import type { EngineModel, AttachedFile } from "@modularmind/ui";
+import type { EngineModel } from "@modularmind/ui";
 import type { ExecutionActivity } from "@modularmind/ui";
 import type { ValidationIssue } from "@modularmind/api-client";
 import { chatAdapter, conversationAdapter } from "../../lib/chat-adapter";
 import { useModelsStore } from "../../stores/models";
-
-const STORAGE_KEY_PREFIX = "mm:graph-playground:";
 
 interface GraphPlaygroundProps {
   graphId: string;
@@ -35,18 +33,6 @@ export function GraphPlayground({
   useEffect(() => {
     if (unifiedCatalog.length === 0) fetchUnifiedCatalog();
   }, [unifiedCatalog.length, fetchUnifiedCatalog]);
-
-  const [conversationId, setConversationId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(`${STORAGE_KEY_PREFIX}${graphId}`) ?? null;
-    } catch {
-      return null;
-    }
-  });
-
-  const [inputValue, setInputValue] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
 
   const availableModels: EngineModel[] = useMemo(
     () =>
@@ -79,21 +65,36 @@ export function GraphPlayground({
     return null;
   }, [selectedModelId, availableModels, toEngineModelId]);
 
-  const {
-    messages,
-    isStreaming,
-    error,
-    activities,
-    pendingPrompt,
-    sendMessage,
-    setInitialMessages,
-    cancelStream,
-    respondToPrompt,
-  } = useChat(conversationId, chatAdapter);
+  const createBody = useMemo(
+    () => ({ graph_id: graphId, supervisor_mode: false as const }),
+    [graphId],
+  );
 
-  useEffect(() => {
-    console.log("[GraphPlayground] pendingPrompt:", pendingPrompt, "activities:", activities.length, "isStreaming:", isStreaming);
-  }, [pendingPrompt, activities, isStreaming]);
+  const patchConfigOnSend = useCallback(
+    async (convId: string) => {
+      if (effectiveModelId) {
+        await conversationAdapter.patchConversation(convId, {
+          config: { model_id: effectiveModelId },
+        });
+      }
+    },
+    [effectiveModelId],
+  );
+
+  const {
+    conversationId, inputValue, setInputValue, setAttachedFiles,
+    messages, isStreaming, error, activities,
+    pendingPrompt, respondToPrompt,
+    handleSend, handleNewConversation, cancelStream,
+  } = usePlayground({
+    storageKeyPrefix: "mm:graph-playground:",
+    entityId: graphId,
+    entityName: graphName,
+    createBody,
+    chatAdapter,
+    conversationAdapter,
+    patchConfigOnSend,
+  });
 
   const onActivitiesChangeRef = useRef(onActivitiesChange);
 
@@ -104,55 +105,6 @@ export function GraphPlayground({
   useEffect(() => {
     onActivitiesChangeRef.current?.(activities, isStreaming);
   }, [activities, isStreaming]);
-
-  const handleSend = useCallback(async () => {
-    const content = inputValue.trim();
-    if (!content || !effectiveModelId) return;
-
-    let targetConvId = conversationId;
-
-    if (!targetConvId) {
-      try {
-        const conv = await conversationAdapter.createConversation({
-          graph_id: graphId,
-          title: graphName,
-          supervisor_mode: false,
-        });
-        targetConvId = conv.id;
-        setConversationId(conv.id);
-        try {
-          localStorage.setItem(`${STORAGE_KEY_PREFIX}${graphId}`, conv.id);
-        } catch { /* ignore */ }
-      } catch {
-        return;
-      }
-    }
-
-    await conversationAdapter
-      .patchConversation(targetConvId, {
-        config: { model_id: effectiveModelId },
-      })
-      .catch(() => {});
-
-    setInputValue("");
-    sendMessage(content, targetConvId);
-  }, [inputValue, conversationId, graphId, graphName, effectiveModelId, sendMessage]);
-
-  const handleNewConversation = useCallback(async () => {
-    try {
-      const conv = await conversationAdapter.createConversation({
-        graph_id: graphId,
-        title: graphName,
-        supervisor_mode: false,
-      });
-      setConversationId(conv.id);
-      setInitialMessages([]);
-      setInputValue("");
-      try {
-        localStorage.setItem(`${STORAGE_KEY_PREFIX}${graphId}`, conv.id);
-      } catch { /* ignore */ }
-    } catch { /* ignore */ }
-  }, [graphId, graphName, setInitialMessages]);
 
   const disabledReason = !isValid
     ? "Fix validation issues first"
@@ -206,12 +158,6 @@ export function GraphPlayground({
           onSend={handleSend}
           isStreaming={isStreaming}
           onCancel={cancelStream}
-          agents={[]}
-          graphs={[]}
-          enabledAgentIds={[]}
-          enabledGraphIds={[]}
-          onToggleAgent={() => {}}
-          onToggleGraph={() => {}}
           onFilesChange={setAttachedFiles}
           disabledReason={disabledReason}
           models={availableModels}

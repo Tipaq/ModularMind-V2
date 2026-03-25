@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { RotateCcw } from "lucide-react";
 import {
-  useChat,
+  usePlayground,
   useChatConfig,
   ChatMessages,
   ChatInput,
@@ -9,14 +9,12 @@ import {
   Button,
   useAuthStore,
 } from "@modularmind/ui";
-import type { EngineModel, AttachedFile } from "@modularmind/ui";
+import type { EngineModel } from "@modularmind/ui";
 import {
   chatAdapter,
   conversationAdapter,
   chatConfigAdapter,
 } from "../../lib/chat-adapter";
-
-const STORAGE_KEY_PREFIX = "mm:agent-playground:";
 
 interface AgentPlaygroundProps {
   agentId: string;
@@ -25,19 +23,6 @@ interface AgentPlaygroundProps {
 
 export function AgentPlayground({ agentId, agentName }: AgentPlaygroundProps) {
   const user = useAuthStore((s) => s.user);
-
-  const [conversationId, setConversationId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(`${STORAGE_KEY_PREFIX}${agentId}`) ?? null;
-    } catch {
-      return null;
-    }
-  });
-
-  const [inputValue, setInputValue] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
-
   const { models, load: loadConfig } = useChatConfig(chatConfigAdapter);
 
   useEffect(() => {
@@ -62,55 +47,24 @@ export function AgentPlayground({ agentId, agentName }: AgentPlaygroundProps) {
     return null;
   }, [selectedModelId, availableModels, toEngineModelId]);
 
+  const createBody = useMemo(
+    () => ({ agent_id: agentId, supervisor_mode: false as const }),
+    [agentId],
+  );
+
   const {
-    messages,
-    isStreaming,
-    error,
-    activities,
-    sendMessage,
-    setInitialMessages,
-    cancelStream,
-    pendingPrompt,
-    respondToPrompt,
-  } = useChat(conversationId, chatAdapter);
-
-  const createConversation = useCallback(async () => {
-    const conv = await conversationAdapter.createConversation({
-      agent_id: agentId,
-      title: agentName,
-      supervisor_mode: false,
-    });
-    setConversationId(conv.id);
-    try {
-      localStorage.setItem(`${STORAGE_KEY_PREFIX}${agentId}`, conv.id);
-    } catch { /* ignore */ }
-    return conv.id;
-  }, [agentId, agentName]);
-
-  const handleSend = useCallback(async () => {
-    const content = inputValue.trim();
-    if (!content) return;
-
-    let targetConvId = conversationId;
-    if (!targetConvId) {
-      try {
-        targetConvId = await createConversation();
-      } catch {
-        return;
-      }
-    }
-
-    setInputValue("");
-    sendMessage(content, targetConvId);
-  }, [inputValue, conversationId, createConversation, sendMessage]);
-
-  const handleNewConversation = useCallback(async () => {
-    try {
-      await createConversation();
-      setInitialMessages([]);
-      setInputValue("");
-    } catch { /* ignore */ }
-  }, [createConversation, setInitialMessages]);
+    conversationId, inputValue, setInputValue, setAttachedFiles,
+    messages, isStreaming, error, activities,
+    pendingPrompt, respondToPrompt,
+    handleSend, handleNewConversation, cancelStream,
+  } = usePlayground({
+    storageKeyPrefix: "mm:agent-playground:",
+    entityId: agentId,
+    entityName: agentName,
+    createBody,
+    chatAdapter,
+    conversationAdapter,
+  });
 
   const disabledReason = !effectiveModelId ? "No model available" : null;
 
@@ -160,12 +114,6 @@ export function AgentPlayground({ agentId, agentName }: AgentPlaygroundProps) {
           onSend={handleSend}
           isStreaming={isStreaming}
           onCancel={cancelStream}
-          agents={[]}
-          graphs={[]}
-          enabledAgentIds={[]}
-          enabledGraphIds={[]}
-          onToggleAgent={() => {}}
-          onToggleGraph={() => {}}
           onFilesChange={setAttachedFiles}
           disabledReason={disabledReason}
           models={availableModels}

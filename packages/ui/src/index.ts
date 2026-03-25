@@ -27,6 +27,10 @@ export { useChatConfig } from "./hooks/useChatConfig";
 // Shared chat hook
 export { useChat } from "./hooks/useChat";
 
+// Playground hook (shared state for agent/graph/model playgrounds)
+export { usePlayground } from "./hooks/usePlayground";
+export type { UsePlaygroundOptions } from "./hooks/usePlayground";
+
 // Chat utilities
 export { extractResponse } from "./hooks/useChatUtils";
 
@@ -50,8 +54,8 @@ export type { ActivityType, ActivityStatus, ToolCallData, LlmCallData, RoutingDa
 // Resource types (shared table/filter/pagination primitives)
 export type { ResourceColumn, ResourceFilterConfig, PaginationState, SortState } from "./types/resource";
 
-// Engine config types (re-exported so platform can use them without depending on api-client)
-export type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "./types/engine";
+// Engine config types (canonical source: @modularmind/api-client)
+export type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "@modularmind/api-client";
 
 // Theme
 export { ThemeProvider } from "./theme/ThemeProvider";
