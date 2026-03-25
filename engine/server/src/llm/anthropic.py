@@ -81,7 +81,9 @@ class AnthropicProvider(LLMProvider):
         _, model_name = self.parse_model_id(model_id)
         api_key = self._resolve_api_key()
         if not api_key:
-            raise ValueError("No Anthropic API key found — configure in Settings or sync via Claude Bridge")
+            raise ValueError(
+                "No Anthropic API key — configure in Settings or sync via Claude Bridge"
+            )
 
         return ChatAnthropic(
             model=model_name,
