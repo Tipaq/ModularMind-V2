@@ -17,6 +17,7 @@ import { Badge, Button, ConfirmDialog, Separator, Slider, cn, DetailHeader } fro
 import { PROVIDER_INFO } from "@modularmind/api-client";
 import type { CatalogModel } from "@modularmind/api-client";
 import { ModelStatusBadge } from "../components/shared/ModelStatusBadge";
+import { ModelPlayground } from "../components/models/ModelPlayground";
 import { useModelsStore } from "../stores/models";
 import { api } from "../lib/api";
 
@@ -454,15 +455,14 @@ export function ModelDetail() {
         {/* Right Panel — Playground or CTA */}
         <div className="flex-1 min-w-0 h-full overflow-hidden">
           {isAccessible ? (
-            <div className="flex flex-col items-center justify-center h-full text-center px-8 bg-muted/20">
-              <Box className="h-12 w-12 text-muted-foreground mb-3 opacity-30" />
-              <p className="text-sm text-muted-foreground">
-                Playground coming soon
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Test this model with real-time conversations
-              </p>
-            </div>
+            <ModelPlayground
+              provider={model.provider}
+              modelName={model.model_name}
+              displayName={model.display_name || model.model_name}
+              temperature={temperature}
+              maxTokens={maxTokens}
+              systemPrompt={systemPrompt}
+            />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-8">
               {isDownloading ? (
