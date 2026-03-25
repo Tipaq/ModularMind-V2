@@ -58,6 +58,18 @@ class AnthropicProvider(LLMProvider):
         """Get the provider name."""
         return "anthropic"
 
+    def _resolve_api_key(self) -> str | None:
+        if self.api_key:
+            return self.api_key
+        from src.infra.secrets import secrets_store
+
+        key = secrets_store.get("ANTHROPIC_API_KEY")
+        if key:
+            return key
+        import os
+
+        return os.environ.get("ANTHROPIC_API_KEY")
+
     async def get_model(
         self,
         model_id: str,
@@ -65,22 +77,15 @@ class AnthropicProvider(LLMProvider):
         max_tokens: int = 4096,
         **kwargs: Any,
     ) -> BaseChatModel:
-        """Get an Anthropic chat model.
-
-        Args:
-            model_id: Model name (e.g., "claude-3-5-sonnet-20241022")
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens in response
-            **kwargs: Additional model parameters
-
-        Returns:
-            ChatAnthropic instance
-        """
+        """Get an Anthropic chat model."""
         _, model_name = self.parse_model_id(model_id)
+        api_key = self._resolve_api_key()
+        if not api_key:
+            raise ValueError("No Anthropic API key found — configure in Settings or sync via Claude Bridge")
 
         return ChatAnthropic(
             model=model_name,
-            api_key=self.api_key,
+            api_key=api_key,
             base_url=self.base_url,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -108,14 +113,5 @@ class AnthropicProvider(LLMProvider):
         return models
 
     async def is_available(self) -> bool:
-        """Check if Anthropic API is accessible.
-
-        Returns:
-            True if API key is set (doesn't make actual API call)
-        """
-        if self.api_key:
-            return True
-
-        import os
-
-        return bool(os.environ.get("ANTHROPIC_API_KEY"))
+        """Check if Anthropic API is accessible."""
+        return bool(self._resolve_api_key())
