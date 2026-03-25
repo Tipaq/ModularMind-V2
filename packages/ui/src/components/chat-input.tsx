@@ -21,7 +21,7 @@ import { cn, formatModelName } from "../lib/utils";
 import { validateFiles, formatFileSize } from "../lib/file-validation";
 import { ContextMiniDonut } from "./context-mini-donut";
 import { AgentGraphSelector } from "./agent-graph-selector";
-import type { EngineAgent, EngineGraph, EngineModel } from "../types/engine";
+import type { EngineAgent, EngineGraph, EngineModel } from "@modularmind/api-client";
 import type { AttachedFile } from "../types/chat";
 
 const MAX_TEXTAREA_HEIGHT = 200;
@@ -32,12 +32,12 @@ export interface ChatInputProps {
   onSend: () => void;
   isStreaming: boolean;
   onCancel: () => void;
-  agents: EngineAgent[];
-  graphs: EngineGraph[];
-  enabledAgentIds: string[];
-  enabledGraphIds: string[];
-  onToggleAgent: (agentId: string) => void;
-  onToggleGraph: (graphId: string) => void;
+  agents?: EngineAgent[];
+  graphs?: EngineGraph[];
+  enabledAgentIds?: string[];
+  enabledGraphIds?: string[];
+  onToggleAgent?: (agentId: string) => void;
+  onToggleGraph?: (graphId: string) => void;
   onFilesChange?: (files: AttachedFile[]) => void;
   disabledReason?: string | null;
   models?: EngineModel[];
@@ -55,7 +55,7 @@ const defaultModelLabel = (m: EngineModel) => formatModelName(m.model_id || m.na
 
 export const ChatInput = memo(function ChatInput({
   value, onChange, onSend, isStreaming, onCancel,
-  agents, graphs, enabledAgentIds, enabledGraphIds,
+  agents = [], graphs = [], enabledAgentIds = [], enabledGraphIds = [],
   onToggleAgent, onToggleGraph, onFilesChange, disabledReason,
   models, selectedModelId, onModelChange,
   modelLabel = defaultModelLabel, getModelId = defaultGetModelId,
@@ -125,6 +125,7 @@ export const ChatInput = memo(function ChatInput({
   );
 
   const hasAgentsOrGraphs = agents.length > 0 || graphs.length > 0;
+  const canToggle = hasAgentsOrGraphs && onToggleAgent && onToggleGraph;
 
   const chatModels = useMemo(
     () => (models ?? []).filter((m) => !m.is_embedding && m.is_available),
@@ -173,7 +174,7 @@ export const ChatInput = memo(function ChatInput({
 
           <div className="flex items-center justify-between px-2 pb-2 pt-0.5">
             <div className="flex items-center gap-0.5">
-              {hasAgentsOrGraphs && (
+              {canToggle && (
                 <AgentGraphSelector
                   agents={agents} graphs={graphs}
                   enabledAgentIds={enabledAgentIds} enabledGraphIds={enabledGraphIds}
