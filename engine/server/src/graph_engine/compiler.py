@@ -341,6 +341,7 @@ class GraphCompiler:
         self,
         agent: AgentConfig,
         mcp_server_ids: list[str] | None = None,
+        llm_kwargs: dict | None = None,
     ) -> CompiledStateGraph:
         """Compile a single-agent graph, optionally with MCP tool calling.
 
@@ -348,7 +349,10 @@ class GraphCompiler:
             agent: Agent configuration.
             mcp_server_ids: Optional list of MCP server UUIDs whose tools
                 should be bound to the LLM for native function calling.
+            llm_kwargs: Extra keyword arguments forwarded to ``get_model``
+                (e.g. temperature, max_tokens) — used by raw LLM playground.
         """
+        effective_llm_kwargs = llm_kwargs or {}
         workflow = StateGraph(GraphState)
 
         model_id = agent.model_id
@@ -539,7 +543,8 @@ class GraphCompiler:
                     )
 
             try:
-                llm = await self.llm_provider.get_model(effective_model)
+                raw_kwargs = effective_llm_kwargs if agent.id == "__raw__" else {}
+                llm = await self.llm_provider.get_model(effective_model, **raw_kwargs)
 
                 # Raw LLM mode — no tools, direct invocation only
                 if agent.id == "__raw__":
