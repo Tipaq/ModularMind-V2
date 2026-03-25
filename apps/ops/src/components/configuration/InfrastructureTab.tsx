@@ -166,9 +166,17 @@ export function InfrastructureTab() {
   };
 
   const handleStartAuth = async () => {
+    setAuthOutput("Starting authentication...");
     try {
-      const data = await api.post<{ output: string }>("/internal/debug/claude/auth");
-      setAuthOutput(data.output);
+      const data = await api.post<{ auth_url: string | null; output: string }>(
+        "/internal/debug/claude/auth",
+      );
+      if (data.auth_url) {
+        window.open(data.auth_url, "_blank");
+        setAuthOutput("Login page opened — complete authentication in the new tab, then refresh this page.");
+      } else {
+        setAuthOutput(data.output);
+      }
     } catch {
       setAuthOutput("Failed to start auth flow");
     }

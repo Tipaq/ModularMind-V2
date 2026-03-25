@@ -116,11 +116,13 @@ async def start_oauth_flow(
     user: CurrentUser,
     _: None = Depends(require_min_role(UserRole.OWNER)),
 ) -> dict:
+    import re
+
     _require_bridge()
-    output = await exec_in_bridge(
-        ["claude", "auth", "login", "--no-open"]
-    )
-    return {"output": output.strip()}
+    output = await exec_in_bridge(["claude", "auth", "login"])
+    url_match = re.search(r"https://claude\.ai/oauth/\S+", output)
+    auth_url = url_match.group(0) if url_match else None
+    return {"auth_url": auth_url, "output": output.strip()}
 
 
 @router.post("/sync-credentials")
