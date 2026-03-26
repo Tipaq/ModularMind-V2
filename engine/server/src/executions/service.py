@@ -774,8 +774,11 @@ class ExecutionService:
         if not graph_config:
             raise ValueError(f"Graph not found: {execution.graph_id}")
 
-        # Get LLM provider (use default)
-        llm_provider = get_llm_provider("ollama", base_url=settings.OLLAMA_BASE_URL)
+        # Get LLM provider with dynamic routing based on model_id prefix
+        from src.llm import RoutingLLMProvider
+
+        base_provider = get_llm_provider("ollama", base_url=settings.OLLAMA_BASE_URL)
+        llm_provider = RoutingLLMProvider(base_provider)
 
         # Create compiler and compile graph
         compiler = GraphCompiler(
