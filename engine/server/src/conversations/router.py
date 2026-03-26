@@ -800,15 +800,25 @@ async def _handle_direct_execution(
         input_data={"mcp_server_ids": _mcp_ids} if _mcp_ids else None,
     )
 
-    if conversation.agent_id:
+    effective_agent_id = conversation.agent_id
+    effective_graph_id = conversation.graph_id
+    if not effective_agent_id and not effective_graph_id:
+        enabled_agents = conv_config.get("enabled_agent_ids", [])
+        enabled_graphs = conv_config.get("enabled_graph_ids", [])
+        if enabled_graphs:
+            effective_graph_id = enabled_graphs[0]
+        elif enabled_agents:
+            effective_agent_id = enabled_agents[0]
+
+    if effective_agent_id:
         execution = await exec_service.start_agent_execution(
-            agent_id=conversation.agent_id,
+            agent_id=effective_agent_id,
             data=execution_data,
             user_id=user.id,
         )
-    elif conversation.graph_id:
+    elif effective_graph_id:
         execution = await exec_service.start_graph_execution(
-            graph_id=conversation.graph_id,
+            graph_id=effective_graph_id,
             data=execution_data,
             user_id=user.id,
         )
