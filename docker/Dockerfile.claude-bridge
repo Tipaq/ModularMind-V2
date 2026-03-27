@@ -1,6 +1,6 @@
 FROM node:22-alpine
 
-RUN apk add --no-cache git procps \
+RUN apk add --no-cache git procps curl jq \
     && npm install -g @anthropic-ai/claude-code \
     && mkdir -p /home/node/.claude /workspace \
     && chown -R node:node /home/node/.claude /workspace
@@ -8,4 +8,17 @@ RUN apk add --no-cache git procps \
 USER node
 WORKDIR /workspace
 
-ENTRYPOINT ["tail", "-f", "/dev/null"]
+# Entrypoint: inject internal MCP server config, then idle
+RUN printf '#!/bin/sh\n\
+SETTINGS="/home/node/.claude/settings.json"\n\
+MCP='"'"'{"modularmind":{"type":"http","url":"http://engine:8000/mcp"}}'"'"'\n\
+if [ -f "$SETTINGS" ] && [ -s "$SETTINGS" ]; then\n\
+  jq --argjson mcp "$MCP" '"'"'.mcpServers = (.mcpServers // {}) + $mcp'"'"' "$SETTINGS" > "${SETTINGS}.tmp" \\\n\
+    && mv "${SETTINGS}.tmp" "$SETTINGS"\n\
+else\n\
+  echo "{\"mcpServers\":$MCP}" > "$SETTINGS"\n\
+fi\n\
+exec tail -f /dev/null\n' > /home/node/entrypoint.sh \
+    && chmod +x /home/node/entrypoint.sh
+
+ENTRYPOINT ["/bin/sh", "/home/node/entrypoint.sh"]

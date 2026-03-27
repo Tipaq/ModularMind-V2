@@ -398,6 +398,14 @@ from src.internal.claude_debug import router as claude_debug_router
 app.include_router(claude_debug_router, prefix=f"{API_PREFIX}/internal")
 
 # ---------------------------------------------------------------------------
+# Internal MCP server — exposes tools to Claude Bridge CLI
+# ---------------------------------------------------------------------------
+
+from src.mcp.internal_server import get_mcp_app
+
+app.mount("/mcp", get_mcp_app())
+
+# ---------------------------------------------------------------------------
 # Static SPA files (Chat + Ops) — only if built into image
 # ---------------------------------------------------------------------------
 

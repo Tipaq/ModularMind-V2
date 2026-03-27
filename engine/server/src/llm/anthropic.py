@@ -1,18 +1,17 @@
 """
 Anthropic LLM Provider.
 
-Two auth modes:
-1. OAuth token from CLAUDE_HOME/.credentials.json (Claude Max — Bearer header)
-2. API key from SecretsStore or ANTHROPIC_API_KEY env var (x-api-key header)
+Two modes:
+1. Claude Code Max — Bridge CLI sidecar (free, tools via internal MCP)
+2. API key — ChatAnthropic (paid, native tool calling)
+
+Bridge is preferred when available. Tool calling is supported in both
+modes: Bridge uses the internal MCP server, API uses native tool_use.
 """
 
-import json
 import logging
-from functools import cached_property
-from pathlib import Path
 from typing import Any
 
-import anthropic
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 
@@ -31,72 +30,28 @@ ANTHROPIC_MODELS = {
 }
 
 
-def _read_oauth_token(claude_home: str) -> str | None:
-    """Read OAuth access token from CLAUDE_HOME/.credentials.json."""
-    credentials_path = Path(claude_home) / ".credentials.json"
-    if not credentials_path.exists():
-        return None
+def _resolve_api_key(explicit_key: str | None = None) -> str | None:
+    """Resolve Anthropic API key from explicit, SecretsStore, or env."""
+    if explicit_key:
+        return explicit_key
     try:
-        data = json.loads(credentials_path.read_text(encoding="utf-8"))
-        token = data.get("claudeAiOauth", {}).get("accessToken")
-        if token:
-            logger.debug("Resolved OAuth token from %s", credentials_path)
-        return token
-    except (json.JSONDecodeError, OSError) as e:
-        logger.warning("Failed to read credentials from %s: %s", credentials_path, e)
-        return None
+        from src.infra.secrets import secrets_store
 
+        key = secrets_store.get("ANTHROPIC_API_KEY")
+        if key:
+            return key
+    except Exception:
+        pass
+    import os
 
-class ChatAnthropicOAuth(ChatAnthropic):
-    """ChatAnthropic subclass that uses OAuth Bearer auth instead of x-api-key.
-
-    Overrides client creation to pass auth_token to the Anthropic SDK,
-    which sends Authorization: Bearer instead of X-Api-Key.
-    """
-
-    oauth_token: str = ""
-
-    @cached_property
-    def _client(self) -> anthropic.Anthropic:
-        from langchain_anthropic._client_utils import _get_default_httpx_client
-
-        params = self._client_params
-        http_kwargs: dict[str, Any] = {"base_url": params["base_url"]}
-        if "timeout" in params:
-            http_kwargs["timeout"] = params["timeout"]
-        return anthropic.Anthropic(
-            api_key=None,
-            auth_token=self.oauth_token,
-            base_url=params["base_url"],
-            max_retries=params["max_retries"],
-            default_headers=params.get("default_headers"),
-            http_client=_get_default_httpx_client(**http_kwargs),
-        )
-
-    @cached_property
-    def _async_client(self) -> anthropic.AsyncAnthropic:
-        from langchain_anthropic._client_utils import _get_default_async_httpx_client
-
-        params = self._client_params
-        http_kwargs: dict[str, Any] = {"base_url": params["base_url"]}
-        if "timeout" in params:
-            http_kwargs["timeout"] = params["timeout"]
-        return anthropic.AsyncAnthropic(
-            api_key=None,
-            auth_token=self.oauth_token,
-            base_url=params["base_url"],
-            max_retries=params["max_retries"],
-            default_headers=params.get("default_headers"),
-            http_client=_get_default_async_httpx_client(**http_kwargs),
-        )
+    return os.environ.get("ANTHROPIC_API_KEY")
 
 
 class AnthropicProvider(LLMProvider):
-    """Anthropic provider — always returns ChatAnthropic.
+    """Anthropic provider.
 
-    Auth resolution order:
-    1. OAuth token from CLAUDE_HOME credentials (Authorization: Bearer)
-    2. API key from SecretsStore or env (x-api-key)
+    Priority: Bridge CLI (Max) > API key (paid).
+    Both modes support tools: Bridge via internal MCP, API via native tool_use.
     """
 
     def __init__(
@@ -115,26 +70,6 @@ class AnthropicProvider(LLMProvider):
     def provider_name(self) -> str:
         return "anthropic"
 
-    def _resolve_oauth_token(self) -> str | None:
-        from src.infra.config import get_settings
-
-        claude_home = get_settings().CLAUDE_HOME
-        if not claude_home:
-            return None
-        return _read_oauth_token(claude_home)
-
-    def _resolve_api_key(self) -> str | None:
-        if self.api_key:
-            return self.api_key
-        from src.infra.secrets import secrets_store
-
-        key = secrets_store.get("ANTHROPIC_API_KEY")
-        if key:
-            return key
-        import os
-
-        return os.environ.get("ANTHROPIC_API_KEY")
-
     async def get_model(
         self,
         model_id: str,
@@ -144,32 +79,32 @@ class AnthropicProvider(LLMProvider):
     ) -> BaseChatModel:
         _, model_name = self.parse_model_id(model_id)
 
-        base_kwargs: dict[str, Any] = {
-            "model": model_name,
-            "base_url": self.base_url,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "timeout": self.timeout,
-            "max_retries": self.max_retries,
-            **kwargs,
-        }
+        # 1. Bridge CLI (Claude Max — free, tools via MCP)
+        from .bridge_exec import is_bridge_available
 
-        # 1. OAuth token (Claude Max subscription)
-        oauth_token = self._resolve_oauth_token()
-        if oauth_token:
-            logger.info("Anthropic: using OAuth for %s", model_name)
-            return ChatAnthropicOAuth(
-                oauth_token=oauth_token,
-                **base_kwargs,
+        if await is_bridge_available():
+            from .claude_bridge import ChatClaudeBridge
+
+            logger.info("Anthropic: using Bridge CLI for %s", model_name)
+            return ChatClaudeBridge(model_name=model_name)
+
+        # 2. API key (paid, full tool support)
+        api_key = _resolve_api_key(self.api_key)
+        if api_key:
+            return ChatAnthropic(
+                model=model_name,
+                api_key=api_key,
+                base_url=self.base_url,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+                **kwargs,
             )
 
-        # 2. API key
-        api_key = self._resolve_api_key()
-        if api_key:
-            return ChatAnthropic(api_key=api_key, **base_kwargs)
-
         raise ValueError(
-            "No Anthropic auth — set CLAUDE_HOME or ANTHROPIC_API_KEY"
+            "No Anthropic auth — start the Claude Bridge sidecar "
+            "or set ANTHROPIC_API_KEY"
         )
 
     async def list_models(self) -> list[ModelInfo]:
@@ -184,4 +119,8 @@ class AnthropicProvider(LLMProvider):
         ]
 
     async def is_available(self) -> bool:
-        return bool(self._resolve_oauth_token() or self._resolve_api_key())
+        from .bridge_exec import is_bridge_available
+
+        if await is_bridge_available():
+            return True
+        return bool(_resolve_api_key(self.api_key))
