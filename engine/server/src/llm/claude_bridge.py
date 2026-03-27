@@ -1,11 +1,8 @@
 """ChatClaudeBridge — LangChain BaseChatModel routed via docker exec.
 
-Uses the Claude Code CLI in the mm-claude-bridge sidecar container
-to run inference with any Claude model via the Max subscription.
-
-When tools are bound (bind_tools), transparently upgrades to ChatAnthropic
-using OAuth token or API key, since the CLI does not support structured
-tool_use responses.
+Legacy fallback: routes inference through the Claude Code CLI sidecar.
+Prefer AnthropicProvider with CLAUDE_HOME or ANTHROPIC_API_KEY instead,
+which supports tool calling natively via ChatAnthropic.
 """
 
 import asyncio
@@ -43,9 +40,8 @@ def _serialize_messages(messages: list[BaseMessage]) -> str:
 class ChatClaudeBridge(BaseChatModel):
     """Chat model that routes through the Claude Code CLI sidecar.
 
-    For simple inference (no tools), uses `claude -p` via docker exec.
-    When bind_tools() is called, upgrades to ChatAnthropic for native
-    tool_use support.
+    Does NOT support tool calling. Use AnthropicProvider with
+    CLAUDE_HOME or ANTHROPIC_API_KEY for agents with tools.
     """
 
     model_name: str = "claude-sonnet-4-6"
@@ -53,56 +49,6 @@ class ChatClaudeBridge(BaseChatModel):
     @property
     def _llm_type(self) -> str:
         return "claude-bridge"
-
-    def bind_tools(self, tools: Any, **kwargs: Any) -> BaseChatModel:
-        """Upgrade to ChatAnthropic for tool calling support."""
-        from langchain_anthropic import ChatAnthropic
-
-        from src.infra.config import get_settings
-
-        from .anthropic import _read_oauth_token
-
-        tool_count = len(tools) if isinstance(tools, list) else 0
-
-        # 1. Try OAuth token
-        claude_home = get_settings().CLAUDE_HOME
-        oauth_token = _read_oauth_token(claude_home) if claude_home else None
-
-        if oauth_token:
-            logger.info(
-                "Bridge bind_tools: upgrading via OAuth (%d tools)", tool_count,
-            )
-            llm = ChatAnthropic(
-                model=self.model_name,
-                api_key="placeholder",
-                default_headers={"Authorization": f"Bearer {oauth_token}"},
-                max_tokens=4096,
-            )
-            return llm.bind_tools(tools, **kwargs)
-
-        # 2. Try API key
-        from src.infra.secrets import secrets_store
-
-        api_key = secrets_store.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            import os
-
-            api_key = os.environ.get("ANTHROPIC_API_KEY")
-
-        if api_key:
-            logger.info(
-                "Bridge bind_tools: upgrading via API key (%d tools)", tool_count,
-            )
-            llm = ChatAnthropic(
-                model=self.model_name,
-                api_key=api_key,
-                max_tokens=4096,
-            )
-            return llm.bind_tools(tools, **kwargs)
-
-        raise NotImplementedError(
-            "ChatClaudeBridge requires CLAUDE_HOME or ANTHROPIC_API_KEY for tool calling."
-        )
 
     def _generate(
         self,
