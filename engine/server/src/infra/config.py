@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     VLLM_BASE_URL: str = Field(default="", description="vLLM OpenAI-compatible API URL")
     TGI_BASE_URL: str = Field(default="", description="TGI OpenAI-compatible API URL")
     LLM_CALL_TIMEOUT: int = Field(default=120, ge=10, le=600)
+    CLAUDE_HOME: str = Field(
+        default="",
+        description="Path to .claude directory containing credentials.json for OAuth auth",
+    )
     GPU_TOTAL_VRAM_GB: float = Field(
         default=0.0,
         description="Total GPU VRAM in GB. Set if server container lacks GPU access.",

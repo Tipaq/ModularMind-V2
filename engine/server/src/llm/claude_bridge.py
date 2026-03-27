@@ -4,7 +4,7 @@ Uses the Claude Code CLI in the mm-claude-bridge sidecar container
 to run inference with any Claude model via the Max subscription.
 
 When tools are bound (bind_tools), transparently upgrades to ChatAnthropic
-using the synced OAuth token, since the CLI does not support structured
+using OAuth token or API key, since the CLI does not support structured
 tool_use responses.
 """
 
@@ -40,27 +40,12 @@ def _serialize_messages(messages: list[BaseMessage]) -> str:
     return "\n\n".join(parts)
 
 
-def _resolve_api_key() -> str | None:
-    """Resolve Anthropic API key from SecretsStore or environment."""
-    try:
-        from src.infra.secrets import secrets_store
-
-        key = secrets_store.get("ANTHROPIC_API_KEY")
-        if key:
-            return key
-    except Exception:
-        pass
-    import os
-
-    return os.environ.get("ANTHROPIC_API_KEY")
-
-
 class ChatClaudeBridge(BaseChatModel):
     """Chat model that routes through the Claude Code CLI sidecar.
 
     For simple inference (no tools), uses `claude -p` via docker exec.
     When bind_tools() is called, upgrades to ChatAnthropic for native
-    tool_use support using the synced OAuth/API key.
+    tool_use support.
     """
 
     model_name: str = "claude-sonnet-4-6"
@@ -69,37 +54,55 @@ class ChatClaudeBridge(BaseChatModel):
     def _llm_type(self) -> str:
         return "claude-bridge"
 
-    def bind_tools(
-        self,
-        tools: Any,
-        **kwargs: Any,
-    ) -> BaseChatModel:
-        """Upgrade to ChatAnthropic for tool calling support.
-
-        The CLI bridge cannot return structured tool_use blocks,
-        so we transparently switch to the Anthropic API when tools
-        are needed. Uses the OAuth token synced from the bridge.
-        """
-        api_key = _resolve_api_key()
-        if not api_key:
-            raise NotImplementedError(
-                "ChatClaudeBridge requires ANTHROPIC_API_KEY for tool calling. "
-                "Sync credentials via /debug/claude/sync-credentials first."
-            )
-
+    def bind_tools(self, tools: Any, **kwargs: Any) -> BaseChatModel:
+        """Upgrade to ChatAnthropic for tool calling support."""
         from langchain_anthropic import ChatAnthropic
 
-        logger.info(
-            "Bridge upgrading to ChatAnthropic for tool calling (%d tools, model=%s)",
-            len(tools) if isinstance(tools, list) else 0,
-            self.model_name,
+        from src.infra.config import get_settings
+
+        from .anthropic import _read_oauth_token
+
+        tool_count = len(tools) if isinstance(tools, list) else 0
+
+        # 1. Try OAuth token
+        claude_home = get_settings().CLAUDE_HOME
+        oauth_token = _read_oauth_token(claude_home) if claude_home else None
+
+        if oauth_token:
+            logger.info(
+                "Bridge bind_tools: upgrading via OAuth (%d tools)", tool_count,
+            )
+            llm = ChatAnthropic(
+                model=self.model_name,
+                api_key="placeholder",
+                default_headers={"Authorization": f"Bearer {oauth_token}"},
+                max_tokens=4096,
+            )
+            return llm.bind_tools(tools, **kwargs)
+
+        # 2. Try API key
+        from src.infra.secrets import secrets_store
+
+        api_key = secrets_store.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            import os
+
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+
+        if api_key:
+            logger.info(
+                "Bridge bind_tools: upgrading via API key (%d tools)", tool_count,
+            )
+            llm = ChatAnthropic(
+                model=self.model_name,
+                api_key=api_key,
+                max_tokens=4096,
+            )
+            return llm.bind_tools(tools, **kwargs)
+
+        raise NotImplementedError(
+            "ChatClaudeBridge requires CLAUDE_HOME or ANTHROPIC_API_KEY for tool calling."
         )
-        anthropic_llm = ChatAnthropic(
-            model=self.model_name,
-            api_key=api_key,
-            max_tokens=4096,
-        )
-        return anthropic_llm.bind_tools(tools, **kwargs)
 
     def _generate(
         self,
