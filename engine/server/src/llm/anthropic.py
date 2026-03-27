@@ -8,9 +8,11 @@ Two auth modes:
 
 import json
 import logging
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
+import anthropic
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 
@@ -43,6 +45,50 @@ def _read_oauth_token(claude_home: str) -> str | None:
     except (json.JSONDecodeError, OSError) as e:
         logger.warning("Failed to read credentials from %s: %s", credentials_path, e)
         return None
+
+
+class ChatAnthropicOAuth(ChatAnthropic):
+    """ChatAnthropic subclass that uses OAuth Bearer auth instead of x-api-key.
+
+    Overrides client creation to pass auth_token to the Anthropic SDK,
+    which sends Authorization: Bearer instead of X-Api-Key.
+    """
+
+    oauth_token: str = ""
+
+    @cached_property
+    def _client(self) -> anthropic.Anthropic:
+        from langchain_anthropic._client_utils import _get_default_httpx_client
+
+        params = self._client_params
+        http_kwargs: dict[str, Any] = {"base_url": params["base_url"]}
+        if "timeout" in params:
+            http_kwargs["timeout"] = params["timeout"]
+        return anthropic.Anthropic(
+            api_key=None,
+            auth_token=self.oauth_token,
+            base_url=params["base_url"],
+            max_retries=params["max_retries"],
+            default_headers=params.get("default_headers"),
+            http_client=_get_default_httpx_client(**http_kwargs),
+        )
+
+    @cached_property
+    def _async_client(self) -> anthropic.AsyncAnthropic:
+        from langchain_anthropic._client_utils import _get_default_async_httpx_client
+
+        params = self._client_params
+        http_kwargs: dict[str, Any] = {"base_url": params["base_url"]}
+        if "timeout" in params:
+            http_kwargs["timeout"] = params["timeout"]
+        return anthropic.AsyncAnthropic(
+            api_key=None,
+            auth_token=self.oauth_token,
+            base_url=params["base_url"],
+            max_retries=params["max_retries"],
+            default_headers=params.get("default_headers"),
+            http_client=_get_default_async_httpx_client(**http_kwargs),
+        )
 
 
 class AnthropicProvider(LLMProvider):
@@ -112,9 +158,8 @@ class AnthropicProvider(LLMProvider):
         oauth_token = self._resolve_oauth_token()
         if oauth_token:
             logger.info("Anthropic: using OAuth for %s", model_name)
-            return ChatAnthropic(
-                api_key="placeholder",
-                default_headers={"Authorization": f"Bearer {oauth_token}"},
+            return ChatAnthropicOAuth(
+                oauth_token=oauth_token,
                 **base_kwargs,
             )
 
