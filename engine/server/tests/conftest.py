@@ -28,6 +28,7 @@ from src.conversations.models import Conversation, ConversationMessage  # noqa: 
 from src.groups.models import UserGroup, UserGroupMember  # noqa: F401
 from src.infra.database import Base, get_db, get_db_readonly
 from src.projects.models import Project, ProjectMember  # noqa: F401
+from src.system_indexer.db_models import IndexedSystem, SystemRelationship  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Test database — NullPool avoids cross-event-loop connection reuse issues

@@ -50,7 +50,7 @@ class SystemRelationship(Base):
     target_unit_id: Mapped[str] = mapped_column(String(36), nullable=False)
     kind: Mapped[str] = mapped_column(String(50), nullable=False)
     weight: Mapped[float] = mapped_column(Float, default=1.0)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
 
     __table_args__ = (
         Index("ix_sysrel_system_source", "system_id", "source_unit_id"),

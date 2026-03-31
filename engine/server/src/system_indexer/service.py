@@ -31,6 +31,9 @@ async def create_system(
         name=name,
         system_type=system_type,
         base_url=base_url,
+        status="pending",
+        unit_count=0,
+        relationship_count=0,
     )
     session.add(system)
     await session.flush()
