@@ -159,9 +159,10 @@ async def lifespan(app: FastAPI):
 
     # 9. Seed System Indexer builder graph (leader-only, idempotent)
     try:
+        from src.infra.database import async_session_maker as _session_maker
         from src.system_indexer.builder_graph import seed_system_indexer
 
-        async with async_session_maker() as seed_session:
+        async with _session_maker() as seed_session:
             await seed_system_indexer(seed_session, model_id=settings.SUPERVISOR_MODEL_ID)
     except Exception as exc:
         logger.warning("System Indexer seed failed (non-fatal): %s", exc)

@@ -1,7 +1,6 @@
 """Tests for built-in connectors."""
 
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from src.system_indexer.connectors.rest_api import RestApiConnector
 

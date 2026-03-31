@@ -1,11 +1,8 @@
 """Tests for the system_indexer service layer."""
 
-import pytest
-import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from src.system_indexer.models import Relationship, StructuralUnit, SystemIndex
-from src.system_indexer.schemas import SearchResult, StructureItem
+import pytest
 
 
 class TestCreateSystem:

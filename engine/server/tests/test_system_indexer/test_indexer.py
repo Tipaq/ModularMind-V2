@@ -1,10 +1,11 @@
 """Tests for the system indexer pipeline."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from src.system_indexer.chunker import split_units
-from src.system_indexer.models import Relationship, StructuralUnit, SystemIndex
+from src.system_indexer.models import StructuralUnit
 
 
 class TestIndexerBatching:
