@@ -33,6 +33,7 @@ def get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
     from src.tools.categories.network import get_network_tool_definitions
     from src.tools.categories.scheduling import get_scheduling_tool_definitions
     from src.tools.categories.shell import get_shell_tool_definitions
+    from src.tools.categories.system_indexer import get_system_indexer_tool_definitions
     from src.tools.categories.web import get_web_tool_definitions
 
     return {
@@ -49,6 +50,7 @@ def get_category_registry() -> dict[str, Callable[[], list[dict[str, Any]]]]:
         "web": get_web_tool_definitions,
         "git": get_git_tool_definitions,
         "scheduling": get_scheduling_tool_definitions,
+        "system_indexer": get_system_indexer_tool_definitions,
     }
 
 

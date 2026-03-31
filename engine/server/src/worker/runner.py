@@ -35,6 +35,7 @@ from src.infra.stream_names import (
     STREAM_RAG_EMBEDDED,
     STREAM_RAG_EXTRACTED,
     STREAM_SCHEDULED_TASK_TRIGGER,
+    STREAM_SYSTEM_INDEX,
 )
 from src.worker.scheduler import create_scheduler
 from src.worker.tasks import graph_execution_handler, model_pull_handler
@@ -237,6 +238,19 @@ async def main() -> None:
                 "scheduled-task-triggers",
                 "st-1",
                 scheduled_task_trigger_handler,
+            ),
+        )
+
+    # --- System indexer stream ---
+    if "system_index" in enabled_streams:
+        from src.system_indexer.handler import system_index_handler
+
+        tasks.append(
+            bus.subscribe(
+                STREAM_SYSTEM_INDEX,
+                "system-indexers",
+                "si-1",
+                system_index_handler,
             ),
         )
 

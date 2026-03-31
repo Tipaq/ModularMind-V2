@@ -17,5 +17,8 @@ STREAM_RAG_EMBEDDED = "rag:embedded"
 # Scheduled tasks
 STREAM_SCHEDULED_TASK_TRIGGER = "tasks:scheduled_task_trigger"
 
+# System indexer
+STREAM_SYSTEM_INDEX = "tasks:system_index"
+
 # Dead letter queue
 STREAM_DLQ = "dead_letter"

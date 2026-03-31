@@ -94,4 +94,5 @@ DEFAULT_TOOL_CATEGORIES: dict[str, bool] = {
     "web": False,
     "git": False,
     "scheduling": False,
+    "system_indexer": False,
 }

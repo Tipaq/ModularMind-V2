@@ -48,6 +48,7 @@ from src.scheduled_tasks.router import router as scheduled_tasks_router
 from src.setup.router import router as setup_router
 from src.supervisor.router import router as supervisor_router
 from src.sync.router import router as sync_router
+from src.system_indexer.router import router as system_indexer_router
 from src.tools.router import router as tools_admin_router
 
 # ---------------------------------------------------------------------------
@@ -379,6 +380,7 @@ app.include_router(groups_router, prefix=API_PREFIX)
 app.include_router(scheduled_tasks_router)
 app.include_router(mini_apps_router, prefix=API_PREFIX)
 app.include_router(projects_router, prefix=API_PREFIX)
+app.include_router(system_indexer_router)
 
 # ── Admin routers ────────────────────────────────────────────────────────
 app.include_router(internal_router, prefix=f"{API_PREFIX}/internal")

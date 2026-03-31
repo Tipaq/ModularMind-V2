@@ -50,6 +50,16 @@ qdrant_points_total = Gauge(
 _DENSE_DIM_DEFAULT = 768
 _DENSE_DISTANCE = models.Distance.COSINE
 
+SYSTEM_INDEXES_COLLECTION = "system-indexes"
+
+_SYSTEM_INDEX_INDEXES: list[tuple[str, models.PayloadSchemaType]] = [
+    ("metadata.system_id", models.PayloadSchemaType.KEYWORD),
+    ("metadata.kind", models.PayloadSchemaType.KEYWORD),
+    ("metadata.unit_id", models.PayloadSchemaType.KEYWORD),
+    ("metadata.body_hash", models.PayloadSchemaType.KEYWORD),
+    ("metadata.depth", models.PayloadSchemaType.INTEGER),
+]
+
 
 def _dense_dim_for_collection(name: str, settings: Settings) -> int:
     """Resolve the dense vector dimension based on the configured embedding model."""
@@ -102,7 +112,7 @@ class QdrantClientFactory:
         return self._client
 
     async def ensure_collections(self) -> None:
-        """Create knowledge collection if it doesn't exist (idempotent)."""
+        """Create knowledge + system-indexes collections if missing (idempotent)."""
         if self._client is None:
             await self.get_client()
             return  # get_client already called ensure_collections
@@ -111,10 +121,22 @@ class QdrantClientFactory:
 
         settings = get_settings()
         await self._ensure_one(settings.QDRANT_COLLECTION_KNOWLEDGE, settings)
+        await self._ensure_one(
+            SYSTEM_INDEXES_COLLECTION, settings, extra_indexes=_SYSTEM_INDEX_INDEXES
+        )
         self._collections_ensured = True
-        logger.info("Qdrant collection ensured: %s", settings.QDRANT_COLLECTION_KNOWLEDGE)
+        logger.info(
+            "Qdrant collections ensured: %s, %s",
+            settings.QDRANT_COLLECTION_KNOWLEDGE,
+            SYSTEM_INDEXES_COLLECTION,
+        )
 
-    async def _ensure_one(self, name: str, settings: Settings) -> None:
+    async def _ensure_one(
+        self,
+        name: str,
+        settings: Settings,
+        extra_indexes: list[tuple[str, models.PayloadSchemaType]] | None = None,
+    ) -> None:
         assert self._client is not None
         expected_dim = _dense_dim_for_collection(name, settings)
         exists = await self._client.collection_exists(name)
@@ -160,7 +182,8 @@ class QdrantClientFactory:
         )
         logger.info("Created Qdrant collection: %s", name)
 
-        for field_name, schema_type in _PAYLOAD_INDEXES:
+        all_indexes = _PAYLOAD_INDEXES + (extra_indexes or [])
+        for field_name, schema_type in all_indexes:
             await self._client.create_payload_index(
                 collection_name=name,
                 field_name=field_name,
