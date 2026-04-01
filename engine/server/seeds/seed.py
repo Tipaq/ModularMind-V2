@@ -23,17 +23,37 @@ def login(base_url: str, email: str, password: str) -> requests.Session:
     return session
 
 
+def _get_existing_agents(session: requests.Session, base_url: str) -> dict[str, str]:
+    resp = session.get(f"{base_url}/api/v1/agents")
+    resp.raise_for_status()
+    return {a["name"]: a["id"] for a in resp.json()}
+
+
+def _get_existing_graphs(session: requests.Session, base_url: str) -> dict[str, str]:
+    resp = session.get(f"{base_url}/api/v1/graphs")
+    resp.raise_for_status()
+    return {g["name"]: g["id"] for g in resp.json()}
+
+
 def seed_agents(session: requests.Session, base_url: str) -> dict[str, str]:
     agents_dir = SEEDS_DIR / "agents"
     agent_ids: dict[str, str] = {}
+    existing = _get_existing_agents(session, base_url)
 
     for yaml_file in sorted(agents_dir.glob("*.yaml")):
         with open(yaml_file) as f:
             data = yaml.safe_load(f)
 
         ref_name = yaml_file.stem
+        name = data["name"]
+
+        if name in existing:
+            agent_ids[ref_name] = existing[name]
+            print(f"  Agent: {name} -> {existing[name]} (already exists, skipped)")
+            continue
+
         payload = {
-            "name": data["name"],
+            "name": name,
             "description": data.get("description", ""),
             "model_id": data["model_id"],
             "system_prompt": data.get("system_prompt", ""),
@@ -47,7 +67,7 @@ def seed_agents(session: requests.Session, base_url: str) -> dict[str, str]:
         resp.raise_for_status()
         agent = resp.json()
         agent_ids[ref_name] = agent["id"]
-        print(f"  Agent: {data['name']} -> {agent['id']}")
+        print(f"  Agent: {name} -> {agent['id']}")
 
     return agent_ids
 
@@ -56,10 +76,16 @@ def seed_graphs(
     session: requests.Session, base_url: str, agent_ids: dict[str, str],
 ) -> None:
     graphs_dir = SEEDS_DIR / "graphs"
+    existing = _get_existing_graphs(session, base_url)
 
     for yaml_file in sorted(graphs_dir.glob("*.yaml")):
         with open(yaml_file) as f:
             data = yaml.safe_load(f)
+
+        name = data["name"]
+        if name in existing:
+            print(f"  Graph: {name} -> {existing[name]} (already exists, skipped)")
+            continue
 
         for node in data.get("nodes", []):
             agent_ref = node.get("data", {}).pop("agent_ref", None)
@@ -67,7 +93,7 @@ def seed_graphs(
                 node["data"]["agent_id"] = agent_ids[agent_ref]
 
         payload = {
-            "name": data["name"],
+            "name": name,
             "description": data.get("description", ""),
             "timeout_seconds": data.get("timeout_seconds", 300),
             "entry_node_id": data.get("entry_node_id"),
@@ -81,7 +107,7 @@ def seed_graphs(
         )
         resp.raise_for_status()
         graph = resp.json()
-        print(f"  Graph: {data['name']} -> {graph['id']}")
+        print(f"  Graph: {name} -> {graph['id']}")
 
 
 def main() -> None:

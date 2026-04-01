@@ -307,6 +307,16 @@ class ConfigRepository:
             await self._session.flush()
         return count
 
+    async def _find_active_by_name(self, model: ConfigModel, name: str) -> ConfigRow | None:
+        """Find an active config by exact name match."""
+        result = await self._session.execute(
+            select(model).where(
+                model.is_active == True,  # noqa: E712
+                model.name == name,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def _has_any(self, model: ConfigModel) -> bool:
         """Check if any configs exist in DB for the given model."""
         result = await self._session.execute(select(func.count()).select_from(model))
@@ -341,6 +351,10 @@ class ConfigRepository:
             created_by=created_by,
             change_note=change_note,
         )
+
+    async def find_active_agent_by_name(self, name: str) -> AgentConfigVersion | None:
+        """Find an active agent by exact name match."""
+        return await self._find_active_by_name(AgentConfigVersion, name)
 
     async def get_active_agent(self, agent_id: str) -> AgentConfigVersion | None:
         """Get the active version of an agent."""
@@ -408,6 +422,10 @@ class ConfigRepository:
             created_by=created_by,
             change_note=change_note,
         )
+
+    async def find_active_graph_by_name(self, name: str) -> GraphConfigVersion | None:
+        """Find an active graph by exact name match."""
+        return await self._find_active_by_name(GraphConfigVersion, name)
 
     async def get_active_graph(self, graph_id: str) -> GraphConfigVersion | None:
         """Get the active version of a graph."""

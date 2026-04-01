@@ -115,6 +115,14 @@ async def create_graph(
 ) -> GraphDetail:
     _validate_graph_integrity(body.nodes, body.edges, body.entry_node_id)
 
+    repo = ConfigRepository(db)
+    existing = await repo.find_active_graph_by_name(body.name)
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A graph named '{body.name}' already exists",
+        )
+
     graph_id = str(uuid4())
     config_dict = _build_config_dict(
         graph_id,
@@ -127,7 +135,6 @@ async def create_graph(
     )
     GraphConfig.model_validate(config_dict)
 
-    repo = ConfigRepository(db)
     row = await repo.create_graph_version(
         graph_id,
         config_dict,

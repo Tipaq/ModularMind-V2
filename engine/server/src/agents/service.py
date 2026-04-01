@@ -88,11 +88,18 @@ async def create_agent(
     body: AgentCreate,
     user_id: str,
 ) -> AgentDetail:
+    repo = ConfigRepository(db)
+    existing = await repo.find_active_agent_by_name(body.name)
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"An agent named '{body.name}' already exists",
+        )
+
     agent_id = str(uuid4())
     config_dict = _build_config_dict(body, agent_id)
     AgentConfig.model_validate(config_dict)
 
-    repo = ConfigRepository(db)
     row = await repo.create_agent_version(
         agent_id,
         config_dict,

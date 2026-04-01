@@ -146,7 +146,12 @@ class SyncService:
             return False
 
     async def _apply_agents(self, agents: list[dict]) -> None:
-        """Transform and write agent configs to DB via ConfigRepository."""
+        """Transform and write agent configs to DB via ConfigRepository.
+
+        Skips agents whose name already exists under a different ID to prevent
+        duplicates when the same agent was created locally (seed / UI) and also
+        exists on Platform with a different UUID.
+        """
         from src.domain_config.repository import ConfigRepository
         from src.infra.database import async_session_maker
 
@@ -158,6 +163,15 @@ class SyncService:
                     continue
                 try:
                     engine_config = _transform_agent(raw_agent)
+                    name = engine_config.get("name", "")
+                    existing = await repo.find_active_agent_by_name(name)
+                    if existing and existing.id != agent_id:
+                        logger.debug(
+                            "Skipping agent '%s' from platform — already exists locally as %s",
+                            name,
+                            existing.id,
+                        )
+                        continue
                     await repo.create_agent_version(
                         agent_id=agent_id,
                         config=engine_config,
@@ -170,7 +184,10 @@ class SyncService:
             await session.commit()
 
     async def _apply_graphs(self, graphs: list[dict]) -> None:
-        """Transform and write graph configs to DB via ConfigRepository."""
+        """Transform and write graph configs to DB via ConfigRepository.
+
+        Skips graphs whose name already exists under a different ID.
+        """
         from src.domain_config.repository import ConfigRepository
         from src.infra.database import async_session_maker
 
@@ -182,6 +199,15 @@ class SyncService:
                     continue
                 try:
                     engine_config = _transform_graph(raw_graph)
+                    name = engine_config.get("name", "")
+                    existing = await repo.find_active_graph_by_name(name)
+                    if existing and existing.id != graph_id:
+                        logger.debug(
+                            "Skipping graph '%s' from platform — already exists locally as %s",
+                            name,
+                            existing.id,
+                        )
+                        continue
                     await repo.create_graph_version(
                         graph_id=graph_id,
                         config=engine_config,
