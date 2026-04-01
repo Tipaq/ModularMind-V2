@@ -2,7 +2,7 @@
 # ModularMind V2 — Development Commands
 # =============================================================================
 
-.PHONY: help setup dev dev-all dev-chat dev-ops dev-platform dev-engine dev-worker dev-gateway dev-infra dev-monitoring stop-monitoring build build-docker build-platform build-mcp-sidecars build-gateway build-sandbox deploy deploy-platform deploy-client stop-client test test-cov lint lint-fix format format-check migrate migrate-new db-push db-studio clean
+.PHONY: help setup dev dev-all dev-chat dev-ops dev-engine dev-worker dev-gateway dev-infra dev-monitoring stop-monitoring build build-docker build-mcp-sidecars build-gateway build-sandbox deploy stop-client test test-cov lint lint-fix format format-check migrate migrate-new clean
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -34,9 +34,6 @@ dev-chat: ## Start Chat app (Vite dev server)
 dev-ops: ## Start Ops Console (Vite dev server)
 	pnpm dev:ops
 
-dev-platform: ## Start Platform (Next.js dev server)
-	pnpm dev:platform
-
 dev-engine: ## Start Engine server (uvicorn)
 	cd engine/server && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
@@ -62,9 +59,6 @@ stop-monitoring: ## Stop monitoring stack
 build: ## Build all apps
 	pnpm build
 
-build-platform: ## Build Platform Docker image
-	docker compose -f docker/docker-compose.platform.yml build
-
 build-mcp-sidecars: ## Build MCP sidecar Docker images
 	docker build -t modularmind/mcp-node-proxy:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.node-proxy engine/mcp-sidecars/mcp-sidecars/
 	docker build -t modularmind/mcp-qdrant:latest -f engine/mcp-sidecars/mcp-sidecars/Dockerfile.qdrant engine/mcp-sidecars/mcp-sidecars/
@@ -79,9 +73,6 @@ build-sandbox: ## Build Gateway sandbox Docker image
 
 deploy: ## Deploy production stack (pre-built images)
 	docker compose -f docker/docker-compose.yml up -d
-
-deploy-platform: ## Deploy platform stack
-	docker compose -f docker/docker-compose.platform.yml up -d
 
 stop: ## Stop production stack
 	docker compose -f docker/docker-compose.yml down
@@ -123,12 +114,6 @@ migrate: ## Run Engine DB migrations
 
 migrate-new: ## Create new Engine migration
 	@read -p "Migration message: " msg; cd engine/server && alembic revision --autogenerate -m "$$msg"
-
-db-push: ## Push Platform Prisma schema to DB
-	cd platform && npx prisma db push
-
-db-studio: ## Open Platform Prisma Studio
-	cd platform && npx prisma studio
 
 # --- Clean ---
 

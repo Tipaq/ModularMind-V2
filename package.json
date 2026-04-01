@@ -10,15 +10,12 @@
     "dev:ops": "turbo dev --filter=@modularmind/ops",
     "build:chat": "turbo build --filter=@modularmind/chat",
     "build:ops": "turbo build --filter=@modularmind/ops",
-    "dev:platform": "turbo dev --filter=@modularmind/platform",
-    "build:platform": "turbo build --filter=@modularmind/platform",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.3",
-    "@next/eslint-plugin-next": "^16.1.6",
     "@vitest/coverage-v8": "^4.0.18",
     "concurrently": "^9.2.1",
     "eslint": "^9.39.3",

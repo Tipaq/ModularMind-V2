@@ -179,14 +179,6 @@ jobs:
           - image: gateway
             dockerfile: gateway/Dockerfile
             context: .
-          - image: platform
-            dockerfile: platform/Dockerfile
-            context: .
-            target: runner
-          - image: platform-migrate
-            dockerfile: platform/Dockerfile
-            context: .
-            target: migrate
 
     steps:
       - uses: actions/checkout@v4
@@ -255,15 +247,11 @@ jobs:
             # --- Login to GHCR & pull pre-built images ---
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-            for img in engine gateway platform platform-migrate; do
+            for img in engine gateway; do
               docker pull "$REGISTRY/$OWNER/modularmind-$img:sha-$SHA"
               docker tag "$REGISTRY/$OWNER/modularmind-$img:sha-$SHA" \
                          "$REGISTRY/$OWNER/modularmind-$img:latest"
             done
-
-            # --- Deploy platform (migrate runs via service_completed_successfully) ---
-            docker compose -f docker/docker-compose.platform.yml \
-              --env-file docker/.env.platform up -d
 
             # --- Run engine DB migrations (Alembic) ---
             docker compose -f docker/docker-compose.yml \
@@ -277,7 +265,6 @@ jobs:
             timeout 120 bash -c 'until docker compose -f docker/docker-compose.yml --env-file docker/.env ps engine --format "{{.Health}}" | grep -q healthy; do sleep 5; done' \
               || { echo "Engine health check timed out"; docker compose -f docker/docker-compose.yml --env-file docker/.env logs engine --tail 50; exit 1; }
             echo "Engine healthy"
-            curl -sf http://localhost:3000 || echo "Platform not reachable (may be on separate host)"
 
             # --- Cleanup old images ---
             docker image prune -f

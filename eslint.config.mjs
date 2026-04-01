@@ -2,7 +2,6 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
-import nextPlugin from "@next/eslint-plugin-next";
 import globals from "globals";
 
 export default tseslint.config(
@@ -31,7 +30,7 @@ export default tseslint.config(
 
   // ── React hooks for all component/hook files ───────────────────────────
   {
-    files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}", "platform/src/**/*.{ts,tsx}"],
+    files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
     plugins: {
       "react-hooks": reactHooks,
     },
@@ -51,21 +50,6 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
-    },
-  },
-
-  // ── Platform (Next.js): Node globals + Next.js rules ────────────────────
-  {
-    files: ["platform/src/**/*.{ts,tsx}"],
-    plugins: {
-      "@next/next": nextPlugin,
-    },
-    languageOptions: {
-      globals: { ...globals.browser, ...globals.node },
-    },
-    rules: {
-      ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs["core-web-vitals"].rules,
     },
   },
 
