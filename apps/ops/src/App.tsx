@@ -1,5 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
+import {
+  createBrowserRouter,
+  Navigate,
+  Outlet,
+  RouterProvider,
+  useLocation,
+} from "react-router-dom";
 import { ThemeProvider, ErrorBoundary, RouteLoader } from "@modularmind/ui";
 
 import { DashboardLayout } from "./layouts/DashboardLayout";
@@ -26,7 +32,7 @@ const GraphDetail = lazy(() => import("./pages/GraphDetail").then((m) => ({ defa
 const Agents = lazy(() => import("./pages/Agents").then((m) => ({ default: m.Agents })));
 const AgentDetail = lazy(() => import("./pages/AgentDetail").then((m) => ({ default: m.AgentDetail })));
 
-function SetupGuard({ children }: { children: React.ReactNode }) {
+function SetupGuard() {
   const [status, setStatus] = useState<"loading" | "initialized" | "needs-setup">("loading");
   const location = useLocation();
 
@@ -34,63 +40,79 @@ function SetupGuard({ children }: { children: React.ReactNode }) {
     fetch("/api/v1/setup/status")
       .then((r) => r.json())
       .then((data) => setStatus(data.initialized ? "initialized" : "needs-setup"))
-      .catch(() => setStatus("initialized")); // if endpoint fails, don't block
+      .catch(() => setStatus("initialized"));
   }, []);
 
   if (status === "loading") return <RouteLoader />;
 
-  // Not initialized → force /setup (unless already there)
   if (status === "needs-setup" && location.pathname !== "/setup") {
     return <Navigate to="/setup" replace />;
   }
 
-  // Already initialized → block /setup page
   if (status === "initialized" && location.pathname === "/setup") {
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return <Outlet />;
 }
+
+function SuspenseWrapper() {
+  return (
+    <Suspense fallback={<RouteLoader />}>
+      <Outlet />
+    </Suspense>
+  );
+}
+
+const router = createBrowserRouter(
+  [
+    {
+      element: <SuspenseWrapper />,
+      children: [
+        {
+          element: <SetupGuard />,
+          children: [
+            { path: "/login", element: <Login /> },
+            { path: "/setup", element: <Setup /> },
+            {
+              element: <DashboardLayout />,
+              children: [
+                { path: "/", element: <Navigate to="/configuration" replace /> },
+                { path: "/monitoring", element: <Monitoring /> },
+                { path: "/configuration", element: <Configuration /> },
+                { path: "/models", element: <Models /> },
+                { path: "/models/:id", element: <ModelDetail /> },
+                { path: "/knowledge", element: <Knowledge /> },
+                { path: "/knowledge/:id", element: <CollectionDetail /> },
+                { path: "/tools", element: <Tools /> },
+                { path: "/mini-apps", element: <MiniApps /> },
+                { path: "/mini-apps/:id", element: <MiniAppDetail /> },
+                { path: "/scheduled-tasks", element: <ScheduledTasks /> },
+                { path: "/scheduled-tasks/:id", element: <ScheduledTaskDetail /> },
+                { path: "/graphs", element: <Graphs /> },
+                { path: "/graphs/:id", element: <GraphDetail /> },
+                { path: "/agents", element: <Agents /> },
+                { path: "/agents/:id", element: <AgentDetail /> },
+                { path: "/users", element: <Users /> },
+                { path: "/users/:userId", element: <UserDetail /> },
+                { path: "/settings", element: <Settings /> },
+                { path: "/profile", element: <Profile /> },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  { basename: "/ops" },
+);
 
 export function App() {
   return (
     <ErrorBoundary>
-    <ThemeProvider defaultMode="system">
-    <BrowserRouter basename="/ops">
-      <Suspense fallback={<RouteLoader />}>
-      <SetupGuard>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/setup" element={<Setup />} />
-        <Route element={<DashboardLayout />}>
-          <Route path="/" element={<Navigate to="/configuration" replace />} />
-          <Route path="/monitoring" element={<Monitoring />} />
-          <Route path="/configuration" element={<Configuration />} />
-          <Route path="/models" element={<Models />} />
-          <Route path="/models/:id" element={<ModelDetail />} />
-          <Route path="/knowledge" element={<Knowledge />} />
-          <Route path="/knowledge/:id" element={<CollectionDetail />} />
-          <Route path="/tools" element={<Tools />} />
-          <Route path="/mini-apps" element={<MiniApps />} />
-          <Route path="/mini-apps/:id" element={<MiniAppDetail />} />
-          <Route path="/scheduled-tasks" element={<ScheduledTasks />} />
-          <Route path="/scheduled-tasks/:id" element={<ScheduledTaskDetail />} />
-          <Route path="/graphs" element={<Graphs />} />
-          <Route path="/graphs/:id" element={<GraphDetail />} />
-          <Route path="/agents" element={<Agents />} />
-          <Route path="/agents/:id" element={<AgentDetail />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/users/:userId" element={<UserDetail />} />
-
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/profile" element={<Profile />} />
-        </Route>
-      </Routes>
-      </SetupGuard>
-      </Suspense>
-    </BrowserRouter>
-    </ThemeProvider>
+      <ThemeProvider defaultMode="system">
+        <RouterProvider router={router} />
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }
-
