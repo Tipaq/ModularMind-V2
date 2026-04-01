@@ -24,7 +24,9 @@ import yaml
 
 from src.auth import AuthService, UserCreate, UserRole
 from src.domain_config import get_config_provider
-from src.groups.models import UserGroupMember  # noqa: F401 — ensure model is registered for SQLAlchemy
+from src.groups.models import (
+    UserGroupMember,  # noqa: F401 — ensure model is registered for SQLAlchemy
+)
 from src.infra.database import async_session_maker
 
 
