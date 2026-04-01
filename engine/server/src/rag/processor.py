@@ -8,114 +8,19 @@ Ported from backend/src/rag/processor/ for local runtime use.
 import asyncio
 import logging
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
 from src.embedding.resolver import get_knowledge_embedding_provider
 from src.infra.config import get_settings
 
+from .chunker import Chunk  # noqa: F401
+from .chunker import RecursiveChunker as TextChunker  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md", ".markdown"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
-
-
-# ─── Chunk Dataclass ──────────────────────────────────────────────────────────
-
-
-@dataclass
-class Chunk:
-    """Represents one text chunk with position and metadata."""
-
-    content: str
-    position: int
-    metadata: dict = field(default_factory=dict)
-
-
-# ─── Text Chunker ─────────────────────────────────────────────────────────────
-
-
-class TextChunker:
-    """Recursive character text splitter with overlap support."""
-
-    def __init__(
-        self,
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
-        separators: list[str] | None = None,
-    ):
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
-        self.separators = separators or ["\n\n", "\n", ". ", " ", ""]
-
-    def split(self, text: str) -> list[Chunk]:
-        if not text or not text.strip():
-            return []
-
-        text = self.clean_text(text)
-        splits = self.split_text(text, self.separators)
-        chunks = self.merge_splits(splits)
-
-        return [Chunk(content=c, position=i, metadata={}) for i, c in enumerate(chunks)]
-
-    def clean_text(self, text: str) -> str:
-        text = re.sub(r" +", " ", text)
-        text = re.sub(r"\n\s*\n", "\n\n", text)
-        return text.strip()
-
-    def split_text(self, text: str, separators: list[str]) -> list[str]:
-        if not separators:
-            return [text[i : i + self.chunk_size] for i in range(0, len(text), self.chunk_size)]
-
-        separator = separators[0]
-        remaining = separators[1:]
-
-        if separator == "":
-            return [text[i : i + self.chunk_size] for i in range(0, len(text), self.chunk_size)]
-
-        splits = text.split(separator)
-        result = []
-
-        for s in splits:
-            if len(s) <= self.chunk_size:
-                result.append(s)
-            else:
-                result.extend(self.split_text(s, remaining))
-
-        return [s for s in result if s.strip()]
-
-    def merge_splits(self, splits: list[str]) -> list[str]:
-        if not splits:
-            return []
-
-        chunks: list[str] = []
-        current = ""
-
-        for s in splits:
-            test = (current + " " + s) if current else s
-
-            if len(test) <= self.chunk_size:
-                current = test
-            else:
-                if current:
-                    chunks.append(current)
-
-                if chunks and self.chunk_overlap > 0:
-                    prev = chunks[-1]
-                    overlap_start = max(0, len(prev) - self.chunk_overlap)
-                    current = prev[overlap_start:] + " " + s
-                else:
-                    current = s
-
-                while len(current) > self.chunk_size:
-                    chunks.append(current[: self.chunk_size])
-                    current = current[self.chunk_size - self.chunk_overlap :]
-
-        if current:
-            chunks.append(current)
-
-        return [c.strip() for c in chunks if c.strip()]
 
 
 # ─── Text Extraction ──────────────────────────────────────────────────────────
