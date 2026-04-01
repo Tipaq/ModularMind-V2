@@ -37,6 +37,19 @@ x-engine-depends: &engine-depends
   redis: { condition: service_healthy }
   qdrant: { condition: service_healthy }
 
+x-worker: &worker
+  <<: *common
+  image: ghcr.io/tipaq/modularmind-engine:${MM_VERSION:-latest}
+  command: python -m src.worker.runner
+  depends_on: *engine-depends
+  volumes:
+    - engine-data:/data
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+
 services:
   # ==========================================================================
   # CORE (always running)
@@ -127,10 +140,7 @@ services:
       retries: 3
 
   worker-exec:
-    <<: *common
-    image: ghcr.io/tipaq/modularmind-engine:${MM_VERSION:-latest}
-    command: python -m src.worker.runner
-    depends_on: *engine-depends
+    <<: *worker
     group_add:
       - ${DOCKER_GID:-0}
     volumes:
@@ -140,19 +150,9 @@ services:
       <<: *engine-env
       WORKER_STREAMS: executions,models,scheduled_tasks
       WORKER_SCHEDULER: "true"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
 
   worker-pipeline:
-    <<: *common
-    image: ghcr.io/tipaq/modularmind-engine:${MM_VERSION:-latest}
-    command: python -m src.worker.runner
-    depends_on: *engine-depends
-    volumes:
-      - engine-data:/data
+    <<: *worker
     environment:
       <<: *engine-env
       WORKER_STREAMS: documents,memory

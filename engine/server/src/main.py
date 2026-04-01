@@ -235,6 +235,12 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 # Prometheus instrumentation
 # ---------------------------------------------------------------------------
+# Middleware stack — order matters (last added = first to run):
+# 1. SecurityHeaders (outermost) — adds CSP, X-Content-Type-Options, etc.
+# 2. GZip — compresses responses > 1000 bytes
+# 3. CORS — handles preflight and allows cross-origin requests
+# 4. Prometheus — instruments request metrics (innermost, closest to app)
+# ---------------------------------------------------------------------------
 
 from prometheus_fastapi_instrumentator import Instrumentator
 
