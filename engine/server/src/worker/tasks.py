@@ -54,44 +54,35 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
     async with async_session_maker() as session:
         service = ExecutionService(session)
 
-        # Skip executions that were already cancelled/failed (stale queue messages)
+        # Fetch status (+ input_data if override needed) in a single query
         from sqlalchemy import select as sa_sel
 
         from src.executions.models import ExecutionRun as _ER
         from src.executions.models import ExecutionStatus as _ES
-        _status_row = (await session.execute(
-            sa_sel(_ER.status).where(_ER.id == execution_id)
+
+        _columns = [_ER.status, _ER.input_data] if ab_model_override else [_ER.status]
+        _row = (await session.execute(
+            sa_sel(*_columns).where(_ER.id == execution_id)
         )).first()
-        if _status_row and _status_row[0] not in (_ES.PENDING, _ES.RUNNING):
-            logger.info("Skipping execution %s (status=%s)", execution_id, _status_row[0])
+
+        if _row and _row[0] not in (_ES.PENDING, _ES.RUNNING):
+            logger.info("Skipping execution %s (status=%s)", execution_id, _row[0])
             return
 
-        # Inject model override into the execution's input_data so the
-        # compiler picks it up via state["input_data"]["_model_override"].
-        if ab_model_override:
-            from sqlalchemy import select, update
+        if ab_model_override and _row:
+            from sqlalchemy import update
 
-            from src.executions.models import ExecutionRun
-
-            row = (
-                await session.execute(
-                    select(ExecutionRun.input_data).where(ExecutionRun.id == execution_id)
-                )
-            ).first()
-            if row:
-                idata = dict(row[0] or {}) if row[0] else {}
-                idata["_model_override"] = ab_model_override
-                await session.execute(
-                    update(ExecutionRun)
-                    .where(ExecutionRun.id == execution_id)
-                    .values(input_data=idata)
-                )
-                await session.commit()
-                logger.info(
-                    "Injected model override %s for execution %s",
-                    ab_model_override,
-                    execution_id,
-                )
+            idata = dict(_row[1] or {}) if _row[1] else {}
+            idata["_model_override"] = ab_model_override
+            await session.execute(
+                update(_ER).where(_ER.id == execution_id).values(input_data=idata)
+            )
+            await session.commit()
+            logger.info(
+                "Injected model override %s for execution %s",
+                ab_model_override,
+                execution_id,
+            )
 
         complete_event: dict[str, Any] | None = None
 

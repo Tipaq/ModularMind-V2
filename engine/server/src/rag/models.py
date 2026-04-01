@@ -56,6 +56,7 @@ class RAGCollection(Base):
         SQLEnum(RAGScope, values_callable=lambda x: [e.value for e in x]),
         default=RAGScope.GLOBAL,
         nullable=False,
+        index=True,
     )
     allowed_groups: Mapped[list[str]] = mapped_column(
         ARRAY(String), default=list, nullable=False
@@ -89,7 +90,9 @@ class RAGDocument(Base):
     content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(nullable=True)
     chunk_count: Mapped[int] = mapped_column(default=0)
-    status: Mapped[str] = mapped_column(String(20), default=DocumentStatus.PENDING.value)
+    status: Mapped[str] = mapped_column(
+        String(20), default=DocumentStatus.PENDING.value, index=True
+    )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
