@@ -279,6 +279,18 @@ class SecretsStore:
         """When secrets were last updated."""
         return self._last_update
 
+    def encrypt_value(self, plaintext: str) -> str:
+        """Encrypt a string value and return base64-encoded ciphertext."""
+        if not self._fernet:
+            raise RuntimeError("SecretsStore not initialized")
+        return self._fernet.encrypt(plaintext.encode()).decode()
+
+    def decrypt_value(self, ciphertext: str) -> str:
+        """Decrypt a base64-encoded ciphertext and return the plaintext string."""
+        if not self._fernet:
+            raise RuntimeError("SecretsStore not initialized")
+        return self._fernet.decrypt(ciphertext.encode()).decode()
+
     def get_provider_key(self, provider: str) -> str | None:
         """
         Get API key for an LLM provider.

@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 
 from src.auth import RequireOwner
 from src.infra.database import DbSession
+from src.infra.secrets import get_secrets_store
 from src.tools.models import GitHubToken
 
 logger = logging.getLogger(__name__)
@@ -52,10 +53,11 @@ async def list_tokens(db: DbSession) -> list[GitHubTokenResponse]:
 @router.post("", response_model=GitHubTokenResponse, status_code=201, dependencies=[RequireOwner])
 async def create_token(body: GitHubTokenCreate, db: DbSession) -> GitHubTokenResponse:
     """Add a new GitHub token."""
+    store = get_secrets_store()
     token = GitHubToken(
         id=str(uuid4()),
         label=body.label,
-        token_encrypted=body.token,
+        token_encrypted=store.encrypt_value(body.token),
         scopes=body.scopes,
         is_default=body.is_default,
     )
@@ -115,7 +117,11 @@ async def _clear_defaults(db: DbSession) -> None:
 
 def _to_response(token: GitHubToken) -> GitHubTokenResponse:
     """Convert model to response with masked token."""
-    raw = token.token_encrypted
+    store = get_secrets_store()
+    try:
+        raw = store.decrypt_value(token.token_encrypted)
+    except Exception:
+        raw = token.token_encrypted
     preview = f"ghp_{'•' * 8}{raw[-4:]}" if len(raw) > 4 else "••••"
     return GitHubTokenResponse(
         id=token.id,

@@ -230,8 +230,14 @@ async def resolve_token(session: AsyncSession, agent_id: str) -> str | None:
 
 
 def _decrypt_token(encrypted: str) -> str:
-    """Decrypt a stored token. Currently plain text — TODO: add encryption."""
-    return encrypted
+    """Decrypt a Fernet-encrypted GitHub PAT stored in the database."""
+    from src.infra.secrets import get_secrets_store
+
+    store = get_secrets_store()
+    try:
+        return store.decrypt_value(encrypted)
+    except Exception:
+        return encrypted
 
 
 # ---------------------------------------------------------------------------
