@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from src.embedding.base import IEmbeddingProvider
+from src.embedding.base import EmbeddingProvider
 from src.infra.constants import DEFAULT_RAG_RETRIEVAL_COUNT, DEFAULT_RAG_THRESHOLD
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ class RAGRetriever:
     def __init__(
         self,
         repository: RAGRepository,
-        embedding_provider: IEmbeddingProvider,
+        embedding_provider: EmbeddingProvider,
         default_limit: int = DEFAULT_RAG_RETRIEVAL_COUNT,
         default_threshold: float = DEFAULT_RAG_THRESHOLD,
     ):

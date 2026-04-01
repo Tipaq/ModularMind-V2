@@ -5,25 +5,6 @@ Defines the interface for text embedding providers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Protocol, runtime_checkable
-
-
-@runtime_checkable
-class IEmbeddingProvider(Protocol):
-    """Lightweight protocol for embedding consumers (memory, RAG, etc.).
-
-    Use this when you only need ``embed_text`` + ``dimension`` and want to
-    accept *any* provider that satisfies the duck-typed contract.
-    """
-
-    async def embed_text(self, text: str) -> list[float]:
-        """Generate embedding for text."""
-        ...
-
-    @property
-    def dimension(self) -> int:
-        """Embedding dimension."""
-        ...
 
 
 class EmbeddingProvider(ABC):
