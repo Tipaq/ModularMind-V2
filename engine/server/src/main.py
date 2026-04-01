@@ -309,6 +309,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
             if is_api_path:
                 response.headers["Content-Security-Policy"] = self._API_CSP
+                response.headers["Cache-Control"] = "no-store"
             else:
                 response.headers["Content-Security-Policy"] = self._SPA_CSP
 

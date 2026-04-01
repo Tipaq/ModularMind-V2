@@ -116,7 +116,7 @@ services:
     labels:
       traefik.enable: "${TRAEFIK_ENABLED:-false}"
       traefik.http.routers.modularmind-spa.entrypoints: websecure
-      traefik.http.routers.modularmind-spa.rule: "Host(`${DOMAIN:-localhost}`)"
+      traefik.http.routers.modularmind-spa.rule: "Host(`${DOMAIN:-localhost}`) && !PathPrefix(`/api`) && !PathPrefix(`/health`)"
       traefik.http.routers.modularmind-spa.priority: "10"
       traefik.http.routers.modularmind-spa.tls.certresolver: letsencrypt
       traefik.http.services.modularmind-spa.loadbalancer.server.port: "80"
