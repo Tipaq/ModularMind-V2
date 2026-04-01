@@ -93,7 +93,7 @@ class MCPClient:
                 self.config.url,
                 http_client=http_client,
             )
-            read, write = await self._exit_stack.enter_async_context(transport_ctx)
+            read, write, _ = await self._exit_stack.enter_async_context(transport_ctx)
 
             session = ClientSession(read, write)
             self._session = await self._exit_stack.enter_async_context(session)
