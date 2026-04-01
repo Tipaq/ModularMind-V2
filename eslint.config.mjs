@@ -39,7 +39,7 @@ export default tseslint.config(
     },
   },
 
-  // ── React Refresh: only Vite apps (not packages, not Next.js platform) ─
+  // ── React Refresh: only Vite apps (not packages) ───────────────────────
   {
     files: ["apps/**/*.tsx"],
     plugins: {
