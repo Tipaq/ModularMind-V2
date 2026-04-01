@@ -257,6 +257,9 @@ jobs:
             docker compose -f docker/docker-compose.yml \
               --env-file docker/.env run --rm engine alembic upgrade head
 
+            # --- Rebuild SPA image (pulls updated SPAs from new engine image + fresh nginx config) ---
+            docker compose -f docker/docker-compose.yml --env-file docker/.env build spa
+
             # --- Deploy client stack ---
             docker compose -f docker/docker-compose.yml --env-file docker/.env up -d
 
