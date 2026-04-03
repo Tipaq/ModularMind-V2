@@ -80,31 +80,23 @@ async def seed_system_indexer(session: AsyncSession, model_id: str) -> None:
     """Create the Connector Builder graph + agents if they don't exist.
 
     Called from main.py lifespan (leader-only). Idempotent.
+    Checks DB directly (not in-memory cache) to avoid re-seeding on restart.
     """
     from src.domain_config import get_config_provider
     from src.domain_config.repository import ConfigRepository
 
-    provider = get_config_provider()
     repo = ConfigRepository(session)
 
-    existing_graph = _find_existing_graph(provider)
+    existing_graph = await repo.find_active_graph_by_name(BUILDER_GRAPH_NAME)
     if existing_graph:
-        logger.debug("Connector Builder graph already exists: %s", existing_graph)
+        logger.debug("Connector Builder graph already exists: %s", existing_graph.id)
         return
 
     agent_ids = await _create_builder_agents(repo, session, model_id)
     await _create_builder_graph(repo, session, agent_ids)
     await session.commit()
-    await provider.reload_async()
+    await get_config_provider().reload_async()
     logger.info("Seeded Connector Builder graph with %d agents", len(agent_ids))
-
-
-def _find_existing_graph(provider) -> str | None:
-    """Check if the builder graph already exists."""
-    for graph_id, graph in provider._graphs.items():
-        if graph.get("name") == BUILDER_GRAPH_NAME:
-            return graph_id
-    return None
 
 
 async def _create_builder_agents(
