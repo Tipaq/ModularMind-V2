@@ -59,8 +59,25 @@ class ProjectDetailResponse(ProjectResponse):
     members: list[MemberResponse] = Field(default_factory=list)
 
 
+class ProjectRepoAdd(BaseModel):
+    repo_identifier: str = Field(min_length=1, max_length=300)
+    repo_url: str | None = None
+    display_name: str | None = None
+
+
+class ProjectRepoResponse(BaseModel):
+    id: str
+    repo_identifier: str
+    repo_url: str | None
+    display_name: str | None
+    added_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ResourceCounts(BaseModel):
     conversations: int = 0
     collections: int = 0
     mini_apps: int = 0
     scheduled_tasks: int = 0
+    repositories: int = 0

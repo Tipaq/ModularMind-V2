@@ -47,6 +47,28 @@ class Project(Base):
     __table_args__ = (Index("ix_projects_owner", "owner_user_id"),)
 
 
+class ProjectRepository(Base):
+    """Links a code repository to a project for FastCode MCP scoping."""
+
+    __tablename__ = "project_repositories"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    repo_identifier: Mapped[str] = mapped_column(String(300), nullable=False)
+    repo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    project: Mapped["Project"] = relationship()
+
+    __table_args__ = (
+        Index("ix_project_repos_project", "project_id"),
+        Index("uq_project_repo", "project_id", "repo_identifier", unique=True),
+    )
+
+
 class ProjectMember(Base):
     """Association between a user and a project."""
 
