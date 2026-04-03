@@ -26,6 +26,7 @@ import redis.exceptions
 from src.infra.config import settings
 from src.infra.redis_streams import RedisStreamBus
 from src.infra.stream_names import (
+    STREAM_CODE_INDEX,
     STREAM_DOCUMENTS,
     STREAM_EXECUTIONS,
     STREAM_MEMORY_EXTRACTED,
@@ -44,7 +45,9 @@ logger = logging.getLogger(__name__)
 
 HEALTH_PORT = int(os.environ.get("WORKER_HEALTH_PORT", "8001"))
 
-VALID_STREAM_CATEGORIES = {"executions", "models", "documents", "memory", "scheduled_tasks"}
+VALID_STREAM_CATEGORIES = {
+    "executions", "models", "documents", "memory", "scheduled_tasks", "code_index",
+}
 
 
 def _parse_worker_streams() -> set[str]:
@@ -252,6 +255,14 @@ async def main() -> None:
                 "si-1",
                 system_index_handler,
             ),
+        )
+
+    # --- Code index stream (FastCode MCP reindex) ---
+    if "code_index" in enabled_streams:
+        from src.hooks.code_index_handler import code_reindex_handler
+
+        tasks.append(
+            bus.subscribe(STREAM_CODE_INDEX, "code-indexers", "ci-1", code_reindex_handler),
         )
 
     # --- Always-on: metrics sampler + health ---

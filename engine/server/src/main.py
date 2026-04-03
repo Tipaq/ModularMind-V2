@@ -389,6 +389,10 @@ app.include_router(mcp_usage_router, prefix=API_PREFIX)
 app.include_router(setup_router, prefix=API_PREFIX)
 app.include_router(connectors_router, prefix=API_PREFIX)
 app.include_router(webhook_router, prefix=f"{API_PREFIX}/webhooks")
+
+from src.hooks.github_push import github_webhook_router
+
+app.include_router(github_webhook_router, prefix=f"{API_PREFIX}/webhooks")
 app.include_router(report_router, prefix=API_PREFIX)
 app.include_router(sync_router, prefix=API_PREFIX)
 app.include_router(recall_router, prefix=API_PREFIX)
