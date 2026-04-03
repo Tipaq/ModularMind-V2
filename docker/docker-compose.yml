@@ -148,7 +148,7 @@ services:
       - engine-data:/data
     environment:
       <<: *engine-env
-      WORKER_STREAMS: executions,models,scheduled_tasks
+      WORKER_STREAMS: executions,models,scheduled_tasks,code_index
       WORKER_SCHEDULER: "true"
 
   worker-pipeline:
