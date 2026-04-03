@@ -78,13 +78,15 @@ async def enqueue_dataset_build(dataset_id: str, agent_id: str, filters: str) ->
     return msg_id
 
 
-async def enqueue_code_reindex(repo_url: str, repo_name: str) -> str:
+async def enqueue_code_reindex(
+    repo_url: str, repo_name: str, repo_id: str | None = None
+) -> str:
     """Publish a code reindex task to tasks:code_index stream."""
     bus = await get_event_bus()
-    msg_id = await bus.publish(
-        "tasks:code_index",
-        {"repo_url": repo_url, "repo_name": repo_name},
-    )
+    payload: dict[str, str] = {"repo_url": repo_url, "repo_name": repo_name}
+    if repo_id:
+        payload["repo_id"] = repo_id
+    msg_id = await bus.publish("tasks:code_index", payload)
     logger.info("Enqueued code reindex %s → tasks:code_index (msg=%s)", repo_name, msg_id)
     return msg_id
 

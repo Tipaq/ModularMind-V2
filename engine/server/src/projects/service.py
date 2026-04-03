@@ -254,6 +254,19 @@ class ProjectService:
         self.db.add(repo)
         await self.db.commit()
         await self.db.refresh(repo)
+
+        if repo_url:
+            try:
+                from src.infra.publish import enqueue_code_reindex
+
+                await enqueue_code_reindex(
+                    repo_url=repo_url,
+                    repo_name=repo_identifier,
+                    repo_id=repo.id,
+                )
+            except Exception:
+                logger.warning("Failed to enqueue initial indexing for '%s'", repo_identifier)
+
         return repo
 
     async def remove_project_repo(self, project_id: str, repo_id: str) -> None:

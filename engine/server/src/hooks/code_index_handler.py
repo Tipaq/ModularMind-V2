@@ -10,6 +10,28 @@ from src.mcp.sdk_client import MCPClientError
 logger = logging.getLogger(__name__)
 
 
+async def _update_repo_status(
+    repo_id: str, status: str, error: str | None = None
+) -> None:
+    """Update ProjectRepository index_status in the database."""
+    from sqlalchemy import update
+
+    from src.infra.database import async_session_maker
+    from src.projects.models import ProjectRepository, RepoIndexStatus
+
+    values: dict[str, Any] = {"index_status": status, "index_error": error}
+    if status == RepoIndexStatus.READY:
+        from src.infra.utils import utcnow
+
+        values["indexed_at"] = utcnow()
+
+    async with async_session_maker() as session:
+        await session.execute(
+            update(ProjectRepository).where(ProjectRepository.id == repo_id).values(**values)
+        )
+        await session.commit()
+
+
 async def code_reindex_handler(data: dict[str, Any]) -> None:
     """Consume tasks:code_index stream — call FastCode reindex_repo via MCP.
 
@@ -17,6 +39,7 @@ async def code_reindex_handler(data: dict[str, Any]) -> None:
     """
     repo_url = data.get("repo_url", "")
     repo_name = data.get("repo_name", "")
+    repo_id = data.get("repo_id")
 
     if not repo_url:
         logger.error("code_reindex_handler: missing repo_url in payload")
@@ -34,6 +57,9 @@ async def code_reindex_handler(data: dict[str, Any]) -> None:
         )
         return
 
+    if repo_id:
+        await _update_repo_status(repo_id, "indexing")
+
     logger.info("Reindexing repo '%s' via FastCode MCP", repo_name)
     try:
         client = await registry.get_client(server.id)
@@ -49,11 +75,18 @@ async def code_reindex_handler(data: dict[str, Any]) -> None:
         output = "\n".join(texts)
 
         if result.is_error:
+            if repo_id:
+                await _update_repo_status(repo_id, "failed", error=output)
             raise MCPClientError(f"reindex_repo returned error: {output}")
 
         logger.info("Reindex complete for '%s': %s", repo_name, output)
+        if repo_id:
+            await _update_repo_status(repo_id, "ready")
+
     except MCPClientError:
         raise
     except Exception as exc:
         logger.error("Failed to reindex '%s': %s", repo_name, exc)
+        if repo_id:
+            await _update_repo_status(repo_id, "failed", error=str(exc))
         raise MCPClientError(f"Reindex failed for '{repo_name}': {exc}") from exc
