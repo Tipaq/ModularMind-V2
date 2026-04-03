@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   GitBranch, Plus, Trash2, ExternalLink, Loader2, Check, AlertCircle, Clock,
@@ -35,8 +35,6 @@ export function ProjectRepositories() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newRepo, setNewRepo] = useState<ProjectRepoAdd>({ repo_identifier: "" });
   const [adding, setAdding] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const loadRepos = useCallback(async () => {
     try {
       const data = await api.get<ProjectRepository[]>(
@@ -59,15 +57,10 @@ export function ProjectRepositories() {
     const hasInProgress = repos.some(
       (r) => r.index_status === "pending" || r.index_status === "indexing",
     );
-    if (hasInProgress && !pollRef.current) {
-      pollRef.current = setInterval(() => { loadRepos(); }, 5000);
-    } else if (!hasInProgress && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
+    if (!hasInProgress) return;
+
+    const interval = setInterval(() => { loadRepos(); }, 5000);
+    return () => clearInterval(interval);
   }, [repos, loadRepos]);
 
   const handleAdd = async () => {
