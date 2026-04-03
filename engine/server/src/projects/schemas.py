@@ -70,7 +70,10 @@ class ProjectRepoResponse(BaseModel):
     repo_identifier: str
     repo_url: str | None
     display_name: str | None
+    index_status: str
+    index_error: str | None
     added_at: datetime
+    indexed_at: datetime | None
 
     model_config = {"from_attributes": True}
 

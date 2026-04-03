@@ -49,12 +49,17 @@ export interface ProjectResourceCounts {
   repositories: number;
 }
 
+export type RepoIndexStatus = "pending" | "indexing" | "ready" | "failed";
+
 export interface ProjectRepository {
   id: string;
   repo_identifier: string;
   repo_url: string | null;
   display_name: string | null;
+  index_status: RepoIndexStatus;
+  index_error: string | null;
   added_at: string;
+  indexed_at: string | null;
 }
 
 export interface ProjectRepoAdd {

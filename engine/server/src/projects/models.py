@@ -47,6 +47,15 @@ class Project(Base):
     __table_args__ = (Index("ix_projects_owner", "owner_user_id"),)
 
 
+class RepoIndexStatus(StrEnum):
+    """Repository indexing status in FastCode."""
+
+    PENDING = "pending"
+    INDEXING = "indexing"
+    READY = "ready"
+    FAILED = "failed"
+
+
 class ProjectRepository(Base):
     """Links a code repository to a project for FastCode MCP scoping."""
 
@@ -59,7 +68,12 @@ class ProjectRepository(Base):
     repo_identifier: Mapped[str] = mapped_column(String(300), nullable=False)
     repo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    index_status: Mapped[str] = mapped_column(
+        String(20), default=RepoIndexStatus.PENDING, nullable=False
+    )
+    index_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     project: Mapped["Project"] = relationship()
 
