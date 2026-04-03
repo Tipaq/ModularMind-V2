@@ -133,9 +133,10 @@ class MCPRegistry:
         return self._servers.get(server_id)
 
     def get_server_by_name(self, name: str) -> MCPServerConfig | None:
-        """Get a server config by name. Returns None if not found."""
+        """Get a server config by name (case-insensitive). Returns None if not found."""
+        name_lower = name.lower()
         for config in self._servers.values():
-            if config.name == name:
+            if config.name.lower() == name_lower:
                 return config
         return None
 
