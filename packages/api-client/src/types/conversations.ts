@@ -59,6 +59,7 @@ export interface ConversationCreate {
   title?: string | null;
   supervisor_mode?: boolean;
   config?: Record<string, unknown> | null;
+  project_id?: string | null;
 }
 
 export interface ConversationUpdate {

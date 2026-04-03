@@ -39,6 +39,7 @@ class ConversationCreate(BaseModel):
     title: str | None = None
     supervisor_mode: bool = False
     config: dict[str, Any] | None = None
+    project_id: str | None = None
 
 
 class ConversationUpdate(BaseModel):

@@ -210,6 +210,7 @@ async def create_conversation(
         title=data.title,
         supervisor_mode=data.supervisor_mode,
         config=data.config,
+        project_id=data.project_id,
     )
     await db.commit()
 

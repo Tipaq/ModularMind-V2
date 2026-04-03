@@ -44,6 +44,7 @@ class ConversationService:
         title: str | None = None,
         supervisor_mode: bool = False,
         config: dict | None = None,
+        project_id: str | None = None,
     ) -> Conversation:
         """Create a new conversation."""
         conversation = Conversation(
@@ -54,6 +55,7 @@ class ConversationService:
             title=title,
             supervisor_mode=supervisor_mode,
             config=config or {},
+            project_id=project_id,
         )
         self.db.add(conversation)
         await self.db.flush()
