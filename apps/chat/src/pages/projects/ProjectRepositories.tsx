@@ -104,7 +104,11 @@ export function ProjectRepositories() {
 
   const handleReindex = async (repoId: string) => {
     await api.post(`/projects/${project.id}/repositories/${repoId}/reindex`, {});
-    await loadRepos();
+    setRepos((prev) =>
+      prev.map((r) =>
+        r.id === repoId ? { ...r, index_status: "pending" as const, index_error: null } : r,
+      ),
+    );
   };
 
   if (loading) {
