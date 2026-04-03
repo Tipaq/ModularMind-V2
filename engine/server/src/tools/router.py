@@ -178,17 +178,17 @@ async def list_tools() -> ToolsOverviewResponse:
             )
         )
 
-    mcp_tool_count = sum(len(t) for t in mcp_by_server.values())
-    if mcp_tool_count > 0:
-        categories.append(
-            ToolCategoryResponse(
-                id="mcp",
-                label="MCP Servers",
-                description="Tools from connected MCP servers",
-                tool_count=mcp_tool_count,
-                enabled_by_default=False,
+    for server_name, server_tools in mcp_by_server.items():
+        if server_tools:
+            categories.append(
+                ToolCategoryResponse(
+                    id=f"mcp:{server_name}",
+                    label=server_name,
+                    description=f"Tools from MCP server '{server_name}'",
+                    tool_count=len(server_tools),
+                    enabled_by_default=False,
+                )
             )
-        )
 
     return ToolsOverviewResponse(
         categories=categories,

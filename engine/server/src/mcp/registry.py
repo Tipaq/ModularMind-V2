@@ -75,7 +75,16 @@ class MCPRegistry:
                 logger.error("Failed to load MCP config %s: %s", path.name, e)
 
     def register(self, config: MCPServerConfig) -> None:
-        """Register an MCP server configuration."""
+        """Register an MCP server configuration.
+
+        Raises:
+            ValueError: If another enabled server already uses the same name.
+        """
+        existing = self.get_server_by_name(config.name)
+        if existing and existing.id != config.id and existing.enabled:
+            raise ValueError(
+                f"MCP server name '{config.name}' is already used by server '{existing.id}'"
+            )
         self._servers[config.id] = config
         # Invalidate existing client if config changed
         existing_client = self._clients.pop(config.id, None)
@@ -122,6 +131,13 @@ class MCPRegistry:
     def get_server(self, server_id: str) -> MCPServerConfig | None:
         """Get a server config by ID."""
         return self._servers.get(server_id)
+
+    def get_server_by_name(self, name: str) -> MCPServerConfig | None:
+        """Get a server config by name. Returns None if not found."""
+        for config in self._servers.values():
+            if config.name == name:
+                return config
+        return None
 
     async def get_client(self, server_id: str) -> MCPClient:
         """Get or create an MCP client for a server.

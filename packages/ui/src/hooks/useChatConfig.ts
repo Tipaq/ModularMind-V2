@@ -1,14 +1,13 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { EngineAgent, EngineGraph, EngineModel, McpServer, SupervisorLayer } from "@modularmind/api-client";
+import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "@modularmind/api-client";
 import type { ChatConfigAdapter } from "./chat-config-adapter";
 
 export function useChatConfig(adapter: ChatConfigAdapter) {
   const [agents, setAgents] = useState<EngineAgent[]>([]);
   const [graphs, setGraphs] = useState<EngineGraph[]>([]);
   const [models, setModels] = useState<EngineModel[]>([]);
-  const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
   const [supervisorLayers, setSupervisorLayers] = useState<SupervisorLayer[]>([]);
   const [userPreferences, setUserPreferences] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -27,7 +26,6 @@ export function useChatConfig(adapter: ChatConfigAdapter) {
       setAgents(data.agents);
       setGraphs(data.graphs);
       setModels(data.models);
-      setMcpServers(data.mcpServers ?? []);
       setSupervisorLayers(data.supervisorLayers ?? []);
       setUserPreferences(data.userPreferences ?? null);
 
@@ -73,7 +71,6 @@ export function useChatConfig(adapter: ChatConfigAdapter) {
     agents,
     graphs,
     models,
-    mcpServers,
     supervisorLayers,
     userPreferences,
     loaded,

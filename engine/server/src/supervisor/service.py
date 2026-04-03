@@ -118,7 +118,6 @@ class SuperSupervisorService:
             and build the HTTP response.
         """
         conv_config = conv_config or {}
-        conv_config = self._auto_enable_mcp_servers(conv_config)
 
         routing_start = time.perf_counter()
         decision = await self._resolve_routing(
@@ -250,25 +249,6 @@ class SuperSupervisorService:
     # =========================================================================
     # Routing resolution
     # =========================================================================
-
-    def _auto_enable_mcp_servers(self, conv_config: dict[str, Any]) -> dict[str, Any]:
-        """Auto-enable all registered MCP servers when none are explicitly set."""
-        if conv_config.get("enabled_mcp_servers"):
-            return conv_config
-        try:
-            from src.infra.config import get_settings
-
-            if get_settings().MCP_AUTO_ENABLE:
-                from src.mcp.service import get_mcp_registry
-
-                all_servers = get_mcp_registry().list_servers()
-                auto_ids = [s.id for s in all_servers if s.enabled]
-                if auto_ids:
-                    conv_config = {**conv_config, "enabled_mcp_servers": auto_ids}
-                    logger.debug("MCP auto-enable: %d server(s) for conversation", len(auto_ids))
-        except (ImportError, OSError, RuntimeError, KeyError) as e:
-            logger.debug("MCP auto-enable check failed: %s", e)
-        return conv_config
 
     async def _resolve_routing(
         self,
@@ -483,25 +463,23 @@ class SuperSupervisorService:
         conv_config: dict[str, Any],
     ) -> dict[str, Any] | None:
         """Discover MCP tools to include in routing context."""
-        enabled_servers = conv_config.get("enabled_mcp_servers", [])
-        if not enabled_servers:
-            return None
         try:
             from src.mcp.service import get_mcp_registry
 
             registry = get_mcp_registry()
+            enabled_servers = [s for s in registry.list_servers() if s.enabled]
+            if not enabled_servers:
+                return None
             tools_map: dict[str, Any] = {}
-            for sid in enabled_servers:
-                server = registry.get_server(sid)
-                server_name = server.name if server else sid[:8]
+            for server in enabled_servers:
                 try:
-                    tools = await registry.discover_tools(sid)
+                    tools = await registry.discover_tools(server.id)
                     if tools:
-                        tools_map[server_name] = tools
+                        tools_map[server.name] = tools
                 except (ConnectionError, TimeoutError, OSError, RuntimeError):
                     logger.debug(
                         "MCP tool discovery failed for server %s",
-                        sid,
+                        server.name,
                         exc_info=True,
                     )
             return tools_map or None
@@ -841,12 +819,12 @@ class SuperSupervisorService:
         from src.mcp.service import get_mcp_registry
         from src.mcp.tool_adapter import discover_and_convert
 
-        enabled_servers = conv_config.get("enabled_mcp_servers", [])
+        registry = get_mcp_registry()
+        enabled_servers = [s.id for s in registry.list_servers() if s.enabled]
         if not enabled_servers:
             logger.debug("No enabled MCP servers for supervisor tools")
             return None, None
 
-        registry = get_mcp_registry()
         lc_tools, tool_executor = await discover_and_convert(
             registry,
             enabled_servers,
@@ -1190,13 +1168,10 @@ class SuperSupervisorService:
                     msg_dicts,
                 )
 
-        mcp_server_ids = conv_config.get("enabled_mcp_servers", [])
         input_data: dict[str, Any] = {
             "routing_strategy": decision.strategy.value,
             "delegated_to": agent.name,
         }
-        if mcp_server_ids:
-            input_data["mcp_server_ids"] = mcp_server_ids
         execution_data = ExecutionCreate(
             prompt=content,
             session_id=conv_id,
@@ -1296,6 +1271,17 @@ class SuperSupervisorService:
         try:
             ec = decision.ephemeral_config or {}
             conv_model_id = conv_config.get("model_id")
+            mcp_tool_categories: dict[str, bool] | None = None
+            try:
+                from src.mcp.service import get_mcp_registry
+
+                registry = get_mcp_registry()
+                enabled = [s for s in registry.list_servers() if s.enabled]
+                if enabled:
+                    mcp_tool_categories = {f"mcp:{s.name}": True for s in enabled}
+            except (ImportError, RuntimeError):
+                pass
+
             agent = await self.ephemeral_factory.create_agent(
                 name=ec.get("name", "Ephemeral Agent"),
                 description=ec.get("description", ""),
@@ -1304,7 +1290,7 @@ class SuperSupervisorService:
                 model_id=ec.get("model_id") or conv_model_id,
                 capabilities=ec.get("capabilities"),
                 rag_collections=ec.get("rag_collections"),
-                mcp_server_ids=ec.get("mcp_server_ids"),
+                mcp_tool_categories=mcp_tool_categories,
             )
         except ValueError as e:
             return {

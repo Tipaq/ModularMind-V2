@@ -9,43 +9,18 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
-from ._utils import apply_mcp_tool_filter, resolve_dot_path
+from ._utils import resolve_dot_path
 from .state import GraphState
 
 if TYPE_CHECKING:
     from src.mcp.registry import MCPRegistry
 
-    from .interfaces import AgentConfig, ConfigProviderProtocol, LLMProviderProtocol
+    from .interfaces import ConfigProviderProtocol, LLMProviderProtocol
 
 NodeFn = Callable[[GraphState], Awaitable[dict[str, Any]]]
 
 logger = logging.getLogger(__name__)
 
-
-def _filter_mcp_for_agent(
-    server_ids: list[str],
-    agent: AgentConfig,
-    registry: MCPRegistry,
-) -> list[str]:
-    """Filter MCP server IDs based on agent's gateway_permissions."""
-    gateway_permissions = agent.gateway_permissions or {}
-    if not gateway_permissions:
-        return []
-
-    filtered = []
-    for sid in server_ids:
-        server = registry.get_server(sid) if hasattr(registry, "get_server") else None
-        if not server:
-            continue
-
-        catalog = getattr(server, "catalog_id", None) or ""
-
-        if catalog in ("brave-search", "puppeteer") and gateway_permissions.get(
-            "browser", {}
-        ).get("enabled"):
-            filtered.append(sid)
-
-    return filtered
 
 
 def _inject_context_layers(
@@ -125,34 +100,25 @@ async def create_agent_node(
     mcp_tools: list[dict] = []
     mcp_executor = None
     if agent and mcp_registry:
-        all_server_ids = [s.id for s in mcp_registry.list_servers() if s.enabled]
-        if all_server_ids:
-            filtered_ids = _filter_mcp_for_agent(all_server_ids, agent, mcp_registry)
-            if filtered_ids:
-                try:
-                    from src.mcp.tool_adapter import discover_and_convert
+        try:
+            from src.tools.registry import resolve_mcp_tool_definitions
 
-                    mcp_tools, mcp_executor = await discover_and_convert(
-                        mcp_registry,
-                        filtered_ids,
-                    )
-                    mcp_tools = apply_mcp_tool_filter(
-                        mcp_tools, agent.gateway_permissions
-                    )
-                    if mcp_tools:
-                        logger.info(
-                            "Graph agent '%s' (%s): bound %d MCP tools from %d servers",
-                            agent.name,
-                            node_id,
-                            len(mcp_tools),
-                            len(filtered_ids),
-                        )
-                except Exception as e:
-                    logger.warning(
-                        "Failed to discover MCP tools for graph agent '%s': %s",
-                        agent.name,
-                        e,
-                    )
+            mcp_tools, mcp_executor = await resolve_mcp_tool_definitions(
+                agent.tool_categories, mcp_registry
+            )
+            if mcp_tools:
+                logger.info(
+                    "Graph agent '%s' (%s): bound %d MCP tools",
+                    agent.name,
+                    node_id,
+                    len(mcp_tools),
+                )
+        except Exception as e:
+            logger.warning(
+                "Failed to discover MCP tools for graph agent '%s': %s",
+                agent.name,
+                e,
+            )
 
     async def agent_node(state: GraphState, config: RunnableConfig) -> dict:
         effective_model = state.get("input_data", {}).get("_model_override") or model_id

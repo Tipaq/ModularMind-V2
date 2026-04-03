@@ -22,7 +22,6 @@ class ConversationConfig(TypedDict, total=False):
     enabled_graph_ids: list[str]
     model_id: str
     model_override: bool
-    enabled_mcp_servers: list[str]
     enabled_agents: list[str]
     enabled_graphs: list[str]
     supervisor_prompt: str

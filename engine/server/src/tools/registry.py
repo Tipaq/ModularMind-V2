@@ -2,15 +2,20 @@
 
 Resolves which tool definitions to include based on agent configuration.
 Each category maps to a function that returns OpenAI-compatible tool defs.
+MCP categories use ``mcp:{server_name}`` keys and are resolved dynamically.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.infra.constants import DEFAULT_TOOL_CATEGORIES  # noqa: F401 — re-exported
+
+if TYPE_CHECKING:
+    from src.mcp.registry import MCPRegistry
+    from src.mcp.tool_adapter import MCPToolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -144,3 +149,68 @@ async def resolve_registered_custom_tools(
     except Exception:
         logger.exception("Failed to load custom tools for agent '%s'", agent_id)
         return []
+
+
+MCP_CATEGORY_PREFIX = "mcp:"
+
+
+async def resolve_mcp_tool_definitions(
+    tool_categories: dict[str, bool | dict[str, bool]],
+    mcp_registry: MCPRegistry,
+) -> tuple[list[dict[str, Any]], MCPToolExecutor | None]:
+    """Resolve MCP tool definitions from ``mcp:*`` keys in tool_categories.
+
+    Iterates keys starting with ``mcp:``, looks up the server by name,
+    discovers its tools, applies per-tool filtering, and converts to
+    LangChain format with proper namespacing.
+
+    Args:
+        tool_categories: Agent's tool_categories dict. Only ``mcp:*`` keys are processed.
+        mcp_registry: The MCP registry instance.
+
+    Returns:
+        Tuple of ``(langchain_tool_dicts, MCPToolExecutor)`` or ``([], None)``.
+    """
+    from src.mcp.tool_adapter import (
+        MCPToolExecutor,
+        _namespace_tool_name,
+        _tool_to_langchain_dict,
+    )
+
+    all_lc_tools: list[dict[str, Any]] = []
+    tool_map: dict[str, tuple[str, str]] = {}
+
+    for key, value in tool_categories.items():
+        if not key.startswith(MCP_CATEGORY_PREFIX):
+            continue
+        if value is False:
+            continue
+
+        server_name = key[len(MCP_CATEGORY_PREFIX) :]
+        server = mcp_registry.get_server_by_name(server_name)
+        if not server:
+            logger.warning("MCP category '%s': server not found, skipping", key)
+            continue
+        if not server.enabled:
+            logger.debug("MCP category '%s': server disabled, skipping", key)
+            continue
+
+        try:
+            mcp_tools = await mcp_registry.discover_tools(server.id)
+        except Exception:
+            logger.warning("MCP category '%s': tool discovery failed", key, exc_info=True)
+            continue
+
+        if isinstance(value, dict):
+            mcp_tools = [t for t in mcp_tools if value.get(t.name, True)]
+
+        for tool in mcp_tools:
+            ns_name = _namespace_tool_name(server.id, tool.name)
+            all_lc_tools.append(_tool_to_langchain_dict(ns_name, tool))
+            tool_map[ns_name] = (server.id, tool.name)
+
+    if not all_lc_tools:
+        return [], None
+
+    executor = MCPToolExecutor(mcp_registry, tool_map)
+    return all_lc_tools, executor

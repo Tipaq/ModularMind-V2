@@ -13,7 +13,6 @@ from src.auth import CurrentUser
 from src.domain_config import get_config_provider
 from src.executions.schemas import ExecutionCreate
 from src.executions.service import ExecutionService
-from src.infra.config import get_settings
 from src.infra.database import DbSession
 from src.infra.query_utils import raise_not_found
 
@@ -780,24 +779,10 @@ async def _handle_direct_execution(
     from src.executions.scheduler import fair_scheduler
 
     conv_config: dict = conversation.config or {}
-    _mcp_ids = conv_config.get("enabled_mcp_servers", [])
-    if not _mcp_ids:
-        try:
-            settings = get_settings()
-            if settings.MCP_AUTO_ENABLE:
-                from src.mcp.service import get_mcp_registry
-
-                _mcp_ids = [s.id for s in get_mcp_registry().list_servers() if s.enabled]
-        except (RuntimeError, ValueError, KeyError):
-            logger.debug(
-                "MCP auto-enable failed, continuing without MCP",
-                exc_info=True,
-            )
 
     execution_data = ExecutionCreate(
         prompt=data.content,
         session_id=conversation_id,
-        input_data={"mcp_server_ids": _mcp_ids} if _mcp_ids else None,
     )
 
     effective_agent_id = conversation.agent_id

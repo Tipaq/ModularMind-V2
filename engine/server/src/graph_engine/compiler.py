@@ -33,7 +33,6 @@ from .interfaces import (
 )
 from .nodes_agent import (
     _extract_tool_publish_fn,
-    _filter_mcp_for_agent,
     _inject_context_layers,
     create_agent_node,
     create_subgraph_node,
@@ -232,10 +231,13 @@ class GraphCompiler:
     async def compile_agent_graph(
         self,
         agent: AgentConfig,
-        mcp_server_ids: list[str] | None = None,
         llm_kwargs: dict | None = None,
     ) -> CompiledStateGraph:
-        """Compile a single-agent graph, optionally with MCP tool calling."""
+        """Compile a single-agent graph with tool calling.
+
+        MCP tools are resolved from the agent's ``tool_categories``
+        (keys starting with ``mcp:``).
+        """
         effective_llm_kwargs = llm_kwargs or {}
         workflow = StateGraph(GraphState)
 
@@ -244,27 +246,18 @@ class GraphCompiler:
 
         lc_tools: list[dict] = []
         tool_executor = None
-        if not mcp_server_ids and self.mcp_registry:
-            mcp_server_ids = [s.id for s in self.mcp_registry.list_servers() if s.enabled]
-        if mcp_server_ids and self.mcp_registry:
-            mcp_server_ids = _filter_mcp_for_agent(mcp_server_ids, agent, self.mcp_registry)
-        if mcp_server_ids and self.mcp_registry:
+        if self.mcp_registry:
             try:
-                from src.mcp.tool_adapter import discover_and_convert
+                from src.tools.registry import resolve_mcp_tool_definitions
 
-                lc_tools, tool_executor = await discover_and_convert(
-                    self.mcp_registry,
-                    mcp_server_ids,
+                lc_tools, tool_executor = await resolve_mcp_tool_definitions(
+                    agent.tool_categories, self.mcp_registry
                 )
-                from ._utils import apply_mcp_tool_filter
-
-                lc_tools = apply_mcp_tool_filter(lc_tools, agent.gateway_permissions)
                 if lc_tools:
                     logger.info(
-                        "Agent '%s': bound %d MCP tools from %d servers",
+                        "Agent '%s': bound %d MCP tools",
                         agent.name,
                         len(lc_tools),
-                        len(mcp_server_ids),
                     )
             except Exception as e:
                 logger.warning("Failed to discover MCP tools for agent '%s': %s", agent.name, e)

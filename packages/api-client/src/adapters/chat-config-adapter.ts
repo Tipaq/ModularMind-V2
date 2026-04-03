@@ -2,7 +2,6 @@ import type {
   EngineAgent,
   EngineGraph,
   EngineModel,
-  McpServer,
   SupervisorLayer,
 } from "../types/engine";
 import { api } from "../index";
@@ -11,7 +10,6 @@ export interface ChatConfigData {
   agents: EngineAgent[];
   graphs: EngineGraph[];
   models: EngineModel[];
-  mcpServers?: McpServer[];
   supervisorLayers?: SupervisorLayer[];
   userPreferences?: string | null;
 }
@@ -46,9 +44,6 @@ export function createChatConfigAdapter(
         api
           .get<{ layers: SupervisorLayer[] }>("/internal/supervisor/layers")
           .catch(() => ({ layers: [] as SupervisorLayer[] })),
-        api
-          .get<McpServer[]>("/internal/mcp/servers")
-          .catch(() => [] as McpServer[]),
       ];
 
       if (includePrefs) {
@@ -65,9 +60,8 @@ export function createChatConfigAdapter(
       const graphsRes = results[1] as { items: EngineGraph[] };
       const modelsRes = results[2] as EngineModel[];
       const layersRes = results[3] as { layers: SupervisorLayer[] };
-      const mcpRes = results[4] as McpServer[];
       const prefsRes = includePrefs
-        ? (results[5] as { preferences: string | null })
+        ? (results[4] as { preferences: string | null })
         : { preferences: null };
 
       return {
@@ -77,7 +71,6 @@ export function createChatConfigAdapter(
         supervisorLayers: Array.isArray(layersRes.layers)
           ? layersRes.layers
           : [],
-        mcpServers: Array.isArray(mcpRes) ? mcpRes : [],
         userPreferences: prefsRes.preferences ?? null,
       };
     },

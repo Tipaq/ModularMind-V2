@@ -26,19 +26,3 @@ def resolve_dot_path(state: dict, path: str) -> Any:
     return current
 
 
-def apply_mcp_tool_filter(
-    tools: list[dict],
-    gateway_permissions: dict | None,
-) -> list[dict]:
-    """Filter MCP tools based on gateway_permissions.mcp_tool_filter."""
-    tool_filter = (gateway_permissions or {}).get("mcp_tool_filter")
-    if not tool_filter or not tools:
-        return tools
-    return [
-        t
-        for t in tools
-        if any(
-            t.get("function", {}).get("name", "").endswith(f"_{tn}")
-            for tn in tool_filter
-        )
-    ]

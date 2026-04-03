@@ -47,7 +47,7 @@ class EphemeralAgentFactory:
         model_id: str | None = None,
         capabilities: list[str] | None = None,
         rag_collections: list[str] | None = None,
-        mcp_server_ids: list[str] | None = None,
+        mcp_tool_categories: dict[str, bool] | None = None,
     ) -> AgentConfig:
         """Create an ephemeral agent and register it in ConfigProvider (Redis).
 
@@ -71,13 +71,15 @@ class EphemeralAgentFactory:
             collection_ids=[UUID(c) for c in (rag_collections or [])],
         )
 
-        # MCP servers stored in routing_metadata (AgentConfig has no mcp_servers field)
-        routing_metadata: dict = {}
-        if mcp_server_ids:
-            routing_metadata["mcp_server_ids"] = mcp_server_ids
-        routing_metadata["ephemeral"] = True
-        routing_metadata["created_at"] = datetime.now(UTC).isoformat()
-        routing_metadata["conversation_id"] = conversation_id
+        routing_metadata: dict = {
+            "ephemeral": True,
+            "created_at": datetime.now(UTC).isoformat(),
+            "conversation_id": conversation_id,
+        }
+
+        tool_categories = dict(AgentConfig.model_fields["tool_categories"].default_factory())
+        if mcp_tool_categories:
+            tool_categories.update(mcp_tool_categories)
 
         config = AgentConfig(
             id=agent_id,
@@ -88,6 +90,7 @@ class EphemeralAgentFactory:
             capabilities=capabilities or [],
             rag_config=rag_config,
             routing_metadata=routing_metadata,
+            tool_categories=tool_categories,
         )
 
         await self.config_provider.register_ephemeral_agent(config)

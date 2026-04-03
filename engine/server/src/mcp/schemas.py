@@ -86,7 +86,6 @@ class MCPServerCreateRequest(BaseModel):
 
 
 class MCPServerUpdateRequest(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     url: str | None = None
     headers: dict[str, str] | None = None
