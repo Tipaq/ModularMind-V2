@@ -46,4 +46,19 @@ export interface ProjectResourceCounts {
   collections: number;
   mini_apps: number;
   scheduled_tasks: number;
+  repositories: number;
+}
+
+export interface ProjectRepository {
+  id: string;
+  repo_identifier: string;
+  repo_url: string | null;
+  display_name: string | null;
+  added_at: string;
+}
+
+export interface ProjectRepoAdd {
+  repo_identifier: string;
+  repo_url?: string;
+  display_name?: string;
 }
