@@ -54,6 +54,38 @@ logger = logging.getLogger(__name__)
 NodeFn = Callable[[GraphState], Awaitable[dict[str, Any]]]
 
 
+async def _maybe_scope_mcp(
+    mcp_executor: Any,
+    mcp_registry: MCPRegistry,
+    project_id: str,
+    session_maker: Any,
+) -> Any:
+    """Wrap MCP executor with project-scoped repo filtering if applicable."""
+    from sqlalchemy import select
+
+    from src.infra.config import settings
+    from src.projects.models import ProjectRepository
+
+    fastcode_server = mcp_registry.get_server_by_name(settings.FASTCODE_MCP_SERVER_NAME)
+    if not fastcode_server:
+        return mcp_executor
+
+    async with session_maker() as session:
+        result = await session.execute(
+            select(ProjectRepository.repo_identifier).where(
+                ProjectRepository.project_id == project_id
+            )
+        )
+        project_repos = [r[0] for r in result.all()]
+
+    if not project_repos:
+        return mcp_executor
+
+    from src.mcp.scoped_executor import ScopedMCPToolExecutor
+
+    return ScopedMCPToolExecutor(mcp_executor, project_repos, fastcode_server.id)
+
+
 class GraphCompiler:
     """Compiles graph configurations into LangGraph StateGraphs.
 
@@ -373,10 +405,17 @@ class GraphCompiler:
                         deps=executor_deps,
                     )
 
+                scoped_mcp = _mcp_executor
+                project_id = (state.get("metadata") or {}).get("project_id")
+                if project_id and _mcp_executor and self.mcp_registry:
+                    scoped_mcp = await _maybe_scope_mcp(
+                        _mcp_executor, self.mcp_registry, project_id, async_session_maker
+                    )
+
                 builtin_exec = create_builtin_executor(user_id, async_session_maker)
                 unified_executor = UnifiedToolExecutor(
                     builtin_exec,
-                    _mcp_executor,
+                    scoped_mcp,
                     BUILTIN_TOOL_NAMES,
                     gateway_executor=gateway_executor,
                     extended_executor=extended_executor,

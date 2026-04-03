@@ -648,6 +648,16 @@ class ExecutionService:
         )
         state["metadata"]["user_id"] = execution.user_id
 
+        if execution.session_id:
+            from src.conversations.models import Conversation
+
+            conv_result = await self.db.execute(
+                select(Conversation.project_id).where(Conversation.id == execution.session_id)
+            )
+            project_id = conv_result.scalar_one_or_none()
+            if project_id:
+                state["metadata"]["project_id"] = project_id
+
         # Create step record
         step = ExecutionStep(
             id=str(uuid4()),
