@@ -371,6 +371,16 @@ class Settings(BaseSettings):
         description="Gateway service URL for internal tool execution calls",
     )
 
+    # ---- FastCode MCP -------------------------------------------------------
+    FASTCODE_MCP_SERVER_NAME: str = Field(
+        default="fastcode",
+        description="Registered name of the FastCode MCP server in the registry",
+    )
+    GITHUB_WEBHOOK_SECRET: str | None = Field(
+        default=None,
+        description="HMAC secret for verifying GitHub webhook signatures",
+    )
+
     # ---- Uvicorn ------------------------------------------------------------
     UVICORN_WORKERS: int = Field(default=4, ge=1, le=16)
 

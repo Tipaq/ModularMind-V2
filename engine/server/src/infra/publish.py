@@ -78,6 +78,17 @@ async def enqueue_dataset_build(dataset_id: str, agent_id: str, filters: str) ->
     return msg_id
 
 
+async def enqueue_code_reindex(repo_url: str, repo_name: str) -> str:
+    """Publish a code reindex task to tasks:code_index stream."""
+    bus = await get_event_bus()
+    msg_id = await bus.publish(
+        "tasks:code_index",
+        {"repo_url": repo_url, "repo_name": repo_name},
+    )
+    logger.info("Enqueued code reindex %s → tasks:code_index (msg=%s)", repo_name, msg_id)
+    return msg_id
+
+
 async def enqueue_fine_tuning_job(job_id: str) -> str:
     """Publish a fine-tuning job to tasks:fine_tuning stream."""
     bus = await get_event_bus()

@@ -20,5 +20,8 @@ STREAM_SCHEDULED_TASK_TRIGGER = "tasks:scheduled_task_trigger"
 # System indexer
 STREAM_SYSTEM_INDEX = "tasks:system_index"
 
+# Code index (FastCode MCP reindex)
+STREAM_CODE_INDEX = "tasks:code_index"
+
 # Dead letter queue
 STREAM_DLQ = "dead_letter"
