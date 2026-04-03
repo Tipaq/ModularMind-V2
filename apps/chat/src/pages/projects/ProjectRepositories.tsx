@@ -1,16 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { GitBranch, Plus, Trash2, ExternalLink } from "lucide-react";
+import {
+  GitBranch, Plus, Trash2, ExternalLink, Loader2, Check, AlertCircle, Clock,
+} from "lucide-react";
 import {
   Badge, Button, EmptyState, Input, relativeTime,
 } from "@modularmind/ui";
-import type { ProjectDetail, ProjectRepository, ProjectRepoAdd } from "@modularmind/api-client";
+import type {
+  ProjectDetail, ProjectRepository, ProjectRepoAdd, RepoIndexStatus,
+} from "@modularmind/api-client";
 import { api } from "../../lib/api";
 
 interface ProjectContext {
   project: ProjectDetail;
   reload: () => void;
 }
+
+const STATUS_CONFIG: Record<RepoIndexStatus, {
+  label: string;
+  icon: typeof Check;
+  className: string;
+}> = {
+  pending: { label: "Pending", icon: Clock, className: "text-muted-foreground" },
+  indexing: { label: "Indexing…", icon: Loader2, className: "text-info" },
+  ready: { label: "Indexed", icon: Check, className: "text-success" },
+  failed: { label: "Failed", icon: AlertCircle, className: "text-destructive" },
+};
 
 export function ProjectRepositories() {
   const { project, reload } = useOutletContext<ProjectContext>();
@@ -19,22 +34,40 @@ export function ProjectRepositories() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newRepo, setNewRepo] = useState<ProjectRepoAdd>({ repo_identifier: "" });
   const [adding, setAdding] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadRepos = useCallback(async () => {
-    setLoading(true);
     try {
       const data = await api.get<ProjectRepository[]>(
         `/projects/${project.id}/repositories`,
       );
       setRepos(data);
+      return data;
     } catch {
       setRepos([]);
-    } finally {
-      setLoading(false);
+      return [];
     }
   }, [project.id]);
 
-  useEffect(() => { loadRepos(); }, [loadRepos]);
+  useEffect(() => {
+    setLoading(true);
+    loadRepos().finally(() => setLoading(false));
+  }, [loadRepos]);
+
+  useEffect(() => {
+    const hasInProgress = repos.some(
+      (r) => r.index_status === "pending" || r.index_status === "indexing",
+    );
+    if (hasInProgress && !pollRef.current) {
+      pollRef.current = setInterval(() => { loadRepos(); }, 5000);
+    } else if (!hasInProgress && pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [repos, loadRepos]);
 
   const handleAdd = async () => {
     if (!newRepo.repo_identifier.trim()) return;
@@ -72,7 +105,7 @@ export function ProjectRepositories() {
     return (
       <div className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-24 animate-pulse rounded-xl bg-muted/50" />
+          <div key={i} className="h-28 animate-pulse rounded-xl bg-muted/50" />
         ))}
       </div>
     );
@@ -139,47 +172,75 @@ export function ProjectRepositories() {
 
       {repos.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {repos.map((repo) => (
-            <div key={repo.id} className="group rounded-xl border border-border/50 bg-card/50 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="min-w-0">
-                    <h3 className="font-medium text-sm truncate">
-                      {repo.display_name ?? repo.repo_identifier}
-                    </h3>
-                    {repo.display_name && (
-                      <p className="text-xs text-muted-foreground truncate">{repo.repo_identifier}</p>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleDelete(repo.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                  title="Remove from project"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+          {repos.map((repo) => {
+            const statusConfig = STATUS_CONFIG[repo.index_status];
+            const StatusIcon = statusConfig.icon;
+            const isAnimated = repo.index_status === "indexing";
 
-              <div className="mt-3 flex items-center gap-2">
-                {repo.repo_url && (
-                  <a
-                    href={repo.repo_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            return (
+              <div key={repo.id} className="group rounded-xl border border-border/50 bg-card/50 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
+                      <h3 className="font-medium text-sm truncate">
+                        {repo.display_name ?? repo.repo_identifier}
+                      </h3>
+                      {repo.display_name && (
+                        <p className="text-xs text-muted-foreground truncate">{repo.repo_identifier}</p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(repo.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                    title="Remove from project"
                   >
-                    <ExternalLink className="h-3 w-3" />
-                    GitHub
-                  </a>
-                )}
-                <Badge variant="outline" className="text-[10px]">
-                  Added {relativeTime(repo.added_at)}
-                </Badge>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <div className={`flex items-center gap-1 text-[11px] ${statusConfig.className}`}>
+                    <StatusIcon className={`h-3 w-3 ${isAnimated ? "animate-spin" : ""}`} />
+                    {statusConfig.label}
+                  </div>
+
+                  {repo.index_status === "failed" && repo.index_error && (
+                    <span
+                      className="text-[10px] text-destructive truncate max-w-[200px]"
+                      title={repo.index_error}
+                    >
+                      {repo.index_error}
+                    </span>
+                  )}
+
+                  {repo.repo_url && (
+                    <a
+                      href={repo.repo_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      GitHub
+                    </a>
+                  )}
+                </div>
+
+                <div className="mt-2 flex items-center gap-1.5">
+                  {repo.indexed_at && (
+                    <Badge variant="outline" className="text-[10px]">
+                      Indexed {relativeTime(repo.indexed_at)}
+                    </Badge>
+                  )}
+                  <Badge variant="outline" className="text-[10px]">
+                    Added {relativeTime(repo.added_at)}
+                  </Badge>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
