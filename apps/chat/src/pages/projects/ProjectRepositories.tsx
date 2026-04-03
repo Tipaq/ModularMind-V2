@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   GitBranch, Plus, Trash2, ExternalLink, Loader2, Check, AlertCircle, Clock,
+  RotateCw,
 } from "lucide-react";
 import {
   Badge, Button, EmptyState, Input, relativeTime,
@@ -101,6 +102,11 @@ export function ProjectRepositories() {
     reload();
   };
 
+  const handleReindex = async (repoId: string) => {
+    await api.post(`/projects/${project.id}/repositories/${repoId}/reindex`, {});
+    await loadRepos();
+  };
+
   if (loading) {
     return (
       <div className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -191,13 +197,24 @@ export function ProjectRepositories() {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDelete(repo.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                    title="Remove from project"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {(repo.index_status === "ready" || repo.index_status === "failed") && (
+                      <button
+                        onClick={() => handleReindex(repo.id)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                        title="Re-index"
+                      >
+                        <RotateCw className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(repo.id)}
+                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                      title="Remove from project"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-3 flex items-center gap-2 flex-wrap">

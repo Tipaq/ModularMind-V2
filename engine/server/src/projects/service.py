@@ -282,6 +282,33 @@ class ProjectService:
         await self.db.delete(repo)
         await self.db.commit()
 
+    async def trigger_reindex(self, project_id: str, repo_id: str) -> ProjectRepository:
+        result = await self.db.execute(
+            select(ProjectRepository).where(
+                ProjectRepository.id == repo_id,
+                ProjectRepository.project_id == project_id,
+            )
+        )
+        repo = result.scalar_one_or_none()
+        if not repo:
+            raise_not_found("Repository")
+        if not repo.repo_url:
+            raise HTTPException(status_code=400, detail="Repository has no URL to index")
+
+        repo.index_status = "pending"
+        repo.index_error = None
+        await self.db.commit()
+        await self.db.refresh(repo)
+
+        from src.infra.publish import enqueue_code_reindex
+
+        await enqueue_code_reindex(
+            repo_url=repo.repo_url,
+            repo_name=repo.repo_identifier,
+            repo_id=repo.id,
+        )
+        return repo
+
     async def get_project_repo_identifiers(self, project_id: str) -> list[str]:
         result = await self.db.execute(
             select(ProjectRepository.repo_identifier).where(

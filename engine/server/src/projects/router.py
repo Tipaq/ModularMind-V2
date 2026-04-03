@@ -269,6 +269,22 @@ async def remove_repository(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post(
+    "/{project_id}/repositories/{repo_id}/reindex",
+    response_model=ProjectRepoResponse,
+    dependencies=[RequireProjectEditor],
+)
+async def reindex_repository(
+    project_id: str,
+    repo_id: str,
+    membership: ProjectMembership,
+    db: DbSession,
+) -> ProjectRepoResponse:
+    service = ProjectService(db)
+    repo = await service.trigger_reindex(project_id, repo_id)
+    return ProjectRepoResponse.model_validate(repo)
+
+
 # ── Resources ────────────────────────────────────────────────────────────
 
 
