@@ -12,7 +12,7 @@ from src.auth.models import User
 from src.conversations.models import Conversation
 from src.infra.query_utils import raise_not_found
 from src.mini_apps.models import MiniApp
-from src.projects.models import Project, ProjectMember
+from src.projects.models import Project, ProjectMember, ProjectRepository
 from src.rag.models import RAGCollection
 from src.scheduled_tasks.models import ScheduledTask
 
@@ -204,12 +204,80 @@ class ProjectService:
             .select_from(ScheduledTask)
             .where(ScheduledTask.project_id == project_id)
         )
+        repositories = await self.db.execute(
+            select(func.count())
+            .select_from(ProjectRepository)
+            .where(ProjectRepository.project_id == project_id)
+        )
         return {
             "conversations": conversations.scalar_one(),
             "collections": collections.scalar_one(),
             "mini_apps": mini_apps.scalar_one(),
             "scheduled_tasks": tasks.scalar_one(),
+            "repositories": repositories.scalar_one(),
         }
+
+    # ── Repositories ───────────────────────────────────────────────────────
+
+    async def list_project_repos(self, project_id: str) -> list[ProjectRepository]:
+        result = await self.db.execute(
+            select(ProjectRepository)
+            .where(ProjectRepository.project_id == project_id)
+            .order_by(ProjectRepository.repo_identifier)
+        )
+        return list(result.scalars().all())
+
+    async def add_project_repo(
+        self,
+        project_id: str,
+        repo_identifier: str,
+        repo_url: str | None = None,
+        display_name: str | None = None,
+    ) -> ProjectRepository:
+        await self.get_project(project_id)
+
+        existing = await self.db.execute(
+            select(ProjectRepository).where(
+                ProjectRepository.project_id == project_id,
+                ProjectRepository.repo_identifier == repo_identifier,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Repository already in project")
+
+        repo = ProjectRepository(
+            project_id=project_id,
+            repo_identifier=repo_identifier,
+            repo_url=repo_url,
+            display_name=display_name,
+        )
+        self.db.add(repo)
+        await self.db.commit()
+        await self.db.refresh(repo)
+        return repo
+
+    async def remove_project_repo(self, project_id: str, repo_id: str) -> None:
+        result = await self.db.execute(
+            select(ProjectRepository).where(
+                ProjectRepository.id == repo_id,
+                ProjectRepository.project_id == project_id,
+            )
+        )
+        repo = result.scalar_one_or_none()
+        if not repo:
+            raise_not_found("Repository")
+        await self.db.delete(repo)
+        await self.db.commit()
+
+    async def get_project_repo_identifiers(self, project_id: str) -> list[str]:
+        result = await self.db.execute(
+            select(ProjectRepository.repo_identifier).where(
+                ProjectRepository.project_id == project_id
+            )
+        )
+        return [r[0] for r in result.all()]
+
+    # ── Resource assignment ────────────────────────────────────────────────
 
     async def assign_resource(self, project_id: str, resource_type: str, resource_id: str) -> None:
         model_map = {

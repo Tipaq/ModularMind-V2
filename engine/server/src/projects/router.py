@@ -16,6 +16,8 @@ from src.projects.schemas import (
     ProjectDetailResponse,
     ProjectMemberAdd,
     ProjectMemberUpdate,
+    ProjectRepoAdd,
+    ProjectRepoResponse,
     ProjectResponse,
     ProjectUpdate,
     ResourceCounts,
@@ -212,6 +214,58 @@ async def remove_member(
 ) -> Response:
     service = ProjectService(db)
     await service.remove_member(project_id, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── Repositories ─────────────────────────────────────────────────────────
+
+
+@router.get("/{project_id}/repositories", response_model=list[ProjectRepoResponse])
+async def list_repositories(
+    project_id: str,
+    membership: ProjectMembership,
+    db: DbSession,
+) -> list[ProjectRepoResponse]:
+    service = ProjectService(db)
+    repos = await service.list_project_repos(project_id)
+    return [ProjectRepoResponse.model_validate(r) for r in repos]
+
+
+@router.post(
+    "/{project_id}/repositories",
+    response_model=ProjectRepoResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[RequireProjectEditor],
+)
+async def add_repository(
+    project_id: str,
+    data: ProjectRepoAdd,
+    membership: ProjectMembership,
+    db: DbSession,
+) -> ProjectRepoResponse:
+    service = ProjectService(db)
+    repo = await service.add_project_repo(
+        project_id,
+        repo_identifier=data.repo_identifier,
+        repo_url=data.repo_url,
+        display_name=data.display_name,
+    )
+    return ProjectRepoResponse.model_validate(repo)
+
+
+@router.delete(
+    "/{project_id}/repositories/{repo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[RequireProjectEditor],
+)
+async def remove_repository(
+    project_id: str,
+    repo_id: str,
+    membership: ProjectMembership,
+    db: DbSession,
+) -> Response:
+    service = ProjectService(db)
+    await service.remove_project_repo(project_id, repo_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
