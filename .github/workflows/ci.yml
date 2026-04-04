@@ -164,14 +164,14 @@ jobs:
       - name: Check coverage ratchet
         if: success()
         run: |
-          if [ ! -f coverage/coverage-summary.json ]; then
+          if [ ! -f packages/ui/coverage/coverage-summary.json ]; then
             echo "::notice::No TS coverage report — skipping ratchet check"
             exit 0
           fi
           python3 - <<'PYEOF'
           import json, sys
 
-          with open("coverage/coverage-summary.json") as f:
+          with open("packages/ui/coverage/coverage-summary.json") as f:
               current = round(json.load(f)["total"]["lines"]["pct"], 2)
 
           with open(".coverage-threshold.json") as f:
