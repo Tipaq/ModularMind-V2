@@ -14,6 +14,7 @@ import { Badge } from "../badge";
 import { SectionCard } from "../section-card";
 import { cn } from "../../lib/utils";
 import type { BudgetOverview } from "../../types/chat";
+import type { ToolCategoryEntry } from "../../lib/chat-config";
 import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "@modularmind/api-client";
 import { ModelSelector } from "./ModelSelector";
 import { SupervisorSection } from "./SupervisorSection";
@@ -48,6 +49,7 @@ export interface ConfigTabProps {
   onSavePreferences?: (prefs: string) => Promise<void>;
   supervisorToolCategories?: string[] | null;
   onToggleToolCategory?: (category: string, enabled: boolean) => void;
+  mcpCategories?: ToolCategoryEntry[];
 }
 
 function formatDuration(ms: number): string {
@@ -102,6 +104,7 @@ export function ConfigTab({
   enabledAgents, enabledGraphs, allAgents,
   userPreferences, onSavePreferences,
   supervisorToolCategories, onToggleToolCategory,
+  mcpCategories,
 }: ConfigTabProps) {
   const effectiveOverview = useMemo<BudgetOverview | null>(() => {
     if (budgetOverview) return budgetOverview;
@@ -149,6 +152,7 @@ export function ConfigTab({
         onUpdateLayer={onUpdateLayer}
         supervisorToolCategories={supervisorToolCategories}
         onToggleToolCategory={onToggleToolCategory}
+        mcpCategories={mcpCategories}
       />
 
       <div className="border-t border-border/50" />

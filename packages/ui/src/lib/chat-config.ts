@@ -16,7 +16,13 @@ export const DEFAULT_CHAT_CONFIG: ChatConfig = {
   supervisorToolCategories: null,
 };
 
-export const ALL_TOOL_CATEGORIES = [
+export interface ToolCategoryEntry {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export const BUILTIN_TOOL_CATEGORIES: ToolCategoryEntry[] = [
   { id: "knowledge", label: "Knowledge", description: "Search documents and knowledge bases" },
   { id: "scheduling", label: "Scheduling", description: "Create/manage scheduled tasks" },
   { id: "web", label: "Web", description: "Web search, browse URLs" },
@@ -28,7 +34,9 @@ export const ALL_TOOL_CATEGORIES = [
   { id: "human_interaction", label: "Human Input", description: "Request user approval" },
   { id: "custom_tools", label: "Custom Tools", description: "Agent-defined tools" },
   { id: "mini_apps", label: "Mini Apps", description: "Interactive applications" },
-  { id: "mcp", label: "MCP", description: "External MCP server tools" },
   { id: "gateway", label: "Gateway", description: "Shell, network access" },
   { id: "builtin", label: "Built-in", description: "Conversations, user profile" },
-] as const;
+];
+
+/** @deprecated Use BUILTIN_TOOL_CATEGORIES + dynamic MCP categories */
+export const ALL_TOOL_CATEGORIES = BUILTIN_TOOL_CATEGORIES;

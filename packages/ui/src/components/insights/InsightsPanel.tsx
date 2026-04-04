@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Layers,
@@ -18,8 +18,9 @@ import type {
   MessageExecutionData,
 } from "../../types/chat";
 import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "@modularmind/api-client";
-import { ALL_TOOL_CATEGORIES } from "../../lib/chat-config";
-import type { ChatConfig } from "../../lib/chat-config";
+import { ALL_TOOL_CATEGORIES, BUILTIN_TOOL_CATEGORIES } from "../../lib/chat-config";
+import type { ChatConfig, ToolCategoryEntry } from "../../lib/chat-config";
+import { api } from "@modularmind/api-client";
 
 export interface InsightsPanelProps {
   selectedExecution: MessageExecutionData | null;
@@ -67,6 +68,18 @@ export function InsightsPanel({
   allGraphs,
   onCompact,
 }: InsightsPanelProps) {
+  const [mcpCategories, setMcpCategories] = useState<ToolCategoryEntry[]>([]);
+
+  useEffect(() => {
+    api.get<{ categories: Array<{ id: string; label: string; description: string }> }>("/internal/tools")
+      .then((data) => {
+        const mcp = data.categories
+          .filter((c) => c.id.startsWith("mcp:"))
+          .map((c) => ({ id: c.id, label: c.label, description: c.description }));
+        setMcpCategories(mcp);
+      })
+      .catch(() => {});
+  }, []);
   const displayActivities = useMemo(() => {
     return isLiveSelected && isStreaming
       ? liveActivities
@@ -161,11 +174,15 @@ export function InsightsPanel({
               const updated = [...current, category];
               onConfigChange({ supervisorToolCategories: updated });
             } else {
-              const all = current ?? ALL_TOOL_CATEGORIES.map((c) => c.id);
-              const updated = all.filter((c) => c !== category);
+              const allIds = [
+                ...BUILTIN_TOOL_CATEGORIES.map((c) => c.id),
+                ...mcpCategories.map((c) => c.id),
+              ];
+              const updated = (current ?? allIds).filter((c) => c !== category);
               onConfigChange({ supervisorToolCategories: updated });
             }
           }}
+          mcpCategories={mcpCategories}
         />
       </TabsContent>
 

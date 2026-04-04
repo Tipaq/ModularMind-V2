@@ -7,7 +7,8 @@ import { SectionCard } from "../section-card";
 import { Switch } from "../switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../tooltip";
 import { cn } from "../../lib/utils";
-import { ALL_TOOL_CATEGORIES } from "../../lib/chat-config";
+import type { ToolCategoryEntry } from "../../lib/chat-config";
+import { BUILTIN_TOOL_CATEGORIES } from "../../lib/chat-config";
 import type { SupervisorLayer } from "@modularmind/api-client";
 
 interface LayerEditorProps {
@@ -95,6 +96,7 @@ interface SupervisorSectionProps {
   onUpdateLayer: (key: string, content: string) => Promise<boolean>;
   supervisorToolCategories?: string[] | null;
   onToggleToolCategory?: (category: string, enabled: boolean) => void;
+  mcpCategories?: ToolCategoryEntry[];
 }
 
 export function SupervisorSection({
@@ -104,6 +106,7 @@ export function SupervisorSection({
   onUpdateLayer,
   supervisorToolCategories,
   onToggleToolCategory,
+  mcpCategories,
 }: SupervisorSectionProps) {
   return (
     <SectionCard
@@ -122,6 +125,7 @@ export function SupervisorSection({
         <ToolCategorySection
           supervisorToolCategories={supervisorToolCategories}
           onToggleToolCategory={onToggleToolCategory}
+          mcpCategories={mcpCategories}
         />
       )}
       {!supervisorMode && (
@@ -136,10 +140,16 @@ export function SupervisorSection({
 function ToolCategorySection({
   supervisorToolCategories,
   onToggleToolCategory,
+  mcpCategories,
 }: {
   supervisorToolCategories?: string[] | null;
   onToggleToolCategory: (category: string, enabled: boolean) => void;
+  mcpCategories?: ToolCategoryEntry[];
 }) {
+  const allCategories = mcpCategories?.length
+    ? [...BUILTIN_TOOL_CATEGORIES, ...mcpCategories]
+    : BUILTIN_TOOL_CATEGORIES;
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5">
@@ -147,7 +157,7 @@ function ToolCategorySection({
         <span className="text-[11px] font-medium text-foreground/80">Tool Categories</span>
       </div>
       <div className="flex flex-wrap gap-1">
-        {ALL_TOOL_CATEGORIES.map((cat) => {
+        {allCategories.map((cat) => {
           const isEnabled = supervisorToolCategories === null || supervisorToolCategories === undefined || supervisorToolCategories.includes(cat.id);
           return (
             <TooltipProvider key={cat.id}>
