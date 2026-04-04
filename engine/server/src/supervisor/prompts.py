@@ -38,6 +38,9 @@ Available graphs:
 Available tool categories:
 {tool_catalog}
 
+Available MCP tools (usable via TOOL_RESPONSE → search_tools → use_tool):
+{mcp_catalog}
+
 Recent conversation context:
 {conversation_summary}
 
@@ -226,6 +229,7 @@ def build_routing_task_prompt(
     agent_catalog = build_agent_catalog(agents)
     graph_catalog = build_graph_catalog(graphs)
     tool_catalog = build_tool_category_catalog(allowed_tool_categories)
+    mcp_catalog = build_mcp_tool_catalog(mcp_tools) if mcp_tools else "(none)"
     conversation_summary = build_conversation_summary(history)
     last_agent_info = last_agent or "(none — new conversation or topic change)"
     memory_section = f"User profile:\n{memory_context}" if memory_context else ""
@@ -239,6 +243,7 @@ def build_routing_task_prompt(
         agent_catalog=agent_catalog,
         graph_catalog=graph_catalog,
         tool_catalog=tool_catalog,
+        mcp_catalog=mcp_catalog,
         conversation_summary=conversation_summary,
         last_agent_info=last_agent_info,
         memory_section=memory_section,
@@ -259,9 +264,10 @@ def build_routing_task_prompt(
         prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
 
     if len(prompt) > MAX_ROUTING_PROMPT_CHARS:
-        # Third: truncate graph, tool, memory, and knowledge
+        # Third: truncate graph, tool, mcp, memory, and knowledge
         fmt_kwargs["graph_catalog"] = build_graph_catalog(graphs[:5])
         fmt_kwargs["tool_catalog"] = "(trimmed for size)"
+        fmt_kwargs["mcp_catalog"] = "(trimmed for size)"
         fmt_kwargs["memory_section"] = ""
         fmt_kwargs["knowledge_section"] = ""
         prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
