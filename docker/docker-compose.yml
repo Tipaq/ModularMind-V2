@@ -31,6 +31,7 @@ x-engine-env: &engine-env
   ENGINE_API_KEY: ${ENGINE_API_KEY:-}
   GATEWAY_ENABLED: ${GATEWAY_ENABLED:-true}
   GATEWAY_URL: http://gateway:8200
+  SUPERVISOR_MODEL_ID: ${SUPERVISOR_MODEL_ID:-}
 
 x-engine-depends: &engine-depends
   db: { condition: service_healthy }
