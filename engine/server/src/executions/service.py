@@ -24,6 +24,7 @@ from src.infra.constants import KNOWN_PROVIDERS as _KNOWN_PROVIDERS
 from src.infra.constants import OUTPUT_TRUNCATION_LENGTH, SSE_CONTENT_LENGTH
 from src.infra.utils import utcnow
 from src.llm import get_llm_provider
+from src.llm.errors import ExecutionError
 from src.mcp.service import get_mcp_registry
 
 from .models import ExecutionRun, ExecutionStatus, ExecutionStep, ExecutionType
@@ -479,7 +480,20 @@ class ExecutionService:
                     ),
                 }
 
-        except Exception as e:  # Resilience: catch-all for LLM, graph, and DB errors in execution
+        except ExecutionError as err:
+            from src.llm.errors import to_sse_payload
+
+            logger.warning("Execution %s: %s", execution_id, err.user_message)
+            execution.status = ExecutionStatus.FAILED
+            execution.error_message = err.user_message
+            execution.completed_at = utcnow()
+
+            duration_ms = int(
+                (execution.completed_at - execution.started_at).total_seconds() * 1000
+            )
+            yield to_sse_payload(err) | {"execution_id": execution.id, "duration_ms": duration_ms}
+
+        except Exception as e:  # Resilience: catch-all for LLM, graph, and DB errors
             logger.exception("Execution %s failed: %s", execution_id, e)
             execution.status = ExecutionStatus.FAILED
             execution.error_message = str(e)

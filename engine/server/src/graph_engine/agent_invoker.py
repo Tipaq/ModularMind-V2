@@ -75,9 +75,21 @@ class AgentInvoker:
         else:
             llm_messages.extend(state.get("messages", []))
 
-        # Get LLM and invoke
         llm = await self.llm_provider.get_model(agent.model_id)
-        response = await llm.ainvoke(llm_messages, config=config)
+        try:
+            response = await llm.ainvoke(llm_messages, config=config)
+        except Exception as exc:
+            from src.executions.cancel import ExecutionCancelled
+            from src.llm.errors import (
+                ExecutionError,
+                _extract_provider_key,
+                classify_llm_error,
+            )
+
+            if isinstance(exc, (ExecutionCancelled, ExecutionError)):
+                raise
+            provider_key = _extract_provider_key(agent.model_id) or "unknown"
+            raise classify_llm_error(exc, provider_key, agent.model_id) from exc
         response_text = response.content if hasattr(response, "content") else str(response)
 
         logger.info("Agent '%s' (%s) responded: %d chars", agent.name, agent_id, len(response_text))

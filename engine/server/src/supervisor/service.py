@@ -28,6 +28,7 @@ from src.executions.schemas import ExecutionCreate
 from src.executions.service import ExecutionService
 from src.infra.constants import OUTPUT_TRUNCATION_LENGTH
 from src.llm.base import LLMProvider
+from src.llm.errors import ExecutionError, ExecutionErrorCode, to_sse_payload
 
 # Supervisor LLM configuration
 ROUTING_TEMPERATURE = 0.1
@@ -406,6 +407,18 @@ class SuperSupervisorService:
 
             return self._parse_routing_response(response)
 
+        except ExecutionError as err:
+            if err.code in (
+                ExecutionErrorCode.AUTH_FAILED,
+                ExecutionErrorCode.PERMISSION_DENIED,
+            ):
+                raise
+            logger.error("LLM routing failed: %s", err.user_message)
+            return RoutingDecision(
+                strategy=RoutingStrategy.DIRECT_RESPONSE,
+                reasoning=f"Routing failed: {err.user_message}",
+                confidence=0.0,
+            )
         except (
             httpx.HTTPError,
             ConnectionError,
@@ -721,6 +734,16 @@ class SuperSupervisorService:
                 "tool_response_inline": True,
             }
 
+        except ExecutionError as err:
+            logger.error("TOOL_RESPONSE LLM error: %s", err.user_message)
+            await publish_fn(to_sse_payload(err) | {"execution_id": execution.id})
+            return await self._handle_direct_response(
+                decision,
+                conv_id,
+                content,
+                user_id,
+                conv_config,
+            )
         except (
             httpx.HTTPError,
             ConnectionError,

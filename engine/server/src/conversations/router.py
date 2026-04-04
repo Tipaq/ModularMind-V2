@@ -15,6 +15,7 @@ from src.executions.schemas import ExecutionCreate
 from src.executions.service import ExecutionService
 from src.infra.database import DbSession
 from src.infra.query_utils import raise_not_found
+from src.llm.errors import ExecutionError, ExecutionErrorCode
 
 from .models import Conversation, MessageRole
 from .schemas import (
@@ -967,6 +968,15 @@ async def send_message(
 
     except HTTPException:
         raise
+    except ExecutionError as err:
+        _STATUS_MAP: dict[ExecutionErrorCode, int] = {
+            ExecutionErrorCode.RATE_LIMITED: 429,
+            ExecutionErrorCode.AUTH_FAILED: 401,
+            ExecutionErrorCode.PERMISSION_DENIED: 403,
+            ExecutionErrorCode.TIMEOUT: 504,
+        }
+        status = _STATUS_MAP.get(err.code, 502)
+        raise HTTPException(status_code=status, detail=err.user_message) from err
     except ValueError as e:
         logger.warning("Message send failed: %s", e)
         raise HTTPException(status_code=400, detail="Message send failed") from e

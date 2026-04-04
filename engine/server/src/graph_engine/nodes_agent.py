@@ -294,11 +294,18 @@ async def create_agent_node(
             logger.info("Agent %s response: %.100s...", node_id, response_text)
         except Exception as e:
             from src.executions.cancel import ExecutionCancelled
+            from src.llm.errors import (
+                ExecutionError,
+                _extract_provider_key,
+                classify_llm_error,
+            )
 
             if isinstance(e, ExecutionCancelled):
                 raise
-            logger.error("Agent %s LLM error: %s", node_id, e)
-            response_text = f"[Error] Failed to get response from {effective_model}: {str(e)}"
+            if isinstance(e, ExecutionError):
+                raise
+            provider_key = _extract_provider_key(effective_model) or "unknown"
+            raise classify_llm_error(e, provider_key, effective_model) from e
 
         new_messages: list[BaseMessage] = []
         if agent_input_msg:

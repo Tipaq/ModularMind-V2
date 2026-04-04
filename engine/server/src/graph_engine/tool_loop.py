@@ -195,6 +195,11 @@ async def run_tool_loop(
                 logger.warning("Tool '%s' timed out after %.1fs", tool_name, timeout)
                 result_text = f"Tool error: '{tool_name}' timed out after {timeout:.0f}s"
             except Exception as e:  # MCP tool calls raise heterogeneous errors
+                from src.llm.errors import ExecutionError
+                from src.mcp.sdk_client import MCPConnectionError
+
+                if isinstance(e, (ExecutionError, MCPConnectionError)):
+                    raise
                 logger.warning("Tool '%s' failed: %s", tool_name, e)
                 result_text = f"Tool error: {e}"
 
