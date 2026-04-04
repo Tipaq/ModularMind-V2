@@ -1,10 +1,17 @@
 """Tests for the groups API (CRUD + members)."""
 
+from uuid import uuid4
+
 import pytest
 
 from tests.conftest import make_user, persist_user
 
 pytestmark = pytest.mark.asyncio
+
+
+def _unique(prefix: str = "test") -> tuple[str, str]:
+    tag = uuid4().hex[:8]
+    return f"{prefix}-{tag}", f"{prefix}-{tag}"
 
 
 # ---------------------------------------------------------------------------
@@ -24,21 +31,23 @@ async def test_list_groups_empty(client):
 
 
 async def test_create_group(admin_client):
+    name, slug = _unique("engineering")
     r = await admin_client.post(
         "/api/v1/groups",
-        json={"name": "Engineering", "slug": "engineering", "description": "Dev team"},
+        json={"name": name, "slug": slug, "description": "Dev team"},
     )
     assert r.status_code == 201
     body = r.json()
-    assert body["name"] == "Engineering"
-    assert body["slug"] == "engineering"
+    assert body["name"] == name
+    assert body["slug"] == slug
     assert body["is_active"] is True
 
 
 async def test_create_group_forbidden_for_regular_user(client):
+    name, slug = _unique("forbidden")
     r = await client.post(
         "/api/v1/groups",
-        json={"name": "Forbidden Group"},
+        json={"name": name, "slug": slug},
     )
     assert r.status_code == 403
 
@@ -49,18 +58,17 @@ async def test_create_group_forbidden_for_regular_user(client):
 
 
 async def test_get_group(admin_client, client):
-    # Create as admin
+    name, slug = _unique("sales")
     r = await admin_client.post(
         "/api/v1/groups",
-        json={"name": "Sales Team", "slug": "sales"},
+        json={"name": name, "slug": slug},
     )
     group_id = r.json()["id"]
 
-    # Get as regular user (any authenticated user can view)
     r = await client.get(f"/api/v1/groups/{group_id}")
     assert r.status_code == 200
     body = r.json()
-    assert body["name"] == "Sales Team"
+    assert body["name"] == name
     assert body["members"] == []
 
 
@@ -70,18 +78,20 @@ async def test_get_group(admin_client, client):
 
 
 async def test_update_group(admin_client):
+    name, slug = _unique("old-name")
     r = await admin_client.post(
         "/api/v1/groups",
-        json={"name": "Old Name", "slug": "old-name"},
+        json={"name": name, "slug": slug},
     )
     group_id = r.json()["id"]
 
+    new_name = f"new-{uuid4().hex[:8]}"
     r = await admin_client.put(
         f"/api/v1/groups/{group_id}",
-        json={"name": "New Name", "description": "Updated"},
+        json={"name": new_name, "description": "Updated"},
     )
     assert r.status_code == 200
-    assert r.json()["name"] == "New Name"
+    assert r.json()["name"] == new_name
 
 
 # ---------------------------------------------------------------------------
@@ -90,9 +100,10 @@ async def test_update_group(admin_client):
 
 
 async def test_delete_group(admin_client):
+    name, slug = _unique("to-delete")
     r = await admin_client.post(
         "/api/v1/groups",
-        json={"name": "To Delete", "slug": "to-delete"},
+        json={"name": name, "slug": slug},
     )
     group_id = r.json()["id"]
 
@@ -108,18 +119,16 @@ async def test_delete_group(admin_client):
 async def test_add_and_remove_member(admin_client):
     from src.auth.models import UserRole
 
-    # Create group
+    name, slug = _unique("members-test")
     r = await admin_client.post(
         "/api/v1/groups",
-        json={"name": "Members Test", "slug": "members-test"},
+        json={"name": name, "slug": slug},
     )
     group_id = r.json()["id"]
 
-    # Create a target user
     target = make_user(UserRole.USER)
     await persist_user(target)
 
-    # Add member
     r = await admin_client.post(
         f"/api/v1/groups/{group_id}/members",
         json={"user_id": target.id, "role": "member"},
@@ -129,15 +138,12 @@ async def test_add_and_remove_member(admin_client):
     assert body["user_id"] == target.id
     assert body["role"] == "member"
 
-    # Verify in group detail
     r = await admin_client.get(f"/api/v1/groups/{group_id}")
     assert r.status_code == 200
     assert len(r.json()["members"]) == 1
 
-    # Remove member
     r = await admin_client.delete(f"/api/v1/groups/{group_id}/members/{target.id}")
     assert r.status_code == 204
 
-    # Verify removed
     r = await admin_client.get(f"/api/v1/groups/{group_id}")
     assert len(r.json()["members"]) == 0
