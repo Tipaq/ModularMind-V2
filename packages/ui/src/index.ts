@@ -49,7 +49,7 @@ export type { ChatConfig } from "./lib/chat-config";
 export { DEFAULT_CHAT_CONFIG } from "./lib/chat-config";
 
 // Chat types
-export type { ActivityType, ActivityStatus, ToolCallData, LlmCallData, RoutingData, ErrorData, ExecutionActivity, KnowledgeCollection, KnowledgeChunk, KnowledgeData, SupervisorData, TokenUsage, ExecutionOutputData, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData, AttachedFile } from "./types/chat";
+export type { ChatError, ActivityType, ActivityStatus, ToolCallData, LlmCallData, RoutingData, ErrorData, ExecutionActivity, KnowledgeCollection, KnowledgeChunk, KnowledgeData, SupervisorData, TokenUsage, ExecutionOutputData, ContextHistoryMessage, ContextHistoryBudget, ContextHistory, BudgetLayerInfo, BudgetOverview, ContextData, MessageExecutionData, AttachedFile } from "./types/chat";
 
 // Resource types (shared table/filter/pagination primitives)
 export type { ResourceColumn, ResourceFilterConfig, PaginationState, SortState } from "./types/resource";
@@ -117,6 +117,7 @@ export { ChatInput } from "./components/chat-input";
 export type { ChatInputProps } from "./components/chat-input";
 export { ChatEmptyState } from "./components/chat-empty-state";
 export type { ChatEmptyStateProps } from "./components/chat-empty-state";
+export { ChatErrorBanner } from "./components/chat-error-banner";
 
 // Conversation sidebar
 export { ConversationSidebar } from "./components/conversation-sidebar";

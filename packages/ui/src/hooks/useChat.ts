@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../components/chat-messages";
 import type { ApprovalRequest } from "../components/approval-card";
 import type { HumanPromptRequest } from "../components/prompt-card";
-import type { KnowledgeData, TokenUsage, ContextData } from "../types/chat";
+import type { ChatError, KnowledgeData, TokenUsage, ContextData } from "../types/chat";
+import { ApiError } from "@modularmind/api-client";
 import type { ChatAdapter } from "./chat-adapter";
 import { useExecutionActivities } from "./useExecutionActivities";
 import { useMessagePersistence } from "./useMessagePersistence";
@@ -12,9 +13,22 @@ import { useStreamManagement } from "./useStreamManagement";
 
 export type Message = ChatMessage;
 
+function parseApiError(err: unknown): ChatError {
+  if (err instanceof ApiError) {
+    try {
+      const parsed = JSON.parse(err.body);
+      const detail = typeof parsed.detail === "string" ? parsed.detail : err.body;
+      return { message: detail, isRetryable: err.status === 429 || err.status >= 500 };
+    } catch {
+      return { message: err.body || `API Error ${err.status}`, isRetryable: err.status === 429 };
+    }
+  }
+  return { message: err instanceof Error ? err.message : "Failed to send message" };
+}
+
 export function useChat(conversationId: string | null, adapter: ChatAdapter) {
   const [isStreaming, setIsStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ChatError | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null);
   const [approvalDecision, setApprovalDecision] = useState<"approved" | "rejected" | null>(null);
@@ -77,7 +91,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
           attachmentIds = results.map((a) => a.id);
           uploadedAttachments = results;
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to upload attachments");
+          setError({ message: err instanceof Error ? err.message : "Failed to upload attachments" });
           setIsStreaming(false);
           return;
         }
@@ -115,7 +129,7 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
         }
         handleSendResponse(res, assistantId, sendStartMs);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to send message");
+        setError(parseApiError(err));
         setMessages((prev) => prev.filter((m) => m.id !== assistantId && (!tempUserMsg || m.id !== tempUserMsg.id)));
         currentAssistantIdRef.current = "";
         setIsStreaming(false);
@@ -182,10 +196,12 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
     sendMessage(lastUserMsg.content, conversationId, undefined, undefined, true);
   }, [isStreaming, conversationId, messages, adapter, sendMessage, setMessages]);
 
+  const clearError = useCallback(() => setError(null), []);
+
   const streamingMessageId = isStreaming ? streamingMsgId : null;
 
   return {
-    messages, isStreaming, error, activities, executionDataMap,
+    messages, isStreaming, error, clearError, activities, executionDataMap,
     selectedMessageId, setSelectedMessageId, streamingMessageId,
     pendingApproval, approvalDecision, pendingPrompt, sendMessage, setInitialMessages,
     cancelStream, approveExecution, rejectExecution, respondToPrompt, regenerateLastMessage, editMessage,

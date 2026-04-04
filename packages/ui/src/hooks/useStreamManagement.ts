@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import type { SendMessageResponse } from "@modularmind/api-client";
 import type { ChatMessage } from "../components/chat-messages";
-import type { KnowledgeData, TokenUsage, ContextData, MessageExecutionData } from "../types/chat";
+import type { ChatError, KnowledgeData, TokenUsage, ContextData, MessageExecutionData } from "../types/chat";
 import type { ChatAdapter } from "./chat-adapter";
 import { extractResponse } from "./useChatUtils";
 import { mapKnowledgeData, mapContextData } from "../lib/mappers";
@@ -23,7 +23,7 @@ interface StreamRefs {
 interface StreamCallbacks {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setIsStreaming: React.Dispatch<React.SetStateAction<boolean>>;
-  setError: React.Dispatch<React.SetStateAction<string | null>>;
+  setError: React.Dispatch<React.SetStateAction<ChatError | null>>;
   setStreamingMsgId: React.Dispatch<React.SetStateAction<string | null>>;
   setSelectedMessageId: React.Dispatch<React.SetStateAction<string | null>>;
   setExecutionDataMap: React.Dispatch<React.SetStateAction<Record<string, MessageExecutionData>>>;
@@ -186,7 +186,13 @@ export function useStreamManagement(
           }
 
           if (eventType === "error") {
-            setError(data.message || "Execution error");
+            setError({
+              message: data.message || "Execution error",
+              errorCode: data.error_code,
+              provider: data.provider,
+              isRetryable: data.is_retryable ?? false,
+              retryAfter: data.retry_after,
+            });
             setIsStreaming(false);
             cleanup();
           }
@@ -200,9 +206,15 @@ export function useStreamManagement(
         if (me.data) {
           try {
             const data = JSON.parse(me.data);
-            setError(data.message || "Execution error");
+            setError({
+              message: data.message || "Execution error",
+              errorCode: data.error_code,
+              provider: data.provider,
+              isRetryable: data.is_retryable ?? false,
+              retryAfter: data.retry_after,
+            });
           } catch {
-            setError("Stream connection error");
+            setError({ message: "Stream connection error", isRetryable: true });
           }
         }
         setIsStreaming(false);
@@ -265,7 +277,7 @@ export function useStreamManagement(
       }
 
       if (!execution_id) {
-        setError("No execution started");
+        setError({ message: "No execution started" });
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));
         currentAssistantIdRef.current = "";
         setIsStreaming(false);

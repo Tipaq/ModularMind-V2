@@ -1,3 +1,11 @@
+export interface ChatError {
+  message: string;
+  errorCode?: string;
+  provider?: string;
+  isRetryable?: boolean;
+  retryAfter?: number;
+}
+
 export type ActivityType =
   | "step"
   | "llm"
