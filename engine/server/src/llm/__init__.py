@@ -7,7 +7,10 @@ from langchain_core.language_models import BaseChatModel
 
 from .anthropic import AnthropicProvider
 from .base import LLMProvider, ModelInfo
+from .cohere import CohereProvider
 from .google import GeminiProvider
+from .groq import GroqProvider
+from .mistral import MistralProvider
 from .ollama import OllamaProvider
 from .openai import OpenAIProvider
 from .provider_factory import (
@@ -25,6 +28,9 @@ _PROVIDERS: dict[str, type[LLMProvider]] = {
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "google": GeminiProvider,
+    "mistral": MistralProvider,
+    "cohere": CohereProvider,
+    "groq": GroqProvider,
 }
 
 

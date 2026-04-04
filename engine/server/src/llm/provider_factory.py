@@ -13,7 +13,10 @@ from src.infra.config import get_settings
 
 from .anthropic import AnthropicProvider
 from .base import LLMProvider
+from .cohere import CohereProvider
 from .google import GeminiProvider
+from .groq import GroqProvider
+from .mistral import MistralProvider
 from .ollama import OllamaProvider
 from .openai import OpenAIProvider
 
@@ -105,11 +108,13 @@ class LLMProviderFactory:
                 timeout=timeout,
             )
 
-        # Standard providers (openai, anthropic, google)
         _STANDARD: dict[str, type[LLMProvider]] = {
             "openai": OpenAIProvider,
             "anthropic": AnthropicProvider,
             "google": GeminiProvider,
+            "mistral": MistralProvider,
+            "cohere": CohereProvider,
+            "groq": GroqProvider,
         }
         provider_class = _STANDARD.get(name)
         if not provider_class:
