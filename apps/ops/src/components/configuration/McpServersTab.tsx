@@ -55,7 +55,7 @@ import type {
   MCPTool,
   MCPTestResult,
 } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   search: Search,

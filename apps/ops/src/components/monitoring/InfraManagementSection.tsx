@@ -12,7 +12,7 @@ import {
   XCircle,
   AlertTriangle,
 } from "lucide-react";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

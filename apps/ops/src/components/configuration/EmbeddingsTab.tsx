@@ -14,7 +14,7 @@ import {
   Badge,
 } from "@modularmind/ui";
 import type { LocalSettings, CatalogModel } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 // Known embedding dimensions per model (matches ENGINE MODEL_DIMENSIONS)
 const MODEL_DIMENSIONS: Record<string, number> = {

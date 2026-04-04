@@ -20,7 +20,7 @@ import {
   CardTitle,
   Switch,
 } from "@modularmind/ui";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 import { AnthropicIcon } from "./provider-icons";
 
 interface GpuInfo {

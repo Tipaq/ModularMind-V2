@@ -14,7 +14,7 @@ import {
   Switch,
 } from "@modularmind/ui";
 import type { LocalSettings } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 export function SystemTab() {
   const [settings, setSettings] = useState<LocalSettings | null>(null);

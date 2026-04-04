@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ToolDefinition, ToolCategoryInfo } from "@modularmind/api-client";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface ToolsState {
   tools: ToolDefinition[];

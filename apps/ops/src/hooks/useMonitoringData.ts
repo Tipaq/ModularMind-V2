@@ -12,7 +12,7 @@ import type {
 import { AUTH_SESSION_EXPIRED_EVENT } from "@modularmind/api-client";
 import type { TimeRange } from "../components/monitoring/MetricsChart";
 import { useApi } from "./useApi";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 
 const POLL_INTERVAL_MS = 10_000;
 

@@ -4,7 +4,7 @@ import type {
   ScheduledTaskListResponse,
   ScheduledTaskRun,
 } from "@modularmind/api-client";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 import { createPaginatedState, withLoading, withError, withErrorRethrow } from "./store-helpers";
 
 interface ScheduledTasksState {

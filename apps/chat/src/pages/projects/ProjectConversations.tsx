@@ -4,7 +4,7 @@ import { MessageSquare, Plus } from "lucide-react";
 import { Button, EmptyState, relativeTime } from "@modularmind/ui";
 import type { Conversation, ProjectDetail } from "@modularmind/api-client";
 import { conversationAdapter } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface ProjectContext {
   project: ProjectDetail;

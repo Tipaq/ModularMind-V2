@@ -3,7 +3,7 @@
 import { Activity, Clock, Bot, AlertTriangle } from "lucide-react";
 import { cn } from "@modularmind/ui";
 import type { DLQMessage, LiveExecutionsData, AgentMetrics } from "@modularmind/api-client";
-import { api } from "../../../lib/api";
+import { api } from "@modularmind/api-client";
 import { estimateCost, formatCostUSD } from "../../../lib/tokenPricing";
 import { retryDLQBatch } from "../../../lib/monitoringUtils";
 import { ExecutionTable } from "../ExecutionTable";

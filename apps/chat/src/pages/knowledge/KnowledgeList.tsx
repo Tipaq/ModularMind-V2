@@ -7,7 +7,7 @@ import {
   useAuthStore, relativeTime,
 } from "@modularmind/ui";
 import type { Collection, CollectionListResponse } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 type ScopeFilter = "all" | "global" | "group" | "agent";
 

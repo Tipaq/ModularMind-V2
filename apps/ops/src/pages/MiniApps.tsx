@@ -7,7 +7,7 @@ import {
   MiniAppCard,
 } from "@modularmind/ui";
 import type { MiniAppListResponse, MiniApp } from "@modularmind/api-client";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 
 export function MiniApps() {
   const [apps, setApps] = useState<MiniApp[]>([]);

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FolderKanban, Plus, RefreshCw, Search } from "lucide-react";
 import { Badge, Button, EmptyState, Input } from "@modularmind/ui";
 import type { Project } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 import { CreateProjectDialog } from "../../components/projects/CreateProjectDialog";
 
 export function ProjectList() {

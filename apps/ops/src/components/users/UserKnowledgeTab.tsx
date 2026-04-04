@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, BookOpen } from "lucide-react";
 import { Card, CardContent, Badge } from "@modularmind/ui";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 import type { UserCollection } from "@modularmind/api-client";
 
 const SCOPE_VARIANT: Record<string, "default" | "secondary" | "outline"> = {

@@ -27,7 +27,7 @@ import {
   formatTokens,
   formatCost,
 } from "@modularmind/ui";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 import { roleConfig } from "../lib/constants";
 import { EditUserDialog } from "../components/users/EditUserDialog";
 import { UserConversationsTab } from "../components/users/UserConversationsTab";

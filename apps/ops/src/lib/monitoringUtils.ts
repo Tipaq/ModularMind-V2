@@ -1,6 +1,6 @@
 /** Shared monitoring utilities — used across monitoring components. */
 
-import { api } from "./api";
+import { api } from "@modularmind/api-client";
 
 /** Retry DLQ messages. */
 export async function retryDLQBatch(count: number, onRefresh: () => Promise<void>): Promise<void> {

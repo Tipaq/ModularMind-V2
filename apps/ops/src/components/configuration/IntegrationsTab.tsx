@@ -40,7 +40,7 @@ import type {
   GraphListItem,
   EngineModel,
 } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 // ─── Custom icons (not in lucide) ───────────────────────────────────────────
 

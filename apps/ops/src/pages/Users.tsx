@@ -8,7 +8,7 @@ import {
   Eye,
 } from "lucide-react";
 import { cn, PageHeader, Badge, Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, useAuthStore, formatTokens, formatCost } from "@modularmind/ui";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 import { roleConfig } from "../lib/constants";
 import { Pagination } from "../components/shared/Pagination";
 import { EditUserDialog } from "../components/users/EditUserDialog";

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Settings, XCircle } from "lucide-react";
 import { cn } from "@modularmind/ui";
 import type { ThresholdConfig, ThresholdUpdate } from "@modularmind/api-client";
-import { api } from "../../../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface ThresholdFieldProps {
   label: string;

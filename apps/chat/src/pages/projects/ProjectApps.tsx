@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import { AppWindow } from "lucide-react";
 import { EmptyState, MiniAppCard } from "@modularmind/ui";
 import type { MiniApp, MiniAppListResponse, ProjectDetail } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface ProjectContext {
   project: ProjectDetail;

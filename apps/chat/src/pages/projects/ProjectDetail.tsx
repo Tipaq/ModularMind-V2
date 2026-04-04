@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { Badge, Button } from "@modularmind/ui";
 import type { ProjectDetail as ProjectDetailType, ProjectResourceCounts } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 const SUB_TABS = [
   { label: "Overview", to: "", icon: LayoutDashboard, end: true },

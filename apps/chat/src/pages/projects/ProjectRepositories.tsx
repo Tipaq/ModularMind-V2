@@ -10,7 +10,7 @@ import {
 import type {
   ProjectDetail, ProjectRepository, ProjectRepoAdd, RepoIndexStatus,
 } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface ProjectContext {
   project: ProjectDetail;

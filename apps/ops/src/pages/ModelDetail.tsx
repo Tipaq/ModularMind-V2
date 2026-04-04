@@ -19,7 +19,7 @@ import type { CatalogModel } from "@modularmind/api-client";
 import { ModelStatusBadge } from "../components/shared/ModelStatusBadge";
 import { ModelPlayground } from "../components/models/ModelPlayground";
 import { useModelsStore } from "../stores/models";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 
 // ---------------------------------------------------------------------------
 // Section / PropRow — consistent with agent detail page

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Eye, EyeOff, KeyRound, Plus, Trash2 } from "lucide-react";
 import { Badge, Button, EmptyState, Input } from "@modularmind/ui";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface UserSecret {
   key: string;

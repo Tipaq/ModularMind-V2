@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { cn, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
 import type { DLQMessage, PipelineData, PipelinesData } from "@modularmind/api-client";
-import { api } from "../../../lib/api";
+import { api } from "@modularmind/api-client";
 import { countDLQByDomain } from "../../../lib/dlqDomains";
 import { retryDLQBatch } from "../../../lib/monitoringUtils";
 import { KnowledgePipelineSection } from "../pipelines/KnowledgePipelineSection";

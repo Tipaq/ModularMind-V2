@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Button, MiniAppViewer } from "@modularmind/ui";
 import type { MiniApp } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 export function AppView() {
   const { appId } = useParams<{ appId: string }>();

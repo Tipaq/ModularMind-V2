@@ -23,7 +23,7 @@ import {
   Input,
   Label,
 } from "@modularmind/ui";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface GitHubTokenResponse {
   id: string;

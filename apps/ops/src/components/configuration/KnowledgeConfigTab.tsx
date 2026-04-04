@@ -23,7 +23,7 @@ import {
   Badge,
 } from "@modularmind/ui";
 import type { LocalSettings, CatalogModel } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface RerankConfig {
   rerank_provider: string;

@@ -20,7 +20,7 @@ import {
   Input,
 } from "@modularmind/ui";
 import type { LocalSettings } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 import {
   OpenAIIcon,
   AnthropicIcon,

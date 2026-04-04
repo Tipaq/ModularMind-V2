@@ -6,7 +6,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@modularmind/ui";
 import type { MiniApp, MiniAppListResponse } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 type ScopeFilter = "all" | "GLOBAL" | "GROUP" | "PERSONAL";
 

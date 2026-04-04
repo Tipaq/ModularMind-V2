@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import { CalendarClock } from "lucide-react";
 import { Badge, EmptyState, Switch, relativeTime } from "@modularmind/ui";
 import type { ProjectDetail, ScheduledTask, ScheduledTaskListResponse } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface ProjectContext {
   project: ProjectDetail;

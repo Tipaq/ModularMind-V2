@@ -5,7 +5,7 @@ import {
   Badge, Button, EmptyState, Input, Switch, relativeTime,
 } from "@modularmind/ui";
 import type { ScheduledTask, ScheduledTaskListResponse } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 export function TaskList() {
   const navigate = useNavigate();

@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { BookOpen, FileText } from "lucide-react";
 import { Badge, EmptyState, relativeTime } from "@modularmind/ui";
 import type { Collection, ProjectDetail } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface ProjectContext {
   project: ProjectDetail;

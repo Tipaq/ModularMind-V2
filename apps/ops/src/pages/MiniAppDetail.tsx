@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, ExternalLink, FileCode, Database, History, Trash2, RotateCcw } from "lucide-react";
 import { ConfirmDialog, MiniAppViewer } from "@modularmind/ui";
 import type { MiniApp, StorageKey, StorageValue, MiniAppSnapshot } from "@modularmind/api-client";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 
 interface StorageEntry extends StorageKey {
   value?: unknown;

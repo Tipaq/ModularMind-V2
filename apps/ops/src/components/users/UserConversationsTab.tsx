@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, ChevronDown, ChevronRight, MessageCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, Badge, cn } from "@modularmind/ui";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 import { formatTokens, formatCost } from "@modularmind/ui";
 import { Pagination } from "../shared/Pagination";
 import type {

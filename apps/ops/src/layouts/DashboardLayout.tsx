@@ -1,7 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
 import { useAuth } from "@modularmind/ui";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 
 export function DashboardLayout() {
   const { user, isLoading } = useAuth({ requireAuth: true, api });

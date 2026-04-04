@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, FileText, Loader2, Upload } from "lucide-react";
 import { Badge, Button, EmptyState, relativeTime } from "@modularmind/ui";
 import type { Collection, KnowledgeDocument, DocumentListResponse } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 export function KnowledgeDetail() {
   const { collectionId } = useParams<{ collectionId: string }>();

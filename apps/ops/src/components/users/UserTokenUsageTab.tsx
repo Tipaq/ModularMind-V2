@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 import type { TokenUsageResponse } from "@modularmind/api-client";
 
 const RANGES = [

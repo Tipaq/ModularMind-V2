@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Loader2, Play } from "lucide-react";
 import { Badge, Button, Switch, relativeTime } from "@modularmind/ui";
 import type { ScheduledTask, ScheduledTaskRun } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 
 export function TaskDetail() {
   const { taskId } = useParams<{ taskId: string }>();

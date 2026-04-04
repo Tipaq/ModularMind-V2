@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Clock, RefreshCw } from "lucide-react";
 import { cn } from "@modularmind/ui";
 import type { AlertHistoryResponse, AlertItem } from "@modularmind/api-client";
-import { api } from "../../../lib/api";
+import { api } from "@modularmind/api-client";
 
 function formatAlertTime(ts: string): string {
   return new Date(ts).toLocaleString("en-US", {

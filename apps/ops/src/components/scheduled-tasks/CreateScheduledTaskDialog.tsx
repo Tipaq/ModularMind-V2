@@ -20,7 +20,7 @@ import type {
   Agent,
   GraphListItem,
 } from "@modularmind/api-client";
-import { api } from "../../lib/api";
+import { api } from "@modularmind/api-client";
 import { useScheduledTasksStore } from "../../stores/scheduled-tasks";
 import { ScheduleSection } from "./ScheduleSection";
 import { TargetSection } from "./TargetSection";

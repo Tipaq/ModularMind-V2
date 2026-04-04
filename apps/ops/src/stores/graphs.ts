@@ -6,7 +6,7 @@ import type {
   GraphCreateInput,
   GraphUpdateInput,
 } from "@modularmind/api-client";
-import { api } from "../lib/api";
+import { api } from "@modularmind/api-client";
 import { createPaginatedState, withLoading, withError, withErrorRethrow } from "./store-helpers";
 
 interface GraphsState {
