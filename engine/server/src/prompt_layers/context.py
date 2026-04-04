@@ -31,6 +31,7 @@ class ContextBuildParams:
     conversation_id: str | None = None
     model_id: str | None = None
     system_prompt_chars: int = 0
+    skip_history: bool = False
 
 
 class AgentContextBuilder:
@@ -99,7 +100,7 @@ class AgentContextBuilder:
         system_used = system_prompt_chars // 4
 
         # Inject recent conversation history for continuity
-        if conversation_id:
+        if conversation_id and not params.skip_history:
             history_text = await self._get_conversation_history(
                 conversation_id,
                 session,

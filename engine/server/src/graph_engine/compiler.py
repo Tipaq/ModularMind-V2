@@ -278,12 +278,15 @@ class GraphCompiler:
 
         lc_tools: list[dict] = []
         tool_executor = None
+        mcp_tools_by_server: dict[str, list[dict]] = {}
         if self.mcp_registry:
             try:
                 from src.tools.registry import resolve_mcp_tool_definitions
 
-                lc_tools, tool_executor = await resolve_mcp_tool_definitions(
-                    agent.tool_categories, self.mcp_registry
+                lc_tools, tool_executor, mcp_tools_by_server = (
+                    await resolve_mcp_tool_definitions(
+                        agent.tool_categories, self.mcp_registry
+                    )
                 )
                 if lc_tools:
                     logger.info(
@@ -303,6 +306,7 @@ class GraphCompiler:
 
         _lc_tools = lc_tools
         _mcp_executor = tool_executor
+        _mcp_tools_by_server = mcp_tools_by_server
 
         async def agent_node(state: GraphState, config: RunnableConfig) -> dict:
             effective_model = state.get("input_data", {}).get("_model_override") or model_id
@@ -416,6 +420,32 @@ class GraphCompiler:
                     gateway_executor=gateway_executor,
                     extended_executor=extended_executor,
                 )
+
+                if agent.tool_mode == "auto":
+                    from src.tools.discovery import (
+                        ToolDiscoveryExecutor,
+                        get_discovery_tool_definitions,
+                    )
+
+                    _allowed = [
+                        k for k, v in (agent.tool_categories or {}).items()
+                        if v is not False and not k.startswith("mcp:")
+                    ]
+                    unified_executor = ToolDiscoveryExecutor(
+                        extended_executor=extended_executor,
+                        mcp_executor=scoped_mcp,
+                        gateway_executor=gateway_executor,
+                        builtin_fn=builtin_exec,
+                        builtin_names=BUILTIN_TOOL_NAMES,
+                        mcp_tool_defs_by_server=_mcp_tools_by_server,
+                        gateway_tool_defs=[],
+                        allowed_categories=_allowed or None,
+                    )
+                    active_tools = get_discovery_tool_definitions()
+                    logger.info(
+                        "Agent '%s': auto tool mode — 2 discovery tools bound",
+                        agent.name,
+                    )
             else:
                 active_tools = [
                     t

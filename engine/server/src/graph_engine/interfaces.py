@@ -87,6 +87,16 @@ class AgentConfig(BaseModel):
         },
         description="Enable/disable extended tool categories for this agent.",
     )
+    tool_mode: str = Field(
+        default="direct",
+        description="Tool binding mode: 'direct' binds all tools to LLM, "
+        "'auto' uses search_tools/use_tool discovery pattern.",
+    )
+    include_conversation_history: bool = Field(
+        default=True,
+        description="Inject conversation history as context. "
+        "Auto-skipped when agent is delegated by supervisor.",
+    )
 
     @field_validator("version", mode="before")
     @classmethod

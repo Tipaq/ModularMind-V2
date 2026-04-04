@@ -99,12 +99,15 @@ async def create_agent_node(
 
     mcp_tools: list[dict] = []
     mcp_executor = None
+    mcp_tools_by_server: dict[str, list[dict]] = {}
     if agent and mcp_registry:
         try:
             from src.tools.registry import resolve_mcp_tool_definitions
 
-            mcp_tools, mcp_executor = await resolve_mcp_tool_definitions(
-                agent.tool_categories, mcp_registry
+            mcp_tools, mcp_executor, mcp_tools_by_server = (
+                await resolve_mcp_tool_definitions(
+                    agent.tool_categories, mcp_registry
+                )
             )
             if mcp_tools:
                 logger.info(
@@ -245,6 +248,32 @@ async def create_agent_node(
                 gateway_executor=gateway_executor,
                 extended_executor=extended_executor,
             )
+
+            if agent and agent.tool_mode == "auto":
+                from src.tools.discovery import (
+                    ToolDiscoveryExecutor,
+                    get_discovery_tool_definitions,
+                )
+
+                _allowed = [
+                    k for k, v in (agent.tool_categories or {}).items()
+                    if v is not False and not k.startswith("mcp:")
+                ]
+                unified_executor = ToolDiscoveryExecutor(
+                    extended_executor=extended_executor,
+                    mcp_executor=mcp_executor,
+                    gateway_executor=gateway_executor,
+                    builtin_fn=None,
+                    builtin_names=set(),
+                    mcp_tool_defs_by_server=mcp_tools_by_server,
+                    gateway_tool_defs=[],
+                    allowed_categories=_allowed or None,
+                )
+                active_tools = get_discovery_tool_definitions()
+                logger.info(
+                    "Graph agent '%s': auto tool mode — 2 discovery tools bound",
+                    agent.name,
+                )
 
         try:
             llm = await llm_provider.get_model(effective_model)

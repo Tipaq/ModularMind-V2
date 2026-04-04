@@ -157,7 +157,7 @@ MCP_CATEGORY_PREFIX = "mcp:"
 async def resolve_mcp_tool_definitions(
     tool_categories: dict[str, bool | dict[str, bool]],
     mcp_registry: MCPRegistry,
-) -> tuple[list[dict[str, Any]], MCPToolExecutor | None]:
+) -> tuple[list[dict[str, Any]], MCPToolExecutor | None, dict[str, list[dict[str, Any]]]]:
     """Resolve MCP tool definitions from ``mcp:*`` keys in tool_categories.
 
     Iterates keys starting with ``mcp:``, looks up the server by name,
@@ -169,7 +169,9 @@ async def resolve_mcp_tool_definitions(
         mcp_registry: The MCP registry instance.
 
     Returns:
-        Tuple of ``(langchain_tool_dicts, MCPToolExecutor)`` or ``([], None)``.
+        Tuple of ``(langchain_tool_dicts, MCPToolExecutor, tools_by_server_name)``
+        or ``([], None, {})``. ``tools_by_server_name`` maps server display
+        names to their LangChain tool definitions (used by auto tool mode).
     """
     from src.mcp.tool_adapter import (
         MCPToolExecutor,
@@ -179,6 +181,7 @@ async def resolve_mcp_tool_definitions(
 
     all_lc_tools: list[dict[str, Any]] = []
     tool_map: dict[str, tuple[str, str]] = {}
+    tools_by_server: dict[str, list[dict[str, Any]]] = {}
 
     for key, value in tool_categories.items():
         if not key.startswith(MCP_CATEGORY_PREFIX):
@@ -206,11 +209,13 @@ async def resolve_mcp_tool_definitions(
 
         for tool in mcp_tools:
             ns_name = _namespace_tool_name(server.id, tool.name)
-            all_lc_tools.append(_tool_to_langchain_dict(ns_name, tool))
+            lc_def = _tool_to_langchain_dict(ns_name, tool)
+            all_lc_tools.append(lc_def)
             tool_map[ns_name] = (server.id, tool.name)
+            tools_by_server.setdefault(server_name, []).append(lc_def)
 
     if not all_lc_tools:
-        return [], None
+        return [], None, {}
 
     executor = MCPToolExecutor(mcp_registry, tool_map)
-    return all_lc_tools, executor
+    return all_lc_tools, executor, tools_by_server

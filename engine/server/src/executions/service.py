@@ -585,6 +585,10 @@ class ExecutionService:
 
         context_builder = AgentContextBuilder()
         system_prompt_chars = len(agent.system_prompt or "")
+        is_delegated = input_data.get("routing_strategy") == "DELEGATE_AGENT"
+        skip_history = is_delegated or not getattr(
+            agent, "include_conversation_history", True
+        )
         context_params = ContextBuildParams(
             agent=agent,
             query=execution.input_prompt,
@@ -593,6 +597,7 @@ class ExecutionService:
             conversation_id=execution.session_id,
             model_id=agent.model_id,
             system_prompt_chars=system_prompt_chars,
+            skip_history=skip_history,
         )
         context_messages = await context_builder.build_context_messages(context_params)
 
