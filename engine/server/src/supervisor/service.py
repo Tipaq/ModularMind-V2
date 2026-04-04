@@ -791,7 +791,7 @@ class SuperSupervisorService:
 
         allowed_categories = conv_config.get("supervisor_tool_categories")
 
-        mcp_tools, mcp_executor = await self._discover_mcp_tools(conv_config)
+        mcp_tools, mcp_executor, mcp_by_server = await self._discover_mcp_tools(conv_config)
 
         executor_deps = ToolExecutorDeps(publish_fn=publish_fn)
         extended_executor = ExtendedToolExecutor(
@@ -832,34 +832,49 @@ class SuperSupervisorService:
             gateway_executor=gateway_executor,
             builtin_fn=builtin_fn,
             builtin_names=BUILTIN_TOOL_NAMES,
-            mcp_tool_defs=mcp_tools or [],
+            mcp_tool_defs_by_server=mcp_by_server,
             gateway_tool_defs=gateway_tool_defs,
             allowed_categories=allowed_categories,
         )
 
         return get_discovery_tool_definitions(), discovery_executor
 
-    async def _discover_mcp_tools(self, conv_config: dict[str, Any]) -> tuple[list | None, Any]:
-        """Discover and convert MCP tools for tool-calling execution."""
+    async def _discover_mcp_tools(
+        self, conv_config: dict[str, Any]
+    ) -> tuple[list | None, Any, dict[str, list[dict[str, Any]]]]:
+        """Discover and convert MCP tools for tool-calling execution.
+
+        Returns:
+            Tuple of (lc_tools, executor, tools_by_server_name).
+            tools_by_server_name maps server display names to their LC tool defs.
+        """
         from src.mcp.service import get_mcp_registry
         from src.mcp.tool_adapter import discover_and_convert
 
         registry = get_mcp_registry()
-        enabled_servers = [s.id for s in registry.list_servers() if s.enabled]
-        if not enabled_servers:
+        servers = [s for s in registry.list_servers() if s.enabled]
+        if not servers:
             logger.debug("No enabled MCP servers for supervisor tools")
-            return None, None
+            return None, None, {}
 
+        server_id_to_name = {s.id: s.name for s in servers}
         lc_tools, tool_executor = await discover_and_convert(
             registry,
-            enabled_servers,
+            [s.id for s in servers],
         )
 
         if not lc_tools or not tool_executor:
             logger.debug("No MCP tools discovered for supervisor")
-            return None, None
+            return None, None, {}
 
-        return lc_tools, tool_executor
+        tools_by_server_name: dict[str, list[dict[str, Any]]] = {}
+        for ns_name, (server_id, _real_name) in tool_executor._map.items():
+            server_name = server_id_to_name.get(server_id, server_id[:8])
+            tool_def = next((t for t in lc_tools if t["function"]["name"] == ns_name), None)
+            if tool_def:
+                tools_by_server_name.setdefault(server_name, []).append(tool_def)
+
+        return lc_tools, tool_executor, tools_by_server_name
 
     async def _setup_tool_execution(
         self,

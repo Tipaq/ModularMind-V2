@@ -21,7 +21,7 @@ MAX_SEARCH_RESULTS = 10
 MAX_DESCRIPTION_CHARS = 200
 
 # Virtual category names that are not in the extended tool registry
-VIRTUAL_CATEGORIES = {"mcp", "builtin"}
+VIRTUAL_CATEGORIES = {"builtin"}
 
 ALL_CATEGORY_NAMES = [
     "knowledge",
@@ -37,7 +37,6 @@ ALL_CATEGORY_NAMES = [
     "human_interaction",
     "custom_tools",
     "mini_apps",
-    "mcp",
     "builtin",
 ]
 
@@ -50,8 +49,10 @@ def get_discovery_tool_definitions() -> list[dict[str, Any]]:
             "function": {
                 "name": "search_tools",
                 "description": (
-                    "Search available tools by keyword or category. "
-                    "Returns tool names, descriptions, and parameter schemas. "
+                    "Search available tools by keyword. "
+                    "Returns matching tool names, descriptions, and parameters. "
+                    "Use descriptive keywords about what you want to do "
+                    "(e.g. 'code structure', 'search symbol', 'schedule task'). "
                     "Always call this before use_tool to discover the right tool."
                 ),
                 "parameters": {
@@ -60,16 +61,10 @@ def get_discovery_tool_definitions() -> list[dict[str, Any]]:
                         "query": {
                             "type": "string",
                             "description": (
-                                "Keyword to search across tool names and descriptions."
-                            ),
-                        },
-                        "category": {
-                            "type": "string",
-                            "description": (
-                                "Filter by category: knowledge, scheduling, web, "
-                                "file_storage, image_generation, github, git, "
-                                "filesystem, shell, network, human_interaction, "
-                                "custom_tools, mcp, builtin."
+                                "Keyword to search across all tool names "
+                                "and descriptions. Use action words describing "
+                                "what you need (e.g. 'repo structure', "
+                                "'search code', 'schedule', 'knowledge')."
                             ),
                         },
                     },
@@ -137,7 +132,7 @@ class ToolDiscoveryExecutor:
         gateway_executor: Any | None,
         builtin_fn: Callable[..., Any] | None,
         builtin_names: set[str],
-        mcp_tool_defs: list[dict[str, Any]],
+        mcp_tool_defs_by_server: dict[str, list[dict[str, Any]]],
         gateway_tool_defs: list[dict[str, Any]],
         allowed_categories: list[str] | None,
     ):
@@ -146,7 +141,7 @@ class ToolDiscoveryExecutor:
         self._gateway = gateway_executor
         self._builtin_fn = builtin_fn
         self._builtin_names = builtin_names
-        self._mcp_tool_defs = mcp_tool_defs
+        self._mcp_tool_defs_by_server = mcp_tool_defs_by_server
         self._gateway_tool_defs = gateway_tool_defs
         self._allowed = set(allowed_categories) if allowed_categories else None
 
@@ -166,11 +161,9 @@ class ToolDiscoveryExecutor:
 
     async def _handle_search(self, args: dict[str, Any]) -> str:
         query = args.get("query", "")
-        category_filter = args.get("category")
         results: list[dict[str, Any]] = []
 
-        # Collect tool defs from all sources
-        for category, defs in self._collect_tool_defs(category_filter):
+        for category, defs in self._collect_all_tool_defs():
             for tool_def in defs:
                 info = _extract_tool_info(tool_def, category)
                 if not query or _matches_query(info, query):
@@ -185,39 +178,29 @@ class ToolDiscoveryExecutor:
 
         return json.dumps(results, ensure_ascii=False)
 
-    def _collect_tool_defs(
-        self,
-        category_filter: str | None,
-    ) -> list[tuple[str, list[dict[str, Any]]]]:
-        """Collect tool definitions from all sources, respecting filters."""
+    def _collect_all_tool_defs(self) -> list[tuple[str, list[dict[str, Any]]]]:
+        """Collect tool definitions from all sources.
+
+        Always searches every source — filtering is done by keyword match
+        on tool names and descriptions, not by category.
+        MCP tools are categorized by their server name (e.g. "FastCode").
+        """
         from src.graph_engine.builtin_tools import get_builtin_tool_definitions
         from src.tools.registry import get_category_registry
 
         collected: list[tuple[str, list[dict[str, Any]]]] = []
         registry = get_category_registry()
 
-        # Extended categories (from registry)
         for cat_name, getter_fn in registry.items():
             if not self._is_category_allowed(cat_name):
                 continue
-            if category_filter and category_filter != cat_name:
-                continue
             collected.append((cat_name, getter_fn()))
 
-        # MCP tools (virtual category)
-        if (
-            self._is_category_allowed("mcp")
-            and self._mcp_tool_defs
-            and (not category_filter or category_filter == "mcp")
-        ):
-            collected.append(("mcp", self._mcp_tool_defs))
+        for server_name, tool_defs in self._mcp_tool_defs_by_server.items():
+            if tool_defs:
+                collected.append((server_name, tool_defs))
 
-        # Builtin tools (virtual category)
-        if (
-            self._is_category_allowed("builtin")
-            and self._builtin_fn
-            and (not category_filter or category_filter == "builtin")
-        ):
+        if self._builtin_fn:
             collected.append(("builtin", get_builtin_tool_definitions()))
 
         return collected

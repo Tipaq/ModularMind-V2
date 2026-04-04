@@ -23,7 +23,7 @@ ROUTING_TASK_TEMPLATE = """Your job is to analyze user messages and decide the b
 
 Available strategies:
 - DIRECT_RESPONSE: Answer directly without delegation (greetings, simple questions, meta-questions about the system)
-- TOOL_RESPONSE: Answer using tools — search and use any available tool (scheduling, knowledge, web search, file storage, GitHub, etc.). Always available.
+- TOOL_RESPONSE: Answer using tools — search_tools finds any available tool by keyword, then use_tool executes it. Always available.
 - DELEGATE_AGENT: Route to a specific existing agent
 - EXECUTE_GRAPH: Execute a specific workflow graph
 - CREATE_AGENT: Create a new ephemeral agent (when no existing agent fits)
@@ -35,11 +35,8 @@ Available agents:
 Available graphs:
 {graph_catalog}
 
-Available tool categories:
+Available tools (all searchable via search_tools by keyword):
 {tool_catalog}
-
-Available MCP tools (usable via TOOL_RESPONSE → search_tools → use_tool):
-{mcp_catalog}
 
 Recent conversation context:
 {conversation_summary}
@@ -62,12 +59,11 @@ Respond with a JSON object matching this schema:
 Rules:
 - When using DELEGATE_AGENT, EXECUTE_GRAPH, or CREATE_AGENT, always provide "extracted_prompt" — a clear, focused reformulation of the user's request tailored for the target agent. Strip meta-language ("can you", "I'd like to"), conversation references, and anything irrelevant to the agent's task. If the user's message is already a clear task, keep it as-is.
 - Use DIRECT_RESPONSE for greetings, small talk, simple factual questions, ANY question about your identity or capabilities ("who are you?", "what can you do?", "describe yourself"), and questions that can be answered using the provided knowledge context. YOU must answer these yourself — never delegate identity questions to an agent.
-- Use TOOL_RESPONSE when the user needs a simple tool action (search, scheduling, file ops, web lookup, etc.) — it is always available via tool discovery
+- Use TOOL_RESPONSE when the user needs a simple tool action (search, scheduling, file ops, web lookup, code search, etc.) — search_tools will find the right tool by keyword
 - Use DELEGATE_AGENT when a specific agent clearly matches the request or the task requires multi-step reasoning with tools
 - Use EXECUTE_GRAPH when the user requests a workflow, pipeline, or a multi-step task that matches a graph (e.g. "resolve this issue", "fix this PR"). ALWAYS prefer EXECUTE_GRAPH over DELEGATE_AGENT when a graph exists for the task.
 - Prefer TOOL_RESPONSE over DIRECT_RESPONSE when tools can provide better, up-to-date information
-- Prefer TOOL_RESPONSE over DELEGATE_AGENT for simple, single-tool tasks (e.g. "create a scheduled task", "search my knowledge base", "is my repo indexed", "check repo status", "list indexed repos")
-- ALWAYS use TOOL_RESPONSE (not DELEGATE_AGENT) when the user asks about code repositories, repo indexing, code search, or code structure — use the MCP tools listed above via search_tools
+- Prefer TOOL_RESPONSE over DELEGATE_AGENT for simple, single-tool tasks (e.g. "create a scheduled task", "search my knowledge base", "check repo status")
 - Prefer DELEGATE_AGENT over CREATE_AGENT — always
 - NEVER choose CREATE_AGENT if an existing agent's capabilities match the request even partially — use DELEGATE_AGENT instead
 - CREATE_AGENT is a last resort: only use it when the user explicitly asks for a new specialized assistant OR when absolutely no existing agent is even remotely relevant
@@ -121,20 +117,26 @@ _TOOL_CATEGORY_DESCRIPTIONS: dict[str, str] = {
     "human_interaction": "Request user approval or input",
     "custom_tools": "Custom agent-defined tools",
     "mini_apps": "Interactive mini-applications",
-    "mcp": "External MCP server tools",
     "gateway": "Shell execution, network requests",
     "builtin": "Search past conversations, update user profile",
 }
 
 
-def build_tool_category_catalog(allowed_categories: list[str] | None = None) -> str:
-    """Build a compact tool category listing for the routing prompt.
+def build_tool_category_catalog(
+    allowed_categories: list[str] | None = None,
+    mcp_tools: dict[str, list[MCPToolDefinition]] | None = None,
+) -> str:
+    """Build a unified tool catalog for the routing prompt.
+
+    Includes built-in categories and MCP server tools in a single list.
+    MCP tools are listed by server name with individual tool descriptions.
 
     Args:
         allowed_categories: Category whitelist (None = all categories).
+        mcp_tools: Mapping of server_name → list of tool definitions.
 
     Returns:
-        Formatted string listing available categories.
+        Formatted string listing all available tools by category/server.
     """
     lines: list[str] = []
     for category, description in _TOOL_CATEGORY_DESCRIPTIONS.items():
@@ -142,37 +144,20 @@ def build_tool_category_catalog(allowed_categories: list[str] | None = None) -> 
             continue
         lines.append(f"- {category}: {description}")
 
+    if mcp_tools:
+        tool_count = 0
+        for server_name, tools in mcp_tools.items():
+            for tool in tools:
+                if tool_count >= MAX_MCP_TOOLS_IN_CATALOG:
+                    remaining = sum(len(t) for t in mcp_tools.values()) - tool_count
+                    if remaining > 0:
+                        lines.append(f"  ... and {remaining} more tools")
+                    return "\n".join(lines)
+                desc = (tool.description or tool.name)[:MAX_DESCRIPTION_CHARS]
+                lines.append(f"- {tool.name} ({server_name}): {desc}")
+                tool_count += 1
+
     return "\n".join(lines) if lines else "(none)"
-
-
-def build_mcp_tool_catalog(
-    tools_by_server: dict[str, list[MCPToolDefinition]],
-) -> str:
-    """Build a compact MCP tool catalog for the routing prompt.
-
-    Args:
-        tools_by_server: Mapping of server_name → list of tool definitions.
-
-    Returns:
-        Formatted string listing available tools, or "(none)" if empty.
-    """
-    if not tools_by_server:
-        return "(none — TOOL_RESPONSE not available)"
-
-    lines: list[str] = []
-    tool_count = 0
-    for server_name, tools in tools_by_server.items():
-        for tool in tools:
-            if tool_count >= MAX_MCP_TOOLS_IN_CATALOG:
-                remaining = sum(len(t) for t in tools_by_server.values()) - tool_count
-                if remaining > 0:
-                    lines.append(f"  ... and {remaining} more tools")
-                return "\n".join(lines)
-            desc = (tool.description or tool.name)[:MAX_DESCRIPTION_CHARS]
-            lines.append(f"- {tool.name} ({server_name}): {desc}")
-            tool_count += 1
-
-    return "\n".join(lines) if lines else "(none — TOOL_RESPONSE not available)"
 
 
 def build_conversation_summary(messages: list[dict]) -> str:
@@ -218,8 +203,7 @@ def build_routing_task_prompt(
         graphs: Available graph configs
         history: Recent conversation messages
         last_agent: Last routed agent name/id (for affinity hint)
-        mcp_tools: Optional mapping of server_name → list of tool definitions
-            (kept for backward compat but no longer used in the template)
+        mcp_tools: Optional mapping of server_name → list of tool definitions.
         memory_context: Pre-formatted memory context string
         knowledge_context: Pre-formatted RAG knowledge context string
         allowed_tool_categories: Whitelist for tool categories (None = all).
@@ -229,8 +213,7 @@ def build_routing_task_prompt(
     """
     agent_catalog = build_agent_catalog(agents)
     graph_catalog = build_graph_catalog(graphs)
-    tool_catalog = build_tool_category_catalog(allowed_tool_categories)
-    mcp_catalog = build_mcp_tool_catalog(mcp_tools) if mcp_tools else "(none)"
+    tool_catalog = build_tool_category_catalog(allowed_tool_categories, mcp_tools)
     conversation_summary = build_conversation_summary(history)
     last_agent_info = last_agent or "(none — new conversation or topic change)"
     memory_section = f"User profile:\n{memory_context}" if memory_context else ""
@@ -244,7 +227,6 @@ def build_routing_task_prompt(
         agent_catalog=agent_catalog,
         graph_catalog=graph_catalog,
         tool_catalog=tool_catalog,
-        mcp_catalog=mcp_catalog,
         conversation_summary=conversation_summary,
         last_agent_info=last_agent_info,
         memory_section=memory_section,
@@ -255,20 +237,16 @@ def build_routing_task_prompt(
 
     # Enforce hard limit — drop context progressively
     if len(prompt) > MAX_ROUTING_PROMPT_CHARS:
-        # First: drop conversation summary
         fmt_kwargs["conversation_summary"] = "(trimmed for size)"
         prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
 
     if len(prompt) > MAX_ROUTING_PROMPT_CHARS:
-        # Second: truncate agent descriptions
         fmt_kwargs["agent_catalog"] = build_agent_catalog(agents[:10])
         prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
 
     if len(prompt) > MAX_ROUTING_PROMPT_CHARS:
-        # Third: truncate graph, tool, mcp, memory, and knowledge
         fmt_kwargs["graph_catalog"] = build_graph_catalog(graphs[:5])
         fmt_kwargs["tool_catalog"] = "(trimmed for size)"
-        fmt_kwargs["mcp_catalog"] = "(trimmed for size)"
         fmt_kwargs["memory_section"] = ""
         fmt_kwargs["knowledge_section"] = ""
         prompt = ROUTING_TASK_TEMPLATE.format(**fmt_kwargs)
