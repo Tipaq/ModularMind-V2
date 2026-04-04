@@ -1,11 +1,12 @@
-import { memo, useState, useRef, useEffect, useCallback } from "react";
+import { memo, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Trash2, Check, X } from "lucide-react";
 import { cn, Button, Input } from "@modularmind/ui";
 import type { Conversation } from "@modularmind/api-client";
 import { useConversationContext } from "../../contexts/ConversationContext";
-import { groupConversationsByTime } from "../../lib/conversation-utils";
 import { useSidebarStore } from "../../stores/sidebar-store";
+
+const MAX_RECENT = 8;
 
 interface ConvItemProps {
   conv: Conversation;
@@ -66,7 +67,7 @@ const ConvItem = memo(function ConvItem({
       ) : (
         <>
           <span
-            className="flex-1 truncate"
+            className="flex-1 truncate text-[13px]"
             onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(conv); }}
           >
             {conv.title || "New Chat"}
@@ -85,7 +86,11 @@ const ConvItem = memo(function ConvItem({
   );
 });
 
-export const SidebarConversations = memo(function SidebarConversations() {
+interface SidebarConversationsProps {
+  searchFilter?: string;
+}
+
+export const SidebarConversations = memo(function SidebarConversations({ searchFilter = "" }: SidebarConversationsProps) {
   const ctx = useConversationContext();
   const { isCollapsed } = useSidebarStore();
   const navigate = useNavigate();
@@ -106,48 +111,47 @@ export const SidebarConversations = memo(function SidebarConversations() {
 
   const cancelEdit = useCallback(() => setEditingId(null), []);
 
-  if (!ctx || isCollapsed) return null;
+  const recentConversations = useMemo(() => {
+    if (!ctx) return [];
+    const filtered = searchFilter
+      ? ctx.conversations.filter((c) =>
+          (c.title || "").toLowerCase().includes(searchFilter.toLowerCase()),
+        )
+      : ctx.conversations;
+    return filtered.slice(0, MAX_RECENT);
+  }, [ctx, searchFilter]);
 
-  const groups = groupConversationsByTime(ctx.conversations);
+  if (!ctx || isCollapsed) return null;
 
   const handleSelect = (id: string) => {
     ctx.onSelect(id);
     navigate(`/chat/${id}`);
   };
 
-  if (groups.length === 0) {
+  if (recentConversations.length === 0) {
     return (
-      <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-        No conversations yet
+      <div className="px-4 py-3 text-center text-xs text-muted-foreground">
+        {searchFilter ? "No matching conversations" : "No conversations yet"}
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      {groups.map((group) => (
-        <div key={group.label}>
-          <p className="px-3 mb-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-            {group.label}
-          </p>
-          <div className="space-y-0.5 px-1">
-            {group.conversations.map((conv) => (
-              <ConvItem
-                key={conv.id}
-                conv={conv}
-                isActive={ctx.activeConversationId === conv.id}
-                isEditing={editingId === conv.id}
-                editValue={editValue}
-                onSelect={handleSelect}
-                onStartEdit={startEdit}
-                onConfirmEdit={confirmEdit}
-                onCancelEdit={cancelEdit}
-                onEditChange={setEditValue}
-                onDelete={ctx.onDelete}
-              />
-            ))}
-          </div>
-        </div>
+    <div className="space-y-0.5 px-2">
+      {recentConversations.map((conv) => (
+        <ConvItem
+          key={conv.id}
+          conv={conv}
+          isActive={ctx.activeConversationId === conv.id}
+          isEditing={editingId === conv.id}
+          editValue={editValue}
+          onSelect={handleSelect}
+          onStartEdit={startEdit}
+          onConfirmEdit={confirmEdit}
+          onCancelEdit={cancelEdit}
+          onEditChange={setEditValue}
+          onDelete={ctx.onDelete}
+        />
       ))}
     </div>
   );
