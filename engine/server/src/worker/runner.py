@@ -29,9 +29,6 @@ from src.infra.stream_names import (
     STREAM_CODE_INDEX,
     STREAM_DOCUMENTS,
     STREAM_EXECUTIONS,
-    STREAM_MEMORY_EXTRACTED,
-    STREAM_MEMORY_RAW,
-    STREAM_MEMORY_SCORED,
     STREAM_MODELS,
     STREAM_RAG_EMBEDDED,
     STREAM_RAG_EXTRACTED,
@@ -191,41 +188,6 @@ async def main() -> None:
                 ),
             )
             logger.info("RAG monolithic handler enabled: documents -> process_document")
-
-    # --- Memory pipeline streams (legacy — will be removed in Phase 9) ---
-    if "memory" in enabled_streams:
-        try:
-            from src.pipeline.handlers.embedder import embedder_handler
-            from src.pipeline.handlers.extractor import extractor_handler
-            from src.pipeline.handlers.summarizer import summarizer_handler
-
-            tasks.extend(
-                [
-                    bus.subscribe(STREAM_MEMORY_RAW, "extractors", "ext-1", extractor_handler),
-                    bus.subscribe(STREAM_MEMORY_RAW, "summarizers", "sum-1", summarizer_handler),
-                ]
-            )
-            if settings.MEMORY_SCORER_ENABLED:
-                from src.pipeline.handlers.scorer import scorer_handler
-
-                tasks.extend(
-                    [
-                        bus.subscribe(
-                            STREAM_MEMORY_EXTRACTED, "scorers", "scr-1", scorer_handler
-                        ),
-                        bus.subscribe(
-                            STREAM_MEMORY_SCORED, "embedders", "emb-1", embedder_handler
-                        ),
-                    ]
-                )
-            else:
-                tasks.append(
-                    bus.subscribe(
-                        STREAM_MEMORY_EXTRACTED, "embedders", "emb-1", embedder_handler
-                    ),
-                )
-        except ImportError:
-            logger.info("Memory pipeline handlers not available (removed in Phase 9)")
 
     # --- Scheduled task trigger stream ---
     if "scheduled_tasks" in enabled_streams and scheduled_task_runner:
