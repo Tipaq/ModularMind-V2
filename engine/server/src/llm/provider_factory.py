@@ -13,6 +13,7 @@ from src.infra.config import get_settings
 
 from .anthropic import AnthropicProvider
 from .base import LLMProvider
+from .google import GeminiProvider
 from .ollama import OllamaProvider
 from .openai import OpenAIProvider
 
@@ -104,10 +105,11 @@ class LLMProviderFactory:
                 timeout=timeout,
             )
 
-        # Standard providers (openai, anthropic)
+        # Standard providers (openai, anthropic, google)
         _STANDARD: dict[str, type[LLMProvider]] = {
             "openai": OpenAIProvider,
             "anthropic": AnthropicProvider,
+            "google": GeminiProvider,
         }
         provider_class = _STANDARD.get(name)
         if not provider_class:
