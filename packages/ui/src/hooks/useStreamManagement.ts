@@ -20,7 +20,7 @@ interface StreamRefs {
   currentContextDataRef: React.MutableRefObject<ContextData | null>;
 }
 
-export interface StreamCallbacks {
+interface StreamCallbacks {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setIsStreaming: React.Dispatch<React.SetStateAction<boolean>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;

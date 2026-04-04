@@ -17,7 +17,7 @@ const ALLOWED_EXTENSIONS = ["pdf", "txt", "csv", "md", "json", "docx", "png", "j
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
-export interface FileValidationResult {
+interface FileValidationResult {
   validFiles: AttachedFile[];
   errorMessage: string | null;
 }

@@ -109,18 +109,3 @@ export function MessageItem({ msg }: { msg: { role: string; content: string } })
   );
 }
 
-export function MessagesContext({ messages }: { messages: { role: string; content: string }[] }) {
-  if (!messages.length) return null;
-  return (
-    <div className="space-y-1.5">
-      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-        Context ({messages.length})
-      </span>
-      <div className="space-y-1">
-        {messages.map((msg, i) => (
-          <MessageItem key={i} msg={msg} />
-        ))}
-      </div>
-    </div>
-  );
-}

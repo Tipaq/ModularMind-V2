@@ -38,5 +38,3 @@ export const BUILTIN_TOOL_CATEGORIES: ToolCategoryEntry[] = [
   { id: "builtin", label: "Built-in", description: "Conversations, user profile" },
 ];
 
-/** @deprecated Use BUILTIN_TOOL_CATEGORIES + dynamic MCP categories */
-export const ALL_TOOL_CATEGORIES = BUILTIN_TOOL_CATEGORIES;
