@@ -18,7 +18,7 @@ import type {
   MessageExecutionData,
 } from "../../types/chat";
 import type { EngineAgent, EngineGraph, EngineModel, SupervisorLayer } from "@modularmind/api-client";
-import { ALL_TOOL_CATEGORIES, BUILTIN_TOOL_CATEGORIES } from "../../lib/chat-config";
+import { BUILTIN_TOOL_CATEGORIES } from "../../lib/chat-config";
 import type { ChatConfig, ToolCategoryEntry } from "../../lib/chat-config";
 import { api } from "@modularmind/api-client";
 

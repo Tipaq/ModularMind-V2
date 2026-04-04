@@ -45,7 +45,7 @@ describe("handleLlmEnd", () => {
     const setActivities = vi.fn();
     const runningLlm: ExecutionActivity = {
       id: "llm-1", type: "llm", status: "running",
-      label: "gpt-4o", startedAt: Date.now() - 500, seq: 1, children: [],
+      label: "gpt-4o", startedAt: Date.now() - 500,
     };
 
     handleLlmEnd({ type: "trace:llm_end", duration_ms: 500 }, null, setActivities as SetActivities);
@@ -81,7 +81,7 @@ describe("handleToolEnd", () => {
     const setActivities = vi.fn();
     const runningTool: ExecutionActivity = {
       id: "tool-1", type: "tool", status: "running",
-      label: "web_search", startedAt: Date.now() - 200, seq: 1, children: [],
+      label: "web_search", startedAt: Date.now() - 200,
     };
 
     handleToolEnd(
@@ -119,7 +119,7 @@ describe("handleRetrieval", () => {
     const seqRef = makeSeqRef();
     const runningRetrieval: ExecutionActivity = {
       id: "ret-1", type: "retrieval", status: "running",
-      label: "Searching", startedAt: Date.now() - 100, seq: 1, children: [],
+      label: "Searching", startedAt: Date.now() - 100,
     };
 
     handleRetrieval(
@@ -198,7 +198,7 @@ describe("handleCompactionEvents", () => {
     const seqRef = makeSeqRef();
     const runningCompaction: ExecutionActivity = {
       id: "comp-1", type: "compaction", status: "running",
-      label: "Compacting", startedAt: Date.now() - 100, seq: 1, children: [],
+      label: "Compacting", startedAt: Date.now() - 100,
     };
 
     handleCompactionEvents(

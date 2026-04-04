@@ -9,7 +9,6 @@ function makeActivity(
     label: "test",
     status: "running",
     startedAt: 1000,
-    seq: 0,
     children: [],
     ...overrides,
   };
@@ -80,7 +79,7 @@ describe("completeLastRunning", () => {
 
 describe("appendChild", () => {
   it("appends child to parent by id", () => {
-    const parent = makeActivity({ id: "p1", type: "agent" });
+    const parent = makeActivity({ id: "p1", type: "agent_execution" });
     const child = makeActivity({ id: "c1", type: "tool" });
 
     const result = appendChild([parent], "p1", child);
@@ -90,7 +89,7 @@ describe("appendChild", () => {
   });
 
   it("appends child to nested parent within graph_execution", () => {
-    const nestedParent = makeActivity({ id: "node1", type: "agent" });
+    const nestedParent = makeActivity({ id: "node1", type: "agent_execution" });
     const graphExec = makeActivity({
       id: "g1",
       type: "graph_execution",
@@ -105,7 +104,7 @@ describe("appendChild", () => {
   });
 
   it("returns unchanged when parentId not found", () => {
-    const activities = [makeActivity({ id: "1", type: "agent" })];
+    const activities = [makeActivity({ id: "1", type: "agent_execution" })];
     const child = makeActivity({ id: "c1", type: "tool" });
 
     const result = appendChild(activities, "nonexistent", child);
@@ -117,7 +116,7 @@ describe("appendChild", () => {
 describe("updateChildDeep", () => {
   it("updates last running child of given type under parent", () => {
     const child = makeActivity({ id: "c1", type: "llm", status: "running" });
-    const parent = makeActivity({ id: "p1", type: "agent", children: [child] });
+    const parent = makeActivity({ id: "p1", type: "agent_execution", children: [child] });
 
     const result = updateChildDeep([parent], "p1", "llm", (c) => ({
       ...c,
@@ -131,7 +130,7 @@ describe("updateChildDeep", () => {
 
   it("updates nested child under graph_execution > parent", () => {
     const child = makeActivity({ id: "c1", type: "tool", status: "running" });
-    const nestedParent = makeActivity({ id: "n1", type: "agent", children: [child] });
+    const nestedParent = makeActivity({ id: "n1", type: "agent_execution", children: [child] });
     const graphExec = makeActivity({
       id: "g1",
       type: "graph_execution",
@@ -148,7 +147,7 @@ describe("updateChildDeep", () => {
 
   it("returns unchanged when no running child of type found", () => {
     const child = makeActivity({ id: "c1", type: "llm", status: "completed" });
-    const parent = makeActivity({ id: "p1", type: "agent", children: [child] });
+    const parent = makeActivity({ id: "p1", type: "agent_execution", children: [child] });
 
     const result = updateChildDeep([parent], "p1", "llm", (c) => ({
       ...c,

@@ -66,11 +66,10 @@ describe("extractToolArtifact", () => {
     label: "write_file",
     status: "completed",
     startedAt: 1000,
-    seq: 0,
     children: [],
     toolData: {
       toolName: "write_file",
-      input: "{}",
+      args: "{}",
       result: JSON.stringify({ path: "/src/utils.ts", content: "export const x = 1;" }),
     },
   };

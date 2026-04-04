@@ -50,7 +50,7 @@ function createMockAdapter(): ConversationAdapter {
 
 function createDefaultOptions(adapter: ConversationAdapter) {
   return {
-    authenticated: { id: "user-1" },
+    authenticated: { id: "user-1" } as { id: string } | null,
     activeConversationId: null as string | null,
     setActiveConversationId: vi.fn(),
     setInitialMessages: vi.fn(),
