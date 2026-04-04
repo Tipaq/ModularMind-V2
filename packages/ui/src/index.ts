@@ -96,6 +96,7 @@ export type { LoginFormProps } from "./components/login-form";
 export { ProfilePage } from "./components/profile-page";
 export type { ProfilePageProps } from "./components/profile-page";
 export { SettingsPage } from "./components/settings-page";
+export type { SettingsTab } from "./components/settings-page";
 export { ThemeCustomizer } from "./components/theme-customizer";
 export { ThemeToggle } from "./components/theme-toggle";
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/tooltip";
