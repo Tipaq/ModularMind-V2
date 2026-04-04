@@ -13,6 +13,10 @@
     "lint": {
       "dependsOn": ["^build"],
       "inputs": ["src/**", "*.ts", "*.tsx", "*.js", "*.json"]
+    },
+    "test": {
+      "inputs": ["src/**/*.test.{ts,tsx}", "src/**/*.{ts,tsx}", "vitest.config.ts"],
+      "outputs": []
     }
   }
 }

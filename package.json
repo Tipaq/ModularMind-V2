@@ -10,7 +10,7 @@
     "dev:ops": "turbo dev --filter=@modularmind/ops",
     "build:chat": "turbo build --filter=@modularmind/chat",
     "build:ops": "turbo build --filter=@modularmind/ops",
-    "test": "vitest run",
+    "test": "turbo test",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
@@ -22,6 +22,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "happy-dom": "^20.8.9",
     "turbo": "^2.3.0",
     "typescript-eslint": "^8.56.1",
     "vitest": "^4.0.18"
