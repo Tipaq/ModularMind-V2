@@ -65,6 +65,15 @@ class MistralProvider(LLMProvider):
             model_kwargs=model_kwargs,
         )
 
+    async def list_models(self) -> list[ModelInfo]:
+        return [
+            ModelInfo(name=info["name"], context_length=info["context_length"])
+            for info in MISTRAL_MODELS.values()
+        ]
+
+    async def is_available(self) -> bool:
+        return bool(self.api_key)
+
     def get_model_info(self, model_name: str) -> ModelInfo:
         info = MISTRAL_MODELS.get(model_name, {})
         return ModelInfo(

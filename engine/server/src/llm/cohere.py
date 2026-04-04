@@ -58,6 +58,15 @@ class CohereProvider(LLMProvider):
             timeout=self.timeout,
         )
 
+    async def list_models(self) -> list[ModelInfo]:
+        return [
+            ModelInfo(name=info["name"], context_length=info["context_length"])
+            for info in COHERE_MODELS.values()
+        ]
+
+    async def is_available(self) -> bool:
+        return bool(self.api_key)
+
     def get_model_info(self, model_name: str) -> ModelInfo:
         info = COHERE_MODELS.get(model_name, {})
         return ModelInfo(
