@@ -78,7 +78,6 @@ class Settings(BaseSettings):
         description="How long Ollama keeps models in VRAM (e.g. '5m', '1h', '24h', '-1' for forever)",  # noqa: E501
     )
     DEFAULT_LLM_PROVIDER: str = "ollama"
-    LLM_TIMEOUT_SECONDS: int = Field(default=60, ge=10, le=300)
     LLM_PROVIDER: Literal["ollama", "vllm", "tgi", "auto"] = "ollama"
     VLLM_BASE_URL: str = Field(default="", description="vLLM OpenAI-compatible API URL")
     TGI_BASE_URL: str = Field(default="", description="TGI OpenAI-compatible API URL")
@@ -163,7 +162,6 @@ class Settings(BaseSettings):
         description="inline=blocking in-process execution (V2 default)",
     )
     MAX_EXECUTION_TIMEOUT: int = Field(default=7200, ge=60, le=14400)
-    MAX_PROMPT_LENGTH: int = Field(default=10000, ge=1000, le=50000)
     MAX_INPUT_PROMPT_SIZE: int = Field(default=32768, ge=1024, le=131072)
     MAX_INPUT_DATA_SIZE: int = Field(default=1048576, ge=1024, le=10485760)
 
@@ -226,13 +224,6 @@ class Settings(BaseSettings):
         description="Enable multi-stage RAG pipeline (extractor->embedder->storer). Default OFF.",
     )
 
-    # ---- Conversation Indexing ----------------------------------------------
-    CONVERSATION_INDEX_MODE: str = Field(
-        default="summary",
-        description="summary|messages|both — controls cross-conversation indexing granularity",
-    )
-    CONVERSATION_INDEXING_ENABLED: bool = True
-
     # ---- Reranking ----------------------------------------------------------
     RERANK_PROVIDER: str = Field(
         default="none",
@@ -247,7 +238,6 @@ class Settings(BaseSettings):
 
     # ---- Rate Limiting ------------------------------------------------------
     RATE_LIMIT_REQUESTS: int = Field(default=100, ge=10, le=1000)
-    RATE_LIMIT_BURST: int = Field(default=20, ge=0, le=100)
     RATE_LIMIT_EXECUTIONS: str = "10/minute"
     RATE_LIMIT_EXECUTIONS_POLL: str = "100/minute"
     RATE_LIMIT_READS: str = "100/minute"
@@ -262,16 +252,9 @@ class Settings(BaseSettings):
         default="",
         description="URL to pull manifest from. Empty = standalone mode.",
     )
-    CONFIG_RELOAD_DEBOUNCE: int = Field(default=1000, ge=100, le=5000)
 
     # ---- Execution Tracing --------------------------------------------------
     ENABLE_EXECUTION_TRACING: bool = True
-    TRACE_LOG_PROMPTS: bool = False
-    TRACE_MAX_CONTENT_LENGTH: int = Field(default=500, ge=100, le=5000)
-
-    # ---- Logging ------------------------------------------------------------
-    LOG_LEVEL: str = "INFO"
-    LOG_FORMAT: Literal["json", "plain"] = "json"
 
     # ---- CORS ---------------------------------------------------------------
     CORS_ORIGINS: str = Field(
@@ -379,6 +362,15 @@ class Settings(BaseSettings):
     GITHUB_WEBHOOK_SECRET: str | None = Field(
         default=None,
         description="HMAC secret for verifying GitHub webhook signatures",
+    )
+
+    # ---- Supervisor ---------------------------------------------------------
+    SUPERVISOR_MODEL_ID: str | None = Field(
+        default=None,
+        description=(
+            "Model ID for supervisor routing and tool calls (e.g. 'google:gemini-2.0-flash'). "
+            "If None, uses the conversation's model_id."
+        ),
     )
 
     # ---- Uvicorn ------------------------------------------------------------

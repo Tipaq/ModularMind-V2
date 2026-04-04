@@ -7,6 +7,7 @@ from langchain_core.language_models import BaseChatModel
 
 from .anthropic import AnthropicProvider
 from .base import LLMProvider, ModelInfo
+from .google import GeminiProvider
 from .ollama import OllamaProvider
 from .openai import OpenAIProvider
 from .provider_factory import (
@@ -23,6 +24,7 @@ _PROVIDERS: dict[str, type[LLMProvider]] = {
     "ollama": OllamaProvider,
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
+    "google": GeminiProvider,
 }
 
 
