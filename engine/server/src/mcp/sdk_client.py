@@ -172,7 +172,13 @@ class MCPClient:
         result = await self._session.call_tool(request.tool_name, request.arguments)
 
         if getattr(result, "isError", None) or getattr(result, "is_error", None):
-            raise MCPToolError(f"Tool '{request.tool_name}' on '{self.config.name}' returned error")
+            error_texts = [
+                item.text for item in result.content if hasattr(item, "text")
+            ]
+            detail = "\n".join(error_texts) if error_texts else "(no details)"
+            raise MCPToolError(
+                f"Tool '{request.tool_name}' on '{self.config.name}' returned error: {detail}"
+            )
 
         content = [
             {"type": "text", "text": item.text} for item in result.content if hasattr(item, "text")
