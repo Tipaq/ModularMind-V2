@@ -8,6 +8,13 @@ from langchain_core.language_models import BaseChatModel
 from .anthropic import AnthropicProvider
 from .base import LLMProvider, ModelInfo
 from .cohere import CohereProvider
+from .errors import (
+    ExecutionError,
+    ExecutionErrorCode,
+    classify_llm_error,
+    classify_tool_error,
+    to_sse_payload,
+)
 from .google import GeminiProvider
 from .groq import GroqProvider
 from .mistral import MistralProvider
@@ -102,4 +109,9 @@ __all__ = [
     "RoutingLLMProvider",
     "get_llm_provider",
     "get_runtime_llm_provider",
+    "ExecutionError",
+    "ExecutionErrorCode",
+    "classify_llm_error",
+    "classify_tool_error",
+    "to_sse_payload",
 ]
