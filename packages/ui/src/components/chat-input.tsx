@@ -50,7 +50,7 @@ export interface ChatInputProps {
   contextPercent?: number | null;
 }
 
-const defaultGetModelId = (m: EngineModel) => m.id;
+const defaultGetModelId = (m: EngineModel) => `${m.provider}:${m.model_id}`;
 const defaultModelLabel = (m: EngineModel) => formatModelName(m.model_id || m.name);
 
 export const ChatInput = memo(function ChatInput({
