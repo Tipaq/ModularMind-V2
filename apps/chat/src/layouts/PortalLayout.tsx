@@ -1,7 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { TopNav } from "../components/navigation/TopNav";
+import { AppSidebar } from "../components/navigation/AppSidebar";
 
 export default function PortalLayout() {
   const { isLoading } = useAuth();
@@ -15,9 +15,11 @@ export default function PortalLayout() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <TopNav />
-      <Outlet />
+    <div className="h-screen flex flex-row bg-background">
+      <AppSidebar />
+      <main className="flex-1 min-w-0 overflow-hidden">
+        <Outlet />
+      </main>
     </div>
   );
 }

@@ -3,10 +3,10 @@ import { useParams } from "react-router-dom";
 import {
   useChat, useConversations, useChatConfig, useArtifacts,
   ChatMessages, ChatInput, ChatErrorBanner,
-  useAuthStore, toggleArrayItem, formatModelName, SectionShell,
+  useAuthStore, toggleArrayItem, formatModelName,
 } from "@modularmind/ui";
 import type { EngineModel, DetectedArtifact } from "@modularmind/ui";
-import { ChatSidebar } from "../components/ChatSidebar";
+import { ConversationProvider } from "../contexts/ConversationContext";
 import { chatAdapter, conversationAdapter, chatConfigAdapter } from "../lib/chat-adapter";
 import { useChatConfigPersistence } from "../hooks/useChatConfigPersistence";
 import { useChatSend } from "../hooks/useChatSend";
@@ -135,19 +135,17 @@ export function ChatPage() {
     return activities.find((a) => a.status === "running")?.label || "Thinking...";
   }, [isStreaming, activities]);
 
+  const conversationContextValue = useMemo(() => ({
+    conversations,
+    activeConversationId,
+    onSelect: handleSelectConversation,
+    onCreate: createConversation,
+    onDelete: handleDeleteConversation,
+    onRename: handleRenameConversation,
+  }), [conversations, activeConversationId, handleSelectConversation, createConversation, handleDeleteConversation, handleRenameConversation]);
+
   return (
-    <SectionShell
-      sidebar={
-        <ChatSidebar
-          conversations={conversations}
-          activeId={activeConversationId}
-          onSelect={handleSelectConversation}
-          onCreate={createConversation}
-          onDelete={handleDeleteConversation}
-          onRename={handleRenameConversation}
-        />
-      }
-    >
+    <ConversationProvider value={conversationContextValue}>
       <div className="flex h-full w-full">
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <ChatHeader
@@ -222,7 +220,7 @@ export function ChatPage() {
           }}
         />
       </div>
-    </SectionShell>
+    </ConversationProvider>
   );
 }
 
