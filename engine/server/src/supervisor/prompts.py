@@ -66,7 +66,8 @@ Rules:
 - Use DELEGATE_AGENT when a specific agent clearly matches the request or the task requires multi-step reasoning with tools
 - Use EXECUTE_GRAPH when the user requests a workflow, pipeline, or a multi-step task that matches a graph (e.g. "resolve this issue", "fix this PR"). ALWAYS prefer EXECUTE_GRAPH over DELEGATE_AGENT when a graph exists for the task.
 - Prefer TOOL_RESPONSE over DIRECT_RESPONSE when tools can provide better, up-to-date information
-- Prefer TOOL_RESPONSE over DELEGATE_AGENT for simple, single-tool tasks (e.g. "create a scheduled task", "search my knowledge base")
+- Prefer TOOL_RESPONSE over DELEGATE_AGENT for simple, single-tool tasks (e.g. "create a scheduled task", "search my knowledge base", "is my repo indexed", "check repo status", "list indexed repos")
+- ALWAYS use TOOL_RESPONSE (not DELEGATE_AGENT) when the user asks about code repositories, repo indexing, code search, or code structure — use the MCP tools listed above via search_tools
 - Prefer DELEGATE_AGENT over CREATE_AGENT — always
 - NEVER choose CREATE_AGENT if an existing agent's capabilities match the request even partially — use DELEGATE_AGENT instead
 - CREATE_AGENT is a last resort: only use it when the user explicitly asks for a new specialized assistant OR when absolutely no existing agent is even remotely relevant
