@@ -513,12 +513,6 @@ class TestGatewayRoutedTools:
         assert GATEWAY_ROUTED_TOOLS["net_request"] == ("network", "request")
         assert GATEWAY_ROUTED_TOOLS["fs_read"] == ("filesystem", "read")
 
-    def test_deprecated_gateway_tool_definitions_returns_empty(self):
-        from src.gateway.tool_definitions import get_gateway_tool_definitions
-
-        assert get_gateway_tool_definitions({}) == []
-        assert get_gateway_tool_definitions({"shell": {"enabled": True}}) == []
-
 
 # ---------------------------------------------------------------------------
 # Models (SQLAlchemy)

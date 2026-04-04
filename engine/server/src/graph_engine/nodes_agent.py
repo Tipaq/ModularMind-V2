@@ -206,12 +206,8 @@ async def create_agent_node(
             _settings = _get_settings()
             if _settings.GATEWAY_ENABLED:
                 from src.gateway.executor import GatewayToolExecutor
-                from src.gateway.tool_definitions import get_gateway_tool_definitions
                 from src.internal.auth import get_internal_bearer_token
 
-                if agent and agent.gateway_permissions:
-                    gateway_tool_defs = get_gateway_tool_definitions(agent.gateway_permissions)
-                    active_tools.extend(gateway_tool_defs)
                 user_id = (state.get("metadata") or {}).get("user_id")
                 gateway_executor = GatewayToolExecutor(
                     gateway_url=_settings.GATEWAY_URL,
