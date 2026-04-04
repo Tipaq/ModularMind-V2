@@ -87,8 +87,10 @@ export function useConversations({
         const items = data.items || [];
 
         // Clean up orphaned conversations (created but cancelled before first message)
-        const orphans = items.filter((c) => c.message_count === 0);
-        const valid = items.filter((c) => c.message_count > 0);
+        // Never delete the currently active conversation — it may just be freshly created.
+        const currentActiveId = activeIdRef.current;
+        const orphans = items.filter((c) => c.message_count === 0 && c.id !== currentActiveId);
+        const valid = items.filter((c) => c.message_count > 0 || c.id === currentActiveId);
         if (orphans.length > 0) {
           orphans.forEach((c) => adapter.deleteConversation(c.id).catch(() => {}));
         }
