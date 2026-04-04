@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import {
   useChat, useConversations, useChatConfig, useArtifacts,
-  ChatMessages, ChatInput,
+  ChatMessages, ChatInput, ChatErrorBanner,
   useAuthStore, toggleArrayItem, formatModelName, SectionShell,
 } from "@modularmind/ui";
 import type { EngineModel, DetectedArtifact } from "@modularmind/ui";
@@ -48,7 +48,7 @@ export function ChatPage() {
   }, [chatConfig.modelId, availableModels, toEngineModelId]);
 
   const {
-    messages, isStreaming, error, activities, executionDataMap, streamingMessageId,
+    messages, isStreaming, error, clearError, activities, executionDataMap, streamingMessageId,
     pendingApproval, approvalDecision, sendMessage, setInitialMessages,
     cancelStream, approveExecution, rejectExecution, regenerateLastMessage, editMessage,
   } = useChat(activeConversationId, chatAdapter);
@@ -158,11 +158,12 @@ export function ChatPage() {
             onTogglePanel={togglePanel}
           />
 
-          {(error || crudError) && (
-            <div className="px-4 py-2 bg-destructive/10 text-destructive text-sm border-b border-destructive/20 shrink-0">
-              {error || crudError}
-            </div>
-          )}
+          <ChatErrorBanner
+            error={error}
+            crudError={crudError}
+            onDismiss={clearError}
+            onRetry={regenerateLastMessage}
+          />
 
           <ChatMessages
             messages={messages}

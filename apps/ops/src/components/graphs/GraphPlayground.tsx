@@ -147,7 +147,7 @@ export function GraphPlayground({
 
       {error && (
         <div className="px-3 py-2 text-xs text-destructive bg-destructive/10 border-t border-destructive/20">
-          {error}
+          {error.message}
         </div>
       )}
 
