@@ -4,7 +4,7 @@ import {
   RefreshCw, Trash2, FileText,
 } from "lucide-react";
 import {
-  Button, ResourceTable, relativeTime,
+  Button, ResourceTable, relativeTime, formatBytes,
 } from "@modularmind/ui";
 import type { ResourceColumn, PaginationState } from "@modularmind/ui";
 import type { KnowledgeDocument } from "@modularmind/api-client";
@@ -15,13 +15,6 @@ function StatusIcon({ status }: { status: KnowledgeDocument["status"] }) {
   if (status === "failed") return <AlertCircle className="h-4 w-4 text-destructive" />;
   if (status === "processing") return <Loader2 className="h-4 w-4 animate-spin text-info" />;
   return <Clock className="h-4 w-4 text-muted-foreground" />;
-}
-
-function formatBytes(bytes: number | null): string {
-  if (!bytes) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 const COLUMNS: ResourceColumn<KnowledgeDocument>[] = [
@@ -63,7 +56,7 @@ const COLUMNS: ResourceColumn<KnowledgeDocument>[] = [
     className: "w-[90px]",
     render: (doc) => (
       <span className="text-sm text-muted-foreground tabular-nums">
-        {formatBytes(doc.size_bytes)}
+        {doc.size_bytes ? formatBytes(doc.size_bytes) : "—"}
       </span>
     ),
   },

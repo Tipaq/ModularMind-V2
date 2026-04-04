@@ -2,19 +2,11 @@
 
 import { memo, useState } from "react";
 import { Loader2, Square } from "lucide-react";
-import { cn } from "@modularmind/ui";
+import { cn, formatDuration } from "@modularmind/ui";
 import type { ExecutionSummary } from "@modularmind/api-client";
 import { estimateCost, formatCostUSD } from "../../lib/tokenPricing";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatDuration(seconds: number | null): string {
-  if (seconds === null) return "—";
-  if (seconds < 60) return `${seconds.toFixed(0)}s`;
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}m ${s}s`;
-}
 
 function formatTokens(prompt: number, completion: number): string {
   const total = prompt + completion;
@@ -165,7 +157,7 @@ const ExecutionRow = memo(function ExecutionRow({
       </td>
       <td className="px-4 py-3 text-right text-xs tabular-nums">
         <div>
-          {formatDuration(exec.duration_seconds)}
+          {exec.duration_seconds !== null ? formatDuration(exec.duration_seconds) : "—"}
           {exec.status === "running" && exec.started_at && (
             <p className="text-[10px] text-muted-foreground">{relativeTime(exec.started_at)}</p>
           )}

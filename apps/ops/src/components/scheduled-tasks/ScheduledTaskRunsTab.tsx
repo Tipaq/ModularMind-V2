@@ -7,6 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
   Separator,
+  formatDuration,
+  relativeTime,
 } from "@modularmind/ui";
 import type { ScheduledTaskRun } from "@modularmind/api-client";
 
@@ -26,22 +28,6 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
 function asUtc(dateStr: string): string {
   if (dateStr.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(dateStr)) return dateStr;
   return `${dateStr}Z`;
-}
-
-function formatDuration(seconds: number | null): string {
-  if (seconds === null) return "—";
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(asUtc(dateStr)).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
 }
 
 function formatFullDate(dateStr: string | null): string {
@@ -90,7 +76,7 @@ function RunDetailDialog({
             {formatFullDate(run.completed_at)}
           </DetailRow>
           <DetailRow label="Duration">
-            {formatDuration(run.duration_seconds)}
+            {run.duration_seconds !== null ? formatDuration(run.duration_seconds) : "—"}
           </DetailRow>
           {run.execution_id && (
             <DetailRow label="Execution">
@@ -185,11 +171,11 @@ export function ScheduledTaskRunsTab({ runs, isLoading }: ScheduledTaskRunsTabPr
                   </Badge>
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
-                  <span className="text-xs">{formatDuration(run.duration_seconds)}</span>
+                  <span className="text-xs">{run.duration_seconds !== null ? formatDuration(run.duration_seconds) : "—"}</span>
                 </td>
                 <td className="px-4 py-3 hidden lg:table-cell">
                   <span className="text-xs text-muted-foreground">
-                    {formatRelativeTime(run.created_at)}
+                    {relativeTime(run.created_at)}
                   </span>
                 </td>
                 <td className="px-4 py-3 max-w-[300px]">
