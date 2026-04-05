@@ -4,6 +4,7 @@ import {
   AgentConfigGrid,
   formatModelName,
   Input,
+  PromptDisplay,
   SectionCard,
   Select,
   SelectContent,
@@ -27,6 +28,7 @@ function AgentOverviewSectionInner({ agent, isEditing, onChange }: AgentOverview
     name: agent.name,
     description: agent.description,
     model_id: agent.model_id,
+    system_prompt: agent.system_prompt || "",
     timeout_seconds: agent.timeout_seconds,
     memory_enabled: agent.memory_enabled,
     timeout_enabled: agent.timeout_seconds > 0,
@@ -51,6 +53,7 @@ function AgentOverviewSectionInner({ agent, isEditing, onChange }: AgentOverview
       name: next.name,
       description: next.description,
       model_id: next.model_id,
+      system_prompt: next.system_prompt,
       timeout_seconds: next.timeout_enabled ? next.timeout_seconds : 0,
       memory_enabled: next.memory_enabled,
       tool_mode: next.tool_mode,
@@ -103,6 +106,16 @@ function AgentOverviewSectionInner({ agent, isEditing, onChange }: AgentOverview
           />
         </div>
 
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">System Prompt</label>
+          <Textarea
+            value={values.system_prompt}
+            onChange={(e) => update("system_prompt", e.target.value)}
+            placeholder="Define how this agent should behave, its personality, constraints, and goals..."
+            className="min-h-[200px] font-mono text-[13px] leading-relaxed resize-y border-border/50 bg-background"
+          />
+        </div>
+
         <div className="grid grid-cols-3 gap-4 pt-1">
           <ToggleRow
             icon={Clock}
@@ -142,7 +155,7 @@ function AgentOverviewSectionInner({ agent, isEditing, onChange }: AgentOverview
   }
 
   return (
-    <SectionCard icon={Settings2} title="Configuration" variant="card">
+    <SectionCard icon={Settings2} title="Configuration" variant="card" className="space-y-4">
       <div className="flex items-start gap-3.5">
         <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
           <Bot className="h-5 w-5 text-primary" />
@@ -154,6 +167,8 @@ function AgentOverviewSectionInner({ agent, isEditing, onChange }: AgentOverview
           </p>
         </div>
       </div>
+
+      <PromptDisplay content={agent.system_prompt || null} />
 
       <AgentConfigGrid
         modelId={agent.model_id}
