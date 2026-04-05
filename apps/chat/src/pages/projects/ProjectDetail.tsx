@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft, BookOpen, CalendarClock, FolderKanban, GitBranch, Loader2,
+  ArrowLeft, BookOpen, CalendarClock, FolderKanban, Loader2,
   MessageSquare, LayoutDashboard, AppWindow,
 } from "lucide-react";
 import { Badge, Button } from "@modularmind/ui";
@@ -13,7 +13,6 @@ const SUB_TABS = [
   { label: "Conversations", to: "conversations", icon: MessageSquare },
   { label: "Knowledge", to: "knowledge", icon: BookOpen },
   { label: "Apps", to: "apps", icon: AppWindow },
-  { label: "Repositories", to: "repositories", icon: GitBranch },
   { label: "Tasks", to: "tasks", icon: CalendarClock },
 ];
 

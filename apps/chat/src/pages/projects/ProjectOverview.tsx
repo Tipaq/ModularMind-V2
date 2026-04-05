@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
-import { BookOpen, FileText, MessageSquare, Plus, Settings2, Upload } from "lucide-react";
+import { BookOpen, MessageSquare, Plus, Settings2, Upload } from "lucide-react";
 import { Button, NewConversationButton, relativeTime } from "@modularmind/ui";
 import type { Conversation, ProjectDetail, ProjectResourceCounts } from "@modularmind/api-client";
 import { api, conversationAdapter } from "@modularmind/api-client";
 import { useRecentConversationsStore } from "../../stores/recent-conversations-store";
+import { useKnowledgeHub } from "../../hooks/useKnowledgeHub";
 
 interface ProjectContext {
   project: ProjectDetail;
@@ -108,87 +109,93 @@ export function ProjectOverview() {
         </div>
 
         {/* Right column — Project settings */}
-        <div className="w-full lg:w-80 shrink-0 space-y-4">
-          <ProjectSection
-            title="Knowledge"
-            icon={BookOpen}
-            count={counts.collections}
-            countLabel="collection"
-            emptyLabel="Add documents for your agents to reference"
-            actionLabel="Manage"
-            onAction={() => navigate("knowledge")}
-          />
-
-          <ProjectSection
-            title="Instructions"
-            icon={Settings2}
-            emptyLabel="Add instructions to customize agent responses for this project"
-            actionLabel="Add"
-            onAction={() => navigate("knowledge")}
-          />
-
-          <ProjectSection
-            title="Files"
-            icon={FileText}
-            emptyLabel="Upload documents to reference in this project"
-            onAction={() => navigate("knowledge")}
-          >
-            <div
-              className="rounded-lg border-2 border-dashed border-border/50 p-4 text-center hover:border-primary/50 transition-colors cursor-pointer"
-              onClick={() => navigate("knowledge")}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && navigate("knowledge")}
-            >
-              <Upload className="mx-auto h-6 w-6 text-muted-foreground/50" />
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Add PDF, documents or other texts to reference in this project.
-              </p>
-            </div>
-          </ProjectSection>
-        </div>
+        <RightColumn
+          counts={counts}
+          projectId={project.id}
+          onNavigate={navigate}
+        />
       </div>
     </div>
   );
 }
 
-interface ProjectSectionProps {
-  title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  count?: number;
-  countLabel?: string;
-  emptyLabel?: string;
-  actionLabel?: string;
-  onAction?: () => void;
-  children?: React.ReactNode;
+interface RightColumnProps {
+  counts: ProjectResourceCounts;
+  projectId: string;
+  onNavigate: (path: string) => void;
 }
 
-function ProjectSection({
-  title, icon: Icon, count, countLabel, emptyLabel, actionLabel, onAction, children,
-}: ProjectSectionProps) {
+function RightColumn({ counts, projectId, onNavigate }: RightColumnProps) {
+  const { totalDocuments, uploading, handleUpload } = useKnowledgeHub({ projectId });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onFilesSelected = useCallback(
+    (files: FileList | null) => { if (files) handleUpload(files); },
+    [handleUpload],
+  );
+
+  const knowledgeSummaryParts: string[] = [];
+  if (totalDocuments > 0) knowledgeSummaryParts.push(`${totalDocuments} document${totalDocuments > 1 ? "s" : ""}`);
+  if (counts.repositories > 0) knowledgeSummaryParts.push(`${counts.repositories} repo${counts.repositories > 1 ? "s" : ""}`);
+
   return (
-    <div className="rounded-xl border border-border/50 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium">{title}</h3>
-        </div>
-        {actionLabel && onAction && (
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onAction}>
+    <div className="w-full lg:w-80 shrink-0 space-y-4">
+      <div className="rounded-xl border border-border/50 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-medium">Knowledge</h3>
+          </div>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onNavigate("knowledge")}>
             <Plus className="h-3.5 w-3.5" />
           </Button>
+        </div>
+
+        {knowledgeSummaryParts.length > 0 ? (
+          <p className="text-xs text-muted-foreground mb-3">
+            {knowledgeSummaryParts.join(", ")} linked to this project
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground mb-3">
+            Add documents and code repos for your agents to reference
+          </p>
         )}
+
+        <div
+          className="rounded-lg border-2 border-dashed border-border/50 p-4 text-center hover:border-primary/50 transition-colors cursor-pointer"
+          onClick={() => fileInputRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
+        >
+          <Upload className="mx-auto h-6 w-6 text-muted-foreground/50" />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {uploading ? "Uploading..." : "Add PDF, documents or other texts"}
+          </p>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => onFilesSelected(e.target.files)}
+        />
       </div>
 
-      {children ? (
-        children
-      ) : count && count > 0 ? (
+      <div className="rounded-xl border border-border/50 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-medium">Instructions</h3>
+          </div>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onNavigate("knowledge")}>
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
         <p className="text-xs text-muted-foreground">
-          {count} {countLabel}{count > 1 ? "s" : ""} linked to this project
+          Add instructions to customize agent responses for this project
         </p>
-      ) : emptyLabel ? (
-        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
-      ) : null}
+      </div>
     </div>
   );
 }
