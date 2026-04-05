@@ -17,6 +17,7 @@ export function AgentDetail() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const pendingChanges = useRef<AgentUpdateInput>({});
+  const [toolMode, setToolMode] = useState<"direct" | "auto">("direct");
 
   const {
     selectedAgent: agent,
@@ -31,8 +32,13 @@ export function AgentDetail() {
     if (id) fetchAgent(id);
   }, [id, fetchAgent]);
 
+  useEffect(() => {
+    if (agent) setToolMode(agent.tool_mode ?? "direct");
+  }, [agent]);
+
   const handleChange = useCallback((data: AgentUpdateInput) => {
     pendingChanges.current = { ...pendingChanges.current, ...data };
+    if (data.tool_mode) setToolMode(data.tool_mode);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -146,7 +152,9 @@ export function AgentDetail() {
           <div className="max-w-3xl mx-auto py-6 px-6 space-y-6">
             <AgentOverviewSection agent={agent} isEditing={isEditing} onChange={handleChange} />
             <AgentPromptSection agent={agent} isEditing={isEditing} onChange={handleChange} />
-            <AgentToolsSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+            {toolMode !== "auto" && (
+              <AgentToolsSection agent={agent} isEditing={isEditing} onChange={handleChange} />
+            )}
           </div>
         </div>
         <div className="flex-[2] min-w-0 border-l border-border">
