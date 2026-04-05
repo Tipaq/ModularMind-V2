@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import type { AttachedFile, ChatConfig, ConversationAdapter } from "@modularmind/ui";
 import type { Conversation } from "@modularmind/api-client";
+import { useRecentConversationsStore } from "../stores/recent-conversations-store";
 
 const MAX_CONVERSATION_TITLE_LENGTH = 50;
 const DEFAULT_CONVERSATION_TITLE = "New Chat";
@@ -43,6 +44,7 @@ export function useChatSend({
 }: UseChatSendParams) {
   const [inputValue, setInputValue] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const updateRecentConversation = useRecentConversationsStore((s) => s.updateConversation);
 
   const handleSend = useCallback(async () => {
     if ((!inputValue.trim() && attachedFiles.length === 0) || isStreaming || !effectiveModelId)
@@ -66,6 +68,7 @@ export function useChatSend({
           ? inputValue.trim().slice(0, MAX_CONVERSATION_TITLE_LENGTH) + "\u2026"
           : inputValue.trim();
       setConversations((prev) => prev.map((c) => (c.id === convId ? { ...c, title } : c)));
+      updateRecentConversation(convId, { title });
       adapter.patchConversation(convId, { title }).catch((err: unknown) => console.error("[Chat]", err));
     }
 

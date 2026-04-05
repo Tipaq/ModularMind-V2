@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import { ConversationList } from "@modularmind/ui";
 import type { Conversation, ProjectDetail } from "@modularmind/api-client";
 import { api, conversationAdapter } from "@modularmind/api-client";
+import { useRecentConversationsStore } from "../../stores/recent-conversations-store";
 
 interface ProjectContext {
   project: ProjectDetail;
@@ -32,14 +33,17 @@ export function ProjectConversations() {
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
 
+  const { addConversation, removeConversation } = useRecentConversationsStore();
+
   const handleCreate = useCallback(async () => {
     const conversation = await conversationAdapter.createConversation({
       supervisor_mode: true,
       project_id: project.id,
     });
+    addConversation(conversation);
     reload();
     navigate(`/projects/${project.id}/conversations/${conversation.id}`);
-  }, [project.id, reload, navigate]);
+  }, [project.id, reload, navigate, addConversation]);
 
   const handleSelect = useCallback(
     (id: string) => navigate(`/projects/${project.id}/conversations/${id}`),
@@ -49,8 +53,9 @@ export function ProjectConversations() {
   const handleDelete = useCallback(async (id: string) => {
     await conversationAdapter.deleteConversation(id);
     setConversations((prev) => prev.filter((c) => c.id !== id));
+    removeConversation(id);
     reload();
-  }, [reload]);
+  }, [reload, removeConversation]);
 
   const handleRename = useCallback(async (id: string, title: string) => {
     await conversationAdapter.patchConversation(id, { title });

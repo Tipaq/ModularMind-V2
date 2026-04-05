@@ -12,8 +12,9 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn, UserButton, useAuthStore, Input } from "@modularmind/ui";
+import { conversationAdapter } from "@modularmind/api-client";
 import { useSidebarStore } from "../../stores/sidebar-store";
-import { useConversationContext } from "../../contexts/ConversationContext";
+import { useRecentConversationsStore } from "../../stores/recent-conversations-store";
 import { SidebarConversations } from "./SidebarConversations";
 
 const SIDEBAR_WIDTH = 256;
@@ -57,7 +58,7 @@ export const AppSidebar = memo(function AppSidebar() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { isCollapsed, toggleCollapsed } = useSidebarStore();
-  const convCtx = useConversationContext();
+  const addConversation = useRecentConversationsStore((s) => s.addConversation);
   const [searchValue, setSearchValue] = useState("");
 
   const handleLogout = () => {
@@ -66,14 +67,15 @@ export const AppSidebar = memo(function AppSidebar() {
   };
 
   const handleNewChat = async () => {
-    if (convCtx) {
-      const id = await convCtx.onCreate();
-      if (id) {
-        navigate(`/chat/${id}`);
-        return;
-      }
+    try {
+      const conversation = await conversationAdapter.createConversation({
+        supervisor_mode: true,
+      });
+      addConversation(conversation);
+      navigate(`/chat/${conversation.id}`);
+    } catch {
+      navigate("/chat");
     }
-    navigate("/chat");
   };
 
   return (

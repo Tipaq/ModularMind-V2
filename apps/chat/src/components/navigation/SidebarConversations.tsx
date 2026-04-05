@@ -1,9 +1,10 @@
 import { memo, useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Trash2, Check, X } from "lucide-react";
-import { cn, Button, Input } from "@modularmind/ui";
+import { cn, Button, Input, useAuthStore } from "@modularmind/ui";
 import type { Conversation } from "@modularmind/api-client";
-import { useConversationContext } from "../../contexts/ConversationContext";
+import { conversationAdapter } from "@modularmind/api-client";
+import { useRecentConversationsStore } from "../../stores/recent-conversations-store";
 import { useSidebarStore } from "../../stores/sidebar-store";
 
 const MAX_RECENT = 8;
@@ -91,40 +92,52 @@ interface SidebarConversationsProps {
 }
 
 export const SidebarConversations = memo(function SidebarConversations({ searchFilter = "" }: SidebarConversationsProps) {
-  const ctx = useConversationContext();
+  const user = useAuthStore((s) => s.user);
   const { isCollapsed } = useSidebarStore();
+  const { conversations, loaded, load, removeConversation, updateConversation } =
+    useRecentConversationsStore();
   const navigate = useNavigate();
+  const { conversationId: activeConversationId } = useParams<{ conversationId: string }>();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  useEffect(() => { if (user) load(); }, [user, load]);
 
   const startEdit = useCallback((conv: Conversation) => {
     setEditingId(conv.id);
     setEditValue(conv.title || "New Chat");
   }, []);
 
-  const confirmEdit = useCallback(() => {
-    if (editingId && editValue.trim() && ctx) {
-      ctx.onRename(editingId, editValue.trim());
+  const confirmEdit = useCallback(async () => {
+    if (editingId && editValue.trim()) {
+      await conversationAdapter.patchConversation(editingId, { title: editValue.trim() });
+      updateConversation(editingId, { title: editValue.trim() });
     }
     setEditingId(null);
-  }, [editingId, editValue, ctx]);
+  }, [editingId, editValue, updateConversation]);
 
   const cancelEdit = useCallback(() => setEditingId(null), []);
 
+  const handleDelete = useCallback(async (id: string) => {
+    await conversationAdapter.deleteConversation(id);
+    removeConversation(id);
+    if (id === activeConversationId) {
+      navigate("/chat");
+    }
+  }, [activeConversationId, removeConversation, navigate]);
+
   const recentConversations = useMemo(() => {
-    if (!ctx) return [];
     const filtered = searchFilter
-      ? ctx.conversations.filter((c) =>
+      ? conversations.filter((c) =>
           (c.title || "").toLowerCase().includes(searchFilter.toLowerCase()),
         )
-      : ctx.conversations;
+      : conversations;
     return filtered.slice(0, MAX_RECENT);
-  }, [ctx, searchFilter]);
+  }, [conversations, searchFilter]);
 
-  if (!ctx || isCollapsed) return null;
+  if (isCollapsed || !loaded) return null;
 
   const handleSelect = (id: string) => {
-    ctx.onSelect(id);
     navigate(`/chat/${id}`);
   };
 
@@ -142,7 +155,7 @@ export const SidebarConversations = memo(function SidebarConversations({ searchF
         <ConvItem
           key={conv.id}
           conv={conv}
-          isActive={ctx.activeConversationId === conv.id}
+          isActive={activeConversationId === conv.id}
           isEditing={editingId === conv.id}
           editValue={editValue}
           onSelect={handleSelect}
@@ -150,7 +163,7 @@ export const SidebarConversations = memo(function SidebarConversations({ searchF
           onConfirmEdit={confirmEdit}
           onCancelEdit={cancelEdit}
           onEditChange={setEditValue}
-          onDelete={ctx.onDelete}
+          onDelete={handleDelete}
         />
       ))}
     </div>
