@@ -38,12 +38,12 @@ export function ProjectConversations() {
       project_id: project.id,
     });
     reload();
-    navigate(`/chat/${conversation.id}`);
+    navigate(`/projects/${project.id}/conversations/${conversation.id}`);
   }, [project.id, reload, navigate]);
 
   const handleSelect = useCallback(
-    (id: string) => navigate(`/chat/${id}`),
-    [navigate],
+    (id: string) => navigate(`/projects/${project.id}/conversations/${id}`),
+    [project.id, navigate],
   );
 
   const handleDelete = useCallback(async (id: string) => {

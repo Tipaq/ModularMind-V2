@@ -1,4 +1,5 @@
-import { Bot, Zap, Code2, PanelRight } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowLeft, Bot, Zap, Code2, PanelRight } from "lucide-react";
 import type { TokenUsage } from "@modularmind/ui";
 
 type RightPanel = "insights" | "artifacts" | null;
@@ -9,17 +10,28 @@ interface ChatHeaderProps {
   latestTokenUsage: TokenUsage | null;
   rightPanel: RightPanel;
   onTogglePanel: (panel: "insights" | "artifacts") => void;
+  projectId?: string;
 }
 
 export function ChatHeader({
-  title, runningActivityLabel, latestTokenUsage, rightPanel, onTogglePanel,
+  title, runningActivityLabel, latestTokenUsage, rightPanel, onTogglePanel, projectId,
 }: ChatHeaderProps) {
   return (
     <div className="h-14 border-b flex items-center justify-between px-4 shrink-0">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 shrink-0">
-          <Bot className="h-4 w-4 text-primary" />
-        </div>
+        {projectId ? (
+          <Link
+            to={`/projects/${projectId}/conversations`}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-muted hover:bg-muted/80 transition-colors shrink-0"
+            title="Back to project"
+          >
+            <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+          </Link>
+        ) : (
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 shrink-0">
+            <Bot className="h-4 w-4 text-primary" />
+          </div>
+        )}
         <div className="min-w-0">
           <p className="text-sm font-medium truncate">{title}</p>
           {runningActivityLabel && (

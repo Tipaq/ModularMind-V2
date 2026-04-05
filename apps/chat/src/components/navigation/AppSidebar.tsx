@@ -4,9 +4,7 @@ import {
   Bot,
   MessageSquare,
   FolderOpen,
-  BookOpen,
   AppWindow,
-  CalendarClock,
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -31,9 +29,7 @@ interface NavItemConfig {
 const NAV_ITEMS: NavItemConfig[] = [
   { label: "Conversations", to: "/chat", icon: MessageSquare },
   { label: "Projects", to: "/projects", icon: FolderOpen },
-  { label: "Knowledge", to: "/knowledge", icon: BookOpen },
   { label: "Apps", to: "/apps", icon: AppWindow },
-  { label: "Tasks", to: "/tasks", icon: CalendarClock },
 ];
 
 function SidebarNavItem({ item, isCollapsed }: { item: NavItemConfig; isCollapsed: boolean }) {

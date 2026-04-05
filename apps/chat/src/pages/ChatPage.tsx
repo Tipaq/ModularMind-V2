@@ -19,7 +19,10 @@ const MIN_MESSAGES_FOR_COMPACT = 4;
 type RightPanel = "insights" | "artifacts" | null;
 
 export function ChatPage() {
-  const { conversationId: routeConversationId } = useParams<{ conversationId: string }>();
+  const { conversationId: routeConversationId, projectId } = useParams<{
+    conversationId: string;
+    projectId: string;
+  }>();
   const [enabledAgentIds, setEnabledAgentIds] = useState<string[]>([]);
   const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -154,6 +157,7 @@ export function ChatPage() {
             latestTokenUsage={latestTokenUsage}
             rightPanel={rightPanel}
             onTogglePanel={togglePanel}
+            projectId={projectId}
           />
 
           <ChatErrorBanner

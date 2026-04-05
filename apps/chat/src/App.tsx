@@ -4,7 +4,6 @@ import { ThemeProvider, ErrorBoundary, RouteLoader } from "@modularmind/ui";
 
 import PortalLayout from "./layouts/PortalLayout";
 import Login from "./pages/Login";
-import { RoleGuard } from "./components/RoleGuard";
 
 const SETUP_CHECK_TIMEOUT_MS = 5000;
 
@@ -15,10 +14,6 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Profile = lazy(() => import("./pages/Profile"));
 const AppGallery = lazy(() => import("./pages/apps/AppGallery"));
 const AppView = lazy(() => import("./pages/apps/AppView"));
-const KnowledgeHub = lazy(() => import("./pages/knowledge/KnowledgeHub"));
-const KnowledgeDetail = lazy(() => import("./pages/knowledge/KnowledgeDetail"));
-const TaskList = lazy(() => import("./pages/tasks/TaskList"));
-const TaskDetail = lazy(() => import("./pages/tasks/TaskDetail"));
 const ProjectList = lazy(() => import("./pages/projects/ProjectList"));
 const ProjectDetail = lazy(() => import("./pages/projects/ProjectDetail"));
 const ProjectOverview = lazy(() => import("./pages/projects/ProjectOverview"));
@@ -82,12 +77,9 @@ export default function App() {
               <Route path="repositories" element={<ProjectRepositories />} />
               <Route path="tasks" element={<ProjectTasks />} />
             </Route>
+            <Route path="/projects/:projectId/conversations/:conversationId" element={<ChatPage />} />
             <Route path="/apps" element={<AppGallery />} />
             <Route path="/apps/:appId" element={<AppView />} />
-            <Route path="/knowledge" element={<KnowledgeHub />} />
-            <Route path="/knowledge/:collectionId" element={<KnowledgeDetail />} />
-            <Route path="/tasks" element={<RoleGuard><TaskList /></RoleGuard>} />
-            <Route path="/tasks/:taskId" element={<RoleGuard><TaskDetail /></RoleGuard>} />
             <Route path="/secrets" element={<Navigate to="/settings" replace />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Profile />} />
