@@ -106,6 +106,7 @@ export function useChatSend({
     setConversations,
     flushDebounce,
     adapter,
+    updateRecentConversation,
   ]);
 
   return { inputValue, setInputValue, attachedFiles, setAttachedFiles, handleSend };
