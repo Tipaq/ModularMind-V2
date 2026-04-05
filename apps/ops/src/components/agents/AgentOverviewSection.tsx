@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bot, Brain, Clock, Settings2 } from "lucide-react";
+import { Bot, Brain, Clock, Search, Settings2 } from "lucide-react";
 import {
   AgentConfigGrid,
   formatModelName,
@@ -30,6 +30,7 @@ function AgentOverviewSectionInner({ agent, isEditing, onChange }: AgentOverview
     timeout_seconds: agent.timeout_seconds,
     memory_enabled: agent.memory_enabled,
     timeout_enabled: agent.timeout_seconds > 0,
+    tool_mode: agent.tool_mode ?? ("direct" as const),
   });
 
   const { unifiedCatalog, fetchUnifiedCatalog } = useModelsStore();
@@ -52,6 +53,7 @@ function AgentOverviewSectionInner({ agent, isEditing, onChange }: AgentOverview
       model_id: next.model_id,
       timeout_seconds: next.timeout_enabled ? next.timeout_seconds : 0,
       memory_enabled: next.memory_enabled,
+      tool_mode: next.tool_mode,
     });
   };
 
@@ -101,7 +103,7 @@ function AgentOverviewSectionInner({ agent, isEditing, onChange }: AgentOverview
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4 pt-1">
+        <div className="grid grid-cols-3 gap-4 pt-1">
           <ToggleRow
             icon={Clock}
             label="Timeout"
@@ -127,6 +129,12 @@ function AgentOverviewSectionInner({ agent, isEditing, onChange }: AgentOverview
             label="Memory"
             checked={values.memory_enabled}
             onCheckedChange={(checked) => update("memory_enabled", checked)}
+          />
+          <ToggleRow
+            icon={Search}
+            label="Auto tools"
+            checked={values.tool_mode === "auto"}
+            onCheckedChange={(checked) => update("tool_mode", checked ? "auto" : "direct")}
           />
         </div>
       </SectionCard>

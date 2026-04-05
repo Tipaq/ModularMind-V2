@@ -62,6 +62,7 @@ async def list_agents(
             rag_retrieval_count=a.rag_config.retrieval_count,
             rag_similarity_threshold=a.rag_config.similarity_threshold,
             tool_categories=dict(a.tool_categories),
+            tool_mode=getattr(a, "tool_mode", "direct"),
         )
         for a in page_agents
     ]
@@ -100,6 +101,7 @@ async def get_agent(agent_id: str, user: CurrentUser) -> AgentDetail:
         rag_retrieval_count=agent.rag_config.retrieval_count,
         rag_similarity_threshold=agent.rag_config.similarity_threshold,
         tool_categories=dict(agent.tool_categories),
+        tool_mode=getattr(agent, "tool_mode", "direct"),
         capabilities=list(agent.capabilities),
         gateway_permissions=agent.gateway_permissions,
         routing_metadata=dict(agent.routing_metadata),

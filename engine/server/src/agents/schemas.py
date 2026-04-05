@@ -36,6 +36,7 @@ class AgentCreate(BaseModel):
     timeout_seconds: int = Field(default=120, ge=10, le=600)
     rag_config: RAGConfigCreate | None = None
     tool_categories: dict[str, bool | dict[str, bool]] = Field(default_factory=dict)
+    tool_mode: str = "direct"
     gateway_permissions: dict[str, Any] | None = None
     capabilities: list[str] = Field(default_factory=list)
     routing_metadata: dict[str, Any] = Field(default_factory=dict)
@@ -55,6 +56,7 @@ class AgentUpdate(BaseModel):
     timeout_seconds: int | None = Field(default=None, ge=10, le=600)
     rag_config: RAGConfigCreate | None = None
     tool_categories: dict[str, bool | dict[str, bool]] | None = None
+    tool_mode: str | None = None
     gateway_permissions: dict[str, Any] | None = None
     capabilities: list[str] | None = None
     routing_metadata: dict[str, Any] | None = None
@@ -83,6 +85,7 @@ class AgentSummary(BaseModel):
     rag_retrieval_count: int = 5
     rag_similarity_threshold: float = 0.7
     tool_categories: dict[str, bool | dict[str, bool]] = {}
+    tool_mode: str = "direct"
 
 
 class AgentDetail(AgentSummary):

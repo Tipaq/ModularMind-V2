@@ -18,6 +18,7 @@ export interface Agent {
   rag_retrieval_count: number;
   rag_similarity_threshold: number;
   tool_categories: ToolCategories;
+  tool_mode: "direct" | "auto";
 }
 
 export interface AgentDetail extends Agent {
@@ -62,6 +63,7 @@ export interface AgentUpdateInput {
   timeout_seconds?: number;
   rag_config?: RAGConfigInput;
   tool_categories?: ToolCategories;
+  tool_mode?: "direct" | "auto";
   gateway_permissions?: Record<string, unknown> | null;
   capabilities?: string[];
   routing_metadata?: Record<string, unknown>;
