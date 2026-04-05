@@ -1,144 +1,196 @@
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
-import { BookOpen, MessageSquare, AppWindow, CalendarClock, Users, Plus } from "lucide-react";
-import type { ProjectDetail, ProjectResourceCounts } from "@modularmind/api-client";
-import { Button, relativeTime } from "@modularmind/ui";
+import { BookOpen, FileText, MessageSquare, Plus, Settings2, Upload } from "lucide-react";
+import { Button, NewConversationButton, relativeTime } from "@modularmind/ui";
+import type { Conversation, ProjectDetail, ProjectResourceCounts } from "@modularmind/api-client";
+import { api, conversationAdapter } from "@modularmind/api-client";
+import { useRecentConversationsStore } from "../../stores/recent-conversations-store";
 
 interface ProjectContext {
   project: ProjectDetail;
   resourceCounts: ProjectResourceCounts | null;
+  reload: () => void;
 }
 
 export function ProjectOverview() {
-  const { project, resourceCounts } = useOutletContext<ProjectContext>();
+  const { project, resourceCounts, reload } = useOutletContext<ProjectContext>();
   const navigate = useNavigate();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const addConversation = useRecentConversationsStore((s) => s.addConversation);
 
-  const counts = resourceCounts ?? { conversations: 0, collections: 0, mini_apps: 0, scheduled_tasks: 0 };
+  const counts = resourceCounts ?? {
+    conversations: 0, collections: 0, mini_apps: 0, scheduled_tasks: 0, repositories: 0,
+  };
+
+  useEffect(() => {
+    (async () => {
+      setLoadingConversations(true);
+      try {
+        const data = await api.get<{ items: Conversation[] }>(
+          `/conversations?project_id=${project.id}&page_size=10`,
+        );
+        setConversations(data.items ?? []);
+      } catch {
+        setConversations([]);
+      } finally {
+        setLoadingConversations(false);
+      }
+    })();
+  }, [project.id]);
+
+  const handleNewConversation = useCallback(async () => {
+    const conversation = await conversationAdapter.createConversation({
+      supervisor_mode: true,
+      project_id: project.id,
+    });
+    addConversation(conversation);
+    reload();
+    navigate(`/projects/${project.id}/conversations/${conversation.id}`);
+  }, [project.id, addConversation, reload, navigate]);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      {/* Project header with description + start conversation */}
-      <div className="mb-8 text-center">
-        {project.description && (
-          <p className="text-sm text-muted-foreground mb-4">{project.description}</p>
-        )}
-        <Button
-          onClick={() => navigate("conversations")}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Start a conversation
-        </Button>
-      </div>
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="max-w-5xl mx-auto flex flex-col lg:flex-row gap-6">
+        {/* Left column — Chat + Conversations */}
+        <div className="flex-1 min-w-0 space-y-6">
+          <NewConversationButton onClick={handleNewConversation} />
 
-      {/* Cards grid — Claude-style */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Knowledge card */}
-        <OverviewCard
-          title="Knowledge"
-          description={counts.collections > 0
-            ? `${counts.collections} collection${counts.collections > 1 ? "s" : ""} linked to this project`
-            : "Add documents and files for your agents to reference"}
-          icon={BookOpen}
-          actionLabel={counts.collections > 0 ? "View" : "Add"}
-          onAction={() => navigate("knowledge")}
-        />
-
-        {/* Apps card */}
-        <OverviewCard
-          title="Apps"
-          description={counts.mini_apps > 0
-            ? `${counts.mini_apps} app${counts.mini_apps > 1 ? "s" : ""} created in this project`
-            : "Apps created by agents will appear here"}
-          icon={AppWindow}
-          actionLabel="View"
-          onAction={() => navigate("apps")}
-        />
-
-        {/* Conversations card */}
-        <OverviewCard
-          title="Conversations"
-          description={counts.conversations > 0
-            ? `${counts.conversations} conversation${counts.conversations > 1 ? "s" : ""} in this project`
-            : "Start chatting within this project context"}
-          icon={MessageSquare}
-          actionLabel={counts.conversations > 0 ? "View" : "Start"}
-          onAction={() => navigate("conversations")}
-        />
-
-        {/* Tasks card */}
-        <OverviewCard
-          title="Scheduled Tasks"
-          description={counts.scheduled_tasks > 0
-            ? `${counts.scheduled_tasks} task${counts.scheduled_tasks > 1 ? "s" : ""} scheduled`
-            : "Automate recurring agent tasks"}
-          icon={CalendarClock}
-          actionLabel="View"
-          onAction={() => navigate("tasks")}
-        />
-      </div>
-
-      {/* Members section */}
-      <div className="mt-8">
-        <div className="flex items-center gap-2 mb-3">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-medium">Members</h2>
-        </div>
-        <div className="rounded-xl border border-border/50 divide-y divide-border/50">
-          {project.members.map((member) => (
-            <div key={member.user_id} className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
-                  {member.email.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-sm truncate">{member.email}</span>
+          {/* Conversations list */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-medium">Conversations</h2>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${roleColor(member.role)}`}>
-                  {member.role}
-                </span>
-                <span className="text-xs text-muted-foreground hidden sm:inline">
-                  {relativeTime(member.joined_at)}
-                </span>
-              </div>
+              {counts.conversations > 0 && (
+                <button
+                  onClick={() => navigate("conversations")}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  View all
+                </button>
+              )}
             </div>
-          ))}
+
+            {loadingConversations ? (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/50" />
+                ))}
+              </div>
+            ) : conversations.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">
+                No conversations yet. Start one above.
+              </p>
+            ) : (
+              <div className="rounded-xl border border-border/50 overflow-hidden">
+                {conversations.map((conv) => (
+                  <div
+                    key={conv.id}
+                    className="flex items-center px-4 py-3 border-b border-border/30 last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/projects/${project.id}/conversations/${conv.id}`)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && navigate(`/projects/${project.id}/conversations/${conv.id}`)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{conv.title || "Untitled"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Last message {relativeTime(conv.updated_at)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right column — Project settings */}
+        <div className="w-full lg:w-80 shrink-0 space-y-4">
+          <ProjectSection
+            title="Knowledge"
+            icon={BookOpen}
+            count={counts.collections}
+            countLabel="collection"
+            emptyLabel="Add documents for your agents to reference"
+            actionLabel="Manage"
+            onAction={() => navigate("knowledge")}
+          />
+
+          <ProjectSection
+            title="Instructions"
+            icon={Settings2}
+            emptyLabel="Add instructions to customize agent responses for this project"
+            actionLabel="Add"
+            onAction={() => navigate("knowledge")}
+          />
+
+          <ProjectSection
+            title="Files"
+            icon={FileText}
+            emptyLabel="Upload documents to reference in this project"
+            onAction={() => navigate("knowledge")}
+          >
+            <div
+              className="rounded-lg border-2 border-dashed border-border/50 p-4 text-center hover:border-primary/50 transition-colors cursor-pointer"
+              onClick={() => navigate("knowledge")}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === "Enter" && navigate("knowledge")}
+            >
+              <Upload className="mx-auto h-6 w-6 text-muted-foreground/50" />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Add PDF, documents or other texts to reference in this project.
+              </p>
+            </div>
+          </ProjectSection>
         </div>
       </div>
     </div>
   );
 }
 
-interface OverviewCardProps {
+interface ProjectSectionProps {
   title: string;
-  description: string;
   icon: React.ComponentType<{ className?: string }>;
-  actionLabel: string;
-  onAction: () => void;
+  count?: number;
+  countLabel?: string;
+  emptyLabel?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  children?: React.ReactNode;
 }
 
-function OverviewCard({ title, description, icon: Icon, actionLabel, onAction }: OverviewCardProps) {
+function ProjectSection({
+  title, icon: Icon, count, countLabel, emptyLabel, actionLabel, onAction, children,
+}: ProjectSectionProps) {
   return (
-    <div className="rounded-xl border border-border/50 p-5 flex flex-col justify-between min-h-[140px] hover:border-border transition-colors">
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold">{title}</h3>
+    <div className="rounded-xl border border-border/50 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
           <Icon className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-medium">{title}</h3>
         </div>
-        <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+        {actionLabel && onAction && (
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onAction}>
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
-      <div className="mt-4">
-        <Button variant="outline" size="sm" onClick={onAction} className="text-xs">
-          {actionLabel}
-        </Button>
-      </div>
+
+      {children ? (
+        children
+      ) : count && count > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {count} {countLabel}{count > 1 ? "s" : ""} linked to this project
+        </p>
+      ) : emptyLabel ? (
+        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+      ) : null}
     </div>
   );
-}
-
-function roleColor(role: string): string {
-  if (role === "owner") return "bg-warning/10 text-warning";
-  if (role === "editor") return "bg-info/10 text-info";
-  return "bg-muted text-muted-foreground";
 }
 
 export default ProjectOverview;

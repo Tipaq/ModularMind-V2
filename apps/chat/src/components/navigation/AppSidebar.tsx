@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   Bot,
@@ -7,11 +7,9 @@ import {
   AppWindow,
   ChevronLeft,
   ChevronRight,
-  Plus,
-  Search,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { cn, UserButton, useAuthStore, Input } from "@modularmind/ui";
+import { cn, UserButton, useAuthStore, NewConversationButton } from "@modularmind/ui";
 import { conversationAdapter } from "@modularmind/api-client";
 import { useSidebarStore } from "../../stores/sidebar-store";
 import { useRecentConversationsStore } from "../../stores/recent-conversations-store";
@@ -59,7 +57,6 @@ export const AppSidebar = memo(function AppSidebar() {
   const { user, logout } = useAuthStore();
   const { isCollapsed, toggleCollapsed } = useSidebarStore();
   const addConversation = useRecentConversationsStore((s) => s.addConversation);
-  const [searchValue, setSearchValue] = useState("");
 
   const handleLogout = () => {
     logout();
@@ -107,30 +104,13 @@ export const AppSidebar = memo(function AppSidebar() {
         )}
       </div>
 
-      {/* New Chat + Search */}
-      <div className="px-3 pt-3 space-y-2">
-        <button
+      {/* New conversation */}
+      <div className="px-3 pt-3">
+        <NewConversationButton
           onClick={handleNewChat}
-          className={cn(
-            "flex w-full items-center gap-2 rounded-lg border border-border/50 px-3 py-2 text-sm transition-colors hover:bg-muted/50",
-            isCollapsed && "justify-center px-2",
-          )}
-        >
-          <Plus className="h-4 w-4 shrink-0" />
-          {!isCollapsed && <span>New chat</span>}
-        </button>
-
-        {!isCollapsed && (
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              placeholder="Search..."
-              className="h-8 pl-8 text-xs"
-            />
-          </div>
-        )}
+          variant="secondary"
+          collapsed={isCollapsed}
+        />
       </div>
 
       {/* Navigation */}
@@ -144,12 +124,12 @@ export const AppSidebar = memo(function AppSidebar() {
       <div className="flex-1 overflow-y-auto mt-2">
         {!isCollapsed && (
           <div className="border-t border-border/50 mx-3 mb-1 pt-2">
-            <p className="px-1 mb-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            <p className="px-3 mb-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
               Recent
             </p>
           </div>
         )}
-        <SidebarConversations searchFilter={searchValue} />
+        <SidebarConversations />
       </div>
 
       {/* Footer */}

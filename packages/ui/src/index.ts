@@ -128,6 +128,10 @@ export type { ConversationSidebarProps, SidebarConversation } from "./components
 export { ConversationList } from "./components/conversation-list";
 export type { ConversationListProps, ConversationListItem } from "./components/conversation-list";
 
+// New conversation button (unified)
+export { NewConversationButton } from "./components/new-conversation-button";
+export type { NewConversationButtonProps } from "./components/new-conversation-button";
+
 // Resource components (shared table, filters, empty state, detail header)
 export { EmptyState } from "./components/empty-state";
 export type { EmptyStateProps } from "./components/empty-state";

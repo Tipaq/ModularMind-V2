@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
-import { Plus, Search, Trash2, Check, X, MessageSquare, MoreHorizontal } from "lucide-react";
+import { Search, Trash2, Check, X, MessageSquare, MoreHorizontal } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
 import { cn, relativeTime } from "../lib/utils";
 import { EmptyState } from "./empty-state";
 import { ConfirmDialog } from "./confirm-dialog";
+import { NewConversationButton } from "./new-conversation-button";
 
 export interface ConversationListItem {
   id: string;
@@ -187,10 +188,7 @@ export const ConversationList = memo(function ConversationList({
               <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
             )}
           </div>
-          <Button onClick={onCreate} size="sm" className="gap-2">
-            <Plus className="h-4 w-4" />
-            New conversation
-          </Button>
+          <NewConversationButton onClick={onCreate} />
         </div>
 
         <div className="relative max-w-md">

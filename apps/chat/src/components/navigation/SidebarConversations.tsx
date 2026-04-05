@@ -87,11 +87,7 @@ const ConvItem = memo(function ConvItem({
   );
 });
 
-interface SidebarConversationsProps {
-  searchFilter?: string;
-}
-
-export const SidebarConversations = memo(function SidebarConversations({ searchFilter = "" }: SidebarConversationsProps) {
+export const SidebarConversations = memo(function SidebarConversations() {
   const user = useAuthStore((s) => s.user);
   const { isCollapsed } = useSidebarStore();
   const { conversations, loaded, load, removeConversation, updateConversation } =
@@ -126,14 +122,10 @@ export const SidebarConversations = memo(function SidebarConversations({ searchF
     }
   }, [activeConversationId, removeConversation, navigate]);
 
-  const recentConversations = useMemo(() => {
-    const filtered = searchFilter
-      ? conversations.filter((c) =>
-          (c.title || "").toLowerCase().includes(searchFilter.toLowerCase()),
-        )
-      : conversations;
-    return filtered.slice(0, MAX_RECENT);
-  }, [conversations, searchFilter]);
+  const recentConversations = useMemo(
+    () => conversations.slice(0, MAX_RECENT),
+    [conversations],
+  );
 
   if (isCollapsed || !loaded) return null;
 
@@ -143,14 +135,14 @@ export const SidebarConversations = memo(function SidebarConversations({ searchF
 
   if (recentConversations.length === 0) {
     return (
-      <div className="px-4 py-3 text-center text-xs text-muted-foreground">
-        {searchFilter ? "No matching conversations" : "No conversations yet"}
+      <div className="px-6 py-3 text-center text-xs text-muted-foreground">
+        No conversations yet
       </div>
     );
   }
 
   return (
-    <div className="space-y-0.5 px-2">
+    <div className="space-y-0.5 px-3">
       {recentConversations.map((conv) => (
         <ConvItem
           key={conv.id}
