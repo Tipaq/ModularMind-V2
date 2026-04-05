@@ -116,7 +116,7 @@ class TestResolveMcpToolDefinitions:
         tools = [_make_tool("search"), _make_tool("create")]
         registry.discover_tools = AsyncMock(return_value=tools)
 
-        lc_tools, executor = await resolve_mcp_tool_definitions(
+        lc_tools, executor, _by_server = await resolve_mcp_tool_definitions(
             {"mcp:myserver": True}, registry
         )
         assert len(lc_tools) == 2
@@ -132,7 +132,7 @@ class TestResolveMcpToolDefinitions:
         server = _make_server("myserver")
         registry._servers[server.id] = server
 
-        lc_tools, executor = await resolve_mcp_tool_definitions(
+        lc_tools, executor, _by_server = await resolve_mcp_tool_definitions(
             {"mcp:myserver": False}, registry
         )
         assert lc_tools == []
@@ -143,7 +143,7 @@ class TestResolveMcpToolDefinitions:
 
         registry = MCPRegistry()
 
-        lc_tools, executor = await resolve_mcp_tool_definitions(
+        lc_tools, executor, _by_server = await resolve_mcp_tool_definitions(
             {"mcp:unknown": True}, registry
         )
         assert lc_tools == []
@@ -159,7 +159,7 @@ class TestResolveMcpToolDefinitions:
         tools = [_make_tool("search")]
         registry.discover_tools = AsyncMock(return_value=tools)
 
-        lc_tools, executor = await resolve_mcp_tool_definitions(
+        lc_tools, executor, _by_server = await resolve_mcp_tool_definitions(
             {"knowledge": True, "mcp:myserver": True}, registry
         )
         assert len(lc_tools) == 1
@@ -175,7 +175,7 @@ class TestResolveMcpToolDefinitions:
         tools = [_make_tool("tool_a"), _make_tool("tool_b"), _make_tool("tool_c")]
         registry.discover_tools = AsyncMock(return_value=tools)
 
-        lc_tools, executor = await resolve_mcp_tool_definitions(
+        lc_tools, executor, _by_server = await resolve_mcp_tool_definitions(
             {"mcp:myserver": {"tool_a": True, "tool_b": False}},
             registry,
         )
@@ -192,7 +192,7 @@ class TestResolveMcpToolDefinitions:
         server = _make_server("myserver", enabled=False)
         registry._servers[server.id] = server
 
-        lc_tools, executor = await resolve_mcp_tool_definitions(
+        lc_tools, executor, _by_server = await resolve_mcp_tool_definitions(
             {"mcp:myserver": True}, registry
         )
         assert lc_tools == []
