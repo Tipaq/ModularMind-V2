@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
-import { ConversationList } from "@modularmind/ui";
-import type { Conversation, ProjectDetail } from "@modularmind/api-client";
-import { api, conversationAdapter } from "@modularmind/api-client";
+import { useNavigate } from "react-router-dom";
+import { ConversationList, useAuthStore } from "@modularmind/ui";
+import type { Conversation } from "@modularmind/api-client";
+import { conversationAdapter } from "@modularmind/api-client";
 
-interface ProjectContext {
-  project: ProjectDetail;
-  reload: () => void;
-}
+const PAGE_SIZE = 50;
 
-export function ProjectConversations() {
-  const { project, reload } = useOutletContext<ProjectContext>();
+export function ConversationsPage() {
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -19,27 +16,25 @@ export function ProjectConversations() {
   const loadConversations = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.get<{ items: Conversation[] }>(
-        `/conversations?project_id=${project.id}&page_size=100`,
-      );
+      const data = await conversationAdapter.listConversations(PAGE_SIZE);
       setConversations(data.items ?? []);
     } catch {
       setConversations([]);
     } finally {
       setLoading(false);
     }
-  }, [project.id]);
+  }, []);
 
-  useEffect(() => { loadConversations(); }, [loadConversations]);
+  useEffect(() => {
+    if (user) loadConversations();
+  }, [user, loadConversations]);
 
   const handleCreate = useCallback(async () => {
     const conversation = await conversationAdapter.createConversation({
       supervisor_mode: true,
-      project_id: project.id,
     });
-    reload();
     navigate(`/chat/${conversation.id}`);
-  }, [project.id, reload, navigate]);
+  }, [navigate]);
 
   const handleSelect = useCallback(
     (id: string) => navigate(`/chat/${id}`),
@@ -49,8 +44,7 @@ export function ProjectConversations() {
   const handleDelete = useCallback(async (id: string) => {
     await conversationAdapter.deleteConversation(id);
     setConversations((prev) => prev.filter((c) => c.id !== id));
-    reload();
-  }, [reload]);
+  }, []);
 
   const handleRename = useCallback(async (id: string, title: string) => {
     await conversationAdapter.patchConversation(id, { title });
@@ -69,12 +63,9 @@ export function ProjectConversations() {
       onCreate={handleCreate}
       onDelete={handleDelete}
       onRename={handleRename}
-      title="Conversations"
-      subtitle="Chat sessions linked to this project."
-      emptyTitle="No conversations in this project"
-      emptyDescription="Start a new conversation to begin chatting within this project context."
+      subtitle="Your conversations"
     />
   );
 }
 
-export default ProjectConversations;
+export default ConversationsPage;

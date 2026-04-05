@@ -9,12 +9,13 @@ import { RoleGuard } from "./components/RoleGuard";
 const SETUP_CHECK_TIMEOUT_MS = 5000;
 
 // Lazy-loaded routes
+const ConversationsPage = lazy(() => import("./pages/ConversationsPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Profile = lazy(() => import("./pages/Profile"));
 const AppGallery = lazy(() => import("./pages/apps/AppGallery"));
 const AppView = lazy(() => import("./pages/apps/AppView"));
-const KnowledgeList = lazy(() => import("./pages/knowledge/KnowledgeList"));
+const KnowledgeHub = lazy(() => import("./pages/knowledge/KnowledgeHub"));
 const KnowledgeDetail = lazy(() => import("./pages/knowledge/KnowledgeDetail"));
 const TaskList = lazy(() => import("./pages/tasks/TaskList"));
 const TaskDetail = lazy(() => import("./pages/tasks/TaskDetail"));
@@ -70,7 +71,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route element={<PortalLayout />}>
             <Route index element={<Navigate to="/chat" replace />} />
-            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/chat" element={<ConversationsPage />} />
             <Route path="/chat/:conversationId" element={<ChatPage />} />
             <Route path="/projects" element={<ProjectList />} />
             <Route path="/projects/:projectId" element={<ProjectDetail />}>
@@ -83,7 +84,7 @@ export default function App() {
             </Route>
             <Route path="/apps" element={<AppGallery />} />
             <Route path="/apps/:appId" element={<AppView />} />
-            <Route path="/knowledge" element={<KnowledgeList />} />
+            <Route path="/knowledge" element={<KnowledgeHub />} />
             <Route path="/knowledge/:collectionId" element={<KnowledgeDetail />} />
             <Route path="/tasks" element={<RoleGuard><TaskList /></RoleGuard>} />
             <Route path="/tasks/:taskId" element={<RoleGuard><TaskDetail /></RoleGuard>} />

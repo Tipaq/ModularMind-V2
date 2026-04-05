@@ -1,80 +1,134 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { BookOpen, FileText } from "lucide-react";
-import { Badge, EmptyState, relativeTime } from "@modularmind/ui";
-import type { Collection, ProjectDetail } from "@modularmind/api-client";
-import { api } from "@modularmind/api-client";
+import { FileText, Search, Trash2, Upload } from "lucide-react";
+import { Badge, Button, ConfirmDialog, EmptyState, Input, relativeTime } from "@modularmind/ui";
+import type { ProjectDetail } from "@modularmind/api-client";
+import { useKnowledgeHub } from "../../hooks/useKnowledgeHub";
+import type { KnowledgeDocumentWithSource } from "../../hooks/useKnowledgeHub";
 
 interface ProjectContext {
   project: ProjectDetail;
+  reload: () => void;
 }
+
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  ready: { label: "Ready", className: "bg-success/10 text-success" },
+  processing: { label: "Processing", className: "bg-warning/10 text-warning" },
+  pending: { label: "Pending", className: "bg-muted text-muted-foreground" },
+  failed: { label: "Failed", className: "bg-destructive/10 text-destructive" },
+};
 
 export function ProjectKnowledge() {
   const { project } = useOutletContext<ProjectContext>();
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    documents, totalDocuments, loading, uploading,
+    search, setSearch, handleUpload, handleDelete,
+  } = useKnowledgeHub({ projectId: project.id });
 
-  const loadCollections = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await api.get<{ items: Collection[] }>(
-        `/rag/collections?project_id=${project.id}&page_size=100`,
-      );
-      setCollections(data.items ?? []);
-    } catch {
-      setCollections([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [project.id]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeDocumentWithSource | null>(null);
 
-  useEffect(() => { loadCollections(); }, [loadCollections]);
+  const onFilesSelected = useCallback(
+    (files: FileList | null) => { if (files) handleUpload(files); },
+    [handleUpload],
+  );
 
-  if (loading) {
-    return (
-      <div className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-28 animate-pulse rounded-xl bg-muted/50" />
-        ))}
-      </div>
-    );
-  }
-
-  if (collections.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <EmptyState
-          icon={BookOpen}
-          title="No knowledge collections in this project"
-          description="Assign collections to this project from the Knowledge page."
-        />
-      </div>
-    );
-  }
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    await handleDelete(deleteTarget.id, deleteTarget.collection_id);
+    setDeleteTarget(null);
+  }, [deleteTarget, handleDelete]);
 
   return (
-    <div className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {collections.map((col) => (
-        <div key={col.id} className="rounded-xl border border-border/50 bg-card/50 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="font-medium truncate text-sm">{col.name}</h3>
-            <div className="flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 shrink-0">
-              <FileText className="h-3 w-3" />
-              <span className="text-xs text-muted-foreground">{col.document_count}</span>
-            </div>
-          </div>
-          {col.description && (
-            <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">{col.description}</p>
-          )}
-          <div className="mt-3 flex items-center gap-1.5">
-            <Badge variant="outline" className="text-[10px]">{col.scope}</Badge>
-            <Badge variant="outline" className="text-[10px]">{col.chunk_count} chunks</Badge>
-          </div>
-          {col.last_sync && (
-            <p className="mt-2 text-[10px] text-muted-foreground">Updated {relativeTime(col.last_sync)}</p>
-          )}
+    <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-medium">Knowledge</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Documents linked to this project.
+          </p>
         </div>
-      ))}
+        <div className="flex items-center gap-2">
+          {!loading && (
+            <Badge variant="outline" className="text-xs">{totalDocuments} documents</Badge>
+          )}
+          <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+            <Upload className="h-3.5 w-3.5 mr-1.5" />
+            {uploading ? "Uploading..." : "Upload"}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => onFilesSelected(e.target.files)}
+          />
+        </div>
+      </div>
+
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search documents..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/50" />
+          ))}
+        </div>
+      ) : documents.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title={search ? "No documents match your search" : "No documents in this project"}
+          description={search ? "Try a different search term." : "Upload documents to add knowledge to this project."}
+        />
+      ) : (
+        <div className="rounded-xl border border-border/50 overflow-hidden">
+          {documents.map((doc) => {
+            const status = STATUS_CONFIG[doc.status] ?? STATUS_CONFIG.pending;
+            return (
+              <div
+                key={doc.id}
+                className="group flex items-center gap-3 px-4 py-3 border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors"
+              >
+                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{doc.filename}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Added {relativeTime(doc.created_at)}
+                  </p>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 text-xs shrink-0 hidden sm:inline ${status.className}`}>
+                  {status.label}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0"
+                  onClick={() => setDeleteTarget(doc)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title={`Delete "${deleteTarget?.filename}"?`}
+        description="This document and its embeddings will be permanently deleted."
+        destructive
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

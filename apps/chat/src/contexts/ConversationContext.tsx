@@ -5,7 +5,7 @@ interface ConversationContextValue {
   conversations: Conversation[];
   activeConversationId: string | null;
   onSelect: (id: string) => void;
-  onCreate: () => void;
+  onCreate: () => Promise<string | null>;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
 }

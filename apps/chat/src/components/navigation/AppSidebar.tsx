@@ -69,9 +69,13 @@ export const AppSidebar = memo(function AppSidebar() {
     window.location.href = "/login";
   };
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     if (convCtx) {
-      convCtx.onCreate();
+      const id = await convCtx.onCreate();
+      if (id) {
+        navigate(`/chat/${id}`);
+        return;
+      }
     }
     navigate("/chat");
   };

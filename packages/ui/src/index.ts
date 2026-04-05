@@ -124,6 +124,10 @@ export { ChatErrorBanner } from "./components/chat-error-banner";
 export { ConversationSidebar } from "./components/conversation-sidebar";
 export type { ConversationSidebarProps, SidebarConversation } from "./components/conversation-sidebar";
 
+// Conversation list (full-page hub)
+export { ConversationList } from "./components/conversation-list";
+export type { ConversationListProps, ConversationListItem } from "./components/conversation-list";
+
 // Resource components (shared table, filters, empty state, detail header)
 export { EmptyState } from "./components/empty-state";
 export type { EmptyStateProps } from "./components/empty-state";
