@@ -26,6 +26,10 @@ class ScopedMCPToolExecutor:
 
     For tools that accept ``repo_name: str``:
       - Validate the repo name belongs to the project.
+
+    Handles name format mismatch: DB stores ``owner/repo`` but FastCode
+    indexes under just ``repo``. Accepts both formats and normalizes to
+    the short name (after ``/``) for FastCode calls.
     """
 
     def __init__(
@@ -38,6 +42,10 @@ class ScopedMCPToolExecutor:
         self._project_repos = project_repos
         self._allowed_set = set(project_repos)
         self._fastcode_server_id = fastcode_server_id
+        self._short_names = {r.split("/")[-1] for r in project_repos}
+        self._short_to_full: dict[str, str] = {
+            r.split("/")[-1]: r for r in project_repos
+        }
 
     def _is_fastcode_tool(self, namespaced_name: str) -> tuple[bool, str]:
         """Check if a namespaced tool belongs to FastCode. Returns (is_match, real_name)."""
@@ -47,30 +55,48 @@ class ScopedMCPToolExecutor:
         server_id, real_name = mapping
         return server_id == self._fastcode_server_id, real_name
 
+    def _resolve_name(self, name: str) -> str | None:
+        """Resolve a repo name to an allowed identifier (short or full)."""
+        if name in self._allowed_set:
+            return name
+        if name in self._short_names:
+            return self._short_to_full.get(name, name)
+        return None
+
+    def _to_short_name(self, name: str) -> str:
+        """Convert ``owner/repo`` to ``repo`` for FastCode compatibility."""
+        return name.split("/")[-1]
+
     def _scope_repo_list(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Inject or filter the ``repos`` argument."""
         repos = arguments.get("repos")
         if not repos:
-            arguments["repos"] = list(self._project_repos)
+            arguments["repos"] = [self._to_short_name(r) for r in self._project_repos]
             return arguments
 
-        filtered = [r for r in repos if r in self._allowed_set]
-        if not filtered:
+        resolved: list[str] = []
+        for r in repos:
+            if self._resolve_name(r) is not None:
+                resolved.append(self._to_short_name(r))
+        if not resolved:
             raise _RepoScopeError(
                 "None of the requested repos belong to this project. "
                 f"Allowed: {self._project_repos}"
             )
-        arguments["repos"] = filtered
+        arguments["repos"] = resolved
         return arguments
 
     def _scope_single_repo(self, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Validate the ``repo_name`` argument."""
+        """Validate and normalize the ``repo_name`` argument."""
         repo_name = arguments.get("repo_name", "")
-        if repo_name and repo_name not in self._allowed_set:
+        if not repo_name:
+            return arguments
+        if self._resolve_name(repo_name) is None:
             raise _RepoScopeError(
                 f"Repository '{repo_name}' is not part of this project. "
                 f"Allowed: {self._project_repos}"
             )
+        arguments["repo_name"] = self._to_short_name(repo_name)
         return arguments
 
     async def execute(self, namespaced_name: str, arguments: dict[str, Any]) -> str:
