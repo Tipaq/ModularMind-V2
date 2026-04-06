@@ -144,8 +144,8 @@ class ProfileSynthesizer:
                 models = await provider.list_models()
                 if models:
                     model_id = models[0].get("model_id", "")
-            except Exception:
-                pass
+            except (ImportError, RuntimeError, ValueError, KeyError):
+                logger.debug("Fallback model resolution failed for profile synthesis")
 
         if not model_id:
             raise ValueError("No model available for profile synthesis")

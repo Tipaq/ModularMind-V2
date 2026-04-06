@@ -91,11 +91,12 @@ async def _detect_gpu() -> GpuInfo:
                 parts = output.split(",", 1)
                 info.driver_version = parts[0].strip()
                 info.hardware_name = parts[1].strip() if len(parts) > 1 else "NVIDIA GPU"
-        except Exception:
+        except (RuntimeError, OSError, KeyError) as exc:
+            logger.debug("nvidia-smi query failed: %s", exc)
             info.hardware_name = "NVIDIA GPU"
 
-    except Exception:
-        pass
+    except (ImportError, RuntimeError, OSError, ConnectionError) as exc:
+        logger.debug("GPU detection failed: %s", exc)
 
     return info
 
@@ -131,7 +132,7 @@ async def start_ollama(
     except OllamaError as e:
         logger.error("OllamaError starting Ollama: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
-    except Exception as e:
+    except (RuntimeError, OSError, ConnectionError, ImportError) as e:
         logger.exception("Unexpected error starting Ollama: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
     gpu = await _detect_gpu()
@@ -145,7 +146,7 @@ async def stop_ollama(user: CurrentUser) -> OllamaStatusResponse:
     except OllamaError as e:
         logger.error("OllamaError stopping Ollama: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
-    except Exception as e:
+    except (RuntimeError, OSError, ConnectionError) as e:
         logger.exception("Unexpected error stopping Ollama: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
     gpu = await _detect_gpu()

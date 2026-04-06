@@ -154,8 +154,8 @@ async def action_stop_execution(execution_id: str, user: CurrentUser) -> ActionR
                 status="error",
                 message=f"Could not stop execution {execution_id}",
             )
-    except Exception:
-        logger.exception("Stop execution failed")
+    except (RuntimeError, ValueError, OSError, ConnectionError) as exc:
+        logger.exception("Stop execution failed: %s", exc)
         return ActionResponse(status="error", message="Failed to stop execution")
 
 
@@ -171,8 +171,8 @@ async def action_scheduler_cleanup(user: CurrentUser) -> ActionResponse:
             message=f"Cleaned up {cleaned} stale slot(s)",
             details={"cleaned": cleaned},
         )
-    except Exception:
-        logger.exception("Scheduler cleanup failed")
+    except (ConnectionError, OSError, RuntimeError) as exc:
+        logger.exception("Scheduler cleanup failed: %s", exc)
         return ActionResponse(status="error", message="Scheduler cleanup failed")
 
 
@@ -282,8 +282,8 @@ async def action_stop_all_executions(user: CurrentUser) -> ActionResponse:
                 "execution_ids": exec_ids if stopped_count > 0 else [],
             },
         )
-    except Exception:
-        logger.exception("Stop all executions failed")
+    except (RuntimeError, ValueError, OSError, ConnectionError) as exc:
+        logger.exception("Stop all executions failed: %s", exc)
         return ActionResponse(status="error", message="Failed to stop executions")
 
 
@@ -302,6 +302,6 @@ async def action_sync_reload(user: CurrentUser) -> ActionResponse:
             return ActionResponse(status="ok", message="Already up to date")
         finally:
             await svc.close()
-    except Exception:
-        logger.exception("Sync reload failed")
+    except (RuntimeError, ValueError, OSError, ConnectionError, TimeoutError) as exc:
+        logger.exception("Sync reload failed: %s", exc)
         return ActionResponse(status="error", message="Sync reload failed")

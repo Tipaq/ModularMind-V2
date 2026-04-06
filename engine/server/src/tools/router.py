@@ -100,8 +100,8 @@ def _collect_extended_tools() -> dict[str, list[ToolDefinitionResponse]]:
         try:
             raw = definition_fn()
             by_category[category_name] = _extract_tool_defs(raw, category_name, "extended")
-        except Exception:
-            logger.exception("Failed to load tool category: %s", category_name)
+        except (ImportError, RuntimeError, ValueError, KeyError) as exc:
+            logger.exception("Failed to load tool category %s: %s", category_name, exc)
             by_category[category_name] = []
     return by_category
 
@@ -129,8 +129,8 @@ async def _collect_mcp_tools() -> dict[str, list[ToolDefinitionResponse]]:
                 for t in mcp_tools
             ]
             by_server[config.name] = defs
-        except Exception:
-            logger.warning("Failed to discover MCP tools from %s", config.name)
+        except (RuntimeError, ConnectionError, OSError, TimeoutError, ValueError) as exc:
+            logger.warning("Failed to discover MCP tools from %s: %s", config.name, exc)
             by_server[config.name] = []
 
     return by_server
@@ -143,8 +143,8 @@ async def list_tools() -> ToolsOverviewResponse:
 
     try:
         mcp_by_server = await _collect_mcp_tools()
-    except Exception:
-        logger.warning("MCP tool discovery failed")
+    except (RuntimeError, ConnectionError, OSError, TimeoutError) as exc:
+        logger.warning("MCP tool discovery failed: %s", exc)
         mcp_by_server = {}
 
     all_tools: list[ToolDefinitionResponse] = []

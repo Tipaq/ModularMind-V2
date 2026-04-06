@@ -124,7 +124,7 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
                 "tasks:models": model_info,
             }
         }
-    except Exception as e:
+    except (ConnectionError, OSError, RuntimeError) as e:
         logger.warning("Worker monitoring failed: %s", e)
         worker_data = {"status": "unavailable"}
 
@@ -159,9 +159,9 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
                 ps_resp = await client.get(f"{settings.OLLAMA_BASE_URL}/api/ps")
                 if ps_resp.status_code == 200:
                     ollama_running = [m["name"] for m in ps_resp.json().get("models", [])]
-            except Exception:
+            except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
                 logger.debug("Ollama /api/ps check failed")
-    except Exception:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
         logger.debug("Ollama connectivity check failed")
 
     # === Qdrant ===
@@ -177,7 +177,7 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
         qdrant_latency_ms = round((time.monotonic() - q_start) * 1000, 2)
         qdrant_status = "ok"
         qdrant_collections = len(collections.collections)
-    except Exception:
+    except (ConnectionError, OSError, RuntimeError, TimeoutError):
         logger.debug("Qdrant health check failed")
 
     infra = InfraMonitoring(
@@ -209,11 +209,11 @@ async def get_monitoring(user: CurrentUser) -> MonitoringResponse:
                     for raw in raw_alerts:
                         try:
                             alert_summary.active_alerts.append(AlertItem(**json.loads(raw)))
-                        except Exception:
+                        except (json.JSONDecodeError, TypeError, KeyError, ValueError):
                             logger.debug("Malformed alert entry skipped")
             finally:
                 await r.aclose()
-    except Exception as e:
+    except (ConnectionError, OSError, RuntimeError) as e:
         logger.debug("Alert summary fetch failed: %s", e)
 
     return MonitoringResponse(
@@ -274,7 +274,7 @@ async def get_metrics_history(
                 try:
                     value = json.loads(value_bytes)
                     points.append(MetricPoint(ts=score, value=value))
-                except Exception:
+                except (json.JSONDecodeError, TypeError, KeyError, ValueError):
                     continue
 
             # Downsample to max ~360 points for large ranges
@@ -322,7 +322,7 @@ async def get_llm_gpu_monitoring(user: CurrentUser) -> LlmGpuMonitoring:
                             family=details.get("family", ""),
                         )
                     )
-    except Exception:
+    except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
         logger.debug("Ollama model list failed", exc_info=True)
 
     # --- VRAM totals (reuse already-fetched loaded_models data) ---
@@ -454,7 +454,7 @@ async def get_agent_metrics(user: CurrentUser) -> list[AgentMetricsItem]:
                 cfg = await provider.get_agent_config(aid)
                 if cfg and hasattr(cfg, "name"):
                     agent_name_map[aid] = cfg.name
-        except Exception:
+        except (RuntimeError, ValueError, KeyError, OSError):
             logger.debug("Agent name resolution failed", exc_info=True)
 
         for row in rows:

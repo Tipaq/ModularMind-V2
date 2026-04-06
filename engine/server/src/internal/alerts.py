@@ -74,7 +74,7 @@ async def get_alert_history(user: CurrentUser) -> AlertHistoryResponse:
         for raw in raw_items:
             try:
                 items.append(AlertItem(**json.loads(raw)))
-            except Exception:
+            except (json.JSONDecodeError, TypeError, KeyError, ValueError):
                 continue
         return AlertHistoryResponse(items=items, total=len(items))
     finally:
@@ -101,7 +101,7 @@ async def get_active_alerts(user: CurrentUser) -> ActiveAlertsResponse:
             for raw in raw_items:
                 try:
                     alerts.append(AlertItem(**json.loads(raw)))
-                except Exception:
+                except (json.JSONDecodeError, TypeError, KeyError, ValueError):
                     continue
 
         return ActiveAlertsResponse(active_count=active_count, alerts=alerts)

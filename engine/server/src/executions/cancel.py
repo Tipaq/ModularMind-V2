@@ -31,8 +31,8 @@ async def check_revoke_intent(execution_id: str) -> str | None:
         if value is None:
             return None
         return value if isinstance(value, str) else value.decode()
-    except Exception:
-        logger.debug("Failed to check revoke_intent for %s", execution_id, exc_info=True)
+    except (ConnectionError, OSError, TimeoutError) as exc:
+        logger.debug("Failed to check revoke_intent for %s: %s", execution_id, exc)
         return None
     finally:
         await r.aclose()

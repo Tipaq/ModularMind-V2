@@ -51,8 +51,8 @@ async def lifespan(app: FastAPI):
         if await redis.ping():
             logger.info("Redis connection verified")
         await redis.aclose()
-    except Exception:
-        logger.warning("Redis not available — SSE approval events will not work")
+    except (ConnectionError, OSError, TimeoutError) as exc:
+        logger.warning("Redis not available — SSE approval events will not work: %s", exc)
 
     # Initialize SandboxManager
     sandbox_mgr = SandboxManager()
@@ -63,8 +63,8 @@ async def lifespan(app: FastAPI):
         removed = await sandbox_mgr.cleanup_orphaned()
         if removed:
             logger.info("Startup: cleaned %d orphaned sandbox(es)", removed)
-    except Exception:
-        logger.warning("Startup orphan cleanup failed", exc_info=True)
+    except (RuntimeError, OSError, ConnectionError) as exc:
+        logger.warning("Startup orphan cleanup failed: %s", exc)
 
     # Recover expired pending approvals from before restart
     try:
@@ -81,8 +81,8 @@ async def lifespan(app: FastAPI):
                     logger.info("Startup: timed out %d expired approvals", timed_out)
             finally:
                 await redis.aclose()
-    except Exception:
-        logger.warning("Startup approval recovery failed", exc_info=True)
+    except (RuntimeError, OSError, ConnectionError) as exc:
+        logger.warning("Startup approval recovery failed: %s", exc)
 
     # Start APScheduler for periodic tasks
     scheduler = AsyncIOScheduler()
@@ -151,8 +151,8 @@ async def _run_approval_cleanup() -> None:
     try:
         async with async_session_maker() as session:
             await cleanup_resolved_approvals(session)
-    except Exception:
-        logger.warning("Approval cleanup job failed", exc_info=True)
+    except (RuntimeError, OSError, ConnectionError) as exc:
+        logger.warning("Approval cleanup job failed: %s", exc)
 
 
 async def _run_audit_cleanup() -> None:
@@ -177,8 +177,8 @@ async def _run_audit_cleanup() -> None:
                     result.rowcount,
                     settings.APPROVAL_RETENTION_DAYS,
                 )
-    except Exception:
-        logger.warning("Audit cleanup job failed", exc_info=True)
+    except (RuntimeError, OSError, ConnectionError) as exc:
+        logger.warning("Audit cleanup job failed: %s", exc)
 
 
 app = FastAPI(

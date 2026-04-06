@@ -2,7 +2,7 @@
 Execution service.
 
 Handles agent and graph execution using modularmind-core.
-Supports distributed execution via Redis Streams and inline (legacy) mode.
+Supports distributed execution via Redis Streams and inline mode.
 """
 
 import asyncio
@@ -379,7 +379,7 @@ class ExecutionService:
             await redis.aclose()
 
     # =========================================================================
-    # Inline execution (legacy — behind EXECUTION_MODE=inline feature flag)
+    # Inline execution (behind EXECUTION_MODE=inline feature flag)
     # =========================================================================
 
     async def execute(

@@ -123,7 +123,7 @@ async def sync_platform() -> None:
             if _scheduled_task_runner:
                 try:
                     await _scheduled_task_runner.sync_jobs()
-                except Exception:
+                except (RuntimeError, ValueError, OSError, ConnectionError):
                     logger.exception("Failed to sync scheduled task jobs")
     except (httpx.HTTPError, ConnectionError, OSError, TimeoutError, ValueError):
         logger.exception("Platform sync failed")
@@ -343,7 +343,7 @@ async def _synthesize_one(synthesizer, user_id: str) -> bool:
                 await session.commit()
                 return True
             return False
-    except Exception:
+    except (sqlalchemy.exc.SQLAlchemyError, ValueError, RuntimeError, OSError):
         logger.warning("Profile synthesis failed for user %s", user_id, exc_info=True)
         raise
 

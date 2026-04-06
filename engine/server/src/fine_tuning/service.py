@@ -14,6 +14,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import httpx
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -238,11 +239,11 @@ class FineTuningService:
                 loss = data.get(b"loss")
                 if loss:
                     progress.loss = float(loss)
-        except Exception:
+        except (ConnectionError, OSError, TimeoutError) as exc:
             logger.warning(
-                "Redis unavailable for job progress %s",
+                "Redis unavailable for job progress %s: %s",
                 job_id,
-                exc_info=True,
+                exc,
             )
 
         return progress
@@ -403,8 +404,7 @@ class FineTuningService:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(config_data, f, indent=2, default=str)
             os.replace(tmp_path, str(config_path))
-        except Exception:
-            # Cleanup temp file on error
+        except (OSError, ValueError, TypeError):
             with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
             raise
@@ -420,7 +420,7 @@ class FineTuningService:
                     headers={"X-Internal-Token": settings.SECRET_KEY},
                     timeout=5.0,
                 )
-        except Exception:
+        except (httpx.HTTPError, ConnectionError, OSError, TimeoutError):
             logger.warning("Failed to trigger config reload", exc_info=True)
 
     # -----------------------------------------------------------------------

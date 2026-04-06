@@ -155,9 +155,18 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 error_message="Cancelled by user",
             )
 
-        except Exception:  # noqa: BLE001 — Worker resilience: catch all to avoid stream consumer crash
+        except (
+            RuntimeError,
+            ValueError,
+            KeyError,
+            TypeError,
+            OSError,
+            ConnectionError,
+            TimeoutError,
+            sqlalchemy.exc.SQLAlchemyError,
+            redis.exceptions.RedisError,
+        ):
             logger.exception("Execution %s failed", execution_id)
-            # Update status to FAILED
             from sqlalchemy import update
 
             from src.executions.models import ExecutionRun, ExecutionStatus
@@ -178,7 +187,7 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                 "failed",
                 error_message="Execution failed",
             )
-            raise  # Re-raise to trigger retry/DLQ
+            raise
 
         finally:
             # Release the fair-scheduler slot so the global/team counters stay accurate.
@@ -209,8 +218,12 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
                             f"{_settings.GATEWAY_URL}/api/v1/release/{execution_id}",
                             headers={"Authorization": token},
                         )
-                except Exception:
-                    pass  # Cleanup scheduler handles leaked sandboxes
+                except (ConnectionError, TimeoutError, OSError) as exc:
+                    logger.debug(
+                        "Gateway sandbox release failed for %s: %s",
+                        execution_id,
+                        exc,
+                    )
 
 
 # --- Cancellation helper ---
@@ -393,7 +406,7 @@ async def _update_scheduled_task_run(
             if status == "completed":
                 await _run_scheduled_task_post_hooks(hook_session, task_id, run)
 
-    except Exception:
+    except (sqlalchemy.exc.SQLAlchemyError, KeyError, ValueError, OSError):
         logger.exception(
             "Failed to update scheduled task run for execution %s",
             execution_id,
@@ -581,7 +594,16 @@ async def document_process_handler(data: dict[str, Any]) -> None:
 
             # File stays in MinIO — no deletion (persistent storage)
 
-        except Exception as exc:  # noqa: BLE001 — Worker resilience: catch all to avoid stream consumer crash
+        except (
+            RuntimeError,
+            ValueError,
+            KeyError,
+            TypeError,
+            OSError,
+            ConnectionError,
+            TimeoutError,
+            sqlalchemy.exc.SQLAlchemyError,
+        ) as exc:
             logger.exception("Failed to process document %s", document_id)
             try:
                 await session.execute(

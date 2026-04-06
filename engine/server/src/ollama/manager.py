@@ -62,7 +62,7 @@ class OllamaManager:
         try:
             self._docker = docker.from_env()
             self._docker.ping()
-        except Exception as e:
+        except (ConnectionError, OSError, RuntimeError) as e:
             self._docker = None
             raise OllamaError(f"Cannot connect to Docker daemon: {e}") from e
 
@@ -86,14 +86,14 @@ class OllamaManager:
                 if name not in ("bridge", "host", "none"):
                     logger.info("Ollama manager: detected Docker network %s", name)
                     return name
-        except Exception:
-            logger.debug("Ollama network detection failed", exc_info=True)
+        except (RuntimeError, OSError, KeyError) as exc:
+            logger.debug("Ollama network detection failed: %s", exc)
         return None
 
     async def _ensure_volume(self, client: Any) -> None:
         try:
             await asyncio.to_thread(client.volumes.get, VOLUME_NAME)
-        except Exception:
+        except (RuntimeError, OSError):
             await asyncio.to_thread(
                 client.volumes.create, VOLUME_NAME, driver="local",
             )
@@ -106,13 +106,13 @@ class OllamaManager:
     def _is_enabled(self) -> bool:
         try:
             return self._get_secrets_store().get(SECRET_KEY_ENABLED) == "true"
-        except Exception:
+        except (RuntimeError, OSError, KeyError):
             return False
 
     def _is_gpu(self) -> bool:
         try:
             return self._get_secrets_store().get(SECRET_KEY_GPU) == "true"
-        except Exception:
+        except (RuntimeError, OSError, KeyError):
             return False
 
     def _persist_state(self, enabled: bool, gpu: bool) -> None:
@@ -120,7 +120,7 @@ class OllamaManager:
             store = self._get_secrets_store()
             store.set(SECRET_KEY_ENABLED, "true" if enabled else "false")
             store.set(SECRET_KEY_GPU, "true" if gpu else "false")
-        except Exception as e:
+        except (RuntimeError, OSError, KeyError) as e:
             logger.warning("Failed to persist Ollama state: %s", e)
 
     async def start(self, gpu_enabled: bool = False) -> OllamaStatus:
@@ -164,7 +164,7 @@ class OllamaManager:
 
         try:
             container = await asyncio.to_thread(client.containers.run, **kwargs)
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError) as e:
             raise OllamaError(f"Failed to start Ollama container: {e}") from e
 
         self._container_id = container.id
@@ -184,7 +184,7 @@ class OllamaManager:
                 await asyncio.to_thread(container.stop, timeout=STOP_TIMEOUT_SECS)
                 await asyncio.to_thread(container.remove)
                 logger.info("Stopped and removed Ollama container")
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError) as e:
                 logger.warning("Error stopping Ollama container: %s", e)
 
         self._container_id = None
@@ -198,7 +198,7 @@ class OllamaManager:
         try:
             client = await self._get_docker()
             container = await self._find_container(client)
-        except (OllamaError, Exception):
+        except (OllamaError, RuntimeError, OSError, ConnectionError):
             return OllamaStatus(
                 running=False,
                 enabled=enabled,
@@ -245,7 +245,7 @@ class OllamaManager:
                 self._container_id = container.id
                 logger.info("Restarted stopped Ollama container")
                 return
-            except Exception as e:
+            except (RuntimeError, OSError, ConnectionError) as e:
                 logger.warning("Failed to restart Ollama: %s, recreating", e)
                 await asyncio.to_thread(container.remove, force=True)
 
@@ -266,8 +266,8 @@ class OllamaManager:
             for c in containers:
                 if c.name == CONTAINER_NAME:
                     return c
-        except Exception:
-            logger.debug("Failed to find Ollama container", exc_info=True)
+        except (RuntimeError, OSError, ConnectionError) as exc:
+            logger.debug("Failed to find Ollama container: %s", exc)
         return None
 
 

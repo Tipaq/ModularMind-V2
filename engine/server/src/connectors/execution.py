@@ -158,8 +158,8 @@ async def _run_background(
             )
             response_text = await execute_and_collect(db, fake_connector, message)
             await adapter.send_response(None, message.platform_context, response_text)
-        except Exception:
-            logger.exception("Background webhook execution failed for %s", connector_id)
+        except (RuntimeError, ValueError, OSError, ConnectionError, TimeoutError) as exc:
+            logger.exception("Background webhook execution failed for %s: %s", connector_id, exc)
             await adapter.send_response(
                 None,
                 message.platform_context,

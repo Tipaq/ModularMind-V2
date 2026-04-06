@@ -2,7 +2,7 @@
 Execution router.
 
 API endpoints for agent and graph execution.
-Supports distributed execution via Redis Streams and inline (legacy) mode.
+Supports distributed execution via Redis Streams and inline mode.
 """
 
 import json
@@ -222,10 +222,10 @@ async def stream_execution(
                         "Client disconnected, set revoke_intent for %s",
                         execution_id,
                     )
-                except Exception:
+                except (ConnectionError, OSError, TimeoutError) as exc:
                     logger.debug(
-                        "Failed to set revoke_intent on disconnect",
-                        exc_info=True,
+                        "Failed to set revoke_intent on disconnect: %s",
+                        exc,
                     )
             await r.aclose()
 
