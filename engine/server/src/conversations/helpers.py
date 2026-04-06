@@ -4,8 +4,6 @@ import logging
 
 from fastapi import HTTPException
 
-from src.infra.query_utils import raise_not_found
-
 from .models import Conversation
 from .schemas import (
     AttachmentResponse,

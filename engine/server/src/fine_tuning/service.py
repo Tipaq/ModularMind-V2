@@ -14,7 +14,6 @@ import os
 import tempfile
 from pathlib import Path
 
-import httpx
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 

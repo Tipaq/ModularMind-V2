@@ -109,7 +109,7 @@ export function GraphDetail() {
   }, [graph]);
 
   const [currentNodes, setCurrentNodes] = useState<Node[]>([]);
-  const [_currentEdges, setCurrentEdges] = useState<Edge[]>([]);
+  const [, setCurrentEdges] = useState<Edge[]>([]);
   const [canvasKey, setCanvasKey] = useState(0);
   const [activeTab, setActiveTab] = useState("settings");
   const [executionActivities, setExecutionActivities] = useState<ExecutionActivity[]>([]);

@@ -48,7 +48,11 @@ async def inject_project_metadata(
         ).where(ProjectRepository.project_id == project_id)
     )
     repos = [
-        {"repo_identifier": r.repo_identifier, "repo_url": r.repo_url, "display_name": r.display_name}
+        {
+            "repo_identifier": r.repo_identifier,
+            "repo_url": r.repo_url,
+            "display_name": r.display_name,
+        }
         for r in repo_result.all()
     ]
     if repos:

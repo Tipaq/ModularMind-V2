@@ -12,6 +12,7 @@ from typing import Any
 from uuid import uuid4
 
 from langchain_core.messages import HumanMessage
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain_config import ConfigProvider
 from src.graph_engine import GraphCompiler, create_initial_state
@@ -21,7 +22,6 @@ from src.infra.constants import OUTPUT_TRUNCATION_LENGTH, SSE_CONTENT_LENGTH
 from src.infra.utils import utcnow
 from src.llm import get_llm_provider
 from src.mcp.service import get_mcp_registry
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from .creation import inject_project_metadata
 from .models import ExecutionRun, ExecutionStatus, ExecutionStep
