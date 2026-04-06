@@ -58,6 +58,7 @@ def seed_agents(session: requests.Session, base_url: str) -> dict[str, str]:
             "model_id": data["model_id"],
             "system_prompt": data.get("system_prompt", ""),
             "tool_categories": data.get("tool_categories", {}),
+            "gateway_permissions": data.get("gateway_permissions"),
         }
 
         resp = session.post(

@@ -815,12 +815,25 @@ class ExecutionService:
         )
         graph = await compiler.compile_graph(graph_config)
 
-        # Create initial state
+        # Create initial state (user_id + project_id in metadata for tool scoping)
         state = create_initial_state(
             prompt=execution.input_prompt,
             input_data=execution.input_data,
             messages=[HumanMessage(content=execution.input_prompt)],
         )
+        state["metadata"]["user_id"] = execution.user_id
+
+        if execution.session_id:
+            from src.conversations.models import Conversation
+
+            conv_result = await self.db.execute(
+                select(Conversation.project_id).where(
+                    Conversation.id == execution.session_id
+                )
+            )
+            project_id = conv_result.scalar_one_or_none()
+            if project_id:
+                state["metadata"]["project_id"] = project_id
 
         # Set up trace handler — events go into a merged queue for real-time streaming
         from src.graph_engine.callbacks import ExecutionTraceHandler
