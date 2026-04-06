@@ -91,7 +91,7 @@ edges:
   - source: issue_check
     target: codebase_investigator
     data:
-      condition: "issue_analyst_status == 'found'"
+      condition: "'no_issues' not in issue_analyst_response"
   - source: issue_check
     target: end
     data:
