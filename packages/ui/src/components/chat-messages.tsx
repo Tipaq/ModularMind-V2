@@ -146,8 +146,9 @@ const MessageBubble = memo(function MessageBubble({
     onEditMessage(msg.id, editContent.trim());
   }, [editContent, onEditMessage, msg.id]);
 
-  const showInlineActivity = !isUser && isStreaming && isLastAssistant && !msg.content;
-  const showActivityAbove = isLastAssistant && isStreaming && !!msg.content && activities.length > 0;
+  const hasActivities = activities.length > 0;
+  const showInlineActivity = !isUser && isLastAssistant && !msg.content && hasActivities;
+  const showActivityAbove = isLastAssistant && !!msg.content && hasActivities;
   const timeStr = formatTime(msg.created_at);
 
   return (
@@ -240,6 +241,10 @@ const MessageBubble = memo(function MessageBubble({
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Thinking...
+                    </div>
+                  ) : !showInlineActivity ? (
+                    <div className="text-sm text-muted-foreground italic">
+                      No response generated.
                     </div>
                   ) : null}
 
