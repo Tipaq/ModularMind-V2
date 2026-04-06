@@ -218,6 +218,42 @@ async def cleanup_orphaned_attachments() -> None:
         await r.aclose()
 
 
+async def recover_interrupted_executions() -> None:
+    """Fail all RUNNING/PENDING executions on worker startup.
+
+    After a crash or restart, any in-flight execution will never complete.
+    Unlike ``cleanup_stale_executions`` (timeout-based), this catches ALL
+    stuck executions regardless of age.  Should be called once at boot,
+    before the worker starts accepting new tasks.
+    """
+    from sqlalchemy import update
+
+    from src.executions.models import ExecutionRun, ExecutionStatus
+    from src.infra.database import async_session_maker
+
+    try:
+        async with async_session_maker() as session:
+            result = await session.execute(
+                update(ExecutionRun)
+                .where(
+                    ExecutionRun.status.in_([ExecutionStatus.RUNNING, ExecutionStatus.PENDING]),
+                )
+                .values(
+                    status=ExecutionStatus.FAILED,
+                    error_message="Worker restarted during execution",
+                    completed_at=utcnow(),
+                )
+            )
+            if result.rowcount:
+                logger.info(
+                    "Boot recovery: marked %d interrupted execution(s) as failed",
+                    result.rowcount,
+                )
+            await session.commit()
+    except sqlalchemy.exc.SQLAlchemyError:
+        logger.exception("Boot execution recovery failed")
+
+
 async def cleanup_stale_executions() -> None:
     """Clean up executions stuck in RUNNING/PENDING state."""
     from datetime import timedelta

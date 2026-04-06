@@ -186,9 +186,12 @@ async def run_tool_loop(
                 if is_human_tool:
                     result_text = await tool_executor.execute(tool_name, tool_args)
                 else:
-                    result_text = await asyncio.wait_for(
-                        tool_executor.execute(tool_name, tool_args),
+                    result_text = await _execute_with_cancel_check(
+                        tool_executor,
+                        tool_name,
+                        tool_args,
                         timeout=loop_config.tool_call_timeout,
+                        cancel_check_fn=cancel_check_fn,
                     )
             except TimeoutError:
                 timeout = loop_config.tool_call_timeout
@@ -258,6 +261,59 @@ def try_bind_tools(
             e,
         )
         return llm, False
+
+
+_CANCEL_POLL_INTERVAL = 3.0
+
+
+async def _execute_with_cancel_check(
+    executor: ToolExecutor,
+    name: str,
+    args: dict[str, Any],
+    *,
+    timeout: float,
+    cancel_check_fn: Callable[[], Awaitable[bool]] | None,
+) -> str:
+    """Run a tool call with concurrent cancel-key polling.
+
+    If ``cancel_check_fn`` is provided, a background task polls it every
+    few seconds.  When cancellation is detected, the tool task is cancelled
+    and ``ExecutionCancelled`` is raised immediately — even if the tool is
+    mid-flight (e.g. a 120 s MCP call).
+    """
+    tool_task = asyncio.ensure_future(executor.execute(name, args))
+
+    if cancel_check_fn is None:
+        return await asyncio.wait_for(asyncio.shield(tool_task), timeout=timeout)
+
+    async def _poll_cancel() -> None:
+        while True:
+            await asyncio.sleep(_CANCEL_POLL_INTERVAL)
+            if await cancel_check_fn():
+                return
+
+    cancel_task = asyncio.ensure_future(_poll_cancel())
+
+    done, pending = await asyncio.wait(
+        {tool_task, cancel_task},
+        timeout=timeout,
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    if tool_task in done:
+        cancel_task.cancel()
+        return tool_task.result()
+
+    if cancel_task in done:
+        tool_task.cancel()
+        from src.executions.cancel import ExecutionCancelled
+
+        raise ExecutionCancelled()
+
+    # Neither finished → timeout
+    tool_task.cancel()
+    cancel_task.cancel()
+    raise TimeoutError
 
 
 def _truncate(text: str, max_length: int) -> str:

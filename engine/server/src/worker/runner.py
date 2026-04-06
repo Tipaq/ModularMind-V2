@@ -126,6 +126,14 @@ async def main() -> None:
     except (ConnectionError, OSError, redis.exceptions.RedisError):
         logger.warning("Boot scheduler cleanup failed (non-fatal)")
 
+    # Fail any executions left in RUNNING/PENDING from a previous crash
+    from src.worker.scheduler import recover_interrupted_executions
+
+    try:
+        await recover_interrupted_executions()
+    except Exception:
+        logger.warning("Boot execution recovery failed (non-fatal)", exc_info=True)
+
     # Start APScheduler (only if this worker instance owns scheduling)
     scheduler = None
     scheduled_task_runner = None
