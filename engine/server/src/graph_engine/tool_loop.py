@@ -36,7 +36,7 @@ class ToolExecutor(Protocol):
 @dataclass(frozen=True)
 class ToolLoopConfig:
     max_iterations: int = DEFAULT_TOOL_LOOP_MAX_ITERATIONS
-    tool_call_timeout: float = 60.0
+    tool_call_timeout: float = 120.0
     min_tool_calls: int = 0
     reflection_prompt: str | None = None
 
