@@ -4,6 +4,9 @@
     "lib": ["DOM", "DOM.Iterable", "ES2023"],
     "allowJs": false,
     "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"]

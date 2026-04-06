@@ -10,6 +10,8 @@ import { Paintbrush, X } from "lucide-react";
 const CANVAS_SIZE = 220;
 const SATURATION_MIN = 20;
 const SATURATION_MAX = 100;
+const PICKER_STROKE_COLOR = "hsl(0 0% 100%)";
+const PICKER_SHADOW_COLOR = "hsl(0 0% 0% / 0.2)";
 
 interface ThemeCustomizerProps {
   className?: string;
@@ -144,10 +146,10 @@ function ColorPickerModal({ hue, saturation, onAccentChange, onClose }: ColorPic
     ctx.arc(ix, iy, 10, 0, Math.PI * 2);
     ctx.fillStyle = `hsl(${localHue} ${localSat}% 55%)`;
     ctx.fill();
-    ctx.strokeStyle = "white";
+    ctx.strokeStyle = PICKER_STROKE_COLOR;
     ctx.lineWidth = 2.5;
     ctx.stroke();
-    ctx.strokeStyle = "rgba(0,0,0,0.2)";
+    ctx.strokeStyle = PICKER_SHADOW_COLOR;
     ctx.lineWidth = 1;
     ctx.stroke();
   }, [localHue, localSat]);
