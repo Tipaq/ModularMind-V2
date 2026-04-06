@@ -1,13 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { ThemeProvider, ErrorBoundary, RouteLoader } from "@modularmind/ui";
+import { ThemeProvider, ErrorBoundary, PageErrorBoundary, RouteLoader } from "@modularmind/ui";
 
 import PortalLayout from "./layouts/PortalLayout";
 import Login from "./pages/Login";
 
 const SETUP_CHECK_TIMEOUT_MS = 5000;
 
-// Lazy-loaded routes
 const ConversationsPage = lazy(() => import("./pages/ConversationsPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -65,22 +64,22 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route element={<PortalLayout />}>
             <Route index element={<Navigate to="/chat" replace />} />
-            <Route path="/chat" element={<ConversationsPage />} />
-            <Route path="/chat/:conversationId" element={<ChatPage />} />
-            <Route path="/projects" element={<ProjectList />} />
-            <Route path="/projects/:projectId" element={<ProjectDetail />}>
+            <Route path="/chat" element={<PageErrorBoundary pageName="conversations"><ConversationsPage /></PageErrorBoundary>} />
+            <Route path="/chat/:conversationId" element={<PageErrorBoundary pageName="chat"><ChatPage /></PageErrorBoundary>} />
+            <Route path="/projects" element={<PageErrorBoundary pageName="projects"><ProjectList /></PageErrorBoundary>} />
+            <Route path="/projects/:projectId" element={<PageErrorBoundary pageName="project-detail"><ProjectDetail /></PageErrorBoundary>}>
               <Route index element={<ProjectOverview />} />
               <Route path="conversations" element={<ProjectConversations />} />
               <Route path="knowledge" element={<ProjectKnowledge />} />
               <Route path="apps" element={<ProjectApps />} />
               <Route path="tasks" element={<ProjectTasks />} />
             </Route>
-            <Route path="/projects/:projectId/conversations/:conversationId" element={<ChatPage />} />
-            <Route path="/apps" element={<AppGallery />} />
-            <Route path="/apps/:appId" element={<AppView />} />
+            <Route path="/projects/:projectId/conversations/:conversationId" element={<PageErrorBoundary pageName="project-chat"><ChatPage /></PageErrorBoundary>} />
+            <Route path="/apps" element={<PageErrorBoundary pageName="app-gallery"><AppGallery /></PageErrorBoundary>} />
+            <Route path="/apps/:appId" element={<PageErrorBoundary pageName="app-view"><AppView /></PageErrorBoundary>} />
             <Route path="/secrets" element={<Navigate to="/settings" replace />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/profile" element={<Profile />} />
+            <Route path="/settings" element={<PageErrorBoundary pageName="settings"><Settings /></PageErrorBoundary>} />
+            <Route path="/profile" element={<PageErrorBoundary pageName="profile"><Profile /></PageErrorBoundary>} />
           </Route>
         </Routes>
         </SetupRedirect>

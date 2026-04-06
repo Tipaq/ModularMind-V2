@@ -6,7 +6,7 @@ import {
   RouterProvider,
   useLocation,
 } from "react-router-dom";
-import { ThemeProvider, ErrorBoundary, RouteLoader } from "@modularmind/ui";
+import { ThemeProvider, ErrorBoundary, PageErrorBoundary, RouteLoader } from "@modularmind/ui";
 
 import { DashboardLayout } from "./layouts/DashboardLayout";
 import { Login } from "./pages/Login";
@@ -64,6 +64,10 @@ function SuspenseWrapper() {
   );
 }
 
+function pageBoundary(pageName: string, element: React.ReactNode) {
+  return <PageErrorBoundary pageName={pageName}>{element}</PageErrorBoundary>;
+}
+
 const router = createBrowserRouter(
   [
     {
@@ -73,30 +77,30 @@ const router = createBrowserRouter(
           element: <SetupGuard />,
           children: [
             { path: "/login", element: <Login /> },
-            { path: "/setup", element: <Setup /> },
+            { path: "/setup", element: pageBoundary("setup", <Setup />) },
             {
               element: <DashboardLayout />,
               children: [
                 { path: "/", element: <Navigate to="/configuration" replace /> },
-                { path: "/monitoring", element: <Monitoring /> },
-                { path: "/configuration", element: <Configuration /> },
-                { path: "/models", element: <Models /> },
-                { path: "/models/:id", element: <ModelDetail /> },
-                { path: "/knowledge", element: <Knowledge /> },
-                { path: "/knowledge/:id", element: <CollectionDetail /> },
-                { path: "/tools", element: <Tools /> },
-                { path: "/mini-apps", element: <MiniApps /> },
-                { path: "/mini-apps/:id", element: <MiniAppDetail /> },
-                { path: "/scheduled-tasks", element: <ScheduledTasks /> },
-                { path: "/scheduled-tasks/:id", element: <ScheduledTaskDetail /> },
-                { path: "/graphs", element: <Graphs /> },
-                { path: "/graphs/:id", element: <GraphDetail /> },
-                { path: "/agents", element: <Agents /> },
-                { path: "/agents/:id", element: <AgentDetail /> },
-                { path: "/users", element: <Users /> },
-                { path: "/users/:userId", element: <UserDetail /> },
-                { path: "/settings", element: <Settings /> },
-                { path: "/profile", element: <Profile /> },
+                { path: "/monitoring", element: pageBoundary("monitoring", <Monitoring />) },
+                { path: "/configuration", element: pageBoundary("configuration", <Configuration />) },
+                { path: "/models", element: pageBoundary("models", <Models />) },
+                { path: "/models/:id", element: pageBoundary("model-detail", <ModelDetail />) },
+                { path: "/knowledge", element: pageBoundary("knowledge", <Knowledge />) },
+                { path: "/knowledge/:id", element: pageBoundary("collection-detail", <CollectionDetail />) },
+                { path: "/tools", element: pageBoundary("tools", <Tools />) },
+                { path: "/mini-apps", element: pageBoundary("mini-apps", <MiniApps />) },
+                { path: "/mini-apps/:id", element: pageBoundary("mini-app-detail", <MiniAppDetail />) },
+                { path: "/scheduled-tasks", element: pageBoundary("scheduled-tasks", <ScheduledTasks />) },
+                { path: "/scheduled-tasks/:id", element: pageBoundary("scheduled-task-detail", <ScheduledTaskDetail />) },
+                { path: "/graphs", element: pageBoundary("graphs", <Graphs />) },
+                { path: "/graphs/:id", element: pageBoundary("graph-detail", <GraphDetail />) },
+                { path: "/agents", element: pageBoundary("agents", <Agents />) },
+                { path: "/agents/:id", element: pageBoundary("agent-detail", <AgentDetail />) },
+                { path: "/users", element: pageBoundary("users", <Users />) },
+                { path: "/users/:userId", element: pageBoundary("user-detail", <UserDetail />) },
+                { path: "/settings", element: pageBoundary("settings", <Settings />) },
+                { path: "/profile", element: pageBoundary("profile", <Profile />) },
               ],
             },
           ],
