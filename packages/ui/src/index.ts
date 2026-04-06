@@ -90,7 +90,7 @@ export { Textarea } from "./components/textarea";
 export type { TextareaProps } from "./components/textarea";
 export { AppearanceCard } from "./components/appearance-card";
 export { ErrorBoundary } from "./components/error-boundary";
-export { RouteLoader } from "./components/route-loader";
+export { RouteLoader, PageLoader } from "./components/route-loader";
 export { LoginForm } from "./components/login-form";
 export type { LoginFormProps } from "./components/login-form";
 export { ProfilePage } from "./components/profile-page";

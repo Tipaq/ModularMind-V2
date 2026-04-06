@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { Button, MiniAppViewer } from "@modularmind/ui";
+import { ArrowLeft } from "lucide-react";
+import { Button, MiniAppViewer, PageLoader } from "@modularmind/ui";
 import type { MiniApp } from "@modularmind/api-client";
 import { api } from "@modularmind/api-client";
 
@@ -27,11 +27,7 @@ export function AppView() {
   useEffect(() => { loadApp(); }, [loadApp]);
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!app) {

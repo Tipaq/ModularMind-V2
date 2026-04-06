@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft, BookOpen, CalendarClock, FolderKanban, Loader2,
+  ArrowLeft, BookOpen, CalendarClock, FolderKanban,
   MessageSquare, LayoutDashboard, AppWindow,
 } from "lucide-react";
-import { Badge, Button } from "@modularmind/ui";
+import { Badge, Button, PageLoader } from "@modularmind/ui";
 import type { ProjectDetail as ProjectDetailType, ProjectResourceCounts } from "@modularmind/api-client";
 import { api } from "@modularmind/api-client";
 
@@ -43,11 +43,7 @@ export function ProjectDetail() {
   useEffect(() => { loadProject(); }, [loadProject]);
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!project) {

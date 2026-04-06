@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
-import { useAuth } from "@modularmind/ui";
+import { useAuth, PageLoader } from "@modularmind/ui";
 import { api } from "@modularmind/api-client";
 
 export function DashboardLayout() {
@@ -8,8 +8,8 @@ export function DashboardLayout() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="flex h-screen">
+        <PageLoader />
       </div>
     );
   }

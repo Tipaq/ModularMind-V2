@@ -1,5 +1,5 @@
 import { Outlet } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { PageLoader } from "@modularmind/ui";
 import { useAuth } from "../hooks/useAuth";
 import { AppSidebar } from "../components/navigation/AppSidebar";
 
@@ -8,8 +8,8 @@ export default function PortalLayout() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex h-screen">
+        <PageLoader />
       </div>
     );
   }
