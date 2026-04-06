@@ -1,7 +1,7 @@
 """Engine configuration — loaded from environment variables.
 
 Uses pydantic-settings for environment-based configuration.
-Mirrors the V1 runtime Settings class adapted for Redis Streams worker.
+Adapted for Redis Streams worker.
 """
 
 import logging
@@ -42,6 +42,20 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_SECONDS: int = Field(default=3600, ge=300, le=86400)
     REFRESH_TOKEN_EXPIRE_SECONDS: int = Field(default=604800, ge=3600, le=2592000)
+    SECURE_COOKIES: bool | None = Field(
+        default=None,
+        description=(
+            "Force Secure flag on auth cookies. "
+            "None = auto (True when DEBUG is False, False when DEBUG is True)."
+        ),
+    )
+
+    @property
+    def secure_cookies(self) -> bool:
+        """Resolve cookie Secure flag: explicit setting wins, otherwise invert DEBUG."""
+        if self.SECURE_COOKIES is not None:
+            return self.SECURE_COOKIES
+        return not self.DEBUG
 
     # ---- Database -----------------------------------------------------------
     DATABASE_URL: str = Field(
@@ -472,7 +486,7 @@ settings = Settings()
 def get_settings() -> Settings:
     """Get cached settings instance.
 
-    Many V1-ported modules call ``get_settings()`` instead of using the
+    Some modules call ``get_settings()`` instead of using the
     module-level ``settings`` singleton directly.  This function is
     lru-cached so it returns the same object on every call.
     """

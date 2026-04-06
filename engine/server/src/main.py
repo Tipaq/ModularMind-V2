@@ -253,9 +253,17 @@ Instrumentator(
 # Middleware
 # ---------------------------------------------------------------------------
 
+_cors_origins = settings.cors_origins_list
+
+if not settings.DEBUG and "*" in _cors_origins:
+    logger.warning(
+        "CORS_ORIGINS contains wildcard '*' in non-debug mode — "
+        "this allows any origin to make cross-origin requests"
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -97,6 +97,19 @@ class GatewaySettings(BaseSettings):
 
     # ---- Prometheus ---------------------------------------------------------
     PROMETHEUS_ENABLED: bool = True
+
+    @model_validator(mode="after")
+    def reject_default_secret_in_production(self) -> "GatewaySettings":
+        """Prevent the gateway from starting with the default SECRET_KEY in production."""
+        if self.SECRET_KEY == "change-me-in-production" and self.ENVIRONMENT not in (
+            "development",
+            "test",
+        ):
+            raise ValueError(
+                "SECRET_KEY must be changed from its default value in "
+                "non-development environments. Generate one with: openssl rand -hex 32"
+            )
+        return self
 
 
 settings = GatewaySettings()
