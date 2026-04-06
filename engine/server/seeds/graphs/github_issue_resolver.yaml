@@ -22,13 +22,20 @@ nodes:
       agent_ref: issue_analyst
       position: { x: 500, y: 150 }
 
+  - id: issue_check
+    type: condition
+    data:
+      type: condition
+      label: Issue Found?
+      position: { x: 500, y: 225 }
+
   - id: codebase_investigator
     type: agent
     data:
       type: agent
       label: Codebase Investigator
       agent_ref: codebase_investigator
-      position: { x: 500, y: 250 }
+      position: { x: 500, y: 300 }
 
   - id: solution_designer
     type: agent
@@ -36,7 +43,7 @@ nodes:
       type: agent
       label: Solution Designer
       agent_ref: solution_designer
-      position: { x: 500, y: 350 }
+      position: { x: 500, y: 400 }
 
   - id: fix_implementer
     type: agent
@@ -44,7 +51,7 @@ nodes:
       type: agent
       label: Fix Implementer
       agent_ref: fix_implementer
-      position: { x: 500, y: 450 }
+      position: { x: 500, y: 500 }
 
   - id: quality_guard
     type: agent
@@ -52,14 +59,14 @@ nodes:
       type: agent
       label: Quality Guard
       agent_ref: quality_guard
-      position: { x: 500, y: 550 }
+      position: { x: 500, y: 600 }
 
   - id: verify_check
     type: condition
     data:
       type: condition
       label: Verify Check
-      position: { x: 500, y: 650 }
+      position: { x: 500, y: 700 }
 
   - id: deliverer
     type: agent
@@ -67,20 +74,28 @@ nodes:
       type: agent
       label: Deliverer
       agent_ref: deliverer
-      position: { x: 500, y: 750 }
+      position: { x: 500, y: 800 }
 
   - id: end
     type: end
     data:
       type: end
       label: end
-      position: { x: 500, y: 850 }
+      position: { x: 500, y: 900 }
 
 edges:
   - source: start
     target: issue_analyst
   - source: issue_analyst
+    target: issue_check
+  - source: issue_check
     target: codebase_investigator
+    data:
+      condition: "issue_analyst_status == 'found'"
+  - source: issue_check
+    target: end
+    data:
+      condition: "default"
   - source: codebase_investigator
     target: solution_designer
   - source: solution_designer
