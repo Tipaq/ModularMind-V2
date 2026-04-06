@@ -190,9 +190,15 @@ async def execute_github_tool(
     """Execute a GitHub tool call."""
     token = await resolve_token(session, agent_id)
 
-    write_tools = {"github_create_issue", "github_create_pr", "github_pr_comment", "github_merge_pr"}
+    write_tools = {
+        "github_create_issue", "github_create_pr",
+        "github_pr_comment", "github_merge_pr",
+    }
     if not token and name in write_tools:
-        return "Error: no GitHub token configured. Add one in Settings > GitHub. (Required for write operations.)"
+        return (
+            "Error: no GitHub token configured. "
+            "Add one in Settings > GitHub. (Required for write operations.)"
+        )
 
     handler = _HANDLERS.get(name)
     if not handler:
