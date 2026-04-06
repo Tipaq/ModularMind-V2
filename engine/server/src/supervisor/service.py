@@ -10,38 +10,34 @@ The actual heavy work (agent/graph execution) is delegated to the
 Redis Streams worker via the router after this service returns.
 """
 
-import json
 import logging
 import time
-from datetime import UTC, datetime
 from typing import Any
 
-import httpx
 import redis.asyncio as aioredis
-from langchain_core.messages import HumanMessage
-from pydantic import ValidationError
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain_config.provider import ConfigProvider
-from src.executions.schemas import ExecutionCreate
 from src.executions.service import ExecutionService
-from src.infra.constants import OUTPUT_TRUNCATION_LENGTH
 from src.llm.base import LLMProvider
-from src.llm.errors import ExecutionError, ExecutionErrorCode, to_sse_payload
-
-# Supervisor LLM configuration
-ROUTING_TEMPERATURE = 0.1
-TOOL_TEMPERATURE = 0.3
-TOOL_LOOP_MAX_ITERATIONS = 10
-EVENT_BUFFER_TTL_SECONDS = 300
-MAX_TOOLS_IN_EVENT = 20
 
 from .context_manager import get_context_manager
+from .context_retriever import get_knowledge_context, get_memory_context
 from .ephemeral_factory import EphemeralAgentFactory
+from .llm_router import route_with_llm
 from .message_parser import MessageParser
-from .prompts import build_routing_task_prompt
+from .routing import build_routing_metadata, resolve_routing
 from .schemas import RoutingDecision, RoutingStrategy
+from .strategy_handlers import (
+    handle_agent_delegation,
+    handle_create_agent,
+    handle_direct_response,
+    handle_graph_execution,
+    handle_multi_action,
+)
+from .tool_handler import handle_tool_response
+
+EVENT_BUFFER_TTL_SECONDS = 300
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +85,8 @@ class SuperSupervisorService:
 
     async def _publish_event(self, channel: str, event: dict[str, Any]) -> None:
         """Async Redis PUBLISH for event streaming."""
+        import json
+
         try:
             await self.redis.publish(channel, json.dumps(event))
         except (aioredis.RedisError, ConnectionError) as e:
@@ -123,16 +121,33 @@ class SuperSupervisorService:
         conv_config = conv_config or {}
 
         routing_start = time.perf_counter()
-        decision = await self._resolve_routing(
-            conversation_id,
-            content,
-            messages,
-            conv_config,
+        decision = await resolve_routing(
+            conversation_id=conversation_id,
+            content=content,
+            messages=messages,
+            conv_config=conv_config,
             user_id=user_id,
+            parser=self.parser,
+            context_manager=self.context_manager,
+            config_provider=self.config_provider,
+            get_memory_context_fn=get_memory_context,
+            get_knowledge_context_fn=lambda q, cc: get_knowledge_context(
+                q, cc, self.config_provider
+            ),
+            route_with_llm_fn=lambda cid, c, **kw: route_with_llm(
+                cid,
+                c,
+                config_provider=self.config_provider,
+                llm_provider=self.llm_provider,
+                resolve_model_name_fn=self._resolve_model_name,
+                **kw,
+            ),
+            resolve_model_name_fn=self._resolve_model_name,
+            state_holder=self,
         )
         routing_duration_ms = int((time.perf_counter() - routing_start) * 1000)
 
-        routing_metadata = self._build_routing_metadata(decision)
+        routing_metadata = build_routing_metadata(decision)
         routing_metadata["duration_ms"] = routing_duration_ms
         logger.info(
             "Routing decision: strategy=%s confidence=%.2f reasoning='%s'",
@@ -250,291 +265,6 @@ class SuperSupervisorService:
         return result
 
     # =========================================================================
-    # Routing resolution
-    # =========================================================================
-
-    async def _resolve_routing(
-        self,
-        conversation_id: str,
-        content: str,
-        messages: list[dict[str, Any]] | None,
-        conv_config: dict[str, Any],
-        user_id: str = "",
-    ) -> RoutingDecision:
-        """Determine routing strategy from message content and context."""
-        parsed, matched_agent_ids = await self.parser.parse_multi(content)
-
-        if parsed.create_directive:
-            return RoutingDecision(
-                strategy=RoutingStrategy.CREATE_AGENT,
-                reasoning="User used @create directive",
-                confidence=1.0,
-                ephemeral_config={
-                    "name": "Ephemeral Agent",
-                    "description": parsed.create_instructions or "",
-                    "system_prompt": (
-                        f"You are a specialized assistant. "
-                        f"User requested: {parsed.create_instructions}"
-                    ),
-                },
-            )
-
-        if parsed.explicit_graph:
-            return RoutingDecision(
-                strategy=RoutingStrategy.EXECUTE_GRAPH,
-                graph_id=parsed.explicit_graph,
-                reasoning="User used /graph: command",
-                confidence=1.0,
-            )
-
-        if len(matched_agent_ids) > 1:
-            sub_decisions = [
-                RoutingDecision(
-                    strategy=RoutingStrategy.DELEGATE_AGENT,
-                    agent_id=aid,
-                    reasoning=f"Explicit @mention (multi-action #{i + 1})",
-                    confidence=1.0,
-                )
-                for i, aid in enumerate(matched_agent_ids)
-            ]
-            return RoutingDecision(
-                strategy=RoutingStrategy.MULTI_ACTION,
-                reasoning=f"Multiple @mentions detected ({len(matched_agent_ids)} agents)",
-                confidence=1.0,
-                sub_decisions=sub_decisions,
-            )
-
-        if parsed.explicit_agent:
-            return RoutingDecision(
-                strategy=RoutingStrategy.DELEGATE_AGENT,
-                agent_id=parsed.explicit_agent,
-                reasoning="User used @AgentName mention",
-                confidence=1.0,
-            )
-
-        # No explicit routing — use LLM with session affinity
-        last_agent = await self.context_manager.get_last_agent(conversation_id)
-
-        # Retrieve user profile for routing context
-        memory_context = ""
-        self._last_user_profile: str | None = None
-        if user_id:
-            memory_context = await self._get_memory_context(user_id)
-            self._last_user_profile = memory_context or None
-
-        # Retrieve knowledge context from agents' RAG collections
-        knowledge_context = ""
-        self._last_knowledge_data: dict[str, Any] | None = None
-        knowledge_context, self._last_knowledge_data = await self._get_knowledge_context(
-            content,
-            conv_config,
-        )
-
-        decision = await self._route_with_llm(
-            conversation_id,
-            parsed.clean_content,
-            messages=messages,
-            affinity_agent_id=last_agent,
-            conv_config=conv_config,
-            memory_context=memory_context,
-            knowledge_context=knowledge_context,
-        )
-        decision = self._apply_single_selection_override(decision, conv_config)
-        return decision
-
-    def _apply_single_selection_override(
-        self,
-        decision: RoutingDecision,
-        conv_config: dict[str, Any],
-    ) -> RoutingDecision:
-        """Override LLM routing when user pinned a single agent/graph."""
-        enabled_agents = conv_config.get("enabled_agents") or []
-        enabled_graphs = conv_config.get("enabled_graphs") or []
-
-        if decision.strategy == RoutingStrategy.DELEGATE_AGENT:
-            if len(enabled_agents) == 1:
-                decision.agent_id = enabled_agents[0]
-        elif decision.strategy == RoutingStrategy.EXECUTE_GRAPH and len(enabled_graphs) == 1:
-            decision.graph_id = enabled_graphs[0]
-
-        return decision
-
-    def _build_routing_metadata(self, decision: RoutingDecision) -> dict[str, Any]:
-        """Build metadata dict for trace events."""
-        return {
-            "type": "trace:routing_decision",
-            "strategy": decision.strategy.value,
-            "reasoning": decision.reasoning,
-            "agent_id": decision.agent_id,
-            "graph_id": decision.graph_id,
-            "confidence": decision.confidence,
-            "timestamp": datetime.now(UTC).isoformat(),
-        }
-
-    # =========================================================================
-    # LLM routing
-    # =========================================================================
-
-    async def _route_with_llm(
-        self,
-        conversation_id: str,
-        content: str,
-        messages: list[dict[str, Any]] | None = None,
-        affinity_agent_id: str | None = None,
-        conv_config: dict[str, Any] | None = None,
-        memory_context: str = "",
-        knowledge_context: str = "",
-    ) -> RoutingDecision:
-        """Call supervisor LLM for routing decision."""
-        conv_config = conv_config or {}
-        try:
-            task_prompt = await self._build_routing_prompt(
-                messages,
-                affinity_agent_id,
-                conv_config,
-                memory_context=memory_context,
-                knowledge_context=knowledge_context,
-            )
-            llm_messages = self._compose_routing_messages(conv_config, task_prompt)
-
-            _, model_name = self._resolve_model_name(conv_config)
-            llm = await self.llm_provider.get_model(
-                model_name,
-                temperature=ROUTING_TEMPERATURE,
-                format="json",
-            )
-            response = await llm.ainvoke(llm_messages + [HumanMessage(content=content)])
-
-            return self._parse_routing_response(response)
-
-        except ExecutionError as err:
-            if err.code in (
-                ExecutionErrorCode.AUTH_FAILED,
-                ExecutionErrorCode.PERMISSION_DENIED,
-            ):
-                raise
-            logger.error("LLM routing failed: %s", err.user_message)
-            return RoutingDecision(
-                strategy=RoutingStrategy.DIRECT_RESPONSE,
-                reasoning=f"Routing failed: {err.user_message}",
-                confidence=0.0,
-            )
-        except (
-            httpx.HTTPError,
-            ConnectionError,
-            TimeoutError,
-            ValidationError,
-            ValueError,
-            RuntimeError,
-            KeyError,
-        ) as e:
-            logger.error("LLM routing failed: %s", e, exc_info=True)
-            return RoutingDecision(
-                strategy=RoutingStrategy.DIRECT_RESPONSE,
-                reasoning=f"Routing failed: {e}",
-                confidence=0.0,
-            )
-
-    async def _build_routing_prompt(
-        self,
-        messages: list[dict[str, Any]] | None,
-        affinity_agent_id: str | None,
-        conv_config: dict[str, Any],
-        memory_context: str = "",
-        knowledge_context: str = "",
-    ) -> str:
-        """Build the routing task prompt with agent/graph catalog and MCP tools."""
-        agents = await self.config_provider.list_agents()
-        graphs = await self.config_provider.list_graphs()
-
-        if enabled_agents := conv_config.get("enabled_agents"):
-            agents = [a for a in agents if a.id in enabled_agents]
-        if enabled_graphs := conv_config.get("enabled_graphs"):
-            graphs = [g for g in graphs if g.id in enabled_graphs]
-
-        last_agent_info = None
-        if affinity_agent_id:
-            agent = await self.config_provider.get_agent_config(affinity_agent_id)
-            if agent:
-                last_agent_info = f"{agent.name} (id={agent.id})"
-
-        mcp_tools = await self._discover_mcp_tools_for_routing(conv_config)
-
-        allowed_tool_categories = conv_config.get("supervisor_tool_categories")
-
-        return build_routing_task_prompt(
-            agents=agents,
-            graphs=graphs,
-            history=messages or [],
-            last_agent=last_agent_info,
-            mcp_tools=mcp_tools,
-            memory_context=memory_context,
-            knowledge_context=knowledge_context,
-            allowed_tool_categories=allowed_tool_categories,
-        )
-
-    async def _discover_mcp_tools_for_routing(
-        self,
-        conv_config: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        """Discover MCP tools to include in routing context."""
-        try:
-            from src.mcp.service import get_mcp_registry
-
-            registry = get_mcp_registry()
-            enabled_servers = [s for s in registry.list_servers() if s.enabled]
-            if not enabled_servers:
-                return None
-            tools_map: dict[str, Any] = {}
-            for server in enabled_servers:
-                try:
-                    tools = await registry.discover_tools(server.id)
-                    if tools:
-                        tools_map[server.name] = tools
-                except (ConnectionError, TimeoutError, OSError, RuntimeError):
-                    logger.debug(
-                        "MCP tool discovery failed for server %s",
-                        server.name,
-                        exc_info=True,
-                    )
-            return tools_map or None
-        except (ImportError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
-            logger.debug("MCP tool discovery for routing failed: %s", e)
-            return None
-
-    def _compose_routing_messages(
-        self,
-        conv_config: dict[str, Any],
-        task_prompt: str,
-    ) -> list[Any]:
-        """Compose layered LLM messages for routing (identity + task)."""
-        from src.prompt_layers import (
-            LayerType,
-            PromptComposer,
-            PromptLayer,
-            get_supervisor_identity,
-        )
-
-        composer = PromptComposer()
-        composer.add(
-            PromptLayer(LayerType.IDENTITY, get_supervisor_identity(), "supervisor_identity")
-        )
-        composer.add(PromptLayer(LayerType.TASK, task_prompt, "routing_task"))
-        return composer.build()
-
-    def _parse_routing_response(self, response) -> RoutingDecision:
-        """Parse LLM response into a RoutingDecision."""
-        response_text = (
-            response.content if isinstance(response.content, str) else str(response.content)
-        )
-        cleaned = response_text.strip()
-        if cleaned.startswith("```"):
-            lines = cleaned.split("\n")
-            lines = [line for line in lines if not line.strip().startswith("```")]
-            cleaned = "\n".join(lines)
-        return RoutingDecision.model_validate_json(cleaned)
-
-    # =========================================================================
     # Strategy execution
     # =========================================================================
 
@@ -552,849 +282,78 @@ class SuperSupervisorService:
 
         match decision.strategy:
             case RoutingStrategy.DIRECT_RESPONSE:
-                return await self._handle_direct_response(
+                return await handle_direct_response(
                     decision,
                     conv_id,
                     content,
                     user_id,
                     conv_config,
+                    self.exec_service,
                 )
             case RoutingStrategy.TOOL_RESPONSE:
-                return await self._handle_tool_response(
+                return await handle_tool_response(
                     decision,
                     conv_id,
                     content,
                     user_id,
                     conv_config,
+                    db=self.db,
+                    config_provider=self.config_provider,
+                    llm_provider=self.llm_provider,
+                    redis_client=self.redis,
+                    exec_service=self.exec_service,
+                    resolve_model_name_fn=self._resolve_model_name,
+                    handle_direct_response_fn=lambda d, ci, co, ui, cc: handle_direct_response(
+                        d, ci, co, ui, cc, self.exec_service
+                    ),
                 )
             case RoutingStrategy.DELEGATE_AGENT:
-                return await self._handle_agent_delegation(
+                return await handle_agent_delegation(
                     decision,
                     conv_id,
                     agent_prompt,
                     user_id,
                     conv_config,
+                    self.db,
+                    self.config_provider,
+                    self.context_manager,
+                    self.exec_service,
                 )
             case RoutingStrategy.EXECUTE_GRAPH:
-                return await self._handle_graph_execution(
+                return await handle_graph_execution(
                     decision,
                     conv_id,
                     agent_prompt,
                     user_id,
+                    self.db,
+                    self.config_provider,
+                    self.context_manager,
+                    self.exec_service,
                 )
             case RoutingStrategy.CREATE_AGENT:
-                return await self._handle_create_agent(
+                return await handle_create_agent(
                     decision,
                     conv_id,
                     agent_prompt,
                     user_id,
                     conv_config,
+                    self.db,
+                    self.config_provider,
+                    self.context_manager,
+                    self.exec_service,
+                    self.ephemeral_factory,
                 )
             case RoutingStrategy.MULTI_ACTION:
-                return await self._handle_multi_action(
+                return await handle_multi_action(
                     decision,
                     conv_id,
                     content,
                     user_id,
                     conv_config,
+                    self._execute_strategy,
                 )
             case _:
                 return {
                     "direct_response": "Unknown routing strategy",
                     "execution_id": None,
                 }
-
-    async def _handle_direct_response(
-        self,
-        decision: RoutingDecision,
-        conv_id: str,
-        content: str,
-        user_id: str,
-        conv_config: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Handle DIRECT_RESPONSE — create a raw execution for SSE streaming."""
-        from src.prompt_layers import get_supervisor_identity
-
-        model_id = conv_config.get("model_id", "ollama:qwen3:8b")
-
-        raw_input: dict = {
-            "routing_strategy": "DIRECT_RESPONSE",
-            "_supervisor_direct": True,
-            "_raw_system_prompt": get_supervisor_identity(),
-        }
-        if conv_config.get("temperature") is not None:
-            raw_input["_raw_temperature"] = conv_config["temperature"]
-        if conv_config.get("max_tokens") is not None:
-            raw_input["_raw_max_tokens"] = conv_config["max_tokens"]
-        execution_data = ExecutionCreate(
-            prompt=content,
-            session_id=conv_id,
-            input_data=raw_input,
-        )
-        execution = await self.exec_service.start_raw_execution(
-            model_id=model_id,
-            data=execution_data,
-            user_id=user_id,
-        )
-
-        return {
-            "execution_id": execution.id,
-        }
-
-    # =========================================================================
-    # TOOL_RESPONSE handler
-    # =========================================================================
-
-    async def _handle_tool_response(
-        self,
-        decision: RoutingDecision,
-        conv_id: str,
-        content: str,
-        user_id: str,
-        conv_config: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Handle TOOL_RESPONSE — supervisor answers using discovered tools.
-
-        Uses two meta-tools (search_tools + use_tool) to give the supervisor
-        access to all tool sources without binding dozens of tools directly.
-        """
-        from src.graph_engine.tool_loop import ToolLoopConfig, run_tool_loop, try_bind_tools
-
-        execution, publish_fn = await self._setup_tool_execution(
-            conv_id,
-            content,
-            user_id,
-        )
-
-        discovery_defs, discovery_executor = await self._create_discovery_tools(
-            user_id,
-            conv_config,
-            publish_fn,
-            execution.id,
-        )
-
-        _, model_name = self._resolve_model_name(conv_config)
-
-        try:
-            llm = await self.llm_provider.get_model(model_name, temperature=TOOL_TEMPERATURE)
-            llm_with_tools, tools_bound = try_bind_tools(llm, discovery_defs)
-
-            if not tools_bound:
-                logger.info("Model %s doesn't support tools, falling back", model_name)
-                return await self._handle_direct_response(
-                    decision,
-                    conv_id,
-                    content,
-                    user_id,
-                    conv_config,
-                )
-
-            memory_context = await self._get_memory_context(user_id)
-            llm_messages = self._compose_tool_messages(
-                conv_config,
-                content,
-                memory_context=memory_context,
-            )
-
-            step_start = time.perf_counter()
-
-            await self._publish_tool_step_started(
-                publish_fn,
-                execution.id,
-                model_name,
-                discovery_defs,
-            )
-
-            from src.infra.config import get_settings
-
-            loop_config = ToolLoopConfig(
-                max_iterations=TOOL_LOOP_MAX_ITERATIONS,
-                tool_call_timeout=get_settings().MCP_TOOL_CALL_TIMEOUT,
-            )
-            response_text, _ = await run_tool_loop(
-                llm_with_tools,
-                llm_messages,
-                discovery_executor,
-                config=loop_config,
-                publish_fn=publish_fn,
-            )
-
-            step_duration_ms = int((time.perf_counter() - step_start) * 1000)
-
-            await self._finalize_tool_response(
-                conv_id,
-                execution,
-                response_text,
-                publish_fn,
-                step_duration_ms=step_duration_ms,
-            )
-
-            return {
-                "execution_id": execution.id,
-                "tool_response_inline": True,
-            }
-
-        except ExecutionError as err:
-            logger.error("TOOL_RESPONSE LLM error: %s", err.user_message)
-            await publish_fn(to_sse_payload(err) | {"execution_id": execution.id})
-            return await self._handle_direct_response(
-                decision,
-                conv_id,
-                content,
-                user_id,
-                conv_config,
-            )
-        except (
-            httpx.HTTPError,
-            ConnectionError,
-            TimeoutError,
-            ValueError,
-            RuntimeError,
-            KeyError,
-        ) as e:
-            logger.error("TOOL_RESPONSE execution failed: %s", e, exc_info=True)
-            await publish_fn(
-                {
-                    "type": "error",
-                    "event": "run_failed",
-                    "execution_id": execution.id,
-                    "message": str(e),
-                }
-            )
-            return await self._handle_direct_response(
-                decision,
-                conv_id,
-                content,
-                user_id,
-                conv_config,
-            )
-
-    async def _create_discovery_tools(
-        self,
-        user_id: str,
-        conv_config: dict[str, Any],
-        publish_fn: Any,
-        execution_id: str,
-    ) -> tuple[list[dict[str, Any]], Any]:
-        """Build the two meta-tools and their unified executor.
-
-        Returns (tool_definitions, ToolDiscoveryExecutor).
-        """
-        from src.graph_engine.builtin_tools import (
-            BUILTIN_TOOL_NAMES,
-            create_builtin_executor,
-        )
-        from src.infra.config import get_settings
-        from src.infra.database import async_session_maker
-        from src.tools.discovery import ToolDiscoveryExecutor, get_discovery_tool_definitions
-        from src.tools.executor import ExtendedToolExecutor, ToolExecutorDeps
-
-        allowed_categories = conv_config.get("supervisor_tool_categories")
-
-        mcp_tools, mcp_executor, mcp_by_server = await self._discover_mcp_tools(conv_config)
-
-        executor_deps = ToolExecutorDeps(publish_fn=publish_fn)
-        extended_executor = ExtendedToolExecutor(
-            session_maker=async_session_maker,
-            user_id=user_id,
-            agent_id="supervisor",
-            deps=executor_deps,
-        )
-
-        # Gateway tools (only if gateway is configured)
-        gateway_executor = None
-        gateway_tool_defs: list[dict[str, Any]] = []
-        settings = get_settings()
-        if settings.GATEWAY_URL:
-            from src.gateway.executor import GatewayToolExecutor
-            from src.internal.auth import get_internal_bearer_token
-            from src.tools.categories.network import get_network_tool_definitions
-            from src.tools.categories.shell import get_shell_tool_definitions
-
-            gateway_tool_defs = [
-                *get_shell_tool_definitions(),
-                *get_network_tool_definitions(),
-            ]
-            gateway_executor = GatewayToolExecutor(
-                gateway_url=settings.GATEWAY_URL,
-                agent_id="supervisor",
-                execution_id=execution_id,
-                user_id=user_id,
-                internal_token=get_internal_bearer_token(),
-            )
-
-        # Builtin tools
-        builtin_fn = create_builtin_executor(user_id, async_session_maker)
-
-        discovery_executor = ToolDiscoveryExecutor(
-            extended_executor=extended_executor,
-            mcp_executor=mcp_executor,
-            gateway_executor=gateway_executor,
-            builtin_fn=builtin_fn,
-            builtin_names=BUILTIN_TOOL_NAMES,
-            mcp_tool_defs_by_server=mcp_by_server,
-            gateway_tool_defs=gateway_tool_defs,
-            allowed_categories=allowed_categories,
-        )
-
-        return get_discovery_tool_definitions(), discovery_executor
-
-    async def _discover_mcp_tools(
-        self, conv_config: dict[str, Any]
-    ) -> tuple[list | None, Any, dict[str, list[dict[str, Any]]]]:
-        """Discover and convert MCP tools for tool-calling execution.
-
-        Returns:
-            Tuple of (lc_tools, executor, tools_by_server_name).
-            tools_by_server_name maps server display names to their LC tool defs.
-        """
-        from src.mcp.service import get_mcp_registry
-        from src.mcp.tool_adapter import discover_and_convert
-
-        registry = get_mcp_registry()
-        servers = [s for s in registry.list_servers() if s.enabled]
-        if not servers:
-            logger.debug("No enabled MCP servers for supervisor tools")
-            return None, None, {}
-
-        server_id_to_name = {s.id: s.name for s in servers}
-        lc_tools, tool_executor = await discover_and_convert(
-            registry,
-            [s.id for s in servers],
-        )
-
-        if not lc_tools or not tool_executor:
-            logger.debug("No MCP tools discovered for supervisor")
-            return None, None, {}
-
-        tools_by_server_name: dict[str, list[dict[str, Any]]] = {}
-        for ns_name, (server_id, _real_name) in tool_executor._map.items():
-            server_name = server_id_to_name.get(server_id, server_id[:8])
-            tool_def = next((t for t in lc_tools if t["function"]["name"] == ns_name), None)
-            if tool_def:
-                tools_by_server_name.setdefault(server_name, []).append(tool_def)
-
-        return lc_tools, tool_executor, tools_by_server_name
-
-    async def _setup_tool_execution(
-        self,
-        conv_id: str,
-        content: str,
-        user_id: str,
-    ) -> tuple[Any, Any]:
-        """Create execution record and build a publish_fn for streaming."""
-        execution = await self.exec_service.start_supervisor_execution(
-            conversation_id=conv_id,
-            input_prompt=content,
-            user_id=user_id,
-        )
-        await self.db.commit()
-
-        exec_channel = f"execution:{execution.id}"
-        seq = 0
-
-        stream_key = f"exec_stream:{execution.id}"
-
-        async def publish_fn(event: dict[str, Any]) -> None:
-            nonlocal seq
-            seq += 1
-            event["seq"] = seq
-            event["execution_id"] = execution.id
-            event_json = json.dumps(event, default=str)
-            await self.redis.publish(exec_channel, event_json)
-            await self.redis.rpush(f"buffer:{execution.id}", event_json)
-            await self.redis.expire(f"buffer:{execution.id}", EVENT_BUFFER_TTL_SECONDS)
-            await self.redis.xadd(stream_key, {"data": event_json})
-            if event.get("type") in ("complete", "error"):
-                await self.redis.expire(stream_key, 300)
-
-        return execution, publish_fn
-
-    async def _get_memory_context(self, user_id: str) -> str:
-        """Retrieve user profile context for supervisor inline responses."""
-        try:
-            from src.auth.models import User
-            from src.infra.database import async_session_maker
-
-            async with async_session_maker() as session:
-                user = await session.get(User, user_id)
-                profile = user.preferences if user else None
-
-            if profile:
-                return f"User profile:\n{profile}"
-            return ""
-
-        except (SQLAlchemyError, ConnectionError, OSError) as e:
-            logger.warning("User profile retrieval for supervisor failed: %s", e, exc_info=True)
-            return ""
-
-    async def _get_knowledge_context(
-        self,
-        query: str,
-        conv_config: dict[str, Any],
-    ) -> tuple[str, dict[str, Any] | None]:
-        """Retrieve knowledge (RAG) context from agents' collections.
-
-        Collects all RAG collection IDs from enabled agents and performs
-        a unified retrieval.  The formatted text is injected into the
-        supervisor's routing prompt so it can answer directly when
-        the knowledge is sufficient.
-
-        Returns:
-            Tuple of (formatted_text, knowledge_data_dict_or_None).
-        """
-        try:
-            from sqlalchemy import select as sa_select
-
-            from src.embedding.resolver import get_knowledge_embedding_provider
-            from src.infra.database import async_session_maker
-            from src.rag.models import RAGCollection
-            from src.rag.repository import RAGRepository
-            from src.rag.retriever import RAGRetriever
-
-            # Collect collection IDs from enabled agents that have RAG
-            agents = await self.config_provider.list_agents()
-            enabled = conv_config.get("enabled_agents")
-            if enabled:
-                agents = [a for a in agents if a.id in enabled]
-
-            all_collection_ids = []
-            for agent in agents:
-                if (
-                    agent.rag_config
-                    and agent.rag_config.enabled
-                    and agent.rag_config.collection_ids
-                ):
-                    all_collection_ids.extend(agent.rag_config.collection_ids)
-
-            if not all_collection_ids:
-                return "", None
-
-            # Deduplicate
-            all_collection_ids = list(dict.fromkeys(all_collection_ids))
-
-            embedding_provider = get_knowledge_embedding_provider()
-            if embedding_provider is None:
-                return "", None
-
-            async with async_session_maker() as session:
-                repo = RAGRepository(session)
-                from src.rag.retriever import RetrievalQuery
-
-                retriever = RAGRetriever(repo, embedding_provider, default_limit=5)
-                retrieval_query = RetrievalQuery(
-                    query=query,
-                    user_id="",
-                    collection_ids=all_collection_ids,
-                    limit=5,
-                    threshold=0.3,
-                )
-                raw_results = await retriever.retrieve_raw(retrieval_query)
-
-                if not raw_results:
-                    return "", None
-
-                # Hydrate collection names
-                coll_ids = {r.collection_id for r in raw_results}
-                rows = await session.execute(
-                    sa_select(RAGCollection.id, RAGCollection.name).where(
-                        RAGCollection.id.in_(coll_ids)
-                    )
-                )
-                coll_map = {row[0]: row[1] for row in rows.all()}
-
-                # Build serialisable results for frontend
-                collections_seen: dict[str, dict[str, Any]] = {}
-                chunks: list[dict[str, Any]] = []
-                for r in raw_results:
-                    cid = r.collection_id
-                    cname = coll_map.get(cid, "Unknown")
-                    if cid not in collections_seen:
-                        collections_seen[cid] = {
-                            "collection_id": cid,
-                            "collection_name": cname,
-                            "chunk_count": 0,
-                        }
-                    collections_seen[cid]["chunk_count"] += 1
-                    chunks.append(
-                        {
-                            "chunk_id": r.chunk_id,
-                            "document_id": r.document_id,
-                            "collection_id": cid,
-                            "collection_name": cname,
-                            "document_filename": r.document.filename if r.document else None,
-                            "content_preview": (r.content or "")[:300],
-                            "score": round(r.score, 4),
-                            "chunk_index": r.chunk_index,
-                        }
-                    )
-
-                knowledge_data = {
-                    "collections": list(collections_seen.values()),
-                    "chunks": chunks,
-                    "total_results": len(raw_results),
-                }
-
-                formatted = retriever.format_context(raw_results)
-                logger.info(
-                    "Knowledge context: %d results from %d collections",
-                    len(raw_results),
-                    len(collections_seen),
-                )
-                return formatted, knowledge_data
-
-        except (
-            SQLAlchemyError,
-            httpx.HTTPError,
-            ConnectionError,
-            TimeoutError,
-            RuntimeError,
-            ValueError,
-        ) as e:
-            logger.warning("Knowledge retrieval for supervisor failed: %s", e, exc_info=True)
-            return "", None
-
-    def _compose_tool_messages(
-        self,
-        conv_config: dict[str, Any],
-        content: str,
-        memory_context: str = "",
-    ) -> list[Any]:
-        """Compose layered LLM messages for tool-calling (identity + personality + task)."""
-        from langchain_core.messages import SystemMessage
-
-        from src.prompt_layers import (
-            LayerType,
-            PromptComposer,
-            PromptLayer,
-            get_supervisor_identity,
-            get_supervisor_personality,
-            get_tool_task,
-        )
-
-        composer = PromptComposer()
-        composer.add(
-            PromptLayer(LayerType.IDENTITY, get_supervisor_identity(), "supervisor_identity")
-        )
-        personality = conv_config.get("supervisor_prompt") or get_supervisor_personality()
-        composer.add(PromptLayer(LayerType.PERSONALITY, personality, "supervisor_personality"))
-        composer.add(PromptLayer(LayerType.TASK, get_tool_task(), "tool_task"))
-        messages = composer.build()
-        if memory_context:
-            messages.append(SystemMessage(content=memory_context))
-        messages.append(HumanMessage(content=content))
-        return messages
-
-    async def _publish_tool_step_started(
-        self,
-        publish_fn,
-        execution_id: str,
-        model_name: str,
-        lc_tools: list,
-    ) -> None:
-        """Publish step_started event with tool info for UI display."""
-        tool_names = [getattr(t, "name", str(t)) for t in lc_tools]
-        await publish_fn(
-            {
-                "type": "step",
-                "event": "step_started",
-                "run_id": execution_id,
-                "node_id": "supervisor_tools",
-                "node_type": "supervisor_tools",
-                "status": "running",
-                "agent_name": "Supervisor (Tools)",
-                "model": model_name,
-                "tools": tool_names[:MAX_TOOLS_IN_EVENT],
-                "is_ephemeral": False,
-            }
-        )
-
-    async def _finalize_tool_response(
-        self,
-        conv_id: str,
-        execution,
-        response_text: str,
-        publish_fn,
-        *,
-        step_duration_ms: int | None = None,
-    ) -> None:
-        """Save response, update execution status, and publish completion events."""
-        from src.conversations.models import MessageRole
-        from src.conversations.service import ConversationService
-        from src.executions.models import ExecutionStatus
-
-        conv_service = ConversationService(self.db)
-        await conv_service.add_message(
-            conversation_id=conv_id,
-            role=MessageRole.ASSISTANT,
-            content=response_text,
-            metadata={
-                "routing": "tool_response",
-                "strategy": "TOOL_RESPONSE",
-                "execution_id": execution.id,
-            },
-        )
-
-        execution.status = ExecutionStatus.COMPLETED
-        execution.output_data = {"response": response_text}
-        await self.db.commit()
-
-        await publish_fn(
-            {
-                "type": "step",
-                "event": "step_completed",
-                "run_id": execution.id,
-                "node_id": "supervisor_tools",
-                "node_type": "agent",
-                "status": "completed",
-                "duration_ms": step_duration_ms,
-                "output_data": {"response": response_text[:OUTPUT_TRUNCATION_LENGTH]},
-            }
-        )
-        await publish_fn(
-            {
-                "type": "complete",
-                "event": "run_completed",
-                "execution_id": execution.id,
-                "run_id": execution.id,
-                "status": "completed",
-                "duration_ms": step_duration_ms,
-                "output": {"response": response_text},
-                "output_data": {"response": response_text},
-            }
-        )
-
-    # =========================================================================
-    # Agent delegation
-    # =========================================================================
-
-    async def _handle_agent_delegation(
-        self,
-        decision: RoutingDecision,
-        conv_id: str,
-        content: str,
-        user_id: str,
-        conv_config: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Handle DELEGATE_AGENT — create execution record for an agent."""
-        agent_id = decision.agent_id
-        if not agent_id:
-            return {
-                "direct_response": "No agent specified for delegation",
-                "execution_id": None,
-            }
-
-        agent = await self.config_provider.get_agent_config(agent_id)
-        if not agent:
-            return {
-                "direct_response": f"Agent {agent_id} not found",
-                "execution_id": None,
-            }
-
-        # Rebuild sub-context if Redis cache miss
-        sub_ctx = await self.context_manager.get_sub_context(conv_id, agent_id)
-        if not sub_ctx:
-            from src.conversations.service import ConversationService
-
-            conv_service = ConversationService(self.db)
-            conv = await conv_service.get_conversation(conv_id)
-            if conv and conv.messages:
-                msg_dicts = [
-                    {"role": m.role.value, "content": m.content, "meta": m.meta}
-                    for m in conv.messages
-                ]
-                await self.context_manager.rebuild_from_messages(
-                    conv_id,
-                    msg_dicts,
-                )
-
-        input_data: dict[str, Any] = {
-            "routing_strategy": decision.strategy.value,
-            "delegated_to": agent.name,
-        }
-        execution_data = ExecutionCreate(
-            prompt=content,
-            session_id=conv_id,
-            input_data=input_data,
-        )
-        execution = await self.exec_service.start_agent_execution(
-            agent_id=agent_id,
-            data=execution_data,
-            user_id=user_id,
-        )
-
-        await self.context_manager.set_last_agent(conv_id, agent_id)
-
-        return {"execution_id": execution.id}
-
-    async def _handle_graph_execution(
-        self,
-        decision: RoutingDecision,
-        conv_id: str,
-        content: str,
-        user_id: str,
-    ) -> dict[str, Any]:
-        """Handle EXECUTE_GRAPH — create execution record for a graph."""
-        graph_id = decision.graph_id
-        if not graph_id:
-            # LLM may have put the id in agent_id instead — fall back to delegation
-            if decision.agent_id:
-                logger.info(
-                    "EXECUTE_GRAPH has no graph_id but agent_id=%s — falling back to DELEGATE_AGENT",  # noqa: E501
-                    decision.agent_id,
-                )
-                decision.strategy = RoutingStrategy.DELEGATE_AGENT
-                return await self._handle_agent_delegation(
-                    decision,
-                    conv_id,
-                    content,
-                    user_id,
-                    {},
-                )
-            return {
-                "direct_response": "No graph specified for execution",
-                "execution_id": None,
-            }
-
-        graph_config = await self.config_provider.get_graph_config(graph_id)
-        # If the graph doesn't exist, the LLM may have confused an agent for a graph.
-        # Try graph_id as an agent_id, or fall back to decision.agent_id.
-        if not graph_config:
-            fallback_agent_id = decision.agent_id
-            # Check if graph_id is actually an agent
-            if not fallback_agent_id:
-                agent_check = await self.config_provider.get_agent_config(graph_id)
-                if agent_check:
-                    fallback_agent_id = graph_id
-            if fallback_agent_id:
-                logger.info(
-                    "Graph %s not found, falling back to DELEGATE_AGENT with agent_id=%s",
-                    graph_id,
-                    fallback_agent_id,
-                )
-                decision.agent_id = fallback_agent_id
-                decision.strategy = RoutingStrategy.DELEGATE_AGENT
-                return await self._handle_agent_delegation(
-                    decision,
-                    conv_id,
-                    content,
-                    user_id,
-                    {},
-                )
-        graph_name = graph_config.name if graph_config else graph_id
-
-        execution_data = ExecutionCreate(
-            prompt=content,
-            session_id=conv_id,
-            input_data={
-                "routing_strategy": decision.strategy.value,
-                "delegated_to": graph_name,
-            },
-        )
-        execution = await self.exec_service.start_graph_execution(
-            graph_id=graph_id,
-            data=execution_data,
-            user_id=user_id,
-        )
-
-        return {"execution_id": execution.id}
-
-    async def _handle_create_agent(
-        self,
-        decision: RoutingDecision,
-        conv_id: str,
-        content: str,
-        user_id: str,
-        conv_config: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Handle CREATE_AGENT — create ephemeral agent, then delegate."""
-        try:
-            ec = decision.ephemeral_config or {}
-            conv_model_id = conv_config.get("model_id")
-            mcp_tool_categories: dict[str, bool] | None = None
-            try:
-                from src.mcp.service import get_mcp_registry
-
-                registry = get_mcp_registry()
-                enabled = [s for s in registry.list_servers() if s.enabled]
-                if enabled:
-                    mcp_tool_categories = {f"mcp:{s.name}": True for s in enabled}
-            except (ImportError, RuntimeError):
-                pass
-
-            agent = await self.ephemeral_factory.create_agent(
-                name=ec.get("name", "Ephemeral Agent"),
-                description=ec.get("description", ""),
-                system_prompt=ec.get("system_prompt", "You are a helpful assistant."),
-                conversation_id=conv_id,
-                model_id=ec.get("model_id") or conv_model_id,
-                capabilities=ec.get("capabilities"),
-                rag_collections=ec.get("rag_collections"),
-                mcp_tool_categories=mcp_tool_categories,
-            )
-        except ValueError as e:
-            return {
-                "direct_response": f"Cannot create agent: {e}",
-                "execution_id": None,
-                "error": str(e),
-            }
-
-        delegate_decision = RoutingDecision(
-            strategy=RoutingStrategy.DELEGATE_AGENT,
-            agent_id=str(agent.id),
-            reasoning=f"Delegating to newly created ephemeral agent: {agent.name}",
-            confidence=1.0,
-        )
-        result = await self._handle_agent_delegation(
-            delegate_decision,
-            conv_id,
-            content,
-            user_id,
-            conv_config,
-        )
-
-        result["ephemeral_agent"] = {
-            "id": str(agent.id),
-            "name": agent.name,
-            "description": agent.description,
-        }
-        return result
-
-    async def _handle_multi_action(
-        self,
-        decision: RoutingDecision,
-        conv_id: str,
-        content: str,
-        user_id: str,
-        conv_config: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Handle MULTI_ACTION — execute multiple sub-decisions sequentially."""
-        results = []
-        execution_ids = []
-        sub_decisions = decision.sub_decisions or []
-
-        for i, sub in enumerate(sub_decisions):
-            try:
-                result = await self._execute_strategy(
-                    sub,
-                    conv_id,
-                    content,
-                    user_id,
-                    conv_config,
-                )
-                results.append(result)
-                if result.get("execution_id"):
-                    execution_ids.append(result["execution_id"])
-            except (ValueError, RuntimeError, ConnectionError, TimeoutError, KeyError) as e:
-                logger.error(
-                    "MULTI_ACTION sub-decision %d/%d failed: %s",
-                    i + 1,
-                    len(sub_decisions),
-                    e,
-                )
-                results.append({"error": str(e)})
-
-        return {
-            "results": results,
-            "execution_ids": execution_ids,
-        }
