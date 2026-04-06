@@ -45,5 +45,3 @@ tool_categories:
   github:
     github_get_issue: true
     github_list_issues: true
-    github_search_issues: true
-  knowledge: true

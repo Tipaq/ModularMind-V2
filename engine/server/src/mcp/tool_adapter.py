@@ -107,10 +107,18 @@ class MCPToolExecutor:
         return "\n".join(texts) if texts else str(result.content)
 
 
-def _namespace_tool_name(server_id: str, tool_name: str) -> str:
-    """Create a namespaced tool name: ``short_id_tool_name``."""
-    short_id = server_id[:8]
-    return f"{short_id}_{tool_name}"
+def _namespace_tool_name(server_key: str, tool_name: str) -> str:
+    """Create a namespaced tool name: ``server_key__tool_name``."""
+    return f"{server_key}__{tool_name}"
+
+
+def _slugify_server_name(name: str) -> str:
+    """Convert server name to a safe tool-name prefix."""
+    import re
+
+    slug = name.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "_", slug)
+    return slug.strip("_")
 
 
 def _tool_to_langchain_dict(ns_name: str, tool: MCPToolDefinition) -> dict[str, Any]:
@@ -139,22 +147,22 @@ def _tool_to_langchain_dict(ns_name: str, tool: MCPToolDefinition) -> dict[str, 
 
 def mcp_tools_to_langchain(
     tools: list[MCPToolDefinition],
-    server_id: str,
+    server_key: str,
 ) -> list[dict[str, Any]]:
     """Convert MCP tool definitions to LangChain ``bind_tools()`` format.
 
-    Each tool is formatted as an OpenAI-compatible function definition dict,
-    which is accepted by all LangChain chat model ``bind_tools()`` methods.
-
     Args:
         tools: MCP tool definitions from ``MCPClient.list_tools()``.
-        server_id: Full UUID of the MCP server (first 8 chars used for namespace).
+        server_key: Slug used as tool name prefix.
 
     Returns:
         List of tool dicts ready for ``llm.bind_tools(result)``.
     """
     return [
-        _tool_to_langchain_dict(_namespace_tool_name(server_id, tool.name), tool) for tool in tools
+        _tool_to_langchain_dict(
+            _namespace_tool_name(server_key, tool.name), tool,
+        )
+        for tool in tools
     ]
 
 
@@ -173,26 +181,30 @@ async def discover_and_convert(
         If no tools are discovered, returns ``([], None)``.
     """
 
-    async def _discover_one(sid: str) -> tuple[str, list[MCPToolDefinition]]:
+    async def _discover_one(
+        sid: str,
+    ) -> tuple[str, str, list[MCPToolDefinition]]:
+        server = registry.get_server(sid)
+        slug = _slugify_server_name(server.name) if server else sid[:8]
         try:
             tools = await registry.discover_tools(sid)
-            return sid, tools
+            return sid, slug, tools
         except Exception as e:
             logger.warning(
                 "Failed to discover tools from MCP server %s: %s",
                 sid,
                 e,
             )
-            return sid, []
+            return sid, slug, []
 
     results = await asyncio.gather(*[_discover_one(sid) for sid in server_ids])
 
     all_lc_tools: list[dict[str, Any]] = []
     tool_map: dict[str, tuple[str, str]] = {}
 
-    for server_id, tools in results:
+    for server_id, slug, tools in results:
         for tool in tools:
-            ns_name = _namespace_tool_name(server_id, tool.name)
+            ns_name = _namespace_tool_name(slug, tool.name)
             all_lc_tools.append(_tool_to_langchain_dict(ns_name, tool))
             tool_map[ns_name] = (server_id, tool.name)
 

@@ -179,6 +179,7 @@ async def resolve_mcp_tool_definitions(
     from src.mcp.tool_adapter import (
         MCPToolExecutor,
         _namespace_tool_name,
+        _slugify_server_name,
         _tool_to_langchain_dict,
     )
 
@@ -210,8 +211,9 @@ async def resolve_mcp_tool_definitions(
         if isinstance(value, dict):
             mcp_tools = [t for t in mcp_tools if value.get(t.name, False)]
 
+        slug = _slugify_server_name(server.name)
         for tool in mcp_tools:
-            ns_name = _namespace_tool_name(server.id, tool.name)
+            ns_name = _namespace_tool_name(slug, tool.name)
             lc_def = _tool_to_langchain_dict(ns_name, tool)
             all_lc_tools.append(lc_def)
             tool_map[ns_name] = (server.id, tool.name)
