@@ -49,6 +49,39 @@ class ExecutionService:
         self.db = db
         self.config_provider = get_config_provider()
 
+    async def _inject_project_metadata(
+        self, state: dict[str, Any], session_id: str | None
+    ) -> None:
+        """Inject project_id and project_repositories into state metadata."""
+        if not session_id:
+            return
+
+        from src.conversations.models import Conversation
+        from src.projects.models import ProjectRepository
+
+        conv_result = await self.db.execute(
+            select(Conversation.project_id).where(Conversation.id == session_id)
+        )
+        project_id = conv_result.scalar_one_or_none()
+        if not project_id:
+            return
+
+        state["metadata"]["project_id"] = project_id
+
+        repo_result = await self.db.execute(
+            select(
+                ProjectRepository.repo_identifier,
+                ProjectRepository.repo_url,
+                ProjectRepository.display_name,
+            ).where(ProjectRepository.project_id == project_id)
+        )
+        repos = [
+            {"repo_identifier": r.repo_identifier, "repo_url": r.repo_url, "display_name": r.display_name}
+            for r in repo_result.all()
+        ]
+        if repos:
+            state["metadata"]["project_repositories"] = repos
+
     async def start_agent_execution(
         self,
         agent_id: str,
@@ -666,16 +699,7 @@ class ExecutionService:
             messages=[HumanMessage(content=execution.input_prompt)],
         )
         state["metadata"]["user_id"] = execution.user_id
-
-        if execution.session_id:
-            from src.conversations.models import Conversation
-
-            conv_result = await self.db.execute(
-                select(Conversation.project_id).where(Conversation.id == execution.session_id)
-            )
-            project_id = conv_result.scalar_one_or_none()
-            if project_id:
-                state["metadata"]["project_id"] = project_id
+        await self._inject_project_metadata(state, execution.session_id)
 
         # Create step record
         step = ExecutionStep(
@@ -822,18 +846,7 @@ class ExecutionService:
             messages=[HumanMessage(content=execution.input_prompt)],
         )
         state["metadata"]["user_id"] = execution.user_id
-
-        if execution.session_id:
-            from src.conversations.models import Conversation
-
-            conv_result = await self.db.execute(
-                select(Conversation.project_id).where(
-                    Conversation.id == execution.session_id
-                )
-            )
-            project_id = conv_result.scalar_one_or_none()
-            if project_id:
-                state["metadata"]["project_id"] = project_id
+        await self._inject_project_metadata(state, execution.session_id)
 
         # Set up trace handler — events go into a merged queue for real-time streaming
         from src.graph_engine.callbacks import ExecutionTraceHandler

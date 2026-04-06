@@ -145,6 +145,18 @@ async def create_agent_node(
                 )
             llm_messages.append(SystemMessage(content=correction_text))
 
+        project_repos = state.get("metadata", {}).get("project_repositories", [])
+        if project_repos:
+            repo_lines = [
+                f"- {r['repo_identifier']}" + (f" ({r['repo_url']})" if r.get("repo_url") else "")
+                for r in project_repos
+            ]
+            llm_messages.append(
+                SystemMessage(
+                    content="Project repositories:\n" + "\n".join(repo_lines)
+                )
+            )
+
         node_outputs = state.get("node_outputs", {})
         agent_input_msg = None
         if node_outputs:
