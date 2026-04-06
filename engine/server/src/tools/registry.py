@@ -85,7 +85,7 @@ def resolve_tool_definitions(
             continue
         category_tools = definition_fn()
         if isinstance(enabled, dict):
-            category_tools = [t for t in category_tools if enabled.get(t["function"]["name"], True)]
+            category_tools = [t for t in category_tools if enabled.get(t["function"]["name"], False)]
         tools.extend(category_tools)
         logger.debug("Category '%s': %d tools", category, len(category_tools))
 
@@ -205,7 +205,7 @@ async def resolve_mcp_tool_definitions(
             continue
 
         if isinstance(value, dict):
-            mcp_tools = [t for t in mcp_tools if value.get(t.name, True)]
+            mcp_tools = [t for t in mcp_tools if value.get(t.name, False)]
 
         for tool in mcp_tools:
             ns_name = _namespace_tool_name(server.id, tool.name)
