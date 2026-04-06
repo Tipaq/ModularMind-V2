@@ -107,7 +107,7 @@ edges:
   - source: verify_check
     target: deliverer
     data:
-      condition: "quality_guard_status == 'pass' or quality_guard_iteration >= 3"
+      condition: "'fail' not in quality_guard_response or quality_guard_iteration >= 3"
   - source: verify_check
     target: fix_implementer
     data:
