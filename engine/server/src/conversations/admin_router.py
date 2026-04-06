@@ -17,7 +17,7 @@ admin_router = APIRouter(
 )
 
 
-@admin_router.get("/", response_model=ConversationListResponse)
+@admin_router.get("", response_model=ConversationListResponse)
 async def admin_list_conversations(
     user: CurrentUser,
     db: DbSession = ...,

@@ -19,7 +19,7 @@ from .service import ConversationService
 router = APIRouter()
 
 
-@router.get("/", response_model=ConversationListResponse)
+@router.get("", response_model=ConversationListResponse)
 async def list_conversations(
     user: CurrentUser,
     db: DbSession,
@@ -43,7 +43,7 @@ async def list_conversations(
     return ConversationListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.post("/", response_model=ConversationResponse, status_code=201)
+@router.post("", response_model=ConversationResponse, status_code=201)
 async def create_conversation(
     data: ConversationCreate,
     user: CurrentUser,
