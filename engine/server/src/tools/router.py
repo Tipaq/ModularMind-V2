@@ -121,7 +121,7 @@ async def _collect_mcp_tools() -> dict[str, list[ToolDefinitionResponse]]:
                 ToolDefinitionResponse(
                     name=t.name,
                     description=t.description or "",
-                    category=f"mcp:{config.name}",
+                    category=f"mcp:{config.name.lower()}",
                     source="mcp",
                     server_name=config.name,
                     parameters=t.input_schema,
@@ -182,7 +182,7 @@ async def list_tools() -> ToolsOverviewResponse:
         if server_tools:
             categories.append(
                 ToolCategoryResponse(
-                    id=f"mcp:{server_name}",
+                    id=f"mcp:{server_name.lower()}",
                     label=server_name,
                     description=f"Tools from MCP server '{server_name}'",
                     tool_count=len(server_tools),
