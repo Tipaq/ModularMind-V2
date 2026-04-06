@@ -179,11 +179,11 @@ class TestResolveMcpToolDefinitions:
             {"mcp:myserver": {"tool_a": True, "tool_b": False}},
             registry,
         )
-        assert len(lc_tools) == 2
+        assert len(lc_tools) == 1
         tool_names = [t["function"]["name"] for t in lc_tools]
         assert any("tool_a" in n for n in tool_names)
-        assert any("tool_c" in n for n in tool_names)
         assert not any("tool_b" in n for n in tool_names)
+        assert not any("tool_c" in n for n in tool_names)
 
     async def test_skips_disabled_server(self):
         from src.tools.registry import resolve_mcp_tool_definitions

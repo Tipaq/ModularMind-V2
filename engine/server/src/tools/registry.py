@@ -85,7 +85,10 @@ def resolve_tool_definitions(
             continue
         category_tools = definition_fn()
         if isinstance(enabled, dict):
-            category_tools = [t for t in category_tools if enabled.get(t["function"]["name"], False)]
+            category_tools = [
+                t for t in category_tools
+                if enabled.get(t["function"]["name"], False)
+            ]
         tools.extend(category_tools)
         logger.debug("Category '%s': %d tools", category, len(category_tools))
 
