@@ -26,13 +26,14 @@ export function useKnowledgeHub(options: UseKnowledgeHubOptions = {}) {
   const [search, setSearch] = useState("");
   const personalCollectionRef = useRef<Collection | null>(null);
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async (cancelled: boolean = false) => {
     setLoading(true);
     try {
       const query = projectId
         ? `/rag/collections?project_id=${projectId}&page_size=200`
         : "/rag/collections?page_size=200";
       const collectionsData = await api.get<CollectionListResponse>(query);
+      if (cancelled) return;
       const loadedCollections = collectionsData.items ?? [];
       setCollections(loadedCollections);
 
@@ -52,19 +53,25 @@ export function useKnowledgeHub(options: UseKnowledgeHubOptions = {}) {
         }),
       );
 
+      if (cancelled) return;
       const allDocuments = documentResults
         .flat()
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setDocuments(allDocuments);
     } catch {
+      if (cancelled) return;
       setCollections([]);
       setDocuments([]);
     } finally {
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     }
   }, [projectId]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    let cancelled = false;
+    loadAll(cancelled);
+    return () => { cancelled = true; };
+  }, [loadAll]);
 
   const ensurePersonalCollection = useCallback(async (): Promise<string> => {
     if (personalCollectionRef.current) return personalCollectionRef.current.id;

@@ -34,7 +34,13 @@ const edgeTypes: EdgeTypes = {
   execution: ExecutionEdge,
 };
 
-function activitiesToNodeStates(activities: ExecutionActivity[]): NodeExecutionState[] {
+const MAX_RECURSION_DEPTH = 20;
+
+function activitiesToNodeStates(
+  activities: ExecutionActivity[],
+  depth: number = 0,
+): NodeExecutionState[] {
+  if (depth >= MAX_RECURSION_DEPTH) return [];
   const states: NodeExecutionState[] = [];
   for (const activity of activities) {
     if (activity.nodeId) {
@@ -45,7 +51,7 @@ function activitiesToNodeStates(activities: ExecutionActivity[]): NodeExecutionS
       });
     }
     if (activity.children) {
-      states.push(...activitiesToNodeStates(activity.children));
+      states.push(...activitiesToNodeStates(activity.children, depth + 1));
     }
   }
   return states;
