@@ -62,11 +62,24 @@ export function useExecutionActivities() {
       return;
     }
     if (eventType === "trace:graph_end") {
+      const completeRunning = (a: ExecutionActivity): ExecutionActivity => {
+        const base = a.status === "running"
+          ? { ...a, status: "completed" as const, durationMs: Date.now() - a.startedAt }
+          : a;
+        if (base.children?.length) return { ...base, children: base.children.map(completeRunning) };
+        return base;
+      };
       setActivities((prev) => {
         const idx = prev.findLastIndex((a) => a.type === "graph_execution" && a.status === "running");
         if (idx === -1) return prev;
         const updated = [...prev];
-        updated[idx] = { ...updated[idx], status: "completed", durationMs: Date.now() - updated[idx].startedAt };
+        const graph = updated[idx];
+        updated[idx] = {
+          ...graph,
+          status: "completed",
+          durationMs: Date.now() - graph.startedAt,
+          children: graph.children?.map(completeRunning),
+        };
         return updated;
       });
       currentGraphIdRef.current = null;
