@@ -189,8 +189,10 @@ async def execute_github_tool(
 ) -> str:
     """Execute a GitHub tool call."""
     token = await resolve_token(session, agent_id)
-    if not token:
-        return "Error: no GitHub token configured. Add one in Settings > GitHub."
+
+    write_tools = {"github_create_issue", "github_create_pr", "github_pr_comment", "github_merge_pr"}
+    if not token and name in write_tools:
+        return "Error: no GitHub token configured. Add one in Settings > GitHub. (Required for write operations.)"
 
     handler = _HANDLERS.get(name)
     if not handler:
@@ -245,11 +247,11 @@ def _decrypt_token(encrypted: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _headers(token: str) -> dict[str, str]:
-    return {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json",
-    }
+def _headers(token: str | None) -> dict[str, str]:
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if token:
+        headers["Authorization"] = f"token {token}"
+    return headers
 
 
 async def _get(path: str, token: str, params: dict | None = None) -> dict | list:
