@@ -48,7 +48,7 @@ def _transform_graph_node(raw: dict[str, Any]) -> dict[str, Any]:
     """Transform a Platform graph node into Engine NodeConfig format.
 
     Platform may send data in two layouts:
-      1. Flat:   id, type, label, config, agentId  (legacy / some Studio paths)
+      1. Flat:   id, type, label, config, agentId  (some Studio paths)
       2. Nested: id, type, data: {label, config, agent_id, ...}  (ReactFlow format)
     Engine expects: id, type, data (dict with label, config, agent_id, etc.)
     """
@@ -56,7 +56,7 @@ def _transform_graph_node(raw: dict[str, Any]) -> dict[str, Any]:
     nested = raw.get("data") or {}
     data: dict[str, Any] = dict(nested)
 
-    # Flat top-level overrides (legacy compat)
+    # Flat top-level overrides
     if "label" in raw:
         data["label"] = raw["label"]
     if "config" in raw:

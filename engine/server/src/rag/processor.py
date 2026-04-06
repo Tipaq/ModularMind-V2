@@ -164,7 +164,7 @@ async def process_document(
             overlap_tokens=chunk_overlap // 2,
         )
     except ValueError:
-        # Fallback to legacy recursive chunker
+        # Fallback to recursive chunker
         chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     chunks = chunker.split(text)

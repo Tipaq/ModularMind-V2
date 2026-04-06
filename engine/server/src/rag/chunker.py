@@ -2,7 +2,7 @@
 Advanced chunking strategies for RAG document processing.
 
 Provides multiple chunker implementations:
-- RecursiveChunker: Character-based recursive splitting (legacy default)
+- RecursiveChunker: Character-based recursive splitting (default)
 - TokenAwareChunker: Token-based splitting using tiktoken
 - ParentChildChunker: Hierarchical parent/child chunks
 - SemanticChunker: Groups sentences by embedding similarity (requires nltk)
@@ -42,7 +42,7 @@ class BaseChunker(ABC):
 
 
 class RecursiveChunker(BaseChunker):
-    """Recursive character text splitter (legacy default)."""
+    """Recursive character text splitter (default)."""
 
     def __init__(
         self,

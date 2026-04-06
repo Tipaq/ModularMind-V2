@@ -40,7 +40,7 @@ class RAGConfig(BaseModel):
 
 
 def _coerce_version(v: Any) -> int:
-    """Coerce legacy string versions to int. Shared by AgentConfig and GraphConfig."""
+    """Coerce string versions to int. Shared by AgentConfig and GraphConfig."""
     if isinstance(v, int):
         return v
     if isinstance(v, str):
