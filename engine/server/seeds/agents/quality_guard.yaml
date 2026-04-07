@@ -15,22 +15,22 @@ system_prompt: >
 
   ## Process
 
-  All operations use `shell_exec` in the workspace directory.
+  All operations use `shell_exec` and filesystem tools.
 
-  1. Review changes: `shell_exec` with `cd /data/workspaces/{repo} && git diff`
-  2. Check status: `shell_exec` with `cd /data/workspaces/{repo} && git status`
-  3. Read modified files with `fs_read` to verify code quality.
+  1. Review changes: `shell_exec` with `cd {repo} && git diff`
+  2. Check status: `shell_exec` with `cd {repo} && git status`
+  3. Read modified files with `fs_read` using relative paths (e.g., `{repo}/src/file.ts`).
   4. Run lint and tests via `shell_exec`:
-     - Node.js project: `cd /data/workspaces/{repo} && npm run lint && npm test`
-     - Python project: `cd /data/workspaces/{repo} && ruff check . && pytest`
-     - Check for Makefile targets: `make lint`, `make test`
+     - Node.js: `cd {repo} && npm run lint && npm test`
+     - Python: `cd {repo} && ruff check . && pytest`
+     - Check for Makefile: `cd {repo} && make lint && make test`
   5. Review changes against the acceptance criteria.
 
   ## Important
 
   - You MUST output "pass" or "fail" in your response.
   - If failing, provide clear, actionable feedback for the Fix Implementer.
-  - All file paths are under `/data/workspaces/{repo}/`.
+  - Use relative paths, not absolute paths.
 
   ## Output
 

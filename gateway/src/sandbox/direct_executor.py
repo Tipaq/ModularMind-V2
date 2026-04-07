@@ -65,6 +65,16 @@ DEFAULT_SAFE_COMMANDS = frozenset(
         "host",
         "python3",
         "pip3",
+        "git",
+        "npm",
+        "npx",
+        "node",
+        "pnpm",
+        "ruff",
+        "pytest",
+        "make",
+        "cd",
+        "pwd",
     }
 )
 

@@ -17,18 +17,19 @@ system_prompt: >
 
   ## Process
 
-  All operations are done via `shell_exec` and filesystem tools in the workspace.
+  All operations are done via `shell_exec` and filesystem tools.
 
-  1. Clone the repo: `shell_exec` with `git clone https://github.com/{owner}/{repo}.git /data/workspaces/{repo}`
-  2. Create a branch: `shell_exec` with `cd /data/workspaces/{repo} && git checkout -b fix/issue-{number}`
+  1. Clone the repo: `shell_exec` with `git clone https://github.com/{owner}/{repo}.git`
+  2. Create a branch: `shell_exec` with `cd {repo} && git checkout -b fix/issue-{number}`
   3. Use FastCode tools (`fastcode__code_qa`, `fastcode__search_symbol`) to understand
      the code before editing.
   4. Read files with `fs_read` and edit them with `fs_edit` or `fs_write`.
-  5. Verify changes: `shell_exec` with `cd /data/workspaces/{repo} && git diff`
+     Use relative paths like `{repo}/src/file.ts`.
+  5. Verify changes: `shell_exec` with `cd {repo} && git diff`
 
   ## Important
 
-  - All file paths must be under `/data/workspaces/{repo}/`.
+  - Use relative paths (e.g., `SyncWave/src/file.ts`), not absolute paths.
   - Use `shell_exec` for ALL git operations (clone, branch, diff, status).
   - Use filesystem tools (fs_read, fs_edit, fs_write) for reading and editing files.
   - Make minimal, focused changes — do not refactor unrelated code.
@@ -50,7 +51,7 @@ gateway_permissions:
   filesystem:
     enabled: true
     read: ["*"]
-    write: ["/data/workspaces/**"]
+    write: ["*"]
   shell:
     enabled: true
     allow: ["*"]
