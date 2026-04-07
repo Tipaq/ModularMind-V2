@@ -1,8 +1,12 @@
 """GatewayToolExecutor — routes tool calls to the Gateway service.
 
+Follows the Claude pattern: tool_call → check permission → if approval
+needed, show card to user → wait for decision → execute or deny.
+
 Includes circuit breaker to gracefully degrade when Gateway is down.
 """
 
+import asyncio
 import logging
 import time
 from uuid import uuid4
@@ -55,7 +59,8 @@ class GatewayToolExecutor:
     async def execute(self, name: str, args: dict) -> str:
         """Execute a gateway tool call.
 
-        Returns string result (matches MCPToolExecutor interface).
+        If the gateway returns requires_approval, wait for the user's
+        decision via Redis pub/sub, then re-call with the approved ID.
         """
         if time.time() < self._circuit_open_until:
             return "Tool error: system access tools are temporarily unavailable."
@@ -76,31 +81,93 @@ class GatewayToolExecutor:
             "args": args,
         }
 
+        data = await self._call_gateway(payload)
+        if data is None:
+            return "Tool error: system access tools are temporarily unavailable."
+
+        status = data.get("status", "")
+
+        if status == "requires_approval":
+            return await self._wait_and_execute(data, payload)
+
+        if status == "denied":
+            return f"Tool error: {data.get('error', 'Access denied')}"
+        if status == "error":
+            return f"Tool error: {data.get('error', 'Execution failed')}"
+
+        return data.get("result", "")
+
+    async def _wait_and_execute(
+        self, approval_response: dict, original_payload: dict,
+    ) -> str:
+        """Wait for user approval, then re-call gateway to execute."""
+        approval_id = approval_response.get("approval_id")
+        if not approval_id:
+            return "Tool error: approval flow failed (no approval_id)"
+
+        logger.info(
+            "Tool %s requires approval %s, waiting for user decision",
+            original_payload["tool"],
+            approval_id,
+        )
+
+        decision = await self._poll_approval_decision(approval_id)
+
+        if decision == "approved":
+            logger.info("Approval %s granted, executing tool", approval_id)
+            payload = {**original_payload, "approved_id": approval_id}
+            data = await self._call_gateway(payload)
+            if data is None:
+                return "Tool error: execution failed after approval."
+            if data.get("status") in ("denied", "error"):
+                return f"Tool error: {data.get('error', 'Execution failed')}"
+            return data.get("result", "")
+
+        logger.info("Approval %s rejected by user", approval_id)
+        return "Tool error: user rejected this action."
+
+    async def _poll_approval_decision(self, approval_id: str) -> str:
+        """Subscribe to Redis for the approval decision."""
+        from src.infra.redis import get_redis_client
+
+        channel = f"gateway:decision:{approval_id}"
+        r = await get_redis_client()
         try:
-            async with httpx.AsyncClient(timeout=None) as client:
+            pubsub = r.pubsub()
+            await pubsub.subscribe(channel)
+            try:
+                while True:
+                    msg = await pubsub.get_message(
+                        ignore_subscribe_messages=True, timeout=2.0,
+                    )
+                    if msg and msg["type"] == "message":
+                        raw = msg["data"]
+                        return raw.decode() if isinstance(raw, bytes) else raw
+                    await asyncio.sleep(0.1)
+            finally:
+                await pubsub.unsubscribe(channel)
+                await pubsub.aclose()
+        finally:
+            await r.aclose()
+
+    async def _call_gateway(self, payload: dict) -> dict | None:
+        """Send a request to the gateway, handling connection errors."""
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(
                     f"{self._url}/api/v1/execute",
                     json=payload,
                     headers={"Authorization": self._token},
                 )
-
             self._failure_count = 0
-            data = response.json()
-
-            if data.get("status") == "denied":
-                return f"Tool error: {data.get('error', 'Access denied')}"
-            if data.get("status") == "error":
-                return f"Tool error: {data.get('error', 'Execution failed')}"
-
-            return data.get("result", "")
-
+            return response.json()
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             self._failure_count += 1
             if self._failure_count >= 3:
                 self._circuit_open_until = time.time() + 30
                 logger.warning(
-                    "Gateway circuit breaker OPEN after %d failures (30s backoff)",
+                    "Gateway circuit breaker OPEN after %d failures",
                     self._failure_count,
                 )
             logger.error("Gateway connection error: %s", e)
-            return "Tool error: system access tools are temporarily unavailable."
+            return None

@@ -96,45 +96,64 @@ async def execute_tool(
     start = time.time()
 
     perm_engine = PermissionEngine(db, cache_ttl=settings.PERMISSION_CACHE_TTL)
-    eval_result, error = await perm_engine.evaluate(
-        agent_id=request.agent_id,
-        category=request.category,
-        action=request.action,
-        tool_name=request.tool,
-        args=request.args,
-    )
 
     result_str = None
     approval_id = None
     decision = "error"
     response_status = "error"
 
-    if eval_result == EvalResult.AUTO_APPROVE:
-        decision = "auto_approved"
+    # Pre-approved re-call: skip permission check, execute directly
+    if request.approved_id:
+        decision = "pre_approved"
         try:
-            result_str = await _execute_in_sandbox(http_request, request, perm_engine)
-            response_status = "allowed"
-        except Exception as e:
-            logger.error("Sandbox execution error: %s", e, exc_info=True)
-            error = str(e)
-            response_status = "error"
-            decision = "error"
-
-    elif eval_result == EvalResult.AUTO_DENY:
-        response_status = "denied"
-        decision = "auto_denied"
-
-    elif eval_result == EvalResult.REQUIRES_APPROVAL:
-        # Create pending approval and wait for admin decision
-        try:
-            result_str, approval_id, decision, response_status, error = await _handle_approval_flow(
-                http_request, request, perm_engine, db
+            result_str = await _execute_in_sandbox(
+                http_request, request, perm_engine,
             )
+            response_status = "allowed"
+            approval_id = request.approved_id
         except Exception as e:
-            logger.error("Approval flow error: %s", e, exc_info=True)
+            logger.error("Pre-approved execution error: %s", e, exc_info=True)
             error = str(e)
             response_status = "error"
             decision = "error"
+    else:
+        eval_result, error = await perm_engine.evaluate(
+            agent_id=request.agent_id,
+            category=request.category,
+            action=request.action,
+            tool_name=request.tool,
+            args=request.args,
+        )
+
+        if eval_result == EvalResult.AUTO_APPROVE:
+            decision = "auto_approved"
+            try:
+                result_str = await _execute_in_sandbox(
+                    http_request, request, perm_engine,
+                )
+                response_status = "allowed"
+            except Exception as e:
+                logger.error("Sandbox execution error: %s", e, exc_info=True)
+                error = str(e)
+                response_status = "error"
+                decision = "error"
+
+        elif eval_result == EvalResult.AUTO_DENY:
+            response_status = "denied"
+            decision = "auto_denied"
+
+        elif eval_result == EvalResult.REQUIRES_APPROVAL:
+            # Return immediately — engine handles the wait
+            try:
+                approval_id = await _create_approval(request, db)
+                response_status = "requires_approval"
+                decision = "pending"
+                error = None
+            except Exception as e:
+                logger.error("Approval creation error: %s", e, exc_info=True)
+                error = str(e)
+                response_status = "error"
+                decision = "error"
 
     duration_ms = (time.time() - start) * 1000
 
@@ -175,22 +194,12 @@ async def execute_tool(
     )
 
 
-async def _handle_approval_flow(
-    http_request: Request,
-    request: ExecuteRequest,
-    perm_engine: PermissionEngine,
-    db,
-) -> tuple[str | None, str | None, str, str, str | None]:
-    """Handle the full approval lifecycle for a tool call.
-
-    Returns (result_str, approval_id, decision, response_status, error).
-    """
+async def _create_approval(request: ExecuteRequest, db) -> str:
+    """Create a pending approval and return its ID immediately (non-blocking)."""
     redis = await get_redis_client()
     try:
         approval_svc = GatewayApprovalService(db, redis)
-
-        # Create the pending approval
-        approval_id = await approval_svc.request_approval(
+        return await approval_svc.request_approval(
             request_id=request.request_id,
             execution_id=request.execution_id,
             agent_id=request.agent_id,
@@ -201,38 +210,6 @@ async def _handle_approval_flow(
             args=request.args,
             timeout_seconds=request.timeout_seconds,
         )
-
-        # Wait for admin decision (blocks until approved/rejected/timeout)
-        decision_result = await approval_svc.wait_for_decision(
-            approval_id=approval_id,
-            timeout=request.timeout_seconds,
-        )
-
-        if decision_result == "approved":
-            # Execute the tool call
-            try:
-                result_str = await _execute_in_sandbox(http_request, request, perm_engine)
-                return result_str, approval_id, "approved", "allowed", None
-            except Exception as e:
-                return None, approval_id, "error", "error", str(e)
-
-        elif decision_result == "rejected":
-            return (
-                None,
-                approval_id,
-                "rejected",
-                "denied",
-                "Request rejected by admin",
-            )
-
-        else:  # timeout or already_processed
-            return (
-                None,
-                approval_id,
-                "timeout",
-                "denied",
-                "Approval request timed out",
-            )
     finally:
         await redis.aclose()
 

@@ -63,6 +63,7 @@ class ExecuteRequest(BaseModel):
     action: str = Field(..., description="Action within category (read, write, execute)")
     args: dict = Field(default_factory=dict, description="Tool arguments")
     timeout_seconds: int = Field(default=0, ge=0, description="0 = no timeout")
+    approved_id: str | None = Field(default=None, description="Pre-approved approval ID")
 
 
 class ExecuteResponse(BaseModel):
