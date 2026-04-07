@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 # 1MB max request body
 MAX_BODY_SIZE = 1_048_576
 
-# 60 second global request timeout
-REQUEST_TIMEOUT_SECONDS = 60
+# Global request timeout — must exceed max shell execution (120s)
+REQUEST_TIMEOUT_SECONDS = 180
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
