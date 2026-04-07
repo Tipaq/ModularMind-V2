@@ -123,6 +123,30 @@ class GatewayApprovalService:
         )
         await self._redis.publish("gateway:approvals", event_data)
 
+        # Publish to the execution's SSE stream so the chat UI shows the card
+        stream_key = f"exec_stream:{execution_id}"
+        await self._redis.xadd(
+            stream_key,
+            {
+                "data": json.dumps(
+                    {
+                        "type": "step",
+                        "event": "approval_required",
+                        "approval_type": "gateway",
+                        "approval_id": approval_id,
+                        "execution_id": execution_id,
+                        "node_id": f"gateway:{category}:{action}",
+                        "message": f"Agent wants to execute **{tool_name}**."
+                        " Review and approve to continue.",
+                        "plan": args_preview,
+                        "tool_name": tool_name,
+                        "args_preview": args_preview,
+                        "timeout_seconds": timeout,
+                    }
+                )
+            },
+        )
+
         logger.info(
             "Created approval %s for %s/%s (agent %s, timeout %ds)",
             approval_id,
@@ -171,6 +195,24 @@ class GatewayApprovalService:
         # Notify waiting handler via Redis pub/sub
         await self._redis.publish(f"gateway:decision:{approval_id}", "approved")
 
+        # Notify the chat UI via the execution SSE stream
+        execution_id = await self._get_execution_id(approval_id)
+        if execution_id:
+            await self._redis.xadd(
+                f"exec_stream:{execution_id}",
+                {
+                    "data": json.dumps(
+                        {
+                            "type": "step",
+                            "event": "approval_granted",
+                            "approval_type": "gateway",
+                            "approval_id": approval_id,
+                            "execution_id": execution_id,
+                        }
+                    )
+                },
+            )
+
         # "Approve & Remember" → create pre-approval rule
         if remember and remember_pattern:
             await self._create_rule_from_approval(approval_id, admin_id, remember_pattern)
@@ -212,8 +254,35 @@ class GatewayApprovalService:
         # Notify waiting handler
         await self._redis.publish(f"gateway:decision:{approval_id}", "rejected")
 
+        # Notify the chat UI via the execution SSE stream
+        execution_id = await self._get_execution_id(approval_id)
+        if execution_id:
+            await self._redis.xadd(
+                f"exec_stream:{execution_id}",
+                {
+                    "data": json.dumps(
+                        {
+                            "type": "step",
+                            "event": "approval_rejected",
+                            "approval_type": "gateway",
+                            "approval_id": approval_id,
+                            "execution_id": execution_id,
+                        }
+                    )
+                },
+            )
+
         logger.info("Approval %s rejected by %s", approval_id, admin_id)
         return True
+
+    async def _get_execution_id(self, approval_id: str) -> str | None:
+        """Look up the execution_id for a given approval record."""
+        result = await self._db.execute(
+            select(GatewayPendingApproval.execution_id).where(
+                GatewayPendingApproval.id == approval_id
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def wait_for_decision(
         self,

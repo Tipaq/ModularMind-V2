@@ -98,3 +98,4 @@ class ApprovalRequest(BaseModel):
     """Approval/rejection request body."""
 
     notes: str | None = None
+    gateway_approval_id: str | None = None

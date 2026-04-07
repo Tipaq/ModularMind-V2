@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { CheckCircle2, XCircle, ShieldQuestion, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, ShieldQuestion, Loader2, Terminal } from "lucide-react";
 import { cn } from "../lib/utils";
 import Markdown from "react-markdown";
 
@@ -11,6 +11,10 @@ export interface ApprovalRequest {
   message: string;
   plan: string;
   timeoutSeconds: number;
+  approvalType?: "graph" | "gateway";
+  approvalId?: string;
+  toolName?: string;
+  argsPreview?: string;
 }
 
 export interface ApprovalCardProps {
@@ -56,6 +60,12 @@ export const ApprovalCard = memo(function ApprovalCard({
       <div className="flex items-center gap-2 px-4 py-2.5 bg-warning/10 border-b border-warning/20">
         <ShieldQuestion className="h-4 w-4 text-warning" />
         <span className="text-sm font-medium text-warning">Approval Required</span>
+        {approval.approvalType === "gateway" && approval.toolName && (
+          <span className="ml-auto inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            <Terminal className="h-3 w-3" />
+            {approval.toolName}
+          </span>
+        )}
       </div>
 
       {/* Message */}

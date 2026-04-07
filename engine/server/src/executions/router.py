@@ -502,6 +502,10 @@ async def approve_execution(
 
     from .approval import ApprovalService
 
+    # If this is a gateway approval, proxy to the gateway service
+    if request and request.gateway_approval_id:
+        await _proxy_gateway_decision(request.gateway_approval_id, "approve", request.notes)
+
     redis_client = await get_redis_client()
     try:
         # Signal the approval node polling loop via Redis (TTL as safety net)
@@ -514,7 +518,7 @@ async def approve_execution(
             notes=request.notes if request else None,
         )
 
-        if not success:
+        if not success and not (request and request.gateway_approval_id):
             raise HTTPException(
                 status_code=400,
                 detail="Execution is not awaiting approval or not found",
@@ -548,6 +552,10 @@ async def reject_execution(
 
     from .approval import ApprovalService
 
+    # If this is a gateway approval, proxy to the gateway service
+    if request and request.gateway_approval_id:
+        await _proxy_gateway_decision(request.gateway_approval_id, "reject", request.notes)
+
     redis_client = await get_redis_client()
     try:
         # Signal the approval node polling loop via Redis (TTL as safety net)
@@ -560,7 +568,7 @@ async def reject_execution(
             notes=request.notes if request else None,
         )
 
-        if not success:
+        if not success and not (request and request.gateway_approval_id):
             raise HTTPException(
                 status_code=400,
                 detail="Execution is not awaiting approval or not found",
@@ -575,6 +583,42 @@ async def reject_execution(
         return ExecutionResponse.model_validate(execution)
     finally:
         await redis_client.aclose()
+
+
+async def _proxy_gateway_decision(
+    approval_id: str,
+    action: str,
+    notes: str | None = None,
+) -> None:
+    """Forward an approve/reject decision to the gateway service."""
+    import httpx
+
+    from src.infra.config import get_settings
+    from src.internal.auth import get_internal_bearer_token
+
+    settings = get_settings()
+    if not settings.GATEWAY_URL:
+        logger.warning("GATEWAY_URL not configured, cannot proxy approval")
+        return
+
+    url = f"{settings.GATEWAY_URL}/api/v1/approvals/{approval_id}/{action}"
+    token = get_internal_bearer_token()
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                url,
+                json={"notes": notes},
+                headers={"Authorization": token},
+            )
+            if response.status_code >= 400:
+                logger.warning(
+                    "Gateway approval proxy failed: %s %s",
+                    response.status_code,
+                    response.text,
+                )
+    except (httpx.ConnectError, httpx.TimeoutException) as exc:
+        logger.error("Gateway approval proxy error: %s", exc)
 
 
 # ---------------------------------------------------------------------------

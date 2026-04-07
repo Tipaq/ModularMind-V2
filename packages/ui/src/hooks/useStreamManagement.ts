@@ -113,18 +113,22 @@ export function useStreamManagement(
 
           if (eventType === "step" && data.event === "approval_required") {
             setPendingApproval({
-              executionId: data.execution_id,
-              nodeId: data.node_id,
-              message: data.message || "Review and approve to continue.",
-              plan: data.plan || "",
-              timeoutSeconds: data.timeout_seconds || 0,
+              executionId: data.execution_id as string,
+              nodeId: data.node_id as string,
+              message: (data.message as string) || "Review and approve to continue.",
+              plan: (data.plan as string) || "",
+              timeoutSeconds: (data.timeout_seconds as number) || 0,
+              approvalType: (data.approval_type as "graph" | "gateway") || "graph",
+              approvalId: data.approval_id as string | undefined,
+              toolName: data.tool_name as string | undefined,
+              argsPreview: data.args_preview as string | undefined,
             });
             setApprovalDecision(null);
             return;
           }
 
-          if (eventType === "step" && data.event === "approval_granted") {
-            setApprovalDecision("approved");
+          if (eventType === "step" && (data.event === "approval_granted" || data.event === "approval_rejected")) {
+            setApprovalDecision(data.event === "approval_granted" ? "approved" : "rejected");
             setPendingApproval(null);
             return;
           }

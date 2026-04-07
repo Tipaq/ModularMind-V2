@@ -36,6 +36,8 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef("");
+  const pendingApprovalRef = useRef<ApprovalRequest | null>(null);
+  pendingApprovalRef.current = pendingApproval;
 
   const currentAssistantIdRef = useRef("");
   const currentExecutionIdRef = useRef("");
@@ -156,13 +158,15 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
   }, []);
 
   const approveExecution = useCallback(async (executionId: string) => {
-    await adapter.approveExecution(executionId);
+    const gatewayId = pendingApprovalRef.current?.approvalId;
+    await adapter.approveExecution(executionId, gatewayId);
     setApprovalDecision("approved");
     setPendingApproval(null);
   }, [adapter]);
 
   const rejectExecution = useCallback(async (executionId: string) => {
-    await adapter.rejectExecution(executionId);
+    const gatewayId = pendingApprovalRef.current?.approvalId;
+    await adapter.rejectExecution(executionId, gatewayId);
     setApprovalDecision("rejected");
     setPendingApproval(null);
   }, [adapter]);
