@@ -329,9 +329,9 @@ export interface ChatMessagesProps {
   /** Decision already made for the current approval. */
   approvalDecision?: "approved" | "rejected" | null;
   /** Callback to approve the execution. */
-  onApprove?: (executionId: string) => Promise<void>;
+  onApprove?: (executionId: string, notes?: string) => Promise<void>;
   /** Callback to reject the execution. */
-  onReject?: (executionId: string) => Promise<void>;
+  onReject?: (executionId: string, notes?: string) => Promise<void>;
   onRegenerate?: () => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onArtifactDetected?: (artifact: DetectedArtifact) => void;

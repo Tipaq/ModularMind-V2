@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { ShieldCheck, CheckCircle2, XCircle, Loader2, ChevronDown } from "lucide-react";
+import { ShieldCheck, CheckCircle2, XCircle, Loader2, ChevronDown, MessageSquare } from "lucide-react";
 import { cn } from "../lib/utils";
 import Markdown from "react-markdown";
 
@@ -31,8 +31,8 @@ export interface ApprovalRequest {
 
 export interface ApprovalCardProps {
   approval: ApprovalRequest;
-  onApprove: (executionId: string) => Promise<void>;
-  onReject: (executionId: string) => Promise<void>;
+  onApprove: (executionId: string, notes?: string) => Promise<void>;
+  onReject: (executionId: string, notes?: string) => Promise<void>;
   decision?: "approved" | "rejected" | null;
 }
 
@@ -44,7 +44,10 @@ export const ApprovalCard = memo(function ApprovalCard({
 }: ApprovalCardProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [resolved, setResolved] = useState<string | null>(decision ?? null);
+  const [resolvedNotes, setResolvedNotes] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [customInput, setCustomInput] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
 
   const options = approval.options ?? DEFAULT_OPTIONS;
   const isBinary = options.length === 2
@@ -65,11 +68,25 @@ export const ApprovalCard = memo(function ApprovalCard({
     }
   };
 
+  const handleCustomSubmit = async () => {
+    const text = customInput.trim();
+    if (!text) return;
+    setLoading("custom");
+    try {
+      await onApprove(approval.executionId, text);
+      setResolved("custom");
+      setResolvedNotes(text);
+    } finally {
+      setLoading(null);
+    }
+  };
+
   if (resolved) {
     const resolvedOption = options.find((o) => o.value === resolved);
     const isRejected = resolved === "rejected" || resolvedOption?.variant === "reject";
+    const isCustom = resolved === "custom";
     return (
-      <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+      <div className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {isRejected ? (
             <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
@@ -81,9 +98,12 @@ export const ApprovalCard = memo(function ApprovalCard({
             "ml-auto text-[10px] font-medium whitespace-nowrap",
             isRejected ? "text-destructive" : "text-success",
           )}>
-            {resolvedOption?.label ?? resolved}
+            {isCustom ? "Custom response" : (resolvedOption?.label ?? resolved)}
           </span>
         </div>
+        {isCustom && resolvedNotes && (
+          <p className="text-xs text-muted-foreground ml-5 italic">{resolvedNotes}</p>
+        )}
       </div>
     );
   }
@@ -112,13 +132,9 @@ export const ApprovalCard = memo(function ApprovalCard({
       )}
 
       {/* Options */}
-      <div className="px-4 pb-4 pt-1">
+      <div className="px-4 pb-3 pt-1">
         {isBinary ? (
-          <BinaryActions
-            options={options}
-            loading={loading}
-            onSelect={handleConfirm}
-          />
+          <BinaryActions options={options} loading={loading} onSelect={handleConfirm} />
         ) : (
           <ListActions
             options={options}
@@ -127,6 +143,58 @@ export const ApprovalCard = memo(function ApprovalCard({
             onSelect={setSelected}
             onConfirm={handleConfirm}
           />
+        )}
+      </div>
+
+      {/* Custom response */}
+      <div className="border-t border-warning/20">
+        <button
+          onClick={() => setShowCustom(!showCustom)}
+          disabled={!!loading}
+          className={cn(
+            "w-full flex items-center gap-2 px-4 py-2 text-xs text-muted-foreground",
+            "hover:text-foreground hover:bg-warning/5 transition-colors",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          )}
+        >
+          <MessageSquare className="h-3 w-3" />
+          <span>Suggest something else</span>
+          <ChevronDown className={cn(
+            "h-3 w-3 ml-auto transition-transform",
+            showCustom && "rotate-180",
+          )} />
+        </button>
+        {showCustom && (
+          <div className="px-4 pb-3 space-y-2">
+            <textarea
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              placeholder="Describe what you'd like instead..."
+              disabled={!!loading}
+              rows={2}
+              className={cn(
+                "w-full rounded-md border border-border/60 bg-background px-3 py-2",
+                "text-sm resize-none placeholder:text-muted-foreground/60",
+                "focus:outline-none focus:ring-1 focus:ring-primary/50",
+                "disabled:opacity-50",
+              )}
+            />
+            <button
+              onClick={handleCustomSubmit}
+              disabled={!customInput.trim() || !!loading}
+              className={cn(
+                "w-full px-3 py-2 rounded-md text-xs font-medium transition-colors",
+                "bg-primary text-primary-foreground hover:bg-primary/90",
+                "disabled:opacity-40 disabled:cursor-not-allowed",
+              )}
+            >
+              {loading === "custom" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
+              ) : (
+                "Send response"
+              )}
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -244,7 +312,6 @@ function ListActions({
 
 function PlanPreview({ plan }: { plan: string }) {
   const [expanded, setExpanded] = useState(false);
-  const isLong = plan.length > 400;
 
   return (
     <div className="px-4 pb-2 pl-10">

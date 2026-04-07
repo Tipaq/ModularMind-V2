@@ -159,16 +159,16 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
     return () => { if (sourceRef.current) { sourceRef.current.close(); sourceRef.current = null; } };
   }, []);
 
-  const approveExecution = useCallback(async (executionId: string) => {
+  const approveExecution = useCallback(async (executionId: string, notes?: string) => {
     const gatewayId = pendingApprovalRef.current?.approvalId;
-    await adapter.approveExecution(executionId, gatewayId);
+    await adapter.approveExecution(executionId, gatewayId, notes);
     setApprovalDecision("approved");
     setPendingApproval(null);
   }, [adapter]);
 
-  const rejectExecution = useCallback(async (executionId: string) => {
+  const rejectExecution = useCallback(async (executionId: string, notes?: string) => {
     const gatewayId = pendingApprovalRef.current?.approvalId;
-    await adapter.rejectExecution(executionId, gatewayId);
+    await adapter.rejectExecution(executionId, gatewayId, notes);
     setApprovalDecision("rejected");
     setPendingApproval(null);
   }, [adapter]);

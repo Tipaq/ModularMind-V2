@@ -23,8 +23,8 @@ export interface ChatAdapter {
   eventSourceInit?: EventSourceInit;
 
   stopExecution(executionId: string): Promise<void>;
-  approveExecution(executionId: string, gatewayApprovalId?: string): Promise<void>;
-  rejectExecution(executionId: string, gatewayApprovalId?: string): Promise<void>;
+  approveExecution(executionId: string, gatewayApprovalId?: string, notes?: string): Promise<void>;
+  rejectExecution(executionId: string, gatewayApprovalId?: string, notes?: string): Promise<void>;
   respondToPrompt(executionId: string, promptId: string, response: string): Promise<void>;
   deleteMessagesFrom(conversationId: string, messageId: string): Promise<void>;
 }
@@ -57,13 +57,17 @@ export const chatAdapter: ChatAdapter = {
     await api.post(`/executions/${executionId}/stop`);
   },
 
-  async approveExecution(executionId, gatewayApprovalId) {
-    const body = gatewayApprovalId ? { gateway_approval_id: gatewayApprovalId } : undefined;
+  async approveExecution(executionId, gatewayApprovalId, notes) {
+    const body = (gatewayApprovalId || notes)
+      ? { gateway_approval_id: gatewayApprovalId, notes }
+      : undefined;
     await api.post(`/executions/${executionId}/approve`, body);
   },
 
-  async rejectExecution(executionId, gatewayApprovalId) {
-    const body = gatewayApprovalId ? { gateway_approval_id: gatewayApprovalId } : undefined;
+  async rejectExecution(executionId, gatewayApprovalId, notes) {
+    const body = (gatewayApprovalId || notes)
+      ? { gateway_approval_id: gatewayApprovalId, notes }
+      : undefined;
     await api.post(`/executions/${executionId}/reject`, body);
   },
 
