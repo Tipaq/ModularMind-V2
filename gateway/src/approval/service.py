@@ -298,11 +298,16 @@ class GatewayApprovalService:
         await pubsub.subscribe(channel)
 
         try:
-            deadline = time.time() + timeout
-            while time.time() < deadline:
-                remaining = max(0.1, deadline - time.time())
-                wait_time = min(remaining, 0.1)
-                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=wait_time)
+            deadline = (time.time() + timeout) if timeout > 0 else 0
+            while deadline == 0 or time.time() < deadline:
+                if deadline > 0:
+                    remaining = max(0.1, deadline - time.time())
+                    wait_time = min(remaining, 0.1)
+                else:
+                    wait_time = 1.0
+                msg = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=wait_time,
+                )
                 if msg and msg["type"] == "message":
                     decision = msg["data"]
                     if isinstance(decision, bytes):

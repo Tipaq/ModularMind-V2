@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-
 # =============================================================================
 # Permission Models (stored in agent config JSONB)
 # =============================================================================
@@ -63,7 +62,7 @@ class ExecuteRequest(BaseModel):
     category: str = Field(..., description="Permission category (filesystem, shell, etc.)")
     action: str = Field(..., description="Action within category (read, write, execute)")
     args: dict = Field(default_factory=dict, description="Tool arguments")
-    timeout_seconds: int = Field(default=30, ge=5, le=300)
+    timeout_seconds: int = Field(default=0, ge=0, description="0 = no timeout")
 
 
 class ExecuteResponse(BaseModel):

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { ShieldCheck, CheckCircle2, XCircle, Loader2, MessageSquare } from "lucide-react";
+import { ShieldCheck, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import Markdown from "react-markdown";
 
@@ -157,7 +157,6 @@ export const ApprovalCard = memo(function ApprovalCard({
               {/* Custom response as last option */}
               <RadioRow
                 label="Suggest something else"
-                icon={<MessageSquare className="h-3.5 w-3.5 text-muted-foreground/60" />}
                 isSelected={isCustomSelected}
                 disabled={loading}
                 onSelect={() => setSelectedIndex(options.length)}
@@ -214,14 +213,12 @@ export const ApprovalCard = memo(function ApprovalCard({
 
 function RadioRow({
   label,
-  icon,
   isSelected,
   isReject,
   disabled,
   onSelect,
 }: {
   label: string;
-  icon?: React.ReactNode;
   isSelected: boolean;
   isReject?: boolean;
   disabled: boolean;
@@ -243,7 +240,6 @@ function RadioRow({
       )}>
         {isSelected && <span className="h-2 w-2 rounded-full bg-primary" />}
       </span>
-      {icon && !isSelected && <span className="-ml-1">{icon}</span>}
       <span className={cn(
         "font-medium",
         isSelected ? "text-foreground" : "text-muted-foreground",
