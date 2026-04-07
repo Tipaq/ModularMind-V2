@@ -89,6 +89,7 @@ export function useStreamManagement(
         source.removeEventListener("tokens", onEvent);
         source.removeEventListener("trace", onEvent);
         source.removeEventListener("step", onEvent);
+        source.removeEventListener("human_prompt", onEvent);
         source.removeEventListener("complete", onEvent);
         source.removeEventListener("error", onError);
         source.close();
@@ -241,6 +242,7 @@ export function useStreamManagement(
       source.addEventListener("tokens", onEvent);
       source.addEventListener("trace", onEvent);
       source.addEventListener("step", onEvent);
+      source.addEventListener("human_prompt", onEvent);
       source.addEventListener("complete", onEvent);
       source.addEventListener("error", onError);
       source.onerror = () => { setIsStreaming(false); };
