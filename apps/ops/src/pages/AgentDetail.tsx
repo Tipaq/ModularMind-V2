@@ -6,6 +6,7 @@ import type { AgentUpdateInput } from "@modularmind/api-client";
 import { useAgentsStore } from "../stores/agents";
 import { AgentOverviewSection } from "../components/agents/AgentOverviewSection";
 import { AgentToolsSection } from "../components/agents/AgentToolsSection";
+import { AgentGatewaySection } from "../components/agents/AgentGatewaySection";
 import { AgentPlayground } from "../components/agents/AgentPlayground";
 
 export function AgentDetail() {
@@ -153,6 +154,7 @@ export function AgentDetail() {
             {toolMode !== "auto" && (
               <AgentToolsSection agent={agent} isEditing={isEditing} onChange={handleChange} />
             )}
+            <AgentGatewaySection agent={agent} isEditing={isEditing} onChange={handleChange} />
           </div>
         </div>
         <div className="flex-[2] min-w-0 border-l border-border">
