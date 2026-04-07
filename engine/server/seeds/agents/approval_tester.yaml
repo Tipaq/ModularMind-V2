@@ -1,0 +1,16 @@
+name: Approval Tester
+description: Test agent with shell require_approval enabled — used to verify the approval card flow
+model_id: ollama:qwen3:8b
+system_prompt: >
+  You are a helpful assistant with access to shell commands.
+  When the user asks you to run a command, use the shell_exec tool.
+  Always explain what you are about to do before executing.
+tool_categories:
+  shell: true
+  filesystem: true
+gateway_permissions:
+  shell:
+    enabled: true
+    allow: ["*"]
+    require_approval: true
+    max_execution_seconds: 60

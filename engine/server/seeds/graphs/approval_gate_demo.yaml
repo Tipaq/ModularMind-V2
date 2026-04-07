@@ -1,0 +1,65 @@
+name: Approval Gate Demo
+description: >
+  Simple graph that researches a topic, pauses for human approval,
+  then writes the final response. Used to test the graph approval node flow.
+timeout_seconds: 300
+entry_node_id: start
+
+nodes:
+  - id: start
+    type: start
+    data:
+      type: start
+      label: start
+      position: { x: 400, y: 50 }
+
+  - id: researcher
+    type: agent
+    data:
+      type: agent
+      label: Researcher
+      agent_ref: approval_tester
+      position: { x: 400, y: 150 }
+      config:
+        system_prompt: >
+          Summarize the user's request in 2-3 bullet points.
+          Be concise and identify the key points.
+
+  - id: approval_gate
+    type: approval
+    data:
+      type: approval
+      label: Human Review
+      position: { x: 400, y: 300 }
+      config:
+        message: Review the research summary above. Approve to generate the final response.
+        approvalTimeout: 120
+
+  - id: writer
+    type: agent
+    data:
+      type: agent
+      label: Writer
+      agent_ref: approval_tester
+      position: { x: 400, y: 450 }
+      config:
+        system_prompt: >
+          Based on the approved research, write a detailed and helpful response.
+          Reference the key points from the research.
+
+  - id: end
+    type: end
+    data:
+      type: end
+      label: end
+      position: { x: 400, y: 550 }
+
+edges:
+  - source: start
+    target: researcher
+  - source: researcher
+    target: approval_gate
+  - source: approval_gate
+    target: writer
+  - source: writer
+    target: end
