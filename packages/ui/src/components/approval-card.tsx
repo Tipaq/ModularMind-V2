@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { ShieldCheck, CheckCircle2, XCircle, Loader2, ChevronDown, MessageSquare } from "lucide-react";
+import { ShieldCheck, CheckCircle2, XCircle, Loader2, MessageSquare } from "lucide-react";
 import { cn } from "../lib/utils";
 import Markdown from "react-markdown";
 
@@ -42,49 +42,51 @@ export const ApprovalCard = memo(function ApprovalCard({
   onReject,
   decision,
 }: ApprovalCardProps) {
-  const [loading, setLoading] = useState<string | null>(null);
-  const [resolved, setResolved] = useState<string | null>(decision ?? null);
-  const [resolvedNotes, setResolvedNotes] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [resolved, setResolved] = useState<{ index: number; notes?: string } | null>(
+    decision ? { index: decision === "rejected" ? -1 : 0 } : null,
+  );
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [customInput, setCustomInput] = useState("");
-  const [showCustom, setShowCustom] = useState(false);
 
   const options = approval.options ?? DEFAULT_OPTIONS;
   const isBinary = options.length === 2
     && options.some((o) => o.variant === "approve")
     && options.some((o) => o.variant === "reject");
+  const isCustomSelected = selectedIndex === options.length;
 
   const handleConfirm = async (option: ApprovalOption) => {
-    setLoading(option.value);
+    setLoading(true);
     try {
       if (option.variant === "reject" || option.value === "rejected") {
         await onReject(approval.executionId);
       } else {
         await onApprove(approval.executionId);
       }
-      setResolved(option.value);
+      setResolved({ index: options.indexOf(option) });
     } finally {
-      setLoading(null);
+      setLoading(false);
     }
   };
 
   const handleCustomSubmit = async () => {
     const text = customInput.trim();
     if (!text) return;
-    setLoading("custom");
+    setLoading(true);
     try {
       await onApprove(approval.executionId, text);
-      setResolved("custom");
-      setResolvedNotes(text);
+      setResolved({ index: options.length, notes: text });
     } finally {
-      setLoading(null);
+      setLoading(false);
     }
   };
 
   if (resolved) {
-    const resolvedOption = options.find((o) => o.value === resolved);
-    const isRejected = resolved === "rejected" || resolvedOption?.variant === "reject";
-    const isCustom = resolved === "custom";
+    const resolvedOption = resolved.index >= 0 && resolved.index < options.length
+      ? options[resolved.index]
+      : null;
+    const isRejected = resolvedOption?.variant === "reject" || resolvedOption?.value === "rejected";
+    const isCustom = resolved.index === options.length;
     return (
       <div className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -98,11 +100,11 @@ export const ApprovalCard = memo(function ApprovalCard({
             "ml-auto text-[10px] font-medium whitespace-nowrap",
             isRejected ? "text-destructive" : "text-success",
           )}>
-            {isCustom ? "Custom response" : (resolvedOption?.label ?? resolved)}
+            {isCustom ? "Custom response" : (resolvedOption?.label ?? "Done")}
           </span>
         </div>
-        {isCustom && resolvedNotes && (
-          <p className="text-xs text-muted-foreground ml-5 italic">{resolvedNotes}</p>
+        {isCustom && resolved.notes && (
+          <p className="text-xs text-muted-foreground ml-5 italic">{resolved.notes}</p>
         )}
       </div>
     );
@@ -118,7 +120,7 @@ export const ApprovalCard = memo(function ApprovalCard({
         </div>
       </div>
 
-      {/* Plan / args context */}
+      {/* Plan / args context — always visible */}
       {approval.approvalType === "gateway" && approval.argsPreview && (
         <div className="px-4 pb-2 pl-10">
           <pre className="rounded-md bg-muted/60 border border-border/50 px-3 py-2 text-xs font-mono text-foreground/80 whitespace-pre-wrap break-all">
@@ -128,72 +130,81 @@ export const ApprovalCard = memo(function ApprovalCard({
       )}
 
       {approval.plan && approval.plan !== "(no plan)" && approval.approvalType !== "gateway" && (
-        <PlanPreview plan={approval.plan} />
+        <div className="px-4 pb-2 pl-10">
+          <div className="rounded-md bg-muted/50 border border-border/50 px-3 py-2 text-xs prose prose-sm dark:prose-invert max-w-none [&>*]:m-0 [&>*+*]:mt-2">
+            <Markdown>{approval.plan}</Markdown>
+          </div>
+        </div>
       )}
 
       {/* Options */}
-      <div className="px-4 pb-3 pt-1">
+      <div className="px-4 pb-4 pt-1">
         {isBinary ? (
           <BinaryActions options={options} loading={loading} onSelect={handleConfirm} />
         ) : (
-          <ListActions
-            options={options}
-            selected={selected}
-            loading={loading}
-            onSelect={setSelected}
-            onConfirm={handleConfirm}
-          />
-        )}
-      </div>
+          <div className="space-y-2 ml-6">
+            <div className="rounded-md border border-border/60 overflow-hidden divide-y divide-border/40">
+              {options.map((option, index) => (
+                <RadioRow
+                  key={index}
+                  label={option.label}
+                  isSelected={selectedIndex === index}
+                  isReject={option.variant === "reject"}
+                  disabled={loading}
+                  onSelect={() => setSelectedIndex(index)}
+                />
+              ))}
+              {/* Custom response as last option */}
+              <RadioRow
+                label="Suggest something else"
+                icon={<MessageSquare className="h-3.5 w-3.5 text-muted-foreground/60" />}
+                isSelected={isCustomSelected}
+                disabled={loading}
+                onSelect={() => setSelectedIndex(options.length)}
+              />
+            </div>
 
-      {/* Custom response */}
-      <div className="border-t border-warning/20">
-        <button
-          onClick={() => setShowCustom(!showCustom)}
-          disabled={!!loading}
-          className={cn(
-            "w-full flex items-center gap-2 px-4 py-2 text-xs text-muted-foreground",
-            "hover:text-foreground hover:bg-warning/5 transition-colors",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-          )}
-        >
-          <MessageSquare className="h-3 w-3" />
-          <span>Suggest something else</span>
-          <ChevronDown className={cn(
-            "h-3 w-3 ml-auto transition-transform",
-            showCustom && "rotate-180",
-          )} />
-        </button>
-        {showCustom && (
-          <div className="px-4 pb-3 space-y-2">
-            <textarea
-              value={customInput}
-              onChange={(e) => setCustomInput(e.target.value)}
-              placeholder="Describe what you'd like instead..."
-              disabled={!!loading}
-              rows={2}
-              className={cn(
-                "w-full rounded-md border border-border/60 bg-background px-3 py-2",
-                "text-sm resize-none placeholder:text-muted-foreground/60",
-                "focus:outline-none focus:ring-1 focus:ring-primary/50",
-                "disabled:opacity-50",
-              )}
-            />
-            <button
-              onClick={handleCustomSubmit}
-              disabled={!customInput.trim() || !!loading}
-              className={cn(
-                "w-full px-3 py-2 rounded-md text-xs font-medium transition-colors",
-                "bg-primary text-primary-foreground hover:bg-primary/90",
-                "disabled:opacity-40 disabled:cursor-not-allowed",
-              )}
-            >
-              {loading === "custom" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
-              ) : (
-                "Send response"
-              )}
-            </button>
+            {/* Custom input field */}
+            {isCustomSelected && (
+              <textarea
+                value={customInput}
+                onChange={(e) => setCustomInput(e.target.value)}
+                placeholder="Describe what you'd like instead..."
+                disabled={loading}
+                rows={2}
+                className={cn(
+                  "w-full rounded-md border border-border/60 bg-background px-3 py-2",
+                  "text-sm resize-none placeholder:text-muted-foreground/60",
+                  "focus:outline-none focus:ring-1 focus:ring-primary/50",
+                  "disabled:opacity-50",
+                )}
+              />
+            )}
+
+            {/* Confirm button */}
+            {isCustomSelected ? (
+              <button
+                onClick={handleCustomSubmit}
+                disabled={!customInput.trim() || loading}
+                className={cn(
+                  "w-full px-3 py-2 rounded-md text-xs font-medium transition-colors",
+                  "bg-primary text-primary-foreground hover:bg-primary/90",
+                  "disabled:opacity-40 disabled:cursor-not-allowed",
+                )}
+              >
+                {loading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
+                ) : (
+                  "Send response"
+                )}
+              </button>
+            ) : (
+              <ConfirmButton
+                option={selectedIndex !== null ? options[selectedIndex] : null}
+                loading={loading}
+                onConfirm={handleConfirm}
+              />
+            )}
           </div>
         )}
       </div>
@@ -201,13 +212,88 @@ export const ApprovalCard = memo(function ApprovalCard({
   );
 });
 
+function RadioRow({
+  label,
+  icon,
+  isSelected,
+  isReject,
+  disabled,
+  onSelect,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  isSelected: boolean;
+  isReject?: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      disabled={disabled}
+      className={cn(
+        "w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors",
+        "hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed",
+        isSelected && "bg-primary/5",
+      )}
+    >
+      <span className={cn(
+        "h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors",
+        isSelected ? "border-primary" : "border-muted-foreground/30",
+      )}>
+        {isSelected && <span className="h-2 w-2 rounded-full bg-primary" />}
+      </span>
+      {icon && !isSelected && <span className="-ml-1">{icon}</span>}
+      <span className={cn(
+        "font-medium",
+        isSelected ? "text-foreground" : "text-muted-foreground",
+      )}>
+        {label}
+      </span>
+      {isReject && (
+        <XCircle className="h-3.5 w-3.5 text-destructive/50 ml-auto shrink-0" />
+      )}
+    </button>
+  );
+}
+
+function ConfirmButton({
+  option,
+  loading,
+  onConfirm,
+}: {
+  option: ApprovalOption | null;
+  loading: boolean;
+  onConfirm: (option: ApprovalOption) => void;
+}) {
+  return (
+    <button
+      onClick={() => option && onConfirm(option)}
+      disabled={!option || loading}
+      className={cn(
+        "w-full px-3 py-2 rounded-md text-xs font-medium transition-colors",
+        "disabled:opacity-40 disabled:cursor-not-allowed",
+        option?.variant === "reject"
+          ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          : "bg-primary text-primary-foreground hover:bg-primary/90",
+      )}
+    >
+      {loading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
+      ) : (
+        option ? `Confirm: ${option.label}` : "Select an option"
+      )}
+    </button>
+  );
+}
+
 function BinaryActions({
   options,
   loading,
   onSelect,
 }: {
   options: ApprovalOption[];
-  loading: string | null;
+  loading: boolean;
   onSelect: (option: ApprovalOption) => void;
 }) {
   return (
@@ -216,7 +302,7 @@ function BinaryActions({
         <button
           key={option.value}
           onClick={() => onSelect(option)}
-          disabled={!!loading}
+          disabled={loading}
           className={cn(
             "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
             "disabled:opacity-50 disabled:cursor-not-allowed",
@@ -226,107 +312,9 @@ function BinaryActions({
               "border border-destructive/40 text-destructive hover:bg-destructive/10",
           )}
         >
-          {loading === option.value ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            option.label
-          )}
+          {option.label}
         </button>
       ))}
-    </div>
-  );
-}
-
-function ListActions({
-  options,
-  selected,
-  loading,
-  onSelect,
-  onConfirm,
-}: {
-  options: ApprovalOption[];
-  selected: string | null;
-  loading: string | null;
-  onSelect: (value: string) => void;
-  onConfirm: (option: ApprovalOption) => void;
-}) {
-  const selectedOption = options.find((o) => o.value === selected);
-
-  return (
-    <div className="space-y-2 ml-6">
-      <div className="rounded-md border border-border/60 overflow-hidden divide-y divide-border/40">
-        {options.map((option) => {
-          const isSelected = selected === option.value;
-          return (
-            <button
-              key={option.value}
-              onClick={() => onSelect(option.value)}
-              disabled={!!loading}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors",
-                "hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed",
-                isSelected && "bg-primary/5",
-              )}
-            >
-              <span className={cn(
-                "h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors",
-                isSelected ? "border-primary" : "border-muted-foreground/30",
-              )}>
-                {isSelected && <span className="h-2 w-2 rounded-full bg-primary" />}
-              </span>
-              <span className={cn(
-                "font-medium",
-                isSelected && "text-foreground",
-                !isSelected && "text-muted-foreground",
-              )}>
-                {option.label}
-              </span>
-              {option.variant === "reject" && (
-                <XCircle className="h-3.5 w-3.5 text-destructive/50 ml-auto shrink-0" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <button
-        onClick={() => selectedOption && onConfirm(selectedOption)}
-        disabled={!selectedOption || !!loading}
-        className={cn(
-          "w-full px-3 py-2 rounded-md text-xs font-medium transition-colors",
-          "disabled:opacity-40 disabled:cursor-not-allowed",
-          selectedOption?.variant === "reject"
-            ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            : "bg-primary text-primary-foreground hover:bg-primary/90",
-        )}
-      >
-        {loading ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
-        ) : (
-          selectedOption ? `Confirm: ${selectedOption.label}` : "Select an option"
-        )}
-      </button>
-    </div>
-  );
-}
-
-function PlanPreview({ plan }: { plan: string }) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <div className="px-4 pb-2 pl-10">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground mb-1 transition-colors"
-      >
-        <ChevronDown className={cn("h-3 w-3 transition-transform", expanded && "rotate-180")} />
-        {expanded ? "Hide plan" : "Show plan"}
-      </button>
-      {expanded && (
-        <div className="rounded-md bg-muted/50 border border-border/50 px-3 py-2 text-xs prose prose-sm dark:prose-invert max-w-none [&>*]:m-0 [&>*+*]:mt-2">
-          <Markdown>{plan}</Markdown>
-        </div>
-      )}
     </div>
   );
 }
