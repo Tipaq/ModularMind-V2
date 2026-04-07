@@ -47,8 +47,8 @@ export function useStreamManagement(
   } = refs;
 
   const {
-    setMessages, setIsStreaming, setError, setStreamingMsgId, setSelectedMessageId,
-    setExecutionDataMap, setPendingApproval, setApprovalDecision, setPendingPrompt,
+    setMessages, setIsStreaming, setError,
+    setExecutionDataMap, setPendingApproval, setApprovalDecision,
     handleTraceEvent, finalizeActivities,
   } = callbacks;
 
@@ -250,8 +250,7 @@ export function useStreamManagement(
       currentExecutionIdRef, currentKnowledgeRef, currentTokenUsageRef,
       currentContextDataRef, setMessages, setIsStreaming, setError,
       setExecutionDataMap, setPendingApproval, setApprovalDecision,
-      handleTraceEvent, finalizeActivities, setStreamingMsgId, setSelectedMessageId,
-      setPendingPrompt,
+      handleTraceEvent, finalizeActivities,
     ],
   );
 

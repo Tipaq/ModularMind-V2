@@ -349,7 +349,6 @@ export const ChatMessages = memo(function ChatMessages({
   suggestedPrompts,
   onSuggestionClick,
   pendingApproval,
-  pendingPrompt: _pendingPrompt,
   approvalDecision,
   onApprove,
   onReject,

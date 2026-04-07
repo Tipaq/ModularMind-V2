@@ -32,8 +32,7 @@ nodes:
       label: Human Review
       position: { x: 400, y: 300 }
       config:
-        message: Review the research summary above. Approve to generate the final response.
-        approvalTimeout: 120
+        message: Review the research summary above. Approve to continue.
 
   - id: writer
     type: agent

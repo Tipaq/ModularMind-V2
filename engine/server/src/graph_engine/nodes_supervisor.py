@@ -264,7 +264,6 @@ def create_approval_node(node_id: str, node_data: dict[str, Any]) -> NodeFn:
     node_config = node_data.get("config", {})
     timeout_seconds = node_config.get("approvalTimeout", 0)
     gate_message = node_config.get("message", "Review the plan above and approve to continue.")
-    custom_options = node_config.get("options")  # [{label, value, variant}]
 
     async def approval_node(state: GraphState, config: RunnableConfig) -> dict:
         execution_id = (config or {}).get("configurable", {}).get("thread_id")
@@ -298,21 +297,21 @@ def create_approval_node(node_id: str, node_data: dict[str, Any]) -> NodeFn:
             await r.set(decision_key, "pending", ex=approval_ttl)
             await r.set(f"approval_node:{execution_id}", node_id, ex=approval_ttl)
 
-            event_data: dict[str, Any] = {
-                "type": "step",
-                "event": "approval_required",
-                "node_id": node_id,
-                "execution_id": execution_id,
-                "message": gate_message,
-                "plan": plan_summary[:4000],
-                "timeout_seconds": timeout_seconds,
-            }
-            if custom_options:
-                event_data["options"] = custom_options
-
             await r.xadd(
                 stream_key,
-                {"data": json_module.dumps(event_data)},
+                {
+                    "data": json_module.dumps(
+                        {
+                            "type": "step",
+                            "event": "approval_required",
+                            "node_id": node_id,
+                            "execution_id": execution_id,
+                            "message": gate_message,
+                            "plan": plan_summary[:4000],
+                            "timeout_seconds": timeout_seconds,
+                        }
+                    )
+                },
             )
 
             logger.info("Approval gate %s: published approval_required event", node_id)
