@@ -54,3 +54,4 @@ gateway_permissions:
   shell:
     enabled: true
     allow: ["*"]
+    max_execution_seconds: 120
