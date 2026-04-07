@@ -54,4 +54,5 @@ gateway_permissions:
   shell:
     enabled: true
     allow: ["*"]
+    require_approval: false
     max_execution_seconds: 120
