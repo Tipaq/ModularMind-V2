@@ -1,5 +1,5 @@
 import {
-  ChatMessages, ChatInput, ChatErrorBanner,
+  ChatMessages, ChatInput, ChatErrorBanner, ApprovalCard,
 } from "@modularmind/ui";
 import { ConversationProvider } from "../contexts/ConversationContext";
 import { ChatHeader } from "../components/chat/ChatHeader";
@@ -34,37 +34,46 @@ export function ChatPage() {
             isStreaming={state.isStreaming}
             activities={state.activities}
             showRoutingMetadata
-            pendingApproval={state.pendingApproval}
             approvalDecision={state.approvalDecision}
-            onApprove={state.approveExecution}
-            onReject={state.rejectExecution}
             onRegenerate={state.regenerateLastMessage}
             onEditMessage={state.editMessage}
             onArtifactDetected={state.handleArtifactDetected}
             selectedMessageId={state.selectedMessageId}
             onSelectMessage={state.setSelectedMessageId}
             stickyFooter={
-              <ChatInput
-                value={state.inputValue}
-                onChange={state.setInputValue}
-                onSend={state.handleSend}
-                isStreaming={state.isStreaming}
-                onCancel={state.cancelStream}
-                agents={state.agents}
-                graphs={state.graphs}
-                enabledAgentIds={state.enabledAgentIds}
-                enabledGraphIds={state.enabledGraphIds}
-                onToggleAgent={state.handleToggleAgent}
-                onToggleGraph={state.handleToggleGraph}
-                onFilesChange={state.setAttachedFiles}
-                disabledReason={state.disabledReason}
-                models={state.models}
-                selectedModelId={state.effectiveModelId}
-                onModelChange={state.handleModelChange}
-                modelLabel={state.modelLabel}
-                onCompact={state.handleCompact}
-                compactDisabled={state.isCompactDisabled}
-              />
+              state.pendingApproval ? (
+                <div className="px-4 py-3">
+                  <ApprovalCard
+                    approval={state.pendingApproval}
+                    onApprove={state.approveExecution}
+                    onReject={state.rejectExecution}
+                    onRespond={state.respondToPrompt}
+                    decision={state.approvalDecision}
+                  />
+                </div>
+              ) : (
+                <ChatInput
+                  value={state.inputValue}
+                  onChange={state.setInputValue}
+                  onSend={state.handleSend}
+                  isStreaming={state.isStreaming}
+                  onCancel={state.cancelStream}
+                  agents={state.agents}
+                  graphs={state.graphs}
+                  enabledAgentIds={state.enabledAgentIds}
+                  enabledGraphIds={state.enabledGraphIds}
+                  onToggleAgent={state.handleToggleAgent}
+                  onToggleGraph={state.handleToggleGraph}
+                  onFilesChange={state.setAttachedFiles}
+                  disabledReason={state.disabledReason}
+                  models={state.models}
+                  selectedModelId={state.effectiveModelId}
+                  onModelChange={state.handleModelChange}
+                  modelLabel={state.modelLabel}
+                  onCompact={state.handleCompact}
+                  compactDisabled={state.isCompactDisabled}
+                />
+              )
             }
           />
         </div>

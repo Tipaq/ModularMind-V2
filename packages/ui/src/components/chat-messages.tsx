@@ -7,7 +7,7 @@ import type { ExecutionActivity } from "../types/chat";
 import type { DetectedArtifact } from "../types/artifact";
 import { ExecutionActivityList } from "./execution-activity";
 import { AttachmentChip, type AttachmentChipData } from "./attachment-chip";
-import { ApprovalCard, type ApprovalRequest } from "./approval-card";
+import type { ApprovalRequest } from "./approval-card";
 import type { HumanPromptRequest } from "./prompt-card";
 import { ChatEmptyState } from "./chat-empty-state";
 import { CopyButton } from "./copy-button";
@@ -348,11 +348,6 @@ export const ChatMessages = memo(function ChatMessages({
   stickyFooter,
   suggestedPrompts,
   onSuggestionClick,
-  pendingApproval,
-  approvalDecision,
-  onApprove,
-  onReject,
-  onRespondToPrompt,
   onRegenerate,
   onEditMessage,
   onArtifactDetected,
@@ -425,17 +420,6 @@ export const ChatMessages = memo(function ChatMessages({
                     </div>
                   );
                 })}
-                {pendingApproval && onApprove && onReject && (
-                  <div className="mt-4 max-w-2xl">
-                    <ApprovalCard
-                      approval={pendingApproval}
-                      onApprove={onApprove}
-                      onReject={onReject}
-                      onRespond={onRespondToPrompt}
-                      decision={approvalDecision}
-                    />
-                  </div>
-                )}
                 <div ref={bottomRef} />
               </div>
             )}

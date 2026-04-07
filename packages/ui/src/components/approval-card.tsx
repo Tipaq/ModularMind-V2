@@ -192,21 +192,23 @@ export const ApprovalCard = memo(function ApprovalCard({
 
             {/* Confirm button */}
             {isCustomSelected ? (
-              <button
-                onClick={handleCustomSubmit}
-                disabled={!customInput.trim() || loading}
-                className={cn(
-                  "w-full px-3 py-2 rounded-md text-xs font-medium transition-colors",
-                  "bg-primary text-primary-foreground hover:bg-primary/90",
-                  "disabled:opacity-40 disabled:cursor-not-allowed",
-                )}
-              >
-                {loading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
-                ) : (
-                  "Send response"
-                )}
-              </button>
+              <div className="flex justify-end">
+                <button
+                  onClick={handleCustomSubmit}
+                  disabled={!customInput.trim() || loading}
+                  className={cn(
+                    "px-4 py-2 rounded-md text-xs font-medium transition-colors",
+                    "bg-primary text-primary-foreground hover:bg-primary/90",
+                    "disabled:opacity-40 disabled:cursor-not-allowed",
+                  )}
+                >
+                  {loading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    "Send response"
+                  )}
+                </button>
+              </div>
             ) : (
               <ConfirmButton
                 option={selectedIndex !== null ? options[selectedIndex] : null}
@@ -273,23 +275,25 @@ function ConfirmButton({
   onConfirm: (option: ApprovalOption) => void;
 }) {
   return (
-    <button
-      onClick={() => option && onConfirm(option)}
-      disabled={!option || loading}
-      className={cn(
-        "w-full px-3 py-2 rounded-md text-xs font-medium transition-colors",
-        "disabled:opacity-40 disabled:cursor-not-allowed",
-        option?.variant === "reject"
-          ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          : "bg-primary text-primary-foreground hover:bg-primary/90",
-      )}
-    >
-      {loading ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
-      ) : (
-        option ? `Confirm: ${option.label}` : "Select an option"
-      )}
-    </button>
+    <div className="flex justify-end">
+      <button
+        onClick={() => option && onConfirm(option)}
+        disabled={!option || loading}
+          className={cn(
+            "px-4 py-2 rounded-md text-xs font-medium transition-colors",
+            "disabled:opacity-40 disabled:cursor-not-allowed",
+            option?.variant === "reject"
+              ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              : "bg-primary text-primary-foreground hover:bg-primary/90",
+          )}
+        >
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            option ? `Confirm: ${option.label}` : "Select an option"
+          )}
+        </button>
+      </div>
   );
 }
 

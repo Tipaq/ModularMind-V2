@@ -49,7 +49,7 @@ export function useChatPage() {
   const {
     messages, isStreaming, error, clearError, activities, executionDataMap, streamingMessageId,
     pendingApproval, approvalDecision, sendMessage, setInitialMessages,
-    cancelStream, approveExecution, rejectExecution, regenerateLastMessage, editMessage,
+    cancelStream, approveExecution, rejectExecution, respondToPrompt, regenerateLastMessage, editMessage,
   } = useChat(activeConversationId, chatAdapter);
 
   const {
@@ -173,6 +173,7 @@ export function useChatPage() {
     approvalDecision,
     approveExecution,
     rejectExecution,
+    respondToPrompt,
     editMessage,
     handleArtifactDetected,
     selectedMessageId,
