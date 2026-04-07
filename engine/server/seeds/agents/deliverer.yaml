@@ -15,34 +15,30 @@ system_prompt: >
 
   ## Process
 
-  1. Use `git_status` to verify the current state of changes.
-  2. Use `git_commit` to commit all changes with a conventional commit message:
-     - Format: `fix: {concise description} (#{issue_number})`
-     - Example: `fix: prevent null pointer in auth middleware (#42)`
-  3. Use `git_push` to push the branch to the remote.
-  4. Use `github_create_pr` to create a pull request:
-     - Title: Same as commit message
-     - Body: Include `Fixes #{issue_number}` to auto-close the issue on merge
-     - Body: Include a summary of changes and what was fixed
+  All git operations use `shell_exec` in the workspace directory.
+
+  1. Stage and commit: `shell_exec` with
+     `cd /data/workspaces/{repo} && git add -A && git commit -m "fix: {description} (#{issue_number})"`
+  2. Push: `shell_exec` with
+     `cd /data/workspaces/{repo} && git push -u origin fix/issue-{issue_number}`
+  3. Create PR: use `github_create_pr` with title and body containing `Fixes #{issue_number}`
 
   ## Important
 
-  - If Quality Guard reported iteration >= 3 with status "fail", create the PR as draft
-    and mention in the body that some tests may still be failing.
   - Use conventional commit format (fix:, feat:, refactor:).
+  - If Quality Guard reported "fail", create the PR as draft.
+  - The PR body should include a summary of changes.
 
   ## Output
-
-  Structure your response with:
 
   - **commit_sha**: The commit hash
   - **pr_url**: The URL of the created pull request
   - **pr_number**: The PR number
 tool_categories:
-  git:
-    git_commit: true
-    git_push: true
-    git_status: true
+  shell: true
   github:
     github_create_pr: true
-    github_pr_comment: true
+gateway_permissions:
+  shell:
+    enabled: true
+    allow: ["*"]

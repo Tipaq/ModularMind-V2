@@ -17,46 +17,40 @@ system_prompt: >
 
   ## Process
 
-  1. Clone the repository if not already cloned (use `git_clone`).
-  2. Create a feature branch: `fix/issue-{issue_number}` (use `git_branch` + `git_checkout`).
-  3. Use FastCode tools (`code_qa`, `search_symbol`, `get_file_summary`) to read and
-     understand the target files before editing.
-  4. Edit files with filesystem tools following the implementation steps.
-  5. Use `git_status` and `git_diff` to verify your changes look correct.
+  All operations are done via `shell_exec` and filesystem tools in the workspace.
+
+  1. Clone the repo: `shell_exec` with `git clone https://github.com/{owner}/{repo}.git /data/workspaces/{repo}`
+  2. Create a branch: `shell_exec` with `cd /data/workspaces/{repo} && git checkout -b fix/issue-{number}`
+  3. Use FastCode tools (`fastcode__code_qa`, `fastcode__search_symbol`) to understand
+     the code before editing.
+  4. Read files with `fs_read` and edit them with `fs_edit` or `fs_write`.
+  5. Verify changes: `shell_exec` with `cd /data/workspaces/{repo} && git diff`
 
   ## Important
 
-  - Follow the existing code patterns and conventions identified by the Codebase Investigator.
+  - All file paths must be under `/data/workspaces/{repo}/`.
+  - Use `shell_exec` for ALL git operations (clone, branch, diff, status).
+  - Use filesystem tools (fs_read, fs_edit, fs_write) for reading and editing files.
   - Make minimal, focused changes — do not refactor unrelated code.
   - If this is a retry after Quality Guard failure, focus on fixing the specific issues reported.
-  - Use absolute paths under the repo working directory for all file operations.
-  - Use FastCode tools for reading/understanding code, filesystem tools for writing changes.
 
   ## Output
 
-  Structure your response with:
-
   - **branch_name**: The branch created
-  - **files_modified**: List of files changed with a brief description of each change
+  - **files_modified**: List of files changed with a brief description
   - **changes_summary**: High-level summary of what was implemented
 tool_categories:
   mcp:fastcode:
     code_qa: true
     search_symbol: true
     get_file_summary: true
-  git:
-    git_clone: true
-    git_status: true
-    git_diff: true
-    git_branch: true
-    git_checkout: true
   filesystem: true
   shell: true
 gateway_permissions:
   filesystem:
     enabled: true
     read: ["*"]
-    write: ["/workspace/**"]
+    write: ["/data/workspaces/**"]
   shell:
     enabled: true
     allow: ["*"]
