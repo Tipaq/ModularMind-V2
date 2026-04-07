@@ -38,9 +38,10 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
     - user_id: str
     - ab_model_override: str (optional)
     """
+    import asyncio
+
     from src.executions.scheduler import fair_scheduler
-    from src.executions.service import ExecutionService
-    from src.infra.database import async_session_maker
+    from src.infra.config import get_settings
 
     execution_id = data.get("execution_id", "")
     user_id = data.get("user_id", "")
@@ -50,6 +51,68 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
         return
 
     logger.info("Starting execution %s", execution_id)
+
+    # Hard ceiling: prevents the handler from blocking the stream consumer forever
+    # even if service.execute() uses timeout=None (approval graphs).
+    _settings = get_settings()
+    _handler_timeout = _settings.MAX_EXECUTION_TIMEOUT + 300
+
+    try:
+        async with asyncio.timeout(_handler_timeout):
+            await _run_execution(data, execution_id, user_id, ab_model_override)
+    except TimeoutError:
+        logger.error(
+            "Execution %s hit handler-level timeout (%ds), forcing failure",
+            execution_id,
+            _handler_timeout,
+        )
+        await _force_fail_execution(execution_id, f"Handler timeout after {_handler_timeout}s")
+    finally:
+        if user_id and execution_id:
+            for _attempt in range(3):
+                try:
+                    await fair_scheduler.release(user_id, execution_id)
+                    break
+                except (ConnectionError, OSError, redis.exceptions.RedisError) as exc:
+                    if _attempt == 2:
+                        logger.error(
+                            "Failed to release scheduler slot for %s after 3 attempts: %s",
+                            execution_id,
+                            exc,
+                        )
+                    else:
+                        import asyncio as _aio
+                        await _aio.sleep(0.5 * (_attempt + 1))
+
+        if _settings.GATEWAY_ENABLED and execution_id:
+            try:
+                import httpx as _httpx
+
+                from src.internal.auth import get_internal_bearer_token
+
+                token = get_internal_bearer_token()
+                async with _httpx.AsyncClient(timeout=5) as _client:
+                    await _client.post(
+                        f"{_settings.GATEWAY_URL}/api/v1/release/{execution_id}",
+                        headers={"Authorization": token},
+                    )
+            except (ConnectionError, TimeoutError, OSError) as exc:
+                logger.debug(
+                    "Gateway sandbox release failed for %s: %s",
+                    execution_id,
+                    exc,
+                )
+
+
+async def _run_execution(
+    data: dict[str, Any],
+    execution_id: str,
+    user_id: str,
+    ab_model_override: str | None,
+) -> None:
+    """Inner execution logic, separated for handler-level timeout wrapping."""
+    from src.executions.service import ExecutionService
+    from src.infra.database import async_session_maker
 
     async with async_session_maker() as session:
         service = ExecutionService(session)
@@ -189,41 +252,29 @@ async def graph_execution_handler(data: dict[str, Any]) -> None:
             )
             raise
 
-        finally:
-            # Release the fair-scheduler slot so the global/team counters stay accurate.
-            # This runs whether the execution succeeded, failed, or was cancelled.
-            if user_id and execution_id:
-                try:
-                    await fair_scheduler.release(user_id, execution_id)
-                except (ConnectionError, OSError, redis.exceptions.RedisError) as exc:
-                    logger.warning(
-                        "Failed to release scheduler slot for execution %s: %s",
-                        execution_id,
-                        exc,
-                    )
 
-            # Release Gateway sandbox (if any was acquired for this execution)
-            from src.infra.config import get_settings
+async def _force_fail_execution(execution_id: str, error_message: str) -> None:
+    """Mark an execution as FAILED from outside the session (handler timeout)."""
+    from sqlalchemy import update
 
-            _settings = get_settings()
-            if _settings.GATEWAY_ENABLED and execution_id:
-                try:
-                    import httpx as _httpx
+    from src.executions.models import ExecutionRun, ExecutionStatus
+    from src.infra.database import async_session_maker
+    from src.infra.utils import utcnow
 
-                    from src.internal.auth import get_internal_bearer_token
-
-                    token = get_internal_bearer_token()
-                    async with _httpx.AsyncClient(timeout=5) as _client:
-                        await _client.post(
-                            f"{_settings.GATEWAY_URL}/api/v1/release/{execution_id}",
-                            headers={"Authorization": token},
-                        )
-                except (ConnectionError, TimeoutError, OSError) as exc:
-                    logger.debug(
-                        "Gateway sandbox release failed for %s: %s",
-                        execution_id,
-                        exc,
-                    )
+    try:
+        async with async_session_maker() as session:
+            await session.execute(
+                update(ExecutionRun)
+                .where(ExecutionRun.id == execution_id)
+                .values(
+                    status=ExecutionStatus.FAILED,
+                    error_message=error_message,
+                    completed_at=utcnow(),
+                )
+            )
+            await session.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to mark execution %s as FAILED", execution_id)
 
 
 # --- Cancellation helper ---
@@ -648,8 +699,9 @@ async def model_pull_handler(data: dict[str, Any]) -> None:
         await r.hset(progress_key, mapping={"status": "downloading", "progress": "0"})
         max_pct = 0
 
+        _pull_timeout = httpx.Timeout(connect=30, read=300, write=30, pool=30)
         async with (
-            httpx.AsyncClient(base_url=settings.OLLAMA_BASE_URL, timeout=None) as client,
+            httpx.AsyncClient(base_url=settings.OLLAMA_BASE_URL, timeout=_pull_timeout) as client,
             client.stream("POST", "/api/pull", json={"name": model_name, "stream": True}) as resp,
         ):
             resp.raise_for_status()

@@ -87,14 +87,13 @@ class RedisStreamBus(EventBus):
         retry_count = int(data.get("_retry_count", 0))
         try:
             await handler(data)
-            await self.redis.xack(stream, group, msg_id)
         except Exception:  # noqa: BLE001
             logger.exception(
                 "Handler failed for %s msg_id=%s retry=%d",
                 stream, msg_id, retry_count,
             )
             if retry_count >= max_retries:
-                await self.redis.xadd(
+                await self._safe_xadd(
                     DLQ_STREAM,
                     {
                         "original_stream": stream,
@@ -103,11 +102,40 @@ class RedisStreamBus(EventBus):
                         "data": str(data),
                     },
                 )
-                await self.redis.xack(stream, group, msg_id)
             else:
                 data["_retry_count"] = str(retry_count + 1)
-                await self.redis.xadd(stream, data)
+                await self._safe_xadd(stream, data)
+
+        # Always ack — separated from handler try/except so xack failures
+        # don't get swallowed by the handler exception path.
+        await self._safe_xack(stream, group, msg_id)
+
+    async def _safe_xack(self, stream: str, group: str, msg_id: str) -> None:
+        """Acknowledge a message with retry on transient Redis errors."""
+        for attempt in range(3):
+            try:
                 await self.redis.xack(stream, group, msg_id)
+                return
+            except (ConnectionError, OSError) as exc:
+                if attempt == 2:
+                    logger.error(
+                        "xack failed after 3 attempts for %s/%s msg=%s: %s",
+                        stream, group, msg_id, exc,
+                    )
+                else:
+                    await asyncio.sleep(0.5 * (attempt + 1))
+
+    async def _safe_xadd(self, stream: str, data: dict[str, Any]) -> None:
+        """Write to a stream with a single retry on transient error."""
+        try:
+            await self.redis.xadd(stream, data, maxlen=STREAM_MAXLEN, approximate=True)
+        except (ConnectionError, OSError):
+            logger.warning("xadd to %s failed, retrying once", stream)
+            try:
+                await asyncio.sleep(0.5)
+                await self.redis.xadd(stream, data, maxlen=STREAM_MAXLEN, approximate=True)
+            except (ConnectionError, OSError):
+                logger.error("xadd to %s failed twice, message dropped", stream)
 
     async def _recover_pending(
         self,

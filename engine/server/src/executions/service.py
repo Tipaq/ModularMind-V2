@@ -247,7 +247,9 @@ class ExecutionService:
                 has_approval = graph_config and any(
                     n.type == "approval" for n in graph_config.nodes
                 )
-                timeout = None if has_approval else min(timeout * 3, 3600)
+                # Approval graphs get a generous but finite timeout (max 2h)
+                # to prevent infinite hangs while still allowing human review time.
+                timeout = min(timeout, 7200) if has_approval else min(timeout * 3, 3600)
                 node_types = [n.type for n in graph_config.nodes] if graph_config else []
                 logger.info(
                     "Execution %s: graph=%s has_approval=%s timeout=%s node_types=%s",

@@ -219,48 +219,70 @@ async def cleanup_orphaned_attachments() -> None:
 
 
 async def recover_interrupted_executions() -> None:
-    """Fail all RUNNING/PENDING executions on worker startup.
+    """Fail all RUNNING/PENDING executions on worker startup and release their scheduler slots.
 
     After a crash or restart, any in-flight execution will never complete.
     Unlike ``cleanup_stale_executions`` (timeout-based), this catches ALL
     stuck executions regardless of age.  Should be called once at boot,
     before the worker starts accepting new tasks.
     """
+    from sqlalchemy import select as sa_select
     from sqlalchemy import update
 
     from src.executions.models import ExecutionRun, ExecutionStatus
+    from src.executions.scheduler import fair_scheduler
     from src.infra.database import async_session_maker
 
     try:
         async with async_session_maker() as session:
-            result = await session.execute(
-                update(ExecutionRun)
-                .where(
+            # Find interrupted executions first (for slot release)
+            interrupted = await session.execute(
+                sa_select(ExecutionRun.id, ExecutionRun.user_id).where(
                     ExecutionRun.status.in_([ExecutionStatus.RUNNING, ExecutionStatus.PENDING]),
                 )
+            )
+            interrupted_runs = interrupted.all()
+
+            if not interrupted_runs:
+                return
+
+            interrupted_ids = [row[0] for row in interrupted_runs]
+
+            await session.execute(
+                update(ExecutionRun)
+                .where(ExecutionRun.id.in_(interrupted_ids))
                 .values(
                     status=ExecutionStatus.FAILED,
                     error_message="Worker restarted during execution",
                     completed_at=utcnow(),
                 )
             )
-            if result.rowcount:
-                logger.info(
-                    "Boot recovery: marked %d interrupted execution(s) as failed",
-                    result.rowcount,
-                )
             await session.commit()
+            logger.info(
+                "Boot recovery: marked %d interrupted execution(s) as failed",
+                len(interrupted_runs),
+            )
+
+        # Release scheduler slots for all interrupted executions
+        for exec_id, user_id in interrupted_runs:
+            try:
+                await fair_scheduler.release(user_id, exec_id)
+            except (ConnectionError, OSError, redis.exceptions.RedisError):
+                logger.debug("Slot release failed for interrupted execution %s", exec_id)
+
     except sqlalchemy.exc.SQLAlchemyError:
         logger.exception("Boot execution recovery failed")
 
 
 async def cleanup_stale_executions() -> None:
-    """Clean up executions stuck in RUNNING/PENDING state."""
+    """Clean up executions stuck in RUNNING/PENDING state and release their scheduler slots."""
     from datetime import timedelta
 
+    from sqlalchemy import select as sa_select
     from sqlalchemy import update
 
     from src.executions.models import ExecutionRun, ExecutionStatus
+    from src.executions.scheduler import fair_scheduler
     from src.infra.database import async_session_maker
 
     timeout = timedelta(seconds=settings.MAX_EXECUTION_TIMEOUT + 60)
@@ -268,21 +290,40 @@ async def cleanup_stale_executions() -> None:
 
     try:
         async with async_session_maker() as session:
-            result = await session.execute(
-                update(ExecutionRun)
-                .where(
+            # First, find stale executions so we can release their scheduler slots
+            stale_result = await session.execute(
+                sa_select(ExecutionRun.id, ExecutionRun.user_id).where(
                     ExecutionRun.status.in_([ExecutionStatus.RUNNING, ExecutionStatus.PENDING]),
                     ExecutionRun.created_at < cutoff,
                 )
+            )
+            stale_runs = stale_result.all()
+
+            if not stale_runs:
+                return
+
+            stale_ids = [row[0] for row in stale_runs]
+
+            # Mark as FAILED in DB
+            await session.execute(
+                update(ExecutionRun)
+                .where(ExecutionRun.id.in_(stale_ids))
                 .values(
                     status=ExecutionStatus.FAILED,
                     error_message=f"Execution timed out after {settings.MAX_EXECUTION_TIMEOUT}s (cleanup)",  # noqa: E501
                     completed_at=utcnow(),
                 )
             )
-            if result.rowcount:
-                logger.info("Cleaned up %d stale executions", result.rowcount)
             await session.commit()
+            logger.info("Cleaned up %d stale executions", len(stale_runs))
+
+        # Release scheduler slots outside the DB session
+        for exec_id, user_id in stale_runs:
+            try:
+                await fair_scheduler.release(user_id, exec_id)
+            except (ConnectionError, OSError, redis.exceptions.RedisError):
+                logger.debug("Slot release failed for stale execution %s", exec_id)
+
     except sqlalchemy.exc.SQLAlchemyError:
         logger.exception("Stale execution cleanup failed")
 
