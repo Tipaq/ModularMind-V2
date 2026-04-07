@@ -511,18 +511,14 @@ async def approve_execution(
         # Signal the approval node polling loop via Redis (TTL as safety net)
         await redis_client.set(f"approval_decision:{execution_id}", "approved", ex=300)
 
+        # DB update is best-effort — graph approval nodes use Redis polling,
+        # so the execution may not be in AWAITING_APPROVAL status in the DB.
         approval_svc = ApprovalService(db, redis_client)
-        success = await approval_svc.approve(
+        await approval_svc.approve(
             execution_id,
             str(user.id),
             notes=request.notes if request else None,
         )
-
-        if not success and not (request and request.gateway_approval_id):
-            raise HTTPException(
-                status_code=400,
-                detail="Execution is not awaiting approval or not found",
-            )
 
         result = await db.execute(
             select(ExecutionRun)
@@ -561,18 +557,13 @@ async def reject_execution(
         # Signal the approval node polling loop via Redis (TTL as safety net)
         await redis_client.set(f"approval_decision:{execution_id}", "rejected", ex=300)
 
+        # DB update is best-effort — see approve_execution comment
         approval_svc = ApprovalService(db, redis_client)
-        success = await approval_svc.reject(
+        await approval_svc.reject(
             execution_id,
             str(user.id),
             notes=request.notes if request else None,
         )
-
-        if not success and not (request and request.gateway_approval_id):
-            raise HTTPException(
-                status_code=400,
-                detail="Execution is not awaiting approval or not found",
-            )
 
         result = await db.execute(
             select(ExecutionRun)
@@ -580,6 +571,9 @@ async def reject_execution(
             .options(selectinload(ExecutionRun.steps))
         )
         execution = result.scalar_one_or_none()
+        if not execution:
+            raise_not_found("Execution")
+
         return ExecutionResponse.model_validate(execution)
     finally:
         await redis_client.aclose()
