@@ -17,6 +17,7 @@ GROQ_MODELS = {
     "llama-3.1-8b-instant": {"name": "Llama 3.1 8B", "context_length": 128000},
     "mixtral-8x7b-32768": {"name": "Mixtral 8x7B", "context_length": 32768},
     "gemma2-9b-it": {"name": "Gemma 2 9B", "context_length": 8192},
+    "gemma-7b-it": {"name": "Gemma 7B", "context_length": 8192},
 }
 
 
