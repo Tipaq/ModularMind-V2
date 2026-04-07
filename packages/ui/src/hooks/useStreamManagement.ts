@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import type { SendMessageResponse } from "@modularmind/api-client";
 import type { ChatMessage } from "../components/chat-messages";
+import type { ApprovalRequest } from "../components/approval-card";
 import type { ChatError, KnowledgeData, TokenUsage, ContextData, MessageExecutionData } from "../types/chat";
 import type { ChatAdapter } from "./chat-adapter";
 import { extractResponse } from "./useChatUtils";
@@ -122,6 +123,7 @@ export function useStreamManagement(
               approvalId: data.approval_id as string | undefined,
               toolName: data.tool_name as string | undefined,
               argsPreview: data.args_preview as string | undefined,
+              options: data.options as ApprovalRequest["options"],
             });
             setApprovalDecision(null);
             return;
