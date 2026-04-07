@@ -37,7 +37,9 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
   const sourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef("");
   const pendingApprovalRef = useRef<ApprovalRequest | null>(null);
-  pendingApprovalRef.current = pendingApproval;
+  useEffect(() => {
+    pendingApprovalRef.current = pendingApproval;
+  }, [pendingApproval]);
 
   const currentAssistantIdRef = useRef("");
   const currentExecutionIdRef = useRef("");
