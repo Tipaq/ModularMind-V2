@@ -102,13 +102,24 @@ export function useStreamManagement(
           handleTraceEvent(data);
 
           if (eventType === "human_prompt") {
-            setPendingPrompt({
+            const promptOptions = (data.options || []).map(
+              (o: { label: string; value: string }) => ({
+                label: o.label,
+                value: o.value,
+                variant: "neutral" as const,
+              }),
+            );
+            setPendingApproval({
               executionId: currentExecutionIdRef.current,
+              nodeId: "",
+              message: data.question || "Choose an option",
+              plan: "",
+              timeoutSeconds: 0,
+              approvalType: "prompt",
               promptId: data.prompt_id || "",
-              promptType: data.prompt_type || "confirm",
-              question: data.question || "",
-              options: data.options || [],
+              options: promptOptions.length > 0 ? promptOptions : undefined,
             });
+            setApprovalDecision(null);
             return;
           }
 

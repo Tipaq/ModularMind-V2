@@ -22,17 +22,19 @@ export interface ApprovalRequest {
   message: string;
   plan: string;
   timeoutSeconds: number;
-  approvalType?: "graph" | "gateway";
+  approvalType?: "graph" | "gateway" | "prompt";
   approvalId?: string;
   toolName?: string;
   argsPreview?: string;
   options?: ApprovalOption[];
+  promptId?: string;
 }
 
 export interface ApprovalCardProps {
   approval: ApprovalRequest;
   onApprove: (executionId: string, notes?: string) => Promise<void>;
   onReject: (executionId: string, notes?: string) => Promise<void>;
+  onRespond?: (executionId: string, promptId: string, response: string) => Promise<void>;
   decision?: "approved" | "rejected" | null;
 }
 
@@ -40,6 +42,7 @@ export const ApprovalCard = memo(function ApprovalCard({
   approval,
   onApprove,
   onReject,
+  onRespond,
   decision,
 }: ApprovalCardProps) {
   const [loading, setLoading] = useState(false);
@@ -50,7 +53,8 @@ export const ApprovalCard = memo(function ApprovalCard({
   const [customInput, setCustomInput] = useState("");
 
   const options = approval.options ?? DEFAULT_OPTIONS;
-  const isBinary = options.length === 2
+  const isPrompt = !!approval.promptId;
+  const isBinary = !isPrompt && options.length === 2
     && options.some((o) => o.variant === "approve")
     && options.some((o) => o.variant === "reject");
   const isCustomSelected = selectedIndex === options.length;
@@ -58,7 +62,9 @@ export const ApprovalCard = memo(function ApprovalCard({
   const handleConfirm = async (option: ApprovalOption) => {
     setLoading(true);
     try {
-      if (option.variant === "reject" || option.value === "rejected") {
+      if (isPrompt && onRespond && approval.promptId) {
+        await onRespond(approval.executionId, approval.promptId, option.value);
+      } else if (option.variant === "reject" || option.value === "rejected") {
         await onReject(approval.executionId);
       } else {
         await onApprove(approval.executionId);
@@ -74,7 +80,11 @@ export const ApprovalCard = memo(function ApprovalCard({
     if (!text) return;
     setLoading(true);
     try {
-      await onApprove(approval.executionId, text);
+      if (isPrompt && onRespond && approval.promptId) {
+        await onRespond(approval.executionId, approval.promptId, text);
+      } else {
+        await onApprove(approval.executionId, text);
+      }
       setResolved({ index: options.length, notes: text });
     } finally {
       setLoading(false);

@@ -8,7 +8,7 @@ import type { DetectedArtifact } from "../types/artifact";
 import { ExecutionActivityList } from "./execution-activity";
 import { AttachmentChip, type AttachmentChipData } from "./attachment-chip";
 import { ApprovalCard, type ApprovalRequest } from "./approval-card";
-import { PromptCard, type HumanPromptRequest } from "./prompt-card";
+import type { HumanPromptRequest } from "./prompt-card";
 import { ChatEmptyState } from "./chat-empty-state";
 import { CopyButton } from "./copy-button";
 import { MarkdownRenderer } from "./markdown-renderer";
@@ -349,7 +349,7 @@ export const ChatMessages = memo(function ChatMessages({
   suggestedPrompts,
   onSuggestionClick,
   pendingApproval,
-  pendingPrompt,
+  pendingPrompt: _pendingPrompt,
   approvalDecision,
   onApprove,
   onReject,
@@ -432,15 +432,8 @@ export const ChatMessages = memo(function ChatMessages({
                       approval={pendingApproval}
                       onApprove={onApprove}
                       onReject={onReject}
-                      decision={approvalDecision}
-                    />
-                  </div>
-                )}
-                {pendingPrompt && onRespondToPrompt && (
-                  <div className="mt-4 max-w-2xl">
-                    <PromptCard
-                      prompt={pendingPrompt}
                       onRespond={onRespondToPrompt}
+                      decision={approvalDecision}
                     />
                   </div>
                 )}
