@@ -175,6 +175,8 @@ export function useChat(conversationId: string | null, adapter: ChatAdapter) {
 
   const respondToPrompt = useCallback(async (executionId: string, promptId: string, response: string) => {
     await adapter.respondToPrompt(executionId, promptId, response);
+    setPendingApproval(null);
+    setApprovalDecision(null);
     setPendingPrompt(null);
   }, [adapter]);
 
