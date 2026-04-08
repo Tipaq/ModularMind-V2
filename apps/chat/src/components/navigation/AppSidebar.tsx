@@ -133,7 +133,7 @@ export const AppSidebar = memo(function AppSidebar() {
       </div>
 
       {/* Footer */}
-      <div className="border-t border-border/50 p-3">
+      <div className="border-t border-border/50 p-2">
         {isCollapsed && (
           <button
             onClick={toggleCollapsed}

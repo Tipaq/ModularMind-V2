@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { memo, useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Trash2, Check, X } from "lucide-react";
 import { cn, Button, Input, useAuthStore } from "@modularmind/ui";
@@ -7,7 +7,6 @@ import { conversationAdapter } from "@modularmind/api-client";
 import { useRecentConversationsStore } from "../../stores/recent-conversations-store";
 import { useSidebarStore } from "../../stores/sidebar-store";
 
-const MAX_RECENT = 8;
 
 interface ConvItemProps {
   conv: Conversation;
@@ -122,18 +121,13 @@ export const SidebarConversations = memo(function SidebarConversations() {
     }
   }, [activeConversationId, removeConversation, navigate]);
 
-  const recentConversations = useMemo(
-    () => conversations.slice(0, MAX_RECENT),
-    [conversations],
-  );
-
   if (isCollapsed || !loaded) return null;
 
   const handleSelect = (id: string) => {
     navigate(`/chat/${id}`);
   };
 
-  if (recentConversations.length === 0) {
+  if (conversations.length === 0) {
     return (
       <div className="px-6 py-3 text-center text-xs text-muted-foreground">
         No conversations yet
@@ -143,7 +137,7 @@ export const SidebarConversations = memo(function SidebarConversations() {
 
   return (
     <div className="space-y-0.5 px-3">
-      {recentConversations.map((conv) => (
+      {conversations.map((conv) => (
         <ConvItem
           key={conv.id}
           conv={conv}
