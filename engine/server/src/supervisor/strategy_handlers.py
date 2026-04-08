@@ -236,6 +236,10 @@ async def handle_create_agent(
         except (ImportError, RuntimeError):
             pass
 
+        inherited_gateway = ec.get("gateway_permissions") or conv_config.get(
+            "gateway_permissions"
+        )
+
         agent = await ephemeral_factory.create_agent(
             name=ec.get("name", "Ephemeral Agent"),
             description=ec.get("description", ""),
@@ -245,6 +249,11 @@ async def handle_create_agent(
             capabilities=ec.get("capabilities"),
             rag_collections=ec.get("rag_collections"),
             mcp_tool_categories=mcp_tool_categories,
+            tool_categories=ec.get("tool_categories"),
+            gateway_permissions=inherited_gateway,
+            tool_mode=ec.get("tool_mode"),
+            timeout_seconds=ec.get("timeout_seconds"),
+            memory_enabled=ec.get("memory_enabled"),
         )
     except ValueError as e:
         return {

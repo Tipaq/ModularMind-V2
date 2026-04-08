@@ -8,13 +8,14 @@ Rate-limited per conversation and globally via Redis INCR.
 
 import logging
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 import redis.asyncio as aioredis
 
 from src.domain_config.provider import ConfigProvider
 from src.graph_engine.interfaces import AgentConfig, RAGConfig
-from src.infra.constants import EPHEMERAL_AGENT_TTL_SECONDS
+from src.infra.constants import DEFAULT_TOOL_CATEGORIES, EPHEMERAL_AGENT_TTL_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,16 @@ class EphemeralAgentFactory:
         capabilities: list[str] | None = None,
         rag_collections: list[str] | None = None,
         mcp_tool_categories: dict[str, bool] | None = None,
+        tool_categories: dict[str, bool | dict[str, bool]] | None = None,
+        gateway_permissions: dict[str, Any] | None = None,
+        tool_mode: str | None = None,
+        timeout_seconds: int | None = None,
+        memory_enabled: bool | None = None,
     ) -> AgentConfig:
         """Create an ephemeral agent and register it in ConfigProvider (Redis).
+
+        Uses the same DEFAULT_TOOL_CATEGORIES as regular agents, merged with
+        any provided tool_categories and MCP categories for full parity.
 
         Rate limited:
         - max MAX_EPHEMERAL_PER_CONVERSATION per conversation
@@ -77,9 +86,11 @@ class EphemeralAgentFactory:
             "conversation_id": conversation_id,
         }
 
-        tool_categories = dict(AgentConfig.model_fields["tool_categories"].default_factory())
+        merged_categories: dict[str, bool | dict[str, bool]] = {**DEFAULT_TOOL_CATEGORIES}
+        if tool_categories:
+            merged_categories.update(tool_categories)
         if mcp_tool_categories:
-            tool_categories.update(mcp_tool_categories)
+            merged_categories.update(mcp_tool_categories)
 
         config = AgentConfig(
             id=agent_id,
@@ -90,7 +101,11 @@ class EphemeralAgentFactory:
             capabilities=capabilities or [],
             rag_config=rag_config,
             routing_metadata=routing_metadata,
-            tool_categories=tool_categories,
+            tool_categories=merged_categories,
+            gateway_permissions=gateway_permissions,
+            tool_mode=tool_mode or "direct",
+            timeout_seconds=timeout_seconds or 120,
+            memory_enabled=memory_enabled if memory_enabled is not None else True,
         )
 
         await self.config_provider.register_ephemeral_agent(config)
