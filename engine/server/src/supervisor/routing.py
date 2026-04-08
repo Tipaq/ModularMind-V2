@@ -128,9 +128,31 @@ async def resolve_routing(
             "system_prompt",
             f"You are a specialized assistant. User requested: {parsed.create_instructions}",
         )
+        if "tool_categories" not in decision.ephemeral_config:
+            decision.ephemeral_config["tool_categories"] = _infer_tool_categories(
+                parsed.create_instructions or "",
+            )
 
     decision = apply_single_selection_override(decision, conv_config)
     return decision
+
+
+_TOOL_CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    "shell": ["shell", "command", "exec", "terminal", "bash", "clone", "git"],
+    "filesystem": ["file", "filesystem", "read", "write", "edit", "create", "sandbox"],
+    "network": ["network", "http", "request", "api", "url", "fetch"],
+    "github": ["github", "issue", "pull request", "pr", "repo"],
+}
+
+
+def _infer_tool_categories(instructions: str) -> dict[str, bool]:
+    """Infer tool categories from @create instructions as LLM fallback."""
+    lower = instructions.lower()
+    return {
+        category: True
+        for category, keywords in _TOOL_CATEGORY_KEYWORDS.items()
+        if any(kw in lower for kw in keywords)
+    }
 
 
 def apply_single_selection_override(
