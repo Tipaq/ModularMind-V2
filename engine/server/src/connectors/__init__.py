@@ -6,7 +6,7 @@ from .adapters.slack import SlackAdapter
 from .adapters.teams import TeamsAdapter
 from .adapters.telegram import TelegramAdapter
 from .adapters.whatsapp import WhatsAppAdapter
-from .models import Connector, ConnectorType
+from .models import Connector, ConnectorCredential
 from .registry import register_adapter
 from .router import router
 from .webhook_router import webhook_router
@@ -20,7 +20,7 @@ register_adapter("whatsapp", WhatsAppAdapter())
 
 __all__ = [
     "Connector",
-    "ConnectorType",
+    "ConnectorCredential",
     "router",
     "webhook_router",
 ]
