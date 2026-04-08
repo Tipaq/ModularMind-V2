@@ -44,11 +44,11 @@ export function ChatPage() {
               state.pendingApproval ? (
                 <div className="px-4 py-3">
                   <ApprovalCard
+                    key={state.pendingApproval.promptId || state.pendingApproval.approvalId || state.pendingApproval.nodeId}
                     approval={state.pendingApproval}
                     onApprove={state.approveExecution}
                     onReject={state.rejectExecution}
                     onRespond={state.respondToPrompt}
-                    decision={state.approvalDecision}
                   />
                 </div>
               ) : (

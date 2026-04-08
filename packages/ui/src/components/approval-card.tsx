@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { ShieldCheck, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { ShieldCheck, XCircle, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import Markdown from "react-markdown";
 
@@ -35,7 +35,6 @@ export interface ApprovalCardProps {
   onApprove: (executionId: string, notes?: string) => Promise<void>;
   onReject: (executionId: string, notes?: string) => Promise<void>;
   onRespond?: (executionId: string, promptId: string, response: string) => Promise<void>;
-  decision?: "approved" | "rejected" | null;
 }
 
 export const ApprovalCard = memo(function ApprovalCard({
@@ -43,12 +42,8 @@ export const ApprovalCard = memo(function ApprovalCard({
   onApprove,
   onReject,
   onRespond,
-  decision,
 }: ApprovalCardProps) {
   const [loading, setLoading] = useState(false);
-  const [resolved, setResolved] = useState<{ index: number; notes?: string } | null>(
-    decision ? { index: decision === "rejected" ? -1 : 0 } : null,
-  );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [customInput, setCustomInput] = useState("");
 
@@ -69,7 +64,6 @@ export const ApprovalCard = memo(function ApprovalCard({
       } else {
         await onApprove(approval.executionId);
       }
-      setResolved({ index: options.indexOf(option) });
     } finally {
       setLoading(false);
     }
@@ -85,40 +79,10 @@ export const ApprovalCard = memo(function ApprovalCard({
       } else {
         await onApprove(approval.executionId, text);
       }
-      setResolved({ index: options.length, notes: text });
     } finally {
       setLoading(false);
     }
   };
-
-  if (resolved) {
-    const resolvedOption = resolved.index >= 0 && resolved.index < options.length
-      ? options[resolved.index]
-      : null;
-    const isRejected = resolvedOption?.variant === "reject" || resolvedOption?.value === "rejected";
-    const isCustom = resolved.index === options.length;
-    return (
-      <div className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-1">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {isRejected ? (
-            <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
-          ) : (
-            <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
-          )}
-          <span className="line-clamp-1">{approval.message}</span>
-          <span className={cn(
-            "ml-auto text-[10px] font-medium whitespace-nowrap",
-            isRejected ? "text-destructive" : "text-success",
-          )}>
-            {isCustom ? "Custom response" : (resolvedOption?.label ?? "Done")}
-          </span>
-        </div>
-        {isCustom && resolved.notes && (
-          <p className="text-xs text-muted-foreground ml-5 italic">{resolved.notes}</p>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div className="rounded-lg border border-warning/30 bg-warning/5 overflow-hidden">
