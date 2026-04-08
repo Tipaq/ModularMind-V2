@@ -37,6 +37,7 @@ SANDBOX_LABEL = "modularmind.gateway.sandbox"
 DOCKER_CREATE_TIMEOUT = 30
 DOCKER_STOP_TIMEOUT = 15
 DOCKER_EXEC_TIMEOUT = 120
+SANDBOX_RETRY_COOLDOWN = 60
 
 
 @dataclass
@@ -66,6 +67,8 @@ class SandboxManager:
         self._network: str | None = None
         self._host_workspace_root: str | None = None
         self._settings = get_settings()
+        self._sandbox_available: bool = True
+        self._sandbox_retry_after: float = 0.0
 
     async def _get_docker(self):
         """Lazy-initialize Docker client."""
@@ -300,6 +303,16 @@ class SandboxManager:
         gateway_sandboxes_active.set(len(self._active))
         return True
 
+    def _normalize_workspace_path(self, command_str: str, agent_id: str) -> str:
+        """Replace /workspace references with the actual host workspace path.
+
+        Called only when routing to direct execution (not Docker sandbox).
+        Trailing-slash variant is replaced first to avoid partial matches.
+        """
+        workspace = os.path.join(self._settings.WORKSPACE_ROOT, agent_id)
+        result = command_str.replace("/workspace/", workspace + "/")
+        return result.replace("/workspace", workspace)
+
     async def exec_hybrid(
         self,
         agent_id: str,
@@ -307,23 +320,47 @@ class SandboxManager:
         execution_id: str,
         permissions: GatewayPermissions,
         timeout: int = 30,
+        unsafe_hint: bool = False,
     ) -> tuple[int, str]:
         """Execute a command via direct subprocess or Docker sandbox.
 
         Safe commands bypass Docker entirely for ~10ms execution.
-        Unsafe commands use the full Docker sandbox path.
+        Unsafe commands (or unsafe_hint=True) use Docker sandbox with
+        automatic fallback to direct execution when sandbox is unavailable.
 
         Returns (exit_code, output_string).
         """
-        from src.sandbox.direct_executor import UnsafeCommandError, direct_exec, is_safe_command
+        from src.sandbox.direct_executor import direct_exec, direct_exec_fallback, is_safe_command
 
-        if self._settings.SANDBOX_DIRECT_EXEC and is_safe_command(command_str):
-            workspace = os.path.join(self._settings.WORKSPACE_ROOT, agent_id)
-            return await direct_exec(command_str, workspace, timeout=timeout)
+        workspace = os.path.join(self._settings.WORKSPACE_ROOT, agent_id)
 
-        # Unsafe command → Docker sandbox
-        sandbox = await self.acquire_or_reuse(execution_id, agent_id, permissions)
-        return await self.exec_in_sandbox(execution_id, ["sh", "-c", command_str])
+        if self._settings.SANDBOX_DIRECT_EXEC and is_safe_command(command_str) and not unsafe_hint:
+            normalized = self._normalize_workspace_path(command_str, agent_id)
+            return await direct_exec(normalized, workspace, timeout=timeout)
+
+        # Unsafe command → try Docker sandbox, fall back to direct
+        should_try_sandbox = (
+            self._sandbox_available or time.time() >= self._sandbox_retry_after
+        )
+
+        if should_try_sandbox:
+            try:
+                await self.acquire_or_reuse(execution_id, agent_id, permissions)
+                if not self._sandbox_available:
+                    self._sandbox_available = True
+                    logger.info("Sandbox recovered, resuming sandbox execution")
+                return await self.exec_in_sandbox(execution_id, ["sh", "-c", command_str])
+            except RuntimeError as e:
+                logger.warning(
+                    "Sandbox unavailable, falling back to direct execution: %s", e,
+                )
+                self._sandbox_available = False
+                self._sandbox_retry_after = time.time() + SANDBOX_RETRY_COOLDOWN
+        else:
+            logger.debug("Sandbox in cooldown, using direct execution fallback")
+
+        normalized = self._normalize_workspace_path(command_str, agent_id)
+        return await direct_exec_fallback(normalized, workspace, timeout=timeout)
 
     async def exec_in_sandbox(
         self,

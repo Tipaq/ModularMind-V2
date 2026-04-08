@@ -179,3 +179,62 @@ async def direct_exec(
     except Exception as e:
         logger.exception("[direct_exec] failed: %s", command[:100])
         return 1, f"Error: {e}"
+
+
+async def direct_exec_fallback(
+    command: str,
+    workdir: str,
+    timeout: int = 30,
+) -> tuple[int, str]:
+    """Execute a command directly when Docker sandbox is unavailable.
+
+    Bypasses the safe command whitelist. Used only as a degraded fallback
+    when Docker is unreachable. Retains env sanitization, cwd confinement,
+    timeout enforcement, and output truncation.
+    """
+    logger.warning(
+        "[direct_exec_fallback] Running without sandbox: %s (workdir=%s)",
+        command[:200],
+        workdir,
+    )
+
+    await asyncio.to_thread(os.makedirs, workdir, exist_ok=True)
+
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            cwd=workdir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env=SAFE_ENV,
+        )
+
+        stdout, _ = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=timeout,
+        )
+
+        output = stdout.decode("utf-8", errors="replace") if stdout else ""
+
+        if len(output) > MAX_OUTPUT_SIZE:
+            output = output[:MAX_OUTPUT_SIZE] + f"\n... (truncated to {MAX_OUTPUT_SIZE} bytes)"
+
+        logger.info(
+            "[direct_exec_fallback] exit=%d, output=%d chars",
+            proc.returncode or 0,
+            len(output),
+        )
+        return proc.returncode or 0, output
+
+    except TimeoutError:
+        logger.warning("[direct_exec_fallback] timed out after %ds: %s", timeout, command[:100])
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            pass
+        return 124, f"Command timed out after {timeout}s"
+
+    except Exception as e:
+        logger.exception("[direct_exec_fallback] failed: %s", command[:100])
+        return 1, f"Error: {e}"

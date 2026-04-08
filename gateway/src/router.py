@@ -264,11 +264,18 @@ async def _execute_in_sandbox(
 
         is_safe = request.action in SAFE_ACTIONS
         if not is_safe:
-            await sandbox_mgr.acquire_or_reuse(
-                execution_id=request.execution_id,
-                agent_id=request.agent_id,
-                permissions=perms,
-            )
+            try:
+                await sandbox_mgr.acquire_or_reuse(
+                    execution_id=request.execution_id,
+                    agent_id=request.agent_id,
+                    permissions=perms,
+                )
+            except RuntimeError:
+                logger.warning(
+                    "Sandbox pre-creation failed for filesystem action '%s', "
+                    "will attempt fallback in executor",
+                    request.action,
+                )
 
         executor = FilesystemExecutor(
             agent_id=request.agent_id,

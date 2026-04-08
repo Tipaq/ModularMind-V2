@@ -90,18 +90,18 @@ class FilesystemExecutor(BaseExecutor):
         command: str | list[str],
         is_safe: bool = False,
     ) -> tuple[int, str]:
-        """Run a command via hybrid (safe) or sandbox (critical) path."""
+        """Run a command via exec_hybrid (handles safe/unsafe routing + fallback)."""
         cmd_str = command if isinstance(command, str) else " ".join(command)
 
-        if is_safe and self._agent_id and self._permissions:
-            if hasattr(sandbox_mgr, "exec_hybrid"):
-                return await sandbox_mgr.exec_hybrid(
-                    agent_id=self._agent_id,
-                    command_str=cmd_str,
-                    execution_id=execution_id,
-                    permissions=self._permissions,
-                    timeout=30,
-                )
+        if self._agent_id and self._permissions and hasattr(sandbox_mgr, "exec_hybrid"):
+            return await sandbox_mgr.exec_hybrid(
+                agent_id=self._agent_id,
+                command_str=cmd_str,
+                execution_id=execution_id,
+                permissions=self._permissions,
+                timeout=30,
+                unsafe_hint=not is_safe,
+            )
 
         cmd_list = ["sh", "-c", cmd_str] if isinstance(command, str) else command
         return await sandbox_mgr.exec_in_sandbox(execution_id, cmd_list)
