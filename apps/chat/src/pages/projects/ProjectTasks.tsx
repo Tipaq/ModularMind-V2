@@ -61,7 +61,7 @@ export function ProjectTasks() {
   }
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <div className="rounded-xl border border-border/50">
         <table className="w-full text-sm">
           <thead>

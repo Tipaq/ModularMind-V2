@@ -54,7 +54,7 @@ export function ProjectApps() {
   }
 
   return (
-    <div className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="flex-1 overflow-y-auto p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 content-start">
       {apps.map((app) => (
         <MiniAppCard
           key={app.id}
