@@ -53,8 +53,8 @@ SMTP_SEND_EMAIL_TOOL = {
 
 CATALOG: list[CatalogEntry] = [
     CatalogEntry(
-        type_id="email_outbound",
-        name="Email (Send)",
+        type_id="email",
+        name="Email",
         description=(
             "Send emails from any email account — Gmail, Outlook, "
             "Yahoo, corporate email, or any SMTP provider. "

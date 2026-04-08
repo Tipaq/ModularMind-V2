@@ -22,6 +22,8 @@ from src.connectors.schemas import (
     ConnectorUpdate,
     CredentialCreate,
     CredentialResponse,
+    CredentialTestRequest,
+    CredentialTestResponse,
 )
 from src.domain_config import get_config_provider
 from src.infra.database import DbSession
@@ -257,6 +259,29 @@ async def list_connector_types() -> ConnectorTypesListResponse:
         )
 
     return ConnectorTypesListResponse(items=items)
+
+
+@router.post(
+    "/test-credentials",
+    response_model=CredentialTestResponse,
+)
+async def test_credentials(
+    data: CredentialTestRequest,
+    user: CurrentUser,
+) -> CredentialTestResponse:
+    """Test connector credentials before saving."""
+    from src.connectors.catalog import get_catalog_entry
+    from src.connectors.outbound import test_connector_credentials
+
+    entry = get_catalog_entry(data.connector_type)
+    if not entry:
+        return CredentialTestResponse(
+            success=False,
+            message=f"Unknown connector type: {data.connector_type}",
+        )
+
+    result = await test_connector_credentials(entry.spec, data.fields)
+    return CredentialTestResponse(**result)
 
 
 @router.get("/mine", response_model=ConnectorListResponse)

@@ -222,6 +222,126 @@ def _extract_jsonpath(data: dict, path: str) -> str | dict | list:
     return current
 
 
+async def test_connector_credentials(
+    spec: dict, credentials: dict[str, str]
+) -> dict:
+    """Test connector credentials before saving.
+
+    Returns {"success": True, "message": "..."} or
+    {"success": False, "message": "error details"}.
+    """
+    outbound = spec.get("outbound", {})
+    tools = outbound.get("tools", [])
+
+    has_smtp = any(t.get("method") == "SMTP" for t in tools)
+    if has_smtp:
+        return await _test_smtp_credentials(credentials)
+
+    health = spec.get("health_check")
+    base_url = spec.get("base_url", "")
+    if health and base_url:
+        return await _test_http_health(
+            spec, base_url, health, credentials
+        )
+
+    if base_url and tools:
+        return {"success": True, "message": "Credentials saved (no health check available)"}
+
+    return {"success": True, "message": "Connector configured"}
+
+
+async def _test_smtp_credentials(
+    credentials: dict[str, str],
+) -> dict:
+    """Test SMTP login without sending any email."""
+    import asyncio
+    import smtplib
+
+    email_address = credentials.get("email_address", "")
+    password = credentials.get("api_key", "")
+
+    if not email_address:
+        return {"success": False, "message": "Email address is required"}
+    if not password:
+        return {"success": False, "message": "Password is required"}
+
+    smtp_host, smtp_port = _resolve_smtp_settings(
+        email_address, credentials
+    )
+
+    def _blocking_test() -> str:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+            server.ehlo()
+            if smtp_port in (587, 25):
+                server.starttls()
+                server.ehlo()
+            server.login(email_address, password)
+            server.noop()
+        return f"Connected to {smtp_host}:{smtp_port}"
+
+    try:
+        detail = await asyncio.to_thread(_blocking_test)
+        return {"success": True, "message": detail}
+    except smtplib.SMTPAuthenticationError:
+        return {
+            "success": False,
+            "message": (
+                "Authentication failed. Check your password. "
+                "For Gmail, use an App Password "
+                "(Google Account > Security > App Passwords). "
+                "For Outlook/Hotmail, enable SMTP in account settings."
+            ),
+        }
+    except smtplib.SMTPConnectError:
+        return {
+            "success": False,
+            "message": f"Could not connect to {smtp_host}:{smtp_port}",
+        }
+    except OSError as exc:
+        return {
+            "success": False,
+            "message": f"Connection error: {exc}",
+        }
+    except smtplib.SMTPException as exc:
+        return {"success": False, "message": str(exc)}
+
+
+async def _test_http_health(
+    spec: dict,
+    base_url: str,
+    health: dict,
+    credentials: dict[str, str],
+) -> dict:
+    """Test HTTP health check endpoint."""
+    method = health.get("method", "GET")
+    path = health.get("path", "/")
+    expected = health.get("expected_status", 200)
+
+    url = f"{base_url.rstrip('/')}{path}"
+    if _is_blocked_url(url):
+        return {"success": False, "message": f"Blocked URL: {url}"}
+
+    headers = _build_auth_headers(spec, {"auth_mode": ""}, credentials)
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.request(method, url, headers=headers)
+            if resp.status_code == expected:
+                return {
+                    "success": True,
+                    "message": f"Health check passed ({resp.status_code})",
+                }
+            return {
+                "success": False,
+                "message": (
+                    f"Health check returned {resp.status_code}, "
+                    f"expected {expected}"
+                ),
+            }
+    except httpx.HTTPError as exc:
+        return {"success": False, "message": f"Request failed: {exc}"}
+
+
 KNOWN_SMTP_PROVIDERS: dict[str, tuple[str, int]] = {
     "gmail.com": ("smtp.gmail.com", 587),
     "googlemail.com": ("smtp.gmail.com", 587),

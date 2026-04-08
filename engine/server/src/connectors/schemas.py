@@ -104,6 +104,20 @@ class CredentialCreate(BaseModel):
     scopes: list[str] | None = None
 
 
+class CredentialTestRequest(BaseModel):
+    """Request to test credentials before saving."""
+
+    connector_type: str = Field(min_length=1, max_length=60)
+    fields: dict[str, str] = Field(default_factory=dict)
+
+
+class CredentialTestResponse(BaseModel):
+    """Result of a credential test."""
+
+    success: bool
+    message: str
+
+
 class CredentialResponse(BaseModel):
     """Credential response (value redacted)."""
 

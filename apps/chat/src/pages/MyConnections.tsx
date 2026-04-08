@@ -75,8 +75,20 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
 
     setCreating(typeDef.type_id);
     try {
+      const allFields = { ...fields };
       const secretFields = typeDef.fields.filter((f) => f.is_secret);
       const nonSecretFields = typeDef.fields.filter((f) => !f.is_secret);
+
+      const testResult = await api.post<{ success: boolean; message: string }>(
+        "/connectors/test-credentials",
+        { connector_type: typeDef.type_id, fields: allFields },
+      );
+
+      if (!testResult.success) {
+        setError(testResult.message);
+        setCreating(null);
+        return;
+      }
 
       const config: Record<string, string> = {};
       for (const f of nonSecretFields) {
