@@ -51,31 +51,6 @@ async def resolve_routing(
     """
     parsed, matched_agent_ids = await parser.parse_multi(content)
 
-    if parsed.create_directive:
-        instructions = (parsed.create_instructions or "").lower()
-        inferred_categories: dict[str, bool] = {}
-        if any(k in instructions for k in ("shell", "command", "exec", "terminal")):
-            inferred_categories["shell"] = True
-        if any(k in instructions for k in ("file", "filesystem", "read", "write", "edit")):
-            inferred_categories["filesystem"] = True
-        if any(k in instructions for k in ("network", "http", "request", "api")):
-            inferred_categories["network"] = True
-
-        return RoutingDecision(
-            strategy=RoutingStrategy.CREATE_AGENT,
-            reasoning="User used @create directive",
-            confidence=1.0,
-            ephemeral_config={
-                "name": "Ephemeral Agent",
-                "description": parsed.create_instructions or "",
-                "system_prompt": (
-                    f"You are a specialized assistant. "
-                    f"User requested: {parsed.create_instructions}"
-                ),
-                **({"tool_categories": inferred_categories} if inferred_categories else {}),
-            },
-        )
-
     if parsed.explicit_graph:
         return RoutingDecision(
             strategy=RoutingStrategy.EXECUTE_GRAPH,
@@ -136,6 +111,20 @@ async def resolve_routing(
         memory_context=memory_context,
         knowledge_context=knowledge_context,
     )
+
+    if parsed.create_directive:
+        decision.strategy = RoutingStrategy.CREATE_AGENT
+        decision.confidence = 1.0
+        decision.reasoning = f"@create directive (LLM provided config: {decision.reasoning})"
+        if not decision.ephemeral_config:
+            decision.ephemeral_config = {}
+        decision.ephemeral_config.setdefault("name", "Ephemeral Agent")
+        decision.ephemeral_config.setdefault("description", parsed.create_instructions or "")
+        decision.ephemeral_config.setdefault(
+            "system_prompt",
+            f"You are a specialized assistant. User requested: {parsed.create_instructions}",
+        )
+
     decision = apply_single_selection_override(decision, conv_config)
     return decision
 
