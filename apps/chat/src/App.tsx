@@ -20,6 +20,7 @@ const ProjectConversations = lazy(() => import("./pages/projects/ProjectConversa
 const ProjectKnowledge = lazy(() => import("./pages/projects/ProjectKnowledge"));
 const ProjectApps = lazy(() => import("./pages/projects/ProjectApps"));
 const ProjectTasks = lazy(() => import("./pages/projects/ProjectTasks"));
+const ProjectConnectors = lazy(() => import("./pages/projects/ProjectConnectors"));
 
 function SetupRedirect({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="knowledge" element={<ProjectKnowledge />} />
               <Route path="apps" element={<ProjectApps />} />
               <Route path="tasks" element={<ProjectTasks />} />
+              <Route path="connectors" element={<ProjectConnectors />} />
             </Route>
             <Route path="/projects/:projectId/conversations/:conversationId" element={<PageErrorBoundary pageName="project-chat"><ChatPage /></PageErrorBoundary>} />
             <Route path="/apps" element={<PageErrorBoundary pageName="app-gallery"><AppGallery /></PageErrorBoundary>} />

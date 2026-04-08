@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, BookOpen, CalendarClock, FolderKanban,
-  MessageSquare, LayoutDashboard, AppWindow,
+  MessageSquare, LayoutDashboard, AppWindow, Plug,
 } from "lucide-react";
 import { Badge, Button, PageLoader } from "@modularmind/ui";
 import type { ProjectDetail as ProjectDetailType, ProjectResourceCounts } from "@modularmind/api-client";
@@ -14,6 +14,7 @@ const SUB_TABS = [
   { label: "Knowledge", to: "knowledge", icon: BookOpen },
   { label: "Apps", to: "apps", icon: AppWindow },
   { label: "Tasks", to: "tasks", icon: CalendarClock },
+  { label: "Connectors", to: "connectors", icon: Plug },
 ];
 
 export function ProjectDetail() {
