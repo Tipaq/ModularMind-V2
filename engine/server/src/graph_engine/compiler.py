@@ -384,6 +384,39 @@ class GraphCompiler:
                         )
 
             if user_id:
+                from src.infra.database import async_session_maker as _conn_asm
+                from src.projects.models import ProjectMember
+                from src.tools.registry import resolve_connector_tool_definitions
+
+                try:
+                    async with _conn_asm() as _conn_sess:
+                        from sqlalchemy import select as _sel
+
+                        _pids_result = await _conn_sess.execute(
+                            _sel(ProjectMember.project_id).where(
+                                ProjectMember.user_id == user_id
+                            )
+                        )
+                        _project_ids = [r[0] for r in _pids_result.all()]
+
+                    conn_defs, _conn_tool_map = await resolve_connector_tool_definitions(
+                        user_id, _project_ids, _conn_asm
+                    )
+                    if conn_defs:
+                        active_tools.extend(conn_defs)
+                        logger.info(
+                            "Agent '%s': %d outbound connector tools loaded",
+                            agent.name,
+                            len(conn_defs),
+                        )
+                except Exception as _conn_err:
+                    logger.warning(
+                        "Failed to load connector tools for agent '%s': %s",
+                        agent.name,
+                        _conn_err,
+                    )
+
+            if user_id:
                 from src.graph_engine.builtin_tools import (
                     UnifiedToolExecutor,
                     create_builtin_executor,
