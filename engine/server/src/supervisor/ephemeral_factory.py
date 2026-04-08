@@ -92,6 +92,10 @@ class EphemeralAgentFactory:
         if mcp_tool_categories:
             merged_categories.update(mcp_tool_categories)
 
+        resolved_gateway = gateway_permissions or self._build_default_gateway_permissions(
+            merged_categories,
+        )
+
         config = AgentConfig(
             id=agent_id,
             name=name,
@@ -102,7 +106,7 @@ class EphemeralAgentFactory:
             rag_config=rag_config,
             routing_metadata=routing_metadata,
             tool_categories=merged_categories,
-            gateway_permissions=gateway_permissions,
+            gateway_permissions=resolved_gateway,
             tool_mode=tool_mode or "direct",
             timeout_seconds=timeout_seconds or 120,
             memory_enabled=memory_enabled if memory_enabled is not None else True,
@@ -117,6 +121,46 @@ class EphemeralAgentFactory:
             conversation_id,
         )
         return config
+
+    @staticmethod
+    def _build_default_gateway_permissions(
+        categories: dict[str, bool | dict[str, bool]],
+    ) -> dict[str, Any] | None:
+        """Auto-generate gateway permissions when tool categories require them.
+
+        Returns None if no gateway-facing categories are enabled.
+        """
+        needs_gateway = (
+            categories.get("shell")
+            or categories.get("filesystem")
+            or categories.get("network")
+        )
+        if not needs_gateway:
+            return None
+
+        perms: dict[str, Any] = {}
+
+        if categories.get("filesystem"):
+            perms["filesystem"] = {
+                "read": ["/workspace/**"],
+                "write": ["/workspace/**"],
+            }
+
+        if categories.get("shell"):
+            perms["shell"] = {
+                "enabled": True,
+                "allow": ["*"],
+                "require_approval": False,
+                "max_execution_seconds": 120,
+            }
+
+        if categories.get("network"):
+            perms["network"] = {
+                "enabled": True,
+                "allow_domains": ["*"],
+            }
+
+        return perms
 
     async def _check_rate_limit(self, conversation_id: str) -> None:
         """Check per-conversation and global rate limits via Redis INCR.

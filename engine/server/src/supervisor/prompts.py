@@ -53,7 +53,7 @@ Respond with a JSON object matching this schema:
   "extracted_prompt": "the refined task/question to send to the agent (only for DELEGATE_AGENT/EXECUTE_GRAPH/CREATE_AGENT)",
   "reasoning": "brief explanation of routing decision",
   "confidence": 0.0-1.0,
-  "ephemeral_config": {{ "name": "...", "description": "...", "system_prompt": "...", "capabilities": [...] }} (only for CREATE_AGENT)
+  "ephemeral_config": {{ "name": "...", "description": "...", "system_prompt": "...", "capabilities": [...], "tool_categories": {{ "shell": true, "filesystem": true, ... }} }} (only for CREATE_AGENT — enable tool categories the agent needs)
 }}
 
 Rules:
