@@ -9,11 +9,13 @@ class ConnectorCreate(BaseModel):
     """Connector creation request."""
 
     name: str = Field(min_length=1, max_length=200)
-    connector_type: str = Field(min_length=1, max_length=20)
+    connector_type: str = Field(min_length=1, max_length=60)
     agent_id: str | None = None
     graph_id: str | None = None
     supervisor_mode: bool = False
     config: dict = Field(default_factory=dict)
+    project_id: str | None = None
+    spec: dict | None = None
 
 
 class ConnectorUpdate(BaseModel):
@@ -25,6 +27,7 @@ class ConnectorUpdate(BaseModel):
     supervisor_mode: bool | None = None
     is_enabled: bool | None = None
     config: dict | None = None
+    spec: dict | None = None
 
 
 class ConnectorResponse(BaseModel):
@@ -39,6 +42,12 @@ class ConnectorResponse(BaseModel):
     webhook_url: str
     is_enabled: bool
     config: dict
+    scope: str
+    user_id: str | None = None
+    project_id: str | None = None
+    has_spec: bool = False
+    credential_count: int = 0
+    has_user_credential: bool = False
     created_at: str
     updated_at: str
 
@@ -82,3 +91,30 @@ class ConnectorTypesListResponse(BaseModel):
     """Response for GET /connectors/types."""
 
     items: list[ConnectorTypeResponse]
+
+
+class CredentialCreate(BaseModel):
+    """Request to add a credential to a connector."""
+
+    credential_type: str = Field(min_length=1, max_length=30)
+    label: str = Field(min_length=1, max_length=200)
+    value: str = Field(min_length=1)
+    refresh_token: str | None = None
+    provider: str | None = None
+    scopes: list[str] | None = None
+
+
+class CredentialResponse(BaseModel):
+    """Credential response (value redacted)."""
+
+    id: str
+    connector_id: str
+    user_id: str | None = None
+    credential_type: str
+    label: str
+    provider: str | None = None
+    scopes: list[str] | None = None
+    is_valid: bool
+    is_shared: bool
+    created_at: str
+    updated_at: str
