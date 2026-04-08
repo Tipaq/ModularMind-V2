@@ -43,12 +43,7 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
         api.get<{ items: ConnectorData[]; total: number }>(endpoint),
       ]);
       setConnectorTypes(typesRes.items);
-
-      const scopeFilter = projectId ? "project" : "user";
-      const filtered = projectId
-        ? connRes.items.filter((c) => c.project_id === projectId)
-        : connRes.items.filter((c) => c.scope === scopeFilter);
-      setConnectors(filtered);
+      setConnectors(connRes.items);
     } catch {
       setConnectorTypes([]);
       setConnectors([]);
@@ -91,7 +86,6 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
       const payload: Record<string, unknown> = {
         name,
         connector_type: typeDef.type_id,
-        supervisor_mode: true,
         config,
       };
       if (projectId) payload.project_id = projectId;

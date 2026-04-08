@@ -65,7 +65,20 @@ def _validate_connector_config(connector_type: str, config: dict) -> None:
         )
 
 
+def _is_outbound_only(data: ConnectorCreate) -> bool:
+    """Outbound-only connectors (from catalog) don't need an execution target."""
+    if data.spec and data.spec.get("outbound", {}).get("tools"):
+        return True
+    from src.connectors.catalog import get_catalog_entry
+
+    entry = get_catalog_entry(data.connector_type)
+    return bool(entry and entry.spec.get("outbound", {}).get("tools"))
+
+
 def _validate_execution_target(data: ConnectorCreate) -> None:
+    if _is_outbound_only(data):
+        return
+
     has_model = bool((data.config or {}).get("model_id"))
     if not data.agent_id and not data.graph_id and not data.supervisor_mode and not has_model:
         raise HTTPException(
