@@ -356,10 +356,11 @@ def _auth_error_hint(email_address: str, smtp_host: str) -> str:
     if domain in ("outlook.com", "hotmail.com", "live.com"):
         return (
             "Outlook/Hotmail authentication failed. "
-            "Make sure SMTP is enabled: go to Outlook.com > Settings > "
-            "Mail > Sync email > POP and IMAP, and enable SMTP. "
-            "If you have 2FA enabled, create an App Password at "
-            "account.microsoft.com/security."
+            "Microsoft has deprecated Basic Auth for SMTP "
+            "(fully disabled April 2026). SMTP with password "
+            "no longer works for Outlook/Hotmail accounts. "
+            "Use the SendGrid connector instead, or a different "
+            "email provider (Gmail with App Password still works)."
         )
 
     if domain in ("yahoo.com", "yahoo.fr"):
@@ -388,9 +389,9 @@ def _auth_error_hint(email_address: str, smtp_host: str) -> str:
 KNOWN_SMTP_PROVIDERS: dict[str, tuple[str, int]] = {
     "gmail.com": ("smtp.gmail.com", 587),
     "googlemail.com": ("smtp.gmail.com", 587),
-    "outlook.com": ("smtp.office365.com", 587),
-    "hotmail.com": ("smtp.office365.com", 587),
-    "live.com": ("smtp.office365.com", 587),
+    "outlook.com": ("smtp-mail.outlook.com", 587),
+    "hotmail.com": ("smtp-mail.outlook.com", 587),
+    "live.com": ("smtp-mail.outlook.com", 587),
     "yahoo.com": ("smtp.mail.yahoo.com", 587),
     "yahoo.fr": ("smtp.mail.yahoo.com", 587),
     "aol.com": ("smtp.aol.com", 587),
