@@ -102,9 +102,13 @@ async def resolve_routing(
         conv_config,
     )
 
+    llm_content = parsed.clean_content
+    if parsed.create_directive and parsed.create_instructions:
+        llm_content = parsed.create_instructions
+
     decision = await route_with_llm_fn(
         conversation_id,
-        parsed.clean_content,
+        llm_content,
         messages=messages,
         affinity_agent_id=last_agent,
         conv_config=conv_config,
