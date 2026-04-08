@@ -190,6 +190,8 @@ def _to_create_response(connector: Connector) -> ConnectorCreateResponse:
 
 @router.get("/types", response_model=ConnectorTypesListResponse)
 async def list_connector_types() -> ConnectorTypesListResponse:
+    from src.connectors.catalog import get_catalog
+
     metas = all_connector_types()
     items = [
         ConnectorTypeResponse(
@@ -213,6 +215,34 @@ async def list_connector_types() -> ConnectorTypesListResponse:
         )
         for m in metas
     ]
+
+    for entry in get_catalog():
+        auth_modes = entry.spec.get("auth", {}).get("modes", [])
+        fields = []
+        for mode in auth_modes:
+            for field in mode.get("fields", []):
+                fields.append(
+                    ConnectorFieldDefResponse(
+                        key=field["key"],
+                        label=field.get("label", field["key"]),
+                        placeholder=field.get("placeholder", ""),
+                        is_secret=field.get("is_secret", True),
+                        is_required=field.get("is_required", True),
+                    )
+                )
+        items.append(
+            ConnectorTypeResponse(
+                type_id=entry.type_id,
+                name=entry.name,
+                icon=entry.icon,
+                color=entry.color,
+                description=entry.description,
+                doc_url="",
+                setup_steps=[],
+                fields=fields,
+            )
+        )
+
     return ConnectorTypesListResponse(items=items)
 
 
@@ -281,6 +311,14 @@ async def create_connector(
             raise HTTPException(status_code=403, detail="Requires editor role or higher")
         user_id = None
 
+    spec = data.spec
+    if not spec:
+        from src.connectors.catalog import get_catalog_entry
+
+        catalog_entry = get_catalog_entry(data.connector_type)
+        if catalog_entry:
+            spec = catalog_entry.spec
+
     connector = Connector(
         id=str(uuid4()),
         name=data.name,
@@ -291,7 +329,7 @@ async def create_connector(
         config=data.config,
         user_id=user_id if not project_id else None,
         project_id=project_id,
-        spec=data.spec,
+        spec=spec,
     )
     db.add(connector)
     await db.commit()
@@ -316,6 +354,14 @@ async def create_global_connector(
     _validate_execution_target(data)
     await _verify_execution_target(data)
 
+    spec = data.spec
+    if not spec:
+        from src.connectors.catalog import get_catalog_entry
+
+        catalog_entry = get_catalog_entry(data.connector_type)
+        if catalog_entry:
+            spec = catalog_entry.spec
+
     connector = Connector(
         id=str(uuid4()),
         name=data.name,
@@ -326,7 +372,7 @@ async def create_global_connector(
         config=data.config,
         user_id=None,
         project_id=None,
-        spec=data.spec,
+        spec=spec,
     )
     db.add(connector)
     await db.commit()

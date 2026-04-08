@@ -91,6 +91,12 @@ class OutboundConnectorExecutor:
             )
 
         method = tool_def.get("method", "POST").upper()
+
+        if method == "SMTP":
+            return await _send_smtp_email(
+                tool_def, params, decrypted_credentials, connector.id
+            )
+
         headers = _build_auth_headers(
             spec, tool_def, decrypted_credentials
         )
@@ -214,3 +220,61 @@ def _extract_jsonpath(data: dict, path: str) -> str | dict | list:
         else:
             break
     return current
+
+
+async def _send_smtp_email(
+    tool_def: dict,
+    params: dict,
+    credentials: dict[str, str],
+    connector_id: str,
+) -> dict:
+    """Send email via SMTP (Gmail App Password, etc.)."""
+    import asyncio
+    import smtplib
+    from email.mime.text import MIMEText
+
+    smtp_address = tool_def.get("path", "smtp.gmail.com:587")
+    host_port = smtp_address.split(":")
+    host = host_port[0]
+    port = int(host_port[1]) if len(host_port) > 1 else 587
+
+    email_address = credentials.get("email_address", "")
+    app_password = credentials.get("api_key", "")
+
+    if not email_address or not app_password:
+        return {
+            "error": True,
+            "message": "Missing email_address or api_key (app password)",
+        }
+
+    to_addr = params.get("to", "")
+    subject = params.get("subject", "")
+    body = params.get("body", "")
+
+    if not to_addr:
+        return {"error": True, "message": "Missing 'to' parameter"}
+
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["From"] = email_address
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+
+    logger.info(
+        "SMTP send: %s → %s (connector=%s)",
+        email_address,
+        to_addr,
+        connector_id[:8],
+    )
+
+    def _blocking_send() -> None:
+        with smtplib.SMTP(host, port, timeout=30) as server:
+            server.starttls()
+            server.login(email_address, app_password)
+            server.send_message(msg)
+
+    try:
+        await asyncio.to_thread(_blocking_send)
+        return {"result": f"Email sent to {to_addr}"}
+    except smtplib.SMTPException as exc:
+        logger.exception("SMTP send failed")
+        return {"error": True, "message": str(exc)}
