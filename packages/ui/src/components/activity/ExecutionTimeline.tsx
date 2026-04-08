@@ -109,9 +109,9 @@ export function ExecutionTimeline(props: {
     for (const activity of activities) {
       result.push({ activity, depth: 0 });
       if (activity.type === "graph_execution") continue;
+      if (activity.type === "agent_execution") continue;
       if (activity.children?.length) {
         for (const child of activity.children) {
-          if (activity.type === "agent_execution" && child.type === "llm") continue;
           result.push({ activity: child, depth: 1 });
         }
       }

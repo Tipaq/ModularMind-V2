@@ -44,6 +44,7 @@ export const ACTIVITY_COLORS: Record<string, string> = {
   agent_created: "text-primary",
   compaction: "text-info",
   agent_execution: "text-info",
+  graph_execution: "text-success",
 };
 
 /** Health status dot colors */

@@ -43,86 +43,20 @@ const ACTIVITY_ICON: Record<ActivityType, React.ElementType> = {
   graph_execution: Workflow,
 };
 
-function flattenActivities(activities: ExecutionActivity[]): ExecutionActivity[] {
-  const result: ExecutionActivity[] = [];
-  for (const activity of activities) {
-    if (activity.type === "graph_execution") {
-      result.push({ ...activity, type: "graph_execution" });
-      if (activity.children?.length) {
-        result.push(...activity.children);
-      }
-    } else {
-      result.push(activity);
+function countActivities(activities: ExecutionActivity[]): { agents: number; llm: number; tools: number; total: number } {
+  let agents = 0, llm = 0, tools = 0, total = 0;
+  for (const a of activities) {
+    total++;
+    if (a.type === "agent_execution") agents++;
+    if (a.type === "llm") llm++;
+    if (a.type === "tool") tools++;
+    if (a.children?.length) {
+      const c = countActivities(a.children);
+      agents += c.agents; llm += c.llm; tools += c.tools; total += c.total;
     }
   }
-  return result;
+  return { agents, llm, tools, total };
 }
-
-function GraphHeader({ activity }: { activity: ExecutionActivity }) {
-  const color = ACTIVITY_COLORS.graph_execution || "text-muted-foreground";
-  return (
-    <div className="flex items-center gap-2 py-1">
-      <div className="mt-0.5">
-        {activity.status === "running" ? (
-          <Loader2 className={cn("h-3.5 w-3.5 animate-spin", color)} />
-        ) : activity.status === "failed" ? (
-          <XCircle className="h-3.5 w-3.5 text-destructive" />
-        ) : (
-          <CheckCircle2 className={cn("h-3.5 w-3.5", color)} />
-        )}
-      </div>
-      <Workflow className={cn("h-3.5 w-3.5 shrink-0", color)} />
-      <span className="text-xs font-medium">{activity.label}</span>
-      {activity.durationMs != null && (
-        <span className="ml-auto text-[10px] text-muted-foreground">
-          {formatDurationMs(activity.durationMs)}
-        </span>
-      )}
-    </div>
-  );
-}
-
-const ActivityChildItem = memo(function ActivityChildItem({ activity }: { activity: ExecutionActivity }) {
-  const [expanded, setExpanded] = useState(false);
-  const Icon = ACTIVITY_ICON[activity.type] || Bot;
-  const color = ACTIVITY_COLORS[activity.type] || "text-muted-foreground";
-
-  return (
-    <div
-      className="flex items-start gap-2 py-0.5 cursor-pointer"
-      onClick={() => activity.preview && setExpanded(!expanded)}
-    >
-      <div className="mt-0.5">
-        {activity.status === "running" ? (
-          <Loader2 className={cn("h-3 w-3 animate-spin", color)} />
-        ) : activity.status === "failed" ? (
-          <XCircle className="h-3 w-3 text-destructive" />
-        ) : (
-          <CheckCircle2 className={cn("h-3 w-3", color)} />
-        )}
-      </div>
-      <Icon className={cn("h-3 w-3 mt-0.5 shrink-0", color)} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] truncate">{activity.label}</span>
-          {activity.detail && (
-            <span className="text-[9px] text-muted-foreground bg-muted px-1 rounded shrink-0">
-              {activity.detail}
-            </span>
-          )}
-          <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
-            {activity.durationMs != null ? formatDurationMs(activity.durationMs) : ""}
-          </span>
-        </div>
-        {expanded && activity.preview && (
-          <p className="text-[10px] text-muted-foreground mt-1 whitespace-pre-wrap break-words bg-muted/50 rounded p-1.5">
-            {activity.preview}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-});
 
 const ActivityItem = memo(function ActivityItem({ activity }: { activity: ExecutionActivity }) {
   const [expanded, setExpanded] = useState(activity.status === "running");
@@ -176,7 +110,7 @@ const ActivityItem = memo(function ActivityItem({ activity }: { activity: Execut
       {expanded && hasChildren && (
         <div className="ml-6 pl-3 border-l border-border/50 space-y-0">
           {activity.children!.map((child) => (
-            <ActivityChildItem key={child.id} activity={child} />
+            <ActivityItem key={child.id} activity={child} />
           ))}
         </div>
       )}
@@ -185,9 +119,6 @@ const ActivityItem = memo(function ActivityItem({ activity }: { activity: Execut
 });
 
 function renderActivityItem(activity: ExecutionActivity) {
-  if (activity.type === "graph_execution") {
-    return <GraphHeader key={activity.id} activity={activity} />;
-  }
   return <ActivityItem key={activity.id} activity={activity} />;
 }
 
@@ -203,7 +134,7 @@ export const ExecutionActivityList = memo(function ExecutionActivityList({
   flat,
 }: ExecutionActivityListProps) {
   const [expanded, setExpanded] = useState(false);
-  const items = flattenActivities(activities);
+  const items = activities;
 
   if (items.length === 0 && !isStreaming) return null;
 
@@ -239,15 +170,13 @@ export const ExecutionActivityList = memo(function ExecutionActivityList({
     );
   }
 
-  const agentCount = items.filter((a) => a.type === "agent_execution").length;
-  const llmCount = items.filter((a) => a.type === "llm").length;
-  const toolCount = items.filter((a) => a.type === "tool").length;
+  const counts = countActivities(items);
   const totalMs = items.reduce((sum, a) => sum + (a.durationMs || 0), 0);
   const parts: string[] = [];
-  if (agentCount > 0) parts.push(`${agentCount} agents`);
-  else parts.push(`${items.length} steps`);
-  if (llmCount > 0) parts.push(`${llmCount} LLM`);
-  if (toolCount > 0) parts.push(`${toolCount} tools`);
+  if (counts.agents > 0) parts.push(`${counts.agents} agents`);
+  else parts.push(`${counts.total} steps`);
+  if (counts.llm > 0) parts.push(`${counts.llm} LLM`);
+  if (counts.tools > 0) parts.push(`${counts.tools} tools`);
 
   return (
     <div>
