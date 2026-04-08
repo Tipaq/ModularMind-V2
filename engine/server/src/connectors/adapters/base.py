@@ -52,10 +52,20 @@ class ConnectorTypeMeta:
 
 
 class PlatformAdapter(ABC):
-    """Base class all platform adapters must implement."""
+    """Base class all platform adapters must implement.
+
+    Adapters receive decrypted credentials via the ``credentials`` parameter
+    (a dict of key→value pairs, e.g. {"bot_token": "xoxb-...", "signing_secret": "abc"}).
+    """
 
     @abstractmethod
-    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
+    async def verify_signature(
+        self,
+        request: Request,
+        body: bytes,
+        connector: Connector,
+        credentials: dict[str, str],
+    ) -> None:
         """Raise HTTPException(401/403) if the request signature is invalid."""
 
     @abstractmethod
@@ -70,7 +80,10 @@ class PlatformAdapter(ABC):
 
     @abstractmethod
     async def send_response(
-        self, connector: Connector, platform_context: dict, response_text: str
+        self,
+        platform_context: dict,
+        response_text: str,
+        credentials: dict[str, str],
     ) -> None:
         """Deliver the agent response back to the user on the platform."""
 
@@ -89,5 +102,7 @@ class PlatformAdapter(ABC):
 
     @classmethod
     def allowed_config_keys(cls) -> frozenset[str]:
-        """Derive allowed config keys from metadata fields."""
-        return frozenset(f.key for f in cls.metadata().fields)
+        """Non-secret config keys allowed in connector.config."""
+        return frozenset(
+            f.key for f in cls.metadata().fields if not f.is_secret
+        )

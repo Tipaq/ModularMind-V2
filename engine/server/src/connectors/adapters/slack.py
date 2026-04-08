@@ -25,25 +25,37 @@ SLACK_REPLAY_WINDOW_SECONDS = 300
 class SlackAdapter(PlatformAdapter):
     """Adapter for Slack Events API webhooks."""
 
-    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
+    async def verify_signature(
+        self,
+        request: Request,
+        body: bytes,
+        connector: Connector,
+        credentials: dict[str, str],
+    ) -> None:
         signature = request.headers.get("X-Slack-Signature")
         timestamp = request.headers.get("X-Slack-Request-Timestamp")
         if not signature or not timestamp:
-            raise HTTPException(status_code=401, detail="Missing Slack signature headers")
+            raise HTTPException(
+                status_code=401,
+                detail="Missing Slack signature headers",
+            )
 
-        signing_secret = (connector.config or {}).get("signing_secret", "")
+        signing_secret = credentials.get("signing_secret", "")
         if not signing_secret:
             signing_secret = connector.webhook_secret
 
         if not _verify_slack_hmac(body, timestamp, signature, signing_secret):
-            raise HTTPException(status_code=403, detail="Invalid Slack signature")
+            raise HTTPException(
+                status_code=403, detail="Invalid Slack signature"
+            )
 
     async def handle_handshake(
         self, request: Request, payload: dict, connector: Connector
     ) -> HandshakeResult:
         if payload.get("type") == "url_verification":
             return HandshakeResult(
-                is_handshake=True, response={"challenge": payload.get("challenge")}
+                is_handshake=True,
+                response={"challenge": payload.get("challenge")},
             )
         return HandshakeResult(is_handshake=False)
 
@@ -61,18 +73,21 @@ class SlackAdapter(PlatformAdapter):
             sender_id=event.get("user", "unknown"),
             platform_context={
                 "channel": event.get("channel", ""),
-                "thread_ts": event.get("thread_ts") or event.get("ts", ""),
+                "thread_ts": (
+                    event.get("thread_ts") or event.get("ts", "")
+                ),
             },
         )
 
     async def send_response(
-        self, connector: Connector | None, platform_context: dict, response_text: str
+        self,
+        platform_context: dict,
+        response_text: str,
+        credentials: dict[str, str],
     ) -> None:
-        bot_token = ""
-        if connector:
-            bot_token = (connector.config or {}).get("bot_token", "")
+        bot_token = credentials.get("bot_token", "")
         if not bot_token:
-            logger.warning("Slack bot_token not configured — cannot send response")
+            logger.warning("Slack bot_token missing — cannot send")
             return
 
         channel = platform_context.get("channel", "")
@@ -94,7 +109,10 @@ class SlackAdapter(PlatformAdapter):
                 )
                 data = resp.json()
                 if not data.get("ok"):
-                    logger.warning("Slack chat.postMessage failed: %s", data.get("error"))
+                    logger.warning(
+                        "Slack chat.postMessage failed: %s",
+                        data.get("error"),
+                    )
         except httpx.HTTPError:
             logger.exception("Failed to send Slack response")
 
@@ -111,27 +129,43 @@ class SlackAdapter(PlatformAdapter):
             name="Slack",
             icon="hash",
             color="bg-secondary",
-            description="Receive and respond to messages via Slack Events API",
+            description=(
+                "Receive and respond to messages via Slack Events API"
+            ),
             doc_url="https://api.slack.com/events-api",
             setup_steps=[
                 "Create a Slack app at api.slack.com/apps",
-                "Under Event Subscriptions, enable events and add bot events (message.im)",
-                "Under OAuth & Permissions, add chat:write scope and install to workspace",
+                "Under Event Subscriptions, enable events and "
+                "add bot events (message.im)",
+                "Under OAuth & Permissions, add chat:write scope "
+                "and install to workspace",
                 "Copy the Bot Token and Signing Secret",
                 "Fill in the credentials below and click Connect",
-                "Copy the Webhook URL and paste it as the Request URL in Event Subscriptions",
+                "Copy the Webhook URL and paste it as the "
+                "Request URL in Event Subscriptions",
             ],
             fields=[
-                ConnectorFieldDef(key="bot_token", label="Bot Token", placeholder="xoxb-..."),
-                ConnectorFieldDef(key="signing_secret", label="Signing Secret"),
                 ConnectorFieldDef(
-                    key="channel", label="Channel", is_secret=False, is_required=False
+                    key="bot_token",
+                    label="Bot Token",
+                    placeholder="xoxb-...",
+                ),
+                ConnectorFieldDef(
+                    key="signing_secret", label="Signing Secret"
+                ),
+                ConnectorFieldDef(
+                    key="channel",
+                    label="Channel",
+                    is_secret=False,
+                    is_required=False,
                 ),
             ],
         )
 
 
-def _verify_slack_hmac(body: bytes, timestamp: str, signature: str, signing_secret: str) -> bool:
+def _verify_slack_hmac(
+    body: bytes, timestamp: str, signature: str, signing_secret: str
+) -> bool:
     try:
         ts = int(timestamp)
     except (ValueError, TypeError):
@@ -141,5 +175,7 @@ def _verify_slack_hmac(body: bytes, timestamp: str, signature: str, signing_secr
         return False
 
     sig_basestring = f"v0:{timestamp}:{body.decode('utf-8')}"
-    digest = hmac.new(signing_secret.encode(), sig_basestring.encode(), hashlib.sha256).hexdigest()
+    digest = hmac.new(
+        signing_secret.encode(), sig_basestring.encode(), hashlib.sha256
+    ).hexdigest()
     return hmac.compare_digest(f"v0={digest}", signature)

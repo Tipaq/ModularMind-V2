@@ -145,6 +145,7 @@ async def _run_background(
     connector_supervisor_mode: bool,
     connector_config: dict,
     message: ExtractedMessage,
+    credentials: dict[str, str],
 ) -> None:
     """Background task: execute then deliver response via adapter."""
     async with _background_semaphore, async_session_maker() as db:
@@ -157,13 +158,15 @@ async def _run_background(
                 config=connector_config,
             )
             response_text = await execute_and_collect(db, fake_connector, message)
-            await adapter.send_response(None, message.platform_context, response_text)
+            await adapter.send_response(
+                message.platform_context, response_text, credentials
+            )
         except (RuntimeError, ValueError, OSError, ConnectionError, TimeoutError) as exc:
             logger.exception("Background webhook execution failed for %s: %s", connector_id, exc)
             await adapter.send_response(
-                None,
                 message.platform_context,
                 "An error occurred while processing your request.",
+                credentials,
             )
 
 
@@ -189,6 +192,7 @@ def launch_background_execution(
     adapter: PlatformAdapter,
     connector: Connector,
     message: ExtractedMessage,
+    credentials: dict[str, str],
 ) -> None:
     """Fire a background task for deferred-execution platforms."""
     task = asyncio.create_task(
@@ -200,6 +204,7 @@ def launch_background_execution(
             connector.supervisor_mode,
             connector.config or {},
             message,
+            credentials,
         ),
         name=f"webhook-bg-{connector.id[:8]}",
     )

@@ -20,12 +20,23 @@ logger = logging.getLogger(__name__)
 class TeamsAdapter(PlatformAdapter):
     """Adapter for Microsoft Teams Bot Framework webhooks."""
 
-    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
+    async def verify_signature(
+        self,
+        request: Request,
+        body: bytes,
+        connector: Connector,
+        credentials: dict[str, str],
+    ) -> None:
         secret = request.headers.get("X-Webhook-Secret", "")
         if not secret:
-            raise HTTPException(status_code=401, detail="Missing X-Webhook-Secret header")
+            raise HTTPException(
+                status_code=401,
+                detail="Missing X-Webhook-Secret header",
+            )
         if not hmac.compare_digest(connector.webhook_secret, secret):
-            raise HTTPException(status_code=403, detail="Invalid webhook secret")
+            raise HTTPException(
+                status_code=403, detail="Invalid webhook secret"
+            )
 
     async def handle_handshake(
         self, request: Request, payload: dict, connector: Connector
@@ -41,13 +52,21 @@ class TeamsAdapter(PlatformAdapter):
         return ExtractedMessage(
             text=text,
             sender_id=payload.get("from", {}).get("id", "unknown"),
-            platform_context={"service_url": payload.get("serviceUrl", "")},
+            platform_context={
+                "service_url": payload.get("serviceUrl", "")
+            },
         )
 
     async def send_response(
-        self, connector: Connector | None, platform_context: dict, response_text: str
+        self,
+        platform_context: dict,
+        response_text: str,
+        credentials: dict[str, str],
     ) -> None:
-        logger.debug("Teams response delivery not implemented — response returned in HTTP body")
+        logger.debug(
+            "Teams response delivery not implemented — "
+            "response returned in HTTP body"
+        )
 
     def requires_deferred_execution(self) -> bool:
         return False
@@ -62,20 +81,40 @@ class TeamsAdapter(PlatformAdapter):
             name="Microsoft Teams",
             icon="message-square",
             color="bg-info",
-            description="Receive messages from Microsoft Teams via Bot Framework",
-            doc_url="https://learn.microsoft.com/en-us/microsoftteams/platform/bots/",
+            description=(
+                "Receive messages from Microsoft Teams "
+                "via Bot Framework"
+            ),
+            doc_url=(
+                "https://learn.microsoft.com"
+                "/en-us/microsoftteams/platform/bots/"
+            ),
             setup_steps=[
                 "Register a bot in the Azure Bot Service",
-                "Configure the messaging endpoint to the Webhook URL below",
+                "Configure the messaging endpoint "
+                "to the Webhook URL below",
                 "Install the bot in your Teams tenant",
                 "Fill in the credentials below and click Connect",
             ],
             fields=[
-                ConnectorFieldDef(key="app_id", label="App ID", is_secret=False),
-                ConnectorFieldDef(key="app_secret", label="App Secret"),
-                ConnectorFieldDef(key="tenant_id", label="Tenant ID", is_secret=False),
                 ConnectorFieldDef(
-                    key="channel", label="Channel", is_secret=False, is_required=False
+                    key="app_id",
+                    label="App ID",
+                    is_secret=False,
+                ),
+                ConnectorFieldDef(
+                    key="app_secret", label="App Secret"
+                ),
+                ConnectorFieldDef(
+                    key="tenant_id",
+                    label="Tenant ID",
+                    is_secret=False,
+                ),
+                ConnectorFieldDef(
+                    key="channel",
+                    label="Channel",
+                    is_secret=False,
+                    is_required=False,
                 ),
             ],
         )

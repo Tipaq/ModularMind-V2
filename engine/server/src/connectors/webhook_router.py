@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
 from src.connectors.adapters.whatsapp import WhatsAppAdapter
+from src.connectors.credentials import CredentialService
 from src.connectors.execution import execute_and_collect, launch_background_execution
 from src.connectors.models import Connector
-from src.connectors.registry import get_adapter
+from src.connectors.registry import get_or_create_adapter
 from src.infra.constants import RATE_LIMIT_WEBHOOK
 from src.infra.database import DbSession
 from src.infra.rate_limit import RateLimitDependency
@@ -34,6 +35,15 @@ async def _load_connector(connector_id: str, db: DbSession) -> Connector:
     return connector
 
 
+async def _resolve_credentials(
+    db: DbSession, connector: Connector
+) -> dict[str, str]:
+    """Resolve shared credentials for inbound webhook processing."""
+    credential_service = CredentialService(db)
+    credential = await credential_service.resolve_credential(connector.id)
+    return credential_service.decrypt_token_map(credential)
+
+
 @webhook_router.get("/{connector_id}")
 async def verify_webhook(
     connector_id: str,
@@ -42,7 +52,7 @@ async def verify_webhook(
 ) -> dict:
     """Handle GET-based webhook verification (WhatsApp hub.challenge)."""
     connector = await _load_connector(connector_id, db)
-    adapter = get_adapter(connector.connector_type)
+    adapter = get_or_create_adapter(connector.connector_type, connector.spec)
     if not adapter:
         raise HTTPException(status_code=400, detail="Unknown connector type")
 
@@ -64,12 +74,14 @@ async def receive_webhook(
 ) -> dict:
     """Receive and process webhook from external service."""
     connector = await _load_connector(connector_id, db)
-    adapter = get_adapter(connector.connector_type)
+    adapter = get_or_create_adapter(connector.connector_type, connector.spec)
     if not adapter:
         raise HTTPException(status_code=400, detail="Unknown connector type")
 
+    credentials = await _resolve_credentials(db, connector)
+
     body = await request.body()
-    await adapter.verify_signature(request, body, connector)
+    await adapter.verify_signature(request, body, connector, credentials)
 
     try:
         payload = await request.json()
@@ -88,9 +100,11 @@ async def receive_webhook(
         return {"status": "ignored", "reason": "No message content extracted"}
 
     if adapter.requires_deferred_execution():
-        launch_background_execution(adapter, connector, message)
+        launch_background_execution(adapter, connector, message, credentials)
         return adapter.deferred_ack_response(payload)
 
     response_text = await execute_and_collect(db, connector, message)
-    await adapter.send_response(connector, message.platform_context, response_text)
+    await adapter.send_response(
+        message.platform_context, response_text, credentials
+    )
     return {"status": "ok", "response": response_text}

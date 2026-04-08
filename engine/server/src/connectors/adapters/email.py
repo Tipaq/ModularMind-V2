@@ -20,12 +20,23 @@ logger = logging.getLogger(__name__)
 class EmailAdapter(PlatformAdapter):
     """Adapter for email webhook integrations."""
 
-    async def verify_signature(self, request: Request, body: bytes, connector: Connector) -> None:
+    async def verify_signature(
+        self,
+        request: Request,
+        body: bytes,
+        connector: Connector,
+        credentials: dict[str, str],
+    ) -> None:
         secret = request.headers.get("X-Webhook-Secret", "")
         if not secret:
-            raise HTTPException(status_code=401, detail="Missing X-Webhook-Secret header")
+            raise HTTPException(
+                status_code=401,
+                detail="Missing X-Webhook-Secret header",
+            )
         if not hmac.compare_digest(connector.webhook_secret, secret):
-            raise HTTPException(status_code=403, detail="Invalid webhook secret")
+            raise HTTPException(
+                status_code=403, detail="Invalid webhook secret"
+            )
 
     async def handle_handshake(
         self, request: Request, payload: dict, connector: Connector
@@ -41,13 +52,21 @@ class EmailAdapter(PlatformAdapter):
         return ExtractedMessage(
             text=text,
             sender_id=payload.get("from", "unknown"),
-            platform_context={"reply_to": payload.get("from", "")},
+            platform_context={
+                "reply_to": payload.get("from", "")
+            },
         )
 
     async def send_response(
-        self, connector: Connector | None, platform_context: dict, response_text: str
+        self,
+        platform_context: dict,
+        response_text: str,
+        credentials: dict[str, str],
     ) -> None:
-        logger.debug("Email response delivery not implemented — response returned in HTTP body")
+        logger.debug(
+            "Email response delivery not implemented — "
+            "response returned in HTTP body"
+        )
 
     def requires_deferred_execution(self) -> bool:
         return False
@@ -63,20 +82,38 @@ class EmailAdapter(PlatformAdapter):
             icon="mail",
             color="bg-success",
             description="Receive messages via email webhooks",
-            doc_url="https://sendgrid.com/docs/for-developers/parsing-email/",
+            doc_url=(
+                "https://sendgrid.com"
+                "/docs/for-developers/parsing-email/"
+            ),
             setup_steps=[
-                "Configure your email provider to forward inbound emails as webhooks",
+                "Configure your email provider to forward "
+                "inbound emails as webhooks",
                 "Set the webhook URL to the Webhook URL below",
                 "Fill in the credentials below and click Connect",
             ],
             fields=[
-                ConnectorFieldDef(key="address", label="Email Address", is_secret=False),
-                ConnectorFieldDef(key="smtp_host", label="SMTP Host", is_secret=False),
                 ConnectorFieldDef(
-                    key="smtp_port", label="SMTP Port", is_secret=False, is_required=False
+                    key="address",
+                    label="Email Address",
+                    is_secret=False,
                 ),
                 ConnectorFieldDef(
-                    key="imap_host", label="IMAP Host", is_secret=False, is_required=False
+                    key="smtp_host",
+                    label="SMTP Host",
+                    is_secret=False,
+                ),
+                ConnectorFieldDef(
+                    key="smtp_port",
+                    label="SMTP Port",
+                    is_secret=False,
+                    is_required=False,
+                ),
+                ConnectorFieldDef(
+                    key="imap_host",
+                    label="IMAP Host",
+                    is_secret=False,
+                    is_required=False,
                 ),
                 ConnectorFieldDef(
                     key="use_tls",
