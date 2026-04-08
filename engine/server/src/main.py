@@ -167,6 +167,15 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("System Indexer seed failed (non-fatal): %s", exc)
 
+    # 10. Seed API Connector Builder graph (leader-only, idempotent)
+    try:
+        from src.connectors.builder_graph import seed_connector_builder
+
+        async with _session_maker() as seed_session:
+            await seed_connector_builder(seed_session, model_id=settings.SUPERVISOR_MODEL_ID)
+    except Exception as exc:
+        logger.warning("Connector Builder seed failed (non-fatal): %s", exc)
+
     logger.info(
         "ModularMind Engine started (env=%s)",
         settings.ENVIRONMENT,

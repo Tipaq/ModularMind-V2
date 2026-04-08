@@ -36,6 +36,7 @@ import {
 import type {
   ConnectorData,
   ConnectorTypeDef,
+  ConnectorCredentialData,
   Agent,
   GraphListItem,
   EngineModel,
@@ -145,7 +146,7 @@ export function IntegrationsTab() {
       try {
         const [typesRes, connRes, agentRes, graphRes, modelRes] = await Promise.all([
           api.get<{ items: ConnectorTypeDef[] }>("/connectors/types"),
-          api.get<{ items: ConnectorData[] }>("/connectors"),
+          api.get<{ items: ConnectorData[]; total: number }>("/connectors/mine"),
           api.get<{ items: Agent[] }>("/agents"),
           api.get<{ items: GraphListItem[] }>("/graphs"),
           api.get<{ items: EngineModel[] }>("/models"),
@@ -204,7 +205,15 @@ export function IntegrationsTab() {
 
     setCreating(typeDef.type_id);
     try {
-      const config = { ...fields };
+      const secretFields = typeDef.fields.filter((f) => f.is_secret);
+      const nonSecretFields = typeDef.fields.filter((f) => !f.is_secret);
+
+      const config: Record<string, string> = {};
+      for (const f of nonSecretFields) {
+        if (fields[f.key]) config[f.key] = fields[f.key];
+      }
+      if (mode === "model" && targetId) config.model_id = targetId;
+
       const payload: Record<string, unknown> = {
         name,
         connector_type: typeDef.type_id,
@@ -214,10 +223,32 @@ export function IntegrationsTab() {
 
       if (mode === "agent") payload.agent_id = targetId;
       else if (mode === "graph") payload.graph_id = targetId;
-      else if (mode === "model") config.model_id = targetId;
 
-      const data = await api.post<ConnectorData>("/connectors", payload);
-      setConnectors((prev) => [data, ...prev]);
+      const data = await api.post<ConnectorData>("/connectors/global", payload);
+
+      const secretValues: Record<string, string> = {};
+      for (const f of secretFields) {
+        if (fields[f.key]) secretValues[f.key] = fields[f.key];
+      }
+
+      if (Object.keys(secretValues).length > 0) {
+        const credentialValue = Object.entries(secretValues)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([k, v]) => `${k}=${v}`)
+          .join("|");
+
+        await api.post<ConnectorCredentialData>(
+          `/connectors/${data.id}/credentials`,
+          {
+            credential_type: "bot_token",
+            label: `${typeDef.name} credentials`,
+            value: credentialValue,
+          },
+        );
+      }
+
+      const refreshed = await api.get<ConnectorData>(`/connectors/${data.id}`);
+      setConnectors((prev) => [refreshed, ...prev]);
       setFormData((prev) => ({ ...prev, [typeDef.type_id]: {} }));
       setConnectorName((prev) => ({ ...prev, [typeDef.type_id]: "" }));
       setSelectedTargetId((prev) => ({ ...prev, [typeDef.type_id]: "" }));
@@ -385,6 +416,14 @@ export function IntegrationsTab() {
                               <Badge variant="outline" className="text-[10px]">
                                 {getConnectorExecutionLabel(connector)}
                               </Badge>
+                              <Badge variant="outline" className="text-[10px]">
+                                {connector.scope}
+                              </Badge>
+                              {connector.credential_count > 0 && (
+                                <Badge variant="success" className="text-[10px]">
+                                  {connector.credential_count} credential{connector.credential_count > 1 ? "s" : ""}
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5 truncate">
                               {getConnectorTargetName(connector, agents, graphs, models)}

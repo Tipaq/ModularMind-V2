@@ -69,6 +69,8 @@ export interface MCPTestResult {
 
 // ─── Connectors ──────────────────────────────────────────────────────────────
 
+export type ConnectorScope = 'user' | 'project' | 'global';
+
 export interface ConnectorData {
   id: string;
   name: string;
@@ -79,8 +81,37 @@ export interface ConnectorData {
   webhook_url: string;
   is_enabled: boolean;
   config: Record<string, string>;
+  scope: ConnectorScope;
+  user_id: string | null;
+  project_id: string | null;
+  has_spec: boolean;
+  credential_count: number;
+  has_user_credential: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface ConnectorCredentialData {
+  id: string;
+  connector_id: string;
+  user_id: string | null;
+  credential_type: string;
+  label: string;
+  provider: string | null;
+  scopes: string[] | null;
+  is_valid: boolean;
+  is_shared: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConnectorCredentialCreate {
+  credential_type: string;
+  label: string;
+  value: string;
+  refresh_token?: string;
+  provider?: string;
+  scopes?: string[];
 }
 
 // ─── Connector Types (dynamic from backend) ─────────────────────────────────
