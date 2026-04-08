@@ -45,6 +45,7 @@ _CATEGORY_PREFIXES = (
     "extract_",
     "git_",
     "scheduling_",
+    "connector__",
 )
 
 
@@ -97,6 +98,8 @@ class ExtendedToolExecutor:
                 return await self._handle_git(name, args)
             if name.startswith("scheduling_"):
                 return await self._handle_scheduling(name, args)
+            if name.startswith("connector__"):
+                return await self._handle_connector(name, args)
             return f"Error: unknown extended tool '{name}'"
         except (KeyError, ValueError, TypeError, RuntimeError, ConnectionError, TimeoutError) as e:
             logger.exception("Extended tool '%s' failed", name)
@@ -245,4 +248,16 @@ class ExtendedToolExecutor:
                 agent_id=self._agent_id,
                 session=session,
                 gateway_executor=self._gateway_executor,
+            )
+
+    async def _handle_connector(self, name: str, args: dict[str, Any]) -> str:
+        """Execute an outbound connector tool (connector__<type>__<action>)."""
+        from src.tools.categories.connectors import execute_connector_tool
+
+        async with self._session_maker() as session:
+            return await execute_connector_tool(
+                name,
+                args,
+                user_id=self._user_id,
+                session=session,
             )
