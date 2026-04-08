@@ -31,6 +31,9 @@ from src.projects.models import ProjectMember
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/connectors", tags=["Connectors"])
+project_connector_router = APIRouter(
+    prefix="/projects", tags=["Project Connectors"]
+)
 
 EXECUTION_CONFIG_KEYS = frozenset({"model_id", "enabled_agent_ids", "enabled_graph_ids"})
 
@@ -476,3 +479,44 @@ async def delete_credential(
     service = CredentialService(db)
     await service.delete_credential(credential_id)
     await db.commit()
+
+
+# ─── Project-scoped connector endpoints ─────────────────────────────
+
+
+@project_connector_router.get(
+    "/{project_id}/connectors",
+    response_model=ConnectorListResponse,
+)
+async def list_project_connectors(
+    project_id: str,
+    user: CurrentUser,
+    db: DbSession,
+) -> ConnectorListResponse:
+    """List connectors scoped to a project (+ global)."""
+    result = await db.execute(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == user.id,
+        )
+    )
+    is_admin = user.role.value in ("admin", "owner")
+    if not result.scalar_one_or_none() and not is_admin:
+        raise HTTPException(
+            status_code=403, detail="Not a project member"
+        )
+
+    query = select(Connector).where(
+        or_(
+            Connector.project_id == project_id,
+            Connector.user_id.is_(None) & Connector.project_id.is_(None),
+        )
+    ).order_by(Connector.created_at.desc())
+
+    rows = await db.execute(query)
+    connectors = list(rows.scalars().all())
+    items = [
+        await _enrich_response(c, db, user.id)
+        for c in connectors
+    ]
+    return ConnectorListResponse(items=items, total=len(items))
