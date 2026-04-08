@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { BookOpen, MessageSquare, Plus, Settings2, Upload } from "lucide-react";
-import { Button, QuickChatInput, relativeTime } from "@modularmind/ui";
-import type { Conversation, ProjectDetail, ProjectResourceCounts } from "@modularmind/api-client";
+import {
+  Button, ChatInput, relativeTime, useChatConfig, toggleArrayItem, formatModelName,
+} from "@modularmind/ui";
+import type { AttachedFile } from "@modularmind/ui";
+import type { Conversation, EngineModel, ProjectDetail, ProjectResourceCounts } from "@modularmind/api-client";
 import { api, conversationAdapter } from "@modularmind/api-client";
 import { useRecentConversationsStore } from "../../stores/recent-conversations-store";
 import { useKnowledgeHub } from "../../hooks/useKnowledgeHub";
+import { chatConfigAdapter } from "../../lib/chat-adapter";
 
 interface ProjectContext {
   project: ProjectDetail;
@@ -19,6 +23,36 @@ export function ProjectOverview() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const addConversation = useRecentConversationsStore((s) => s.addConversation);
+
+  const [inputValue, setInputValue] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [enabledAgentIds, setEnabledAgentIds] = useState<string[]>([]);
+  const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+
+  const { agents, graphs, models } = useChatConfig(chatConfigAdapter);
+
+  const chatModels = useMemo(
+    () => models.filter((m) => m.is_active && m.is_available && !m.is_embedding),
+    [models],
+  );
+
+  const effectiveModelId = useMemo(() => {
+    if (selectedModelId) return selectedModelId;
+    if (chatModels.length > 0) return `${chatModels[0].provider}:${chatModels[0].model_id}`;
+    return null;
+  }, [selectedModelId, chatModels]);
+
+  const modelLabel = useCallback(
+    (m: EngineModel) => formatModelName(m.model_id || m.name), [],
+  );
+
+  const handleToggleAgent = useCallback(
+    (agentId: string) => setEnabledAgentIds((prev) => toggleArrayItem(prev, agentId)), [],
+  );
+  const handleToggleGraph = useCallback(
+    (graphId: string) => setEnabledGraphIds((prev) => toggleArrayItem(prev, graphId)), [],
+  );
 
   const counts = resourceCounts ?? {
     conversations: 0, collections: 0, mini_apps: 0, scheduled_tasks: 0, repositories: 0,
@@ -40,24 +74,54 @@ export function ProjectOverview() {
     })();
   }, [project.id]);
 
-  const handleQuickSend = useCallback(async (message: string) => {
+  const handleSend = useCallback(async () => {
+    if (!inputValue.trim() && attachedFiles.length === 0) return;
     const conversation = await conversationAdapter.createConversation({
       supervisor_mode: true,
       project_id: project.id,
     });
+    if (effectiveModelId || enabledAgentIds.length > 0 || enabledGraphIds.length > 0) {
+      await conversationAdapter.patchConversation(conversation.id, {
+        config: {
+          enabled_agent_ids: enabledAgentIds,
+          enabled_graph_ids: enabledGraphIds,
+          model_id: effectiveModelId,
+        },
+      }).catch((err: unknown) => console.error("[ProjectOverview]", err));
+    }
     addConversation(conversation);
     reload();
     navigate(`/projects/${project.id}/conversations/${conversation.id}`, {
-      state: { initialMessage: message },
+      state: { initialMessage: inputValue.trim() },
     });
-  }, [project.id, addConversation, reload, navigate]);
+    setInputValue("");
+    setAttachedFiles([]);
+  }, [inputValue, attachedFiles, project.id, effectiveModelId, enabledAgentIds, enabledGraphIds, addConversation, reload, navigate]);
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <div className="max-w-5xl mx-auto flex flex-col lg:flex-row gap-6">
         {/* Left column — Chat + Conversations */}
         <div className="flex-1 min-w-0 space-y-6">
-          <QuickChatInput onSend={handleQuickSend} placeholder="Start a new conversation..." />
+          <ChatInput
+            value={inputValue}
+            onChange={setInputValue}
+            onSend={handleSend}
+            isStreaming={false}
+            onCancel={() => {}}
+            agents={agents}
+            graphs={graphs}
+            enabledAgentIds={enabledAgentIds}
+            enabledGraphIds={enabledGraphIds}
+            onToggleAgent={handleToggleAgent}
+            onToggleGraph={handleToggleGraph}
+            onFilesChange={setAttachedFiles}
+            disabledReason={effectiveModelId ? null : "Select a model before sending"}
+            models={chatModels}
+            selectedModelId={effectiveModelId}
+            onModelChange={setSelectedModelId}
+            modelLabel={modelLabel}
+          />
 
           {/* Conversations list */}
           <div>
