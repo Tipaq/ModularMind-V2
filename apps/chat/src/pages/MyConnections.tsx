@@ -29,7 +29,7 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [visibleSecrets, setVisibleSecrets] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
+  const [typeError, setTypeError] = useState<Record<string, string>>({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -68,7 +68,7 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
 
     for (const f of typeDef.fields) {
       if (f.is_required && !fields[f.key]?.trim()) {
-        setError(`Please fill in: ${f.label}`);
+        setTypeError((prev) => ({ ...prev, [typeDef.type_id]: `Please fill in: ${f.label}` }));
         return;
       }
     }
@@ -85,7 +85,7 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
       );
 
       if (!testResult.success) {
-        setError(testResult.message);
+        setTypeError((prev) => ({ ...prev, [typeDef.type_id]: testResult.message }));
         setCreating(null);
         return;
       }
@@ -133,9 +133,10 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
       setConnectorName((prev) => ({ ...prev, [typeDef.type_id]: "" }));
       setExpandedType(null);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create connector"
-      );
+      setTypeError((prev) => ({
+        ...prev,
+        [typeDef.type_id]: err instanceof Error ? err.message : "Failed to create connector",
+      }));
     }
     setCreating(null);
   };
@@ -361,6 +362,12 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
                     })}
                   </div>
 
+                  {typeError[typeDef.type_id] && (
+                    <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                      {typeError[typeDef.type_id]}
+                    </div>
+                  )}
+
                   <div className="flex items-end gap-3">
                     <div className="flex-1 space-y-1">
                       <Label className="text-xs">Connection Name</Label>
@@ -377,14 +384,17 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
                       />
                     </div>
                     <Button
-                      onClick={() => handleConnect(typeDef)}
+                      onClick={() => {
+                        setTypeError((prev) => ({ ...prev, [typeDef.type_id]: "" }));
+                        handleConnect(typeDef);
+                      }}
                       disabled={creating === typeDef.type_id}
                       className="h-8 text-xs"
                     >
                       {creating === typeDef.type_id ? (
                         <>
                           <RefreshCw className="h-3 w-3 animate-spin mr-1" />
-                          Connecting...
+                          Testing...
                         </>
                       ) : (
                         <>
@@ -412,15 +422,6 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
         onConfirm={handleDeleteConfirm}
       />
 
-      <ConfirmDialog
-        open={!!error}
-        onOpenChange={(open) => { if (!open) setError(null); }}
-        title="Error"
-        description={error ?? ""}
-        confirmLabel="OK"
-        cancelLabel={false}
-        onConfirm={() => setError(null)}
-      />
     </div>
   );
 }

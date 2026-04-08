@@ -283,24 +283,23 @@ async def _test_smtp_credentials(
         detail = await asyncio.to_thread(_blocking_test)
         return {"success": True, "message": detail}
     except smtplib.SMTPAuthenticationError:
-        return {
-            "success": False,
-            "message": (
-                "Authentication failed. Check your password. "
-                "For Gmail, use an App Password "
-                "(Google Account > Security > App Passwords). "
-                "For Outlook/Hotmail, enable SMTP in account settings."
-            ),
-        }
+        hint = _auth_error_hint(email_address, smtp_host)
+        return {"success": False, "message": hint}
     except smtplib.SMTPConnectError:
         return {
             "success": False,
-            "message": f"Could not connect to {smtp_host}:{smtp_port}",
+            "message": (
+                f"Could not connect to {smtp_host}:{smtp_port}. "
+                f"Check that the SMTP host is correct."
+            ),
         }
-    except OSError as exc:
+    except (TimeoutError, OSError) as exc:
         return {
             "success": False,
-            "message": f"Connection error: {exc}",
+            "message": (
+                f"Connection to {smtp_host}:{smtp_port} timed out "
+                f"or was refused: {exc}"
+            ),
         }
     except smtplib.SMTPException as exc:
         return {"success": False, "message": str(exc)}
@@ -340,6 +339,50 @@ async def _test_http_health(
             }
     except httpx.HTTPError as exc:
         return {"success": False, "message": f"Request failed: {exc}"}
+
+
+def _auth_error_hint(email_address: str, smtp_host: str) -> str:
+    """Return a provider-specific authentication error message."""
+    domain = email_address.rsplit("@", 1)[-1].lower()
+
+    if domain in ("gmail.com", "googlemail.com"):
+        return (
+            "Gmail authentication failed. "
+            "Gmail requires an App Password (not your regular password). "
+            "Go to Google Account > Security > 2-Step Verification > "
+            "App Passwords, generate one, and use it here."
+        )
+
+    if domain in ("outlook.com", "hotmail.com", "live.com"):
+        return (
+            "Outlook/Hotmail authentication failed. "
+            "Make sure SMTP is enabled: go to Outlook.com > Settings > "
+            "Mail > Sync email > POP and IMAP, and enable SMTP. "
+            "If you have 2FA enabled, create an App Password at "
+            "account.microsoft.com/security."
+        )
+
+    if domain in ("yahoo.com", "yahoo.fr"):
+        return (
+            "Yahoo authentication failed. "
+            "Yahoo requires an App Password. Go to Yahoo Account > "
+            "Security > Generate app password and use it here."
+        )
+
+    if domain in ("icloud.com", "me.com", "mac.com"):
+        return (
+            "iCloud authentication failed. "
+            "Apple requires an App-Specific Password. Go to "
+            "appleid.apple.com > Sign-In and Security > "
+            "App-Specific Passwords."
+        )
+
+    return (
+        f"Authentication failed for {email_address} "
+        f"via {smtp_host}. Check your email and password. "
+        f"If your provider requires 2FA, you may need an "
+        f"app-specific password."
+    )
 
 
 KNOWN_SMTP_PROVIDERS: dict[str, tuple[str, int]] = {
@@ -461,13 +504,7 @@ async def _send_smtp_email(
         logger.exception("SMTP auth failed for %s", email_address)
         return {
             "error": True,
-            "message": (
-                "Authentication failed. Check your password. "
-                "For Gmail, use an App Password "
-                "(Google Account > Security > App Passwords). "
-                "For Outlook/Hotmail, you may need to enable "
-                "SMTP access in account settings."
-            ),
+            "message": _auth_error_hint(email_address, smtp_host),
         }
     except smtplib.SMTPException as exc:
         logger.exception("SMTP send failed via %s", smtp_host)
