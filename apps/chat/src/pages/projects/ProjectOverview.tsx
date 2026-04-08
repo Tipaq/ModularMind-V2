@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { BookOpen, MessageSquare, Plus, Settings2, Upload } from "lucide-react";
-import { Button, NewConversationButton, relativeTime } from "@modularmind/ui";
+import { Button, QuickChatInput, relativeTime } from "@modularmind/ui";
 import type { Conversation, ProjectDetail, ProjectResourceCounts } from "@modularmind/api-client";
 import { api, conversationAdapter } from "@modularmind/api-client";
 import { useRecentConversationsStore } from "../../stores/recent-conversations-store";
@@ -29,7 +29,7 @@ export function ProjectOverview() {
       setLoadingConversations(true);
       try {
         const data = await api.get<{ items: Conversation[] }>(
-          `/conversations?project_id=${project.id}&page_size=10`,
+          `/conversations?project_id=${project.id}&page_size=20`,
         );
         setConversations(data.items ?? []);
       } catch {
@@ -40,14 +40,16 @@ export function ProjectOverview() {
     })();
   }, [project.id]);
 
-  const handleNewConversation = useCallback(async () => {
+  const handleQuickSend = useCallback(async (message: string) => {
     const conversation = await conversationAdapter.createConversation({
       supervisor_mode: true,
       project_id: project.id,
     });
     addConversation(conversation);
     reload();
-    navigate(`/projects/${project.id}/conversations/${conversation.id}`);
+    navigate(`/projects/${project.id}/conversations/${conversation.id}`, {
+      state: { initialMessage: message },
+    });
   }, [project.id, addConversation, reload, navigate]);
 
   return (
@@ -55,23 +57,13 @@ export function ProjectOverview() {
       <div className="max-w-5xl mx-auto flex flex-col lg:flex-row gap-6">
         {/* Left column — Chat + Conversations */}
         <div className="flex-1 min-w-0 space-y-6">
-          <NewConversationButton onClick={handleNewConversation} />
+          <QuickChatInput onSend={handleQuickSend} placeholder="Start a new conversation..." />
 
           {/* Conversations list */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-medium">Conversations</h2>
-              </div>
-              {counts.conversations > 0 && (
-                <button
-                  onClick={() => navigate("conversations")}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  View all
-                </button>
-              )}
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium">Conversations</h2>
             </div>
 
             {loadingConversations ? (
@@ -85,25 +77,35 @@ export function ProjectOverview() {
                 No conversations yet. Start one above.
               </p>
             ) : (
-              <div className="rounded-xl border border-border/50 overflow-hidden">
-                {conversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className="flex items-center px-4 py-3 border-b border-border/30 last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/projects/${project.id}/conversations/${conv.id}`)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === "Enter" && navigate(`/projects/${project.id}/conversations/${conv.id}`)}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{conv.title || "Untitled"}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Last message {relativeTime(conv.updated_at)}
-                      </p>
+              <>
+                <div className="rounded-xl border border-border/50 overflow-hidden max-h-[400px] overflow-y-auto">
+                  {conversations.map((conv) => (
+                    <div
+                      key={conv.id}
+                      className="flex items-center px-4 py-3 border-b border-border/30 last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => navigate(`/projects/${project.id}/conversations/${conv.id}`)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && navigate(`/projects/${project.id}/conversations/${conv.id}`)}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{conv.title || "Untitled"}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Last message {relativeTime(conv.updated_at)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                {counts.conversations > conversations.length && (
+                  <button
+                    onClick={() => navigate("conversations")}
+                    className="w-full mt-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors text-center"
+                  >
+                    View all conversations
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

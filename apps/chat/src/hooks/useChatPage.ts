@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useParams, useLocation } from "react-router-dom";
 import {
   useChat, useConversations, useChatConfig, useArtifacts,
   useAuthStore, toggleArrayItem, formatModelName,
@@ -19,6 +19,10 @@ export function useChatPage() {
     conversationId: string;
     projectId: string;
   }>();
+  const location = useLocation();
+  const initialMessageRef = useRef<string | null>(
+    (location.state as { initialMessage?: string } | null)?.initialMessage ?? null,
+  );
   const [enabledAgentIds, setEnabledAgentIds] = useState<string[]>([]);
   const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -66,7 +70,7 @@ export function useChatPage() {
   const { artifacts, selectedArtifactId, selectedArtifact, addArtifact, selectArtifact, clearArtifacts } =
     useArtifacts();
 
-  const { inputValue, setInputValue, setAttachedFiles, handleSend } = useChatSend({
+  const { inputValue, setInputValue, setAttachedFiles, handleSend, sendDirectMessage } = useChatSend({
     activeConversationId, conversations, messages, isStreaming, effectiveModelId, chatConfig,
     enabledAgentIds, enabledGraphIds, createConversation, sendMessage, setConversations,
     flushDebounce, adapter: conversationAdapter,
@@ -78,6 +82,14 @@ export function useChatPage() {
 
   useEffect(() => { if (user) reloadConfig(); }, [user, reloadConfig]);
   useEffect(() => { clearArtifacts(); }, [activeConversationId, clearArtifacts]);
+
+  useEffect(() => {
+    const pending = initialMessageRef.current;
+    if (!pending || !activeConversationId || !effectiveModelId) return;
+    initialMessageRef.current = null;
+    window.history.replaceState({}, "");
+    sendDirectMessage(pending);
+  }, [activeConversationId, effectiveModelId, sendDirectMessage]);
 
   useEffect(() => {
     if (routeConversationId && routeConversationId !== activeConversationId) {

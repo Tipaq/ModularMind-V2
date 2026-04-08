@@ -117,6 +117,8 @@ export { ChatPanel } from "./components/chat-panel";
 export type { ChatPanelProps, ChatPanelTab } from "./components/chat-panel";
 export { ChatInput } from "./components/chat-input";
 export type { ChatInputProps } from "./components/chat-input";
+export { QuickChatInput } from "./components/quick-chat-input";
+export type { QuickChatInputProps } from "./components/quick-chat-input";
 export { ChatEmptyState } from "./components/chat-empty-state";
 export type { ChatEmptyStateProps } from "./components/chat-empty-state";
 export { ChatErrorBanner } from "./components/chat-error-banner";
