@@ -20,69 +20,90 @@ class CatalogEntry:
     spec: dict
 
 
+SMTP_SEND_EMAIL_TOOL = {
+    "name": "send_email",
+    "description": "Send an email from your connected account",
+    "method": "SMTP",
+    "path": "auto",
+    "auth_mode": "personal_token",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "to": {
+                "type": "string",
+                "description": "Recipient email address",
+            },
+            "subject": {
+                "type": "string",
+                "description": "Email subject line",
+            },
+            "body": {
+                "type": "string",
+                "description": "Email body (plain text)",
+            },
+            "cc": {
+                "type": "string",
+                "description": "CC recipients (comma-separated, optional)",
+            },
+        },
+        "required": ["to", "subject", "body"],
+    },
+}
+
+
 CATALOG: list[CatalogEntry] = [
     CatalogEntry(
-        type_id="gmail",
-        name="Gmail",
-        description="Send emails via Gmail SMTP relay or API",
+        type_id="email",
+        name="Email (SMTP)",
+        description=(
+            "Send emails from any email account — Gmail, Outlook, "
+            "Yahoo, corporate email, or any SMTP provider. "
+            "SMTP settings are auto-detected for common providers."
+        ),
         icon="mail",
         color="bg-destructive",
         category="communication",
         spec={
-            "base_url": "https://gmail.googleapis.com",
+            "base_url": "",
             "auth": {
                 "modes": [
                     {
                         "type": "personal_token",
                         "fields": [
                             {
-                                "key": "api_key",
-                                "label": "Gmail App Password",
-                                "is_secret": True,
-                                "placeholder": "xxxx xxxx xxxx xxxx",
-                            },
-                            {
                                 "key": "email_address",
                                 "label": "Email Address",
                                 "is_secret": False,
-                                "placeholder": "you@gmail.com",
+                                "placeholder": "you@example.com",
+                            },
+                            {
+                                "key": "api_key",
+                                "label": "Password / App Password",
+                                "is_secret": True,
+                                "placeholder": (
+                                    "Your email password or app-specific password"
+                                ),
+                            },
+                            {
+                                "key": "smtp_host",
+                                "label": "SMTP Host (auto-detected if empty)",
+                                "is_secret": False,
+                                "is_required": False,
+                                "placeholder": "smtp.example.com",
+                            },
+                            {
+                                "key": "smtp_port",
+                                "label": "SMTP Port (auto-detected if empty)",
+                                "is_secret": False,
+                                "is_required": False,
+                                "placeholder": "587",
                             },
                         ],
                         "purpose": "user_identity",
                     },
                 ],
             },
-            "outbound": {
-                "tools": [
-                    {
-                        "name": "send_email",
-                        "description": (
-                            "Send an email from your Gmail account"
-                        ),
-                        "method": "SMTP",
-                        "path": "smtp.gmail.com:587",
-                        "auth_mode": "personal_token",
-                        "input_schema": {
-                            "type": "object",
-                            "properties": {
-                                "to": {
-                                    "type": "string",
-                                    "description": "Recipient email",
-                                },
-                                "subject": {
-                                    "type": "string",
-                                    "description": "Email subject",
-                                },
-                                "body": {
-                                    "type": "string",
-                                    "description": "Email body (plain text)",
-                                },
-                            },
-                            "required": ["to", "subject", "body"],
-                        },
-                    },
-                ],
-            },
+            "outbound": {"tools": [SMTP_SEND_EMAIL_TOOL]},
             "health_check": None,
         },
     ),
@@ -178,9 +199,7 @@ CATALOG: list[CatalogEntry] = [
     CatalogEntry(
         type_id="webhook_outbound",
         name="Webhook (Outbound)",
-        description=(
-            "Send data to any HTTP endpoint via webhook"
-        ),
+        description="Send data to any HTTP endpoint via webhook",
         icon="plug",
         color="bg-secondary",
         category="utility",
@@ -224,9 +243,7 @@ CATALOG: list[CatalogEntry] = [
                             "properties": {
                                 "data": {
                                     "type": "object",
-                                    "description": (
-                                        "JSON data to send"
-                                    ),
+                                    "description": "JSON data to send",
                                 },
                             },
                             "required": ["data"],
@@ -269,7 +286,9 @@ CATALOG: list[CatalogEntry] = [
                 "tools": [
                     {
                         "name": "search",
-                        "description": "Search Notion pages and databases",
+                        "description": (
+                            "Search Notion pages and databases"
+                        ),
                         "method": "POST",
                         "path": "/search",
                         "auth_mode": "api_key",
@@ -312,10 +331,7 @@ CATALOG: list[CatalogEntry] = [
                                     "description": "Page content",
                                 },
                             },
-                            "required": [
-                                "database_id",
-                                "title",
-                            ],
+                            "required": ["database_id", "title"],
                         },
                     },
                 ],
@@ -369,7 +385,9 @@ CATALOG: list[CatalogEntry] = [
                                 },
                                 "description": {
                                     "type": "string",
-                                    "description": "Issue description (markdown)",
+                                    "description": (
+                                        "Issue description (markdown)"
+                                    ),
                                 },
                                 "team_id": {
                                     "type": "string",

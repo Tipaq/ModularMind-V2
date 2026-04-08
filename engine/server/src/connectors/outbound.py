@@ -222,34 +222,79 @@ def _extract_jsonpath(data: dict, path: str) -> str | dict | list:
     return current
 
 
+KNOWN_SMTP_PROVIDERS: dict[str, tuple[str, int]] = {
+    "gmail.com": ("smtp.gmail.com", 587),
+    "googlemail.com": ("smtp.gmail.com", 587),
+    "outlook.com": ("smtp.office365.com", 587),
+    "hotmail.com": ("smtp.office365.com", 587),
+    "live.com": ("smtp.office365.com", 587),
+    "yahoo.com": ("smtp.mail.yahoo.com", 587),
+    "yahoo.fr": ("smtp.mail.yahoo.com", 587),
+    "aol.com": ("smtp.aol.com", 587),
+    "icloud.com": ("smtp.mail.me.com", 587),
+    "me.com": ("smtp.mail.me.com", 587),
+    "mac.com": ("smtp.mail.me.com", 587),
+    "zoho.com": ("smtp.zoho.com", 587),
+    "protonmail.com": ("smtp.protonmail.ch", 587),
+    "proton.me": ("smtp.protonmail.ch", 587),
+    "gmx.com": ("mail.gmx.com", 587),
+    "gmx.fr": ("mail.gmx.com", 587),
+    "free.fr": ("smtp.free.fr", 587),
+    "orange.fr": ("smtp.orange.fr", 587),
+    "sfr.fr": ("smtp.sfr.fr", 587),
+    "laposte.net": ("smtp.laposte.net", 587),
+}
+
+
+def _resolve_smtp_settings(
+    email_address: str, credentials: dict[str, str]
+) -> tuple[str, int]:
+    """Resolve SMTP host and port from explicit config or domain auto-detection."""
+    explicit_host = credentials.get("smtp_host", "")
+    explicit_port = credentials.get("smtp_port", "")
+
+    if explicit_host:
+        port = int(explicit_port) if explicit_port else 587
+        return explicit_host, port
+
+    domain = email_address.rsplit("@", 1)[-1].lower()
+    known = KNOWN_SMTP_PROVIDERS.get(domain)
+    if known:
+        return known
+
+    return f"smtp.{domain}", 587
+
+
 async def _send_smtp_email(
     tool_def: dict,
     params: dict,
     credentials: dict[str, str],
     connector_id: str,
 ) -> dict:
-    """Send email via SMTP (Gmail App Password, etc.)."""
+    """Send email via SMTP — works with any provider."""
     import asyncio
     import smtplib
     from email.mime.text import MIMEText
 
-    smtp_address = tool_def.get("path", "smtp.gmail.com:587")
-    host_port = smtp_address.split(":")
-    host = host_port[0]
-    port = int(host_port[1]) if len(host_port) > 1 else 587
-
     email_address = credentials.get("email_address", "")
-    app_password = credentials.get("api_key", "")
+    password = credentials.get("api_key", "")
 
-    if not email_address or not app_password:
+    if not email_address or not password:
         return {
             "error": True,
-            "message": "Missing email_address or api_key (app password)",
+            "message": (
+                "Missing email_address or password in credentials"
+            ),
         }
+
+    smtp_host, smtp_port = _resolve_smtp_settings(
+        email_address, credentials
+    )
 
     to_addr = params.get("to", "")
     subject = params.get("subject", "")
     body = params.get("body", "")
+    cc_raw = params.get("cc", "")
 
     if not to_addr:
         return {"error": True, "message": "Missing 'to' parameter"}
@@ -258,23 +303,52 @@ async def _send_smtp_email(
     msg["From"] = email_address
     msg["To"] = to_addr
     msg["Subject"] = subject
+    if cc_raw:
+        msg["Cc"] = cc_raw
+
+    all_recipients = [to_addr]
+    if cc_raw:
+        all_recipients.extend(
+            addr.strip() for addr in cc_raw.split(",") if addr.strip()
+        )
 
     logger.info(
-        "SMTP send: %s → %s (connector=%s)",
+        "SMTP send: %s → %s via %s:%d (connector=%s)",
         email_address,
         to_addr,
+        smtp_host,
+        smtp_port,
         connector_id[:8],
     )
 
     def _blocking_send() -> None:
-        with smtplib.SMTP(host, port, timeout=30) as server:
-            server.starttls()
-            server.login(email_address, app_password)
-            server.send_message(msg)
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
+            server.ehlo()
+            if smtp_port in (587, 25):
+                server.starttls()
+                server.ehlo()
+            server.login(email_address, password)
+            server.sendmail(email_address, all_recipients, msg.as_string())
 
     try:
         await asyncio.to_thread(_blocking_send)
-        return {"result": f"Email sent to {to_addr}"}
+        return {
+            "result": f"Email sent to {to_addr}",
+            "from": email_address,
+            "smtp_host": smtp_host,
+        }
+    except smtplib.SMTPAuthenticationError:
+        logger.exception("SMTP auth failed for %s", email_address)
+        return {
+            "error": True,
+            "message": (
+                "Authentication failed. Check your password. "
+                "For Gmail, use an App Password "
+                "(Google Account > Security > App Passwords). "
+                "For Outlook/Hotmail, you may need to enable "
+                "SMTP access in account settings."
+            ),
+        }
     except smtplib.SMTPException as exc:
-        logger.exception("SMTP send failed")
+        logger.exception("SMTP send failed via %s", smtp_host)
         return {"error": True, "message": str(exc)}
