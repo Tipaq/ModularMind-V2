@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Plug, Plus, Trash2, RefreshCw, Power, PowerOff,
-  Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink,
+  Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink, LogIn,
 } from "lucide-react";
 import {
   Badge, Button, Card, CardContent, EmptyState,
@@ -14,6 +14,12 @@ import type {
 } from "@modularmind/api-client";
 import { api } from "@modularmind/api-client";
 
+interface OAuthProvider {
+  provider_id: string;
+  name: string;
+  configured: boolean;
+}
+
 interface MyConnectionsProps {
   projectId?: string;
 }
@@ -21,6 +27,7 @@ interface MyConnectionsProps {
 export function MyConnections({ projectId }: MyConnectionsProps) {
   const [connectorTypes, setConnectorTypes] = useState<ConnectorTypeDef[]>([]);
   const [connectors, setConnectors] = useState<ConnectorData[]>([]);
+  const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedType, setExpandedType] = useState<string | null>(null);
   const [formData, setFormData] = useState<Record<string, Record<string, string>>>({});
@@ -38,12 +45,14 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
         ? `/projects/${projectId}/connectors`
         : "/connectors/mine";
 
-      const [typesRes, connRes] = await Promise.all([
+      const [typesRes, connRes, oauthRes] = await Promise.all([
         api.get<{ items: ConnectorTypeDef[] }>("/connectors/types"),
         api.get<{ items: ConnectorData[]; total: number }>(endpoint),
+        api.get<OAuthProvider[]>("/connectors/oauth/providers").catch(() => []),
       ]);
       setConnectorTypes(typesRes.items);
       setConnectors(connRes.items);
+      setOauthProviders(Array.isArray(oauthRes) ? oauthRes : []);
     } catch {
       setConnectorTypes([]);
       setConnectors([]);
@@ -140,6 +149,26 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
     }
     setCreating(null);
   };
+
+  const handleOAuthConnect = async (providerId: string) => {
+    try {
+      const params = new URLSearchParams({
+        connector_name: "",
+        project_id: projectId || "",
+      });
+      const data = await api.get<{ auth_url: string }>(
+        `/connectors/oauth/authorize/${providerId}?${params.toString()}`
+      );
+      window.location.href = data.auth_url;
+    } catch (err) {
+      setTypeError((prev) => ({
+        ...prev,
+        [`oauth_${providerId}`]: err instanceof Error ? err.message : "OAuth failed",
+      }));
+    }
+  };
+
+  const configuredOAuthProviders = oauthProviders.filter((p) => p.configured);
 
   const handleToggle = async (connector: ConnectorData) => {
     try {
@@ -262,9 +291,45 @@ export function MyConnections({ projectId }: MyConnectionsProps) {
         />
       )}
 
+      {configuredOAuthProviders.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-muted-foreground">
+            Connect with one click
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {configuredOAuthProviders.map((provider) => (
+              <Card key={provider.provider_id}>
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <LogIn className="h-4 w-4 text-primary" />
+                      <p className="text-sm font-medium">{provider.name}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => handleOAuthConnect(provider.provider_id)}
+                    >
+                      Connect
+                    </Button>
+                  </div>
+                  {typeError[`oauth_${provider.provider_id}`] && (
+                    <div className="mt-2 rounded border border-destructive/50 bg-destructive/10 px-2 py-1 text-xs text-destructive">
+                      {typeError[`oauth_${provider.provider_id}`]}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         <p className="text-sm font-medium text-muted-foreground">
-          Available services
+          {configuredOAuthProviders.length > 0
+            ? "Or connect manually"
+            : "Available services"}
         </p>
         {connectorTypes.map((typeDef) => {
           const isExpanded = expandedType === typeDef.type_id;

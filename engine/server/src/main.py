@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 from src.admin.user_router import admin_user_router
 from src.agents.router import router as agents_router
 from src.auth.router import router as auth_router
+from src.connectors.oauth_router import oauth_router as connectors_oauth_router
 from src.connectors.router import project_connector_router
 from src.connectors.router import router as connectors_router
 from src.connectors.webhook_router import webhook_router
@@ -406,6 +407,7 @@ app.include_router(models_usage_router, prefix=API_PREFIX)
 app.include_router(mcp_usage_router, prefix=API_PREFIX)
 app.include_router(setup_router, prefix=API_PREFIX)
 app.include_router(connectors_router, prefix=API_PREFIX)
+app.include_router(connectors_oauth_router, prefix=API_PREFIX)
 app.include_router(project_connector_router, prefix=API_PREFIX)
 app.include_router(webhook_router, prefix=f"{API_PREFIX}/webhooks")
 

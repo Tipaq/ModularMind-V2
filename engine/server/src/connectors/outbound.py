@@ -97,6 +97,18 @@ class OutboundConnectorExecutor:
                 tool_def, params, decrypted_credentials, connector.id
             )
 
+        if method == "SMTP_XOAUTH2":
+            return await _send_smtp_xoauth2(
+                tool_def, params, decrypted_credentials,
+                connector.config or {}, connector.id,
+            )
+
+        if method == "GRAPH_SEND_MAIL":
+            return await _send_graph_email(
+                tool_def, params, decrypted_credentials,
+                spec.get("base_url", ""), connector.id,
+            )
+
         headers = _build_auth_headers(
             spec, tool_def, decrypted_credentials
         )
@@ -509,4 +521,184 @@ async def _send_smtp_email(
         }
     except smtplib.SMTPException as exc:
         logger.exception("SMTP send failed via %s", smtp_host)
+        return {"error": True, "message": str(exc)}
+
+
+async def _send_smtp_xoauth2(
+    tool_def: dict,
+    params: dict,
+    credentials: dict[str, str],
+    connector_config: dict,
+    connector_id: str,
+) -> dict:
+    """Send email via Gmail SMTP with XOAUTH2 (OAuth access token)."""
+    import asyncio
+    import base64
+    import smtplib
+    from email.mime.text import MIMEText
+
+    access_token = credentials.get("token", "")
+    email_address = connector_config.get("email_address", "")
+
+    if not access_token or not email_address:
+        return {
+            "error": True,
+            "message": "Missing OAuth token or email address",
+        }
+
+    smtp_address = tool_def.get("path", "smtp.gmail.com:587")
+    host_port = smtp_address.split(":")
+    smtp_host = host_port[0]
+    smtp_port = int(host_port[1]) if len(host_port) > 1 else 587
+
+    to_addr = params.get("to", "")
+    subject = params.get("subject", "")
+    body = params.get("body", "")
+    cc_raw = params.get("cc", "")
+
+    if not to_addr:
+        return {"error": True, "message": "Missing 'to' parameter"}
+
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["From"] = email_address
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    if cc_raw:
+        msg["Cc"] = cc_raw
+
+    all_recipients = [to_addr]
+    if cc_raw:
+        all_recipients.extend(
+            a.strip() for a in cc_raw.split(",") if a.strip()
+        )
+
+    xoauth2_string = (
+        f"user={email_address}\x01"
+        f"auth=Bearer {access_token}\x01\x01"
+    )
+    xoauth2_b64 = base64.b64encode(
+        xoauth2_string.encode()
+    ).decode()
+
+    logger.info(
+        "XOAUTH2 send: %s -> %s (connector=%s)",
+        email_address,
+        to_addr,
+        connector_id[:8],
+    )
+
+    def _blocking_send() -> None:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            code, resp = server.docmd("AUTH", f"XOAUTH2 {xoauth2_b64}")
+            if code != 235:
+                raise smtplib.SMTPAuthenticationError(
+                    code, resp
+                )
+            server.sendmail(
+                email_address, all_recipients, msg.as_string()
+            )
+
+    try:
+        await asyncio.to_thread(_blocking_send)
+        return {"result": f"Email sent to {to_addr}"}
+    except smtplib.SMTPAuthenticationError:
+        logger.exception("XOAUTH2 auth failed for %s", email_address)
+        return {
+            "error": True,
+            "message": (
+                "Gmail OAuth authentication failed. "
+                "Your token may have expired — "
+                "reconnect your Gmail in Settings > Connections."
+            ),
+        }
+    except smtplib.SMTPException as exc:
+        logger.exception("XOAUTH2 send failed")
+        return {"error": True, "message": str(exc)}
+
+
+async def _send_graph_email(
+    tool_def: dict,
+    params: dict,
+    credentials: dict[str, str],
+    base_url: str,
+    connector_id: str,
+) -> dict:
+    """Send email via Microsoft Graph API."""
+    access_token = credentials.get("token", "")
+    if not access_token:
+        return {
+            "error": True,
+            "message": "Missing OAuth token",
+        }
+
+    to_addr = params.get("to", "")
+    subject = params.get("subject", "")
+    body = params.get("body", "")
+    cc_raw = params.get("cc", "")
+
+    if not to_addr:
+        return {"error": True, "message": "Missing 'to' parameter"}
+
+    to_recipients = [
+        {"emailAddress": {"address": to_addr}}
+    ]
+    cc_recipients = []
+    if cc_raw:
+        cc_recipients = [
+            {"emailAddress": {"address": a.strip()}}
+            for a in cc_raw.split(",")
+            if a.strip()
+        ]
+
+    graph_payload = {
+        "message": {
+            "subject": subject,
+            "body": {
+                "contentType": "Text",
+                "content": body,
+            },
+            "toRecipients": to_recipients,
+            "ccRecipients": cc_recipients,
+        },
+    }
+
+    url = f"{base_url.rstrip('/')}/me/sendMail"
+    logger.info(
+        "Graph sendMail -> %s (connector=%s)",
+        to_addr,
+        connector_id[:8],
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                },
+                json=graph_payload,
+            )
+
+        if resp.status_code == 202:
+            return {"result": f"Email sent to {to_addr}"}
+        if resp.status_code == 401:
+            return {
+                "error": True,
+                "message": (
+                    "Microsoft OAuth token expired or invalid. "
+                    "Reconnect your Outlook in "
+                    "Settings > Connections."
+                ),
+            }
+        return {
+            "error": True,
+            "status": resp.status_code,
+            "message": resp.text[:500],
+        }
+    except httpx.HTTPError as exc:
+        logger.exception("Graph sendMail failed")
         return {"error": True, "message": str(exc)}
