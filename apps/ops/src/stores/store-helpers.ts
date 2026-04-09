@@ -15,46 +15,49 @@ export const createPaginatedState = (): PaginatedState => ({
   total: 0,
 });
 
-export const withLoading = async <T>(
+interface ActionOptions {
+  showLoading?: boolean;
+  rethrowOnError?: boolean;
+}
+
+export async function withAction<T>(
   set: SetState,
   action: () => Promise<T>,
   errorPrefix: string,
-): Promise<T | undefined> => {
-  set({ loading: true, error: null });
+  options: ActionOptions = {},
+): Promise<T | undefined> {
+  const { showLoading = false, rethrowOnError = false } = options;
+  if (showLoading) set({ loading: true, error: null });
+  else set({ error: null });
+
   try {
     const result = await action();
-    set({ loading: false });
+    if (showLoading) set({ loading: false });
     return result;
   } catch (err) {
-    set({ loading: false, error: handleStoreError(err, errorPrefix) });
+    const errorMessage = handleStoreError(err, errorPrefix);
+    if (showLoading) set({ loading: false, error: errorMessage });
+    else set({ error: errorMessage });
+    if (rethrowOnError) throw err;
     return undefined;
   }
-};
+}
 
-export const withError = async <T>(
+export const withLoading = <T>(
   set: SetState,
   action: () => Promise<T>,
   errorPrefix: string,
-): Promise<T | undefined> => {
-  set({ error: null });
-  try {
-    return await action();
-  } catch (err) {
-    set({ error: handleStoreError(err, errorPrefix) });
-    return undefined;
-  }
-};
+): Promise<T | undefined> => withAction(set, action, errorPrefix, { showLoading: true });
 
-export const withErrorRethrow = async <T>(
+export const withError = <T>(
   set: SetState,
   action: () => Promise<T>,
   errorPrefix: string,
-): Promise<T> => {
-  set({ error: null });
-  try {
-    return await action();
-  } catch (err) {
-    set({ error: handleStoreError(err, errorPrefix) });
-    throw err;
-  }
-};
+): Promise<T | undefined> => withAction(set, action, errorPrefix);
+
+export const withErrorRethrow = <T>(
+  set: SetState,
+  action: () => Promise<T>,
+  errorPrefix: string,
+): Promise<T> =>
+  withAction(set, action, errorPrefix, { rethrowOnError: true }) as Promise<T>;
