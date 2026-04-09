@@ -164,66 +164,86 @@ async def resolve_connector_tool_definitions(
 ) -> tuple[list[dict[str, Any]], dict[str, str]]:
     """Load outbound connector tools visible to this user.
 
+    Uses raw SQL to avoid ORM mapper initialization issues
+    (UserGroupMember circular import).
+
     Returns:
         Tuple of (tool_definitions, tool_map).
         tool_map maps namespaced tool name → connector_id.
     """
     from re import sub as re_sub
 
-    from sqlalchemy import or_, select
-
-    from src.connectors.models import Connector
-    from src.connectors.outbound import OutboundConnectorExecutor
+    from sqlalchemy import text
 
     try:
         async with session_maker() as session:
-            conditions = [
-                Connector.user_id == user_id,
-                Connector.user_id.is_(None) & Connector.project_id.is_(None),
-            ]
             if project_ids:
-                conditions.append(Connector.project_id.in_(project_ids))
-
-            result = await session.execute(
-                select(Connector).where(
-                    or_(*conditions),
-                    Connector.is_enabled.is_(True),
-                    Connector.spec.isnot(None),
+                query = text(
+                    "SELECT id, name, connector_type, spec FROM connectors "
+                    "WHERE is_enabled = true AND spec IS NOT NULL AND ("
+                    "  user_id = :user_id "
+                    "  OR (user_id IS NULL AND project_id IS NULL) "
+                    "  OR project_id = ANY(:project_ids)"
+                    ")"
                 )
-            )
-            connectors = list(result.scalars().all())
+                result = await session.execute(
+                    query, {"user_id": user_id, "project_ids": project_ids}
+                )
+            else:
+                query = text(
+                    "SELECT id, name, connector_type, spec FROM connectors "
+                    "WHERE is_enabled = true AND spec IS NOT NULL AND ("
+                    "  user_id = :user_id "
+                    "  OR (user_id IS NULL AND project_id IS NULL)"
+                    ")"
+                )
+                result = await session.execute(
+                    query, {"user_id": user_id}
+                )
 
-        if not connectors:
+            rows = result.fetchall()
+
+        if not rows:
             return [], {}
 
-        executor = OutboundConnectorExecutor()
         definitions: list[dict[str, Any]] = []
         tool_map: dict[str, str] = {}
 
-        for connector in connectors:
-            actions = executor.list_actions(connector)
-            slug = re_sub(r"[^a-z0-9_]", "_", connector.connector_type.lower())
+        for row in rows:
+            connector_id = row[0]
+            connector_name = row[1]
+            connector_type = row[2]
+            spec = row[3] or {}
 
-            for action in actions:
-                fn = action["function"]
-                ns_name = f"{CONNECTOR_TOOL_PREFIX}{slug}__{fn['name']}"
+            outbound_tools = spec.get("outbound", {}).get("tools", [])
+            slug = re_sub(r"[^a-z0-9_]", "_", connector_type.lower())
+
+            for tool in outbound_tools:
+                tool_name = tool.get("name", "")
+                if not tool_name:
+                    continue
+                ns_name = f"{CONNECTOR_TOOL_PREFIX}{slug}__{tool_name}"
                 definitions.append({
                     "type": "function",
                     "function": {
                         "name": ns_name,
                         "description": (
-                            f"[{connector.name}] {fn['description']}"
+                            f"[{connector_name}] "
+                            f"{tool.get('description', '')}"
                         ),
-                        "parameters": fn["parameters"],
+                        "parameters": tool.get("input_schema", {
+                            "type": "object",
+                            "properties": {},
+                        }),
                     },
                 })
-                tool_map[ns_name] = connector.id
+                tool_map[ns_name] = connector_id
 
         logger.info(
             "User '%s': loaded %d connector tools from %d connectors",
             user_id[:8],
             len(definitions),
-            len(connectors),
+            len(rows),
         )
         return definitions, tool_map
 

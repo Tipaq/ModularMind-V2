@@ -2,12 +2,17 @@
 
 import ipaddress
 import logging
+from typing import Protocol
 from urllib.parse import urlparse
 
 import httpx
 from fastapi import HTTPException
 
-from src.connectors.models import Connector
+
+class ConnectorLike(Protocol):
+    id: str
+    spec: dict | None
+    config: dict
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +47,7 @@ def _is_blocked_url(url: str) -> bool:
 class OutboundConnectorExecutor:
     """Executes outbound tool calls defined in Connector.spec.outbound.tools."""
 
-    def list_actions(self, connector: Connector) -> list[dict]:
+    def list_actions(self, connector: ConnectorLike) -> list[dict]:
         spec = connector.spec or {}
         outbound = spec.get("outbound", {})
         tools = outbound.get("tools", [])
@@ -64,7 +69,7 @@ class OutboundConnectorExecutor:
 
     async def execute_action(
         self,
-        connector: Connector,
+        connector: ConnectorLike,
         action_name: str,
         params: dict,
         decrypted_credentials: dict[str, str],
