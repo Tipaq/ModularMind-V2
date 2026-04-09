@@ -35,6 +35,16 @@ oauth_router = APIRouter(
 )
 
 
+def _build_callback_url(request: Request, provider_id: str) -> str:
+    """Build the OAuth callback URL using forwarded headers (reverse proxy aware)."""
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    return (
+        f"{proto}://{host}"
+        f"/api/v1/connectors/oauth/callback/{provider_id}"
+    )
+
+
 def _encrypt_state(data: dict) -> str:
     store = get_secrets_store()
     return store.encrypt_value(json.dumps(data))
@@ -78,10 +88,7 @@ async def authorize(
         )
     client_id, _ = creds
 
-    base_url = str(request.base_url).rstrip("/")
-    callback_url = (
-        f"{base_url}/api/v1/connectors/oauth/callback/{provider_id}"
-    )
+    callback_url = _build_callback_url(request, provider_id)
 
     state_data = {
         "user_id": user.id,
@@ -136,10 +143,7 @@ async def callback(
     connector_name = state_data.get("connector_name", provider.name)
     project_id = state_data.get("project_id", "") or None
 
-    base_url = str(request.base_url).rstrip("/")
-    callback_url = (
-        f"{base_url}/api/v1/connectors/oauth/callback/{provider_id}"
-    )
+    callback_url = _build_callback_url(request, provider_id)
 
     token_data = await _exchange_code(
         provider, client_id, client_secret, code, callback_url
