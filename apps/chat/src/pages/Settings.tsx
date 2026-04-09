@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { SettingsPage } from "@modularmind/ui";
 import type { SettingsTab } from "@modularmind/ui";
 import { Secrets } from "./Secrets";
-import { MyConnections } from "./MyConnections";
+import { MyConnections } from "./my-connections";
 
 export default function Settings() {
   const [searchParams] = useSearchParams();

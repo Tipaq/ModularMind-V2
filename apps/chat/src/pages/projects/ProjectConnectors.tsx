@@ -5,7 +5,7 @@ import type {
   ProjectDetail,
   ProjectResourceCounts,
 } from "@modularmind/api-client";
-import { MyConnections } from "../MyConnections";
+import { MyConnections } from "../my-connections";
 
 interface ProjectContext {
   project: ProjectDetail;
