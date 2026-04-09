@@ -9,7 +9,7 @@ const DEFAULT_CONVERSATION_TITLE = "New Chat";
 interface UseChatSendParams {
   activeConversationId: string | null;
   conversations: Conversation[];
-  messages: { length: number };
+  messageCount: number;
   isStreaming: boolean;
   effectiveModelId: string | null;
   chatConfig: ChatConfig;
@@ -30,7 +30,7 @@ interface UseChatSendParams {
 export function useChatSend({
   activeConversationId,
   conversations,
-  messages,
+  messageCount,
   isStreaming,
   effectiveModelId,
   chatConfig,
@@ -59,7 +59,7 @@ export function useChatSend({
     if (
       conv &&
       (conv.title === DEFAULT_CONVERSATION_TITLE || !conv.title) &&
-      messages.length === 0
+      messageCount === 0
     ) {
       const title =
         text.trim().length > MAX_CONVERSATION_TITLE_LENGTH
@@ -89,7 +89,7 @@ export function useChatSend({
     effectiveModelId,
     activeConversationId,
     conversations,
-    messages.length,
+    messageCount,
     enabledAgentIds,
     enabledGraphIds,
     chatConfig.modelOverride,

@@ -5,7 +5,8 @@ import {
   useAuthStore, toggleArrayItem, formatModelName,
 } from "@modularmind/ui";
 import type { EngineModel, DetectedArtifact } from "@modularmind/ui";
-import { chatAdapter, conversationAdapter, chatConfigAdapter } from "../lib/chat-adapter";
+import { chatAdapter, conversationAdapter } from "@modularmind/api-client";
+import { chatConfigAdapter } from "../lib/chat-adapter";
 import { useChatConfigPersistence } from "./useChatConfigPersistence";
 import { useChatSend } from "./useChatSend";
 import { useExecutionData } from "./useExecutionData";
@@ -71,7 +72,7 @@ export function useChatPage() {
     useArtifacts();
 
   const { inputValue, setInputValue, setAttachedFiles, handleSend, sendDirectMessage } = useChatSend({
-    activeConversationId, conversations, messages, isStreaming, effectiveModelId, chatConfig,
+    activeConversationId, conversations, messageCount: messages.length, isStreaming, effectiveModelId, chatConfig,
     enabledAgentIds, enabledGraphIds, createConversation, sendMessage, setConversations,
     flushDebounce, adapter: conversationAdapter,
   });

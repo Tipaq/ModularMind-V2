@@ -112,6 +112,7 @@ export function useMonitoringData(): MonitoringDataResult {
 
   // Stop polling when session expires
   const sessionExpired = useRef(false);
+  const consecutiveErrors = useRef(0);
   useEffect(() => {
     const handleExpired = () => { sessionExpired.current = true; };
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleExpired);
@@ -119,10 +120,24 @@ export function useMonitoringData(): MonitoringDataResult {
   }, []);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      if (!sessionExpired.current && !document.hidden) refetchAll();
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      if (sessionExpired.current || document.hidden) {
+        timeoutId = setTimeout(poll, POLL_INTERVAL_MS);
+        return;
+      }
+      try {
+        await refetchAll();
+        consecutiveErrors.current = 0;
+        timeoutId = setTimeout(poll, POLL_INTERVAL_MS);
+      } catch {
+        consecutiveErrors.current++;
+        const backoff = Math.min(POLL_INTERVAL_MS * 2 ** consecutiveErrors.current, 60_000);
+        timeoutId = setTimeout(poll, backoff);
+      }
+    };
+    timeoutId = setTimeout(poll, POLL_INTERVAL_MS);
+    return () => clearTimeout(timeoutId);
   }, [refetchAll]);
 
   useEffect(() => {

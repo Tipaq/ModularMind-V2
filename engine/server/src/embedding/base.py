@@ -1,67 +1,41 @@
-"""
-Embedding Provider Base Class.
+"""Embedding Provider Protocol.
 
 Defines the interface for text embedding providers.
 """
 
-from abc import ABC, abstractmethod
+from typing import Protocol, runtime_checkable
 
 
-class EmbeddingProvider(ABC):
-    """Abstract base class for embedding providers.
+@runtime_checkable
+class EmbeddingProvider(Protocol):
+    """Protocol for embedding providers.
 
     All embedding providers must implement this interface
     to be usable with the ModularMind memory and RAG systems.
     """
 
     @property
-    @abstractmethod
     def dimension(self) -> int:
-        """Get the embedding dimension.
-
-        Returns:
-            Dimension of embedding vectors (e.g., 768 for nomic-embed-text)
-        """
+        """Get the embedding dimension."""
         ...
 
     @property
-    @abstractmethod
     def provider_name(self) -> str:
         """Get the provider name (e.g., 'ollama', 'openai')."""
         ...
 
-    @abstractmethod
     async def embed_text(self, text: str) -> list[float]:
-        """Generate embedding for a single text.
-
-        Args:
-            text: Text to embed
-
-        Returns:
-            Embedding vector as list of floats
-        """
+        """Generate embedding for a single text."""
         ...
 
-    @abstractmethod
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for multiple texts.
-
-        Args:
-            texts: List of texts to embed
-
-        Returns:
-            List of embedding vectors
-        """
+        """Generate embeddings for multiple texts."""
         ...
 
-    @abstractmethod
     async def is_available(self) -> bool:
-        """Check if the provider is available.
-
-        Returns:
-            True if the provider is accessible
-        """
+        """Check if the provider is available."""
         ...
 
-    async def close(self) -> None:  # noqa: B027
+    async def close(self) -> None:
         """Release any held resources (HTTP clients, etc.)."""
+        ...
