@@ -34,6 +34,7 @@ def _load_persisted_overrides() -> None:
     for attr in (
         "KNOWLEDGE_EMBEDDING_PROVIDER",
         "KNOWLEDGE_EMBEDDING_MODEL",
+        "DEFAULT_LLM_PROVIDER",
     ):
         stored = secrets_store.get(attr, "")
         if stored:
@@ -78,9 +79,6 @@ async def build_settings_response() -> SettingsResponse:
     return SettingsResponse(
         llm_api_keys=masked_keys,
         default_model=settings.DEFAULT_LLM_PROVIDER,
-        telemetry_enabled=True,
-        auto_sync=True,
-        sync_interval_minutes=5,
         ollama_keep_alive=settings.OLLAMA_KEEP_ALIVE,
         ollama_enabled=ollama_enabled,
         ollama_gpu_mode=ollama_gpu,
@@ -124,6 +122,10 @@ async def update_settings_endpoint(update: SettingsUpdate, user: CurrentUser) ->
             else:
                 # Set the new key
                 secrets_store.set(env_key, key_value)
+
+    if update.default_model is not None:
+        settings.DEFAULT_LLM_PROVIDER = update.default_model
+        secrets_store.set("DEFAULT_LLM_PROVIDER", update.default_model)
 
     if update.ollama_keep_alive is not None:
         settings.OLLAMA_KEEP_ALIVE = update.ollama_keep_alive

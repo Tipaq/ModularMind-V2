@@ -3,9 +3,6 @@
 export interface LocalSettings {
   llm_api_keys: Record<string, string>;
   default_model: string | null;
-  telemetry_enabled: boolean;
-  auto_sync: boolean;
-  sync_interval_minutes: number;
   ollama_keep_alive: string;
   max_execution_timeout: number;
   knowledge_embedding_provider: string;

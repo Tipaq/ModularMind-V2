@@ -344,9 +344,6 @@ class InternalPullRequest(BaseModel):
 class SettingsResponse(BaseModel):
     llm_api_keys: dict[str, str]
     default_model: str | None
-    telemetry_enabled: bool
-    auto_sync: bool
-    sync_interval_minutes: int
     ollama_keep_alive: str
     ollama_enabled: bool
     ollama_gpu_mode: bool
@@ -359,9 +356,6 @@ class SettingsResponse(BaseModel):
 class SettingsUpdate(BaseModel):
     llm_api_keys: dict[str, str] | None = Field(None, max_length=20)
     default_model: str | None = None
-    telemetry_enabled: bool | None = None
-    auto_sync: bool | None = None
-    sync_interval_minutes: int | None = None
     ollama_keep_alive: str | None = None
     max_execution_timeout: int | None = Field(None, ge=60, le=1800)
     knowledge_embedding_provider: str | None = None
