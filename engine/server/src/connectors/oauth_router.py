@@ -89,6 +89,15 @@ async def authorize(
     client_id, _ = creds
 
     callback_url = _build_callback_url(request, provider_id)
+    logger.info(
+        "OAuth authorize: provider=%s callback_url=%s "
+        "x-forwarded-proto=%s x-forwarded-host=%s host=%s",
+        provider_id,
+        callback_url,
+        request.headers.get("x-forwarded-proto", "MISSING"),
+        request.headers.get("x-forwarded-host", "MISSING"),
+        request.headers.get("host", "MISSING"),
+    )
 
     state_data = {
         "user_id": user.id,
