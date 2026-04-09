@@ -261,6 +261,49 @@ async def list_connector_types() -> ConnectorTypesListResponse:
     return ConnectorTypesListResponse(items=items)
 
 
+@router.get("/oauth-config", dependencies=[RequireAdmin])
+async def get_oauth_config() -> list[dict]:
+    """Get OAuth provider configs (admin only)."""
+    from src.connectors.oauth_providers import list_configured_providers
+
+    return list_configured_providers()
+
+
+@router.put("/oauth-config/{provider_id}", dependencies=[RequireAdmin])
+async def set_oauth_config(
+    provider_id: str,
+    user: CurrentUser,
+    db: DbSession,
+    client_id: str = "",
+    client_secret: str = "",
+) -> dict:
+    """Set OAuth client_id and client_secret for a provider (admin only)."""
+    from src.connectors.oauth_providers import get_oauth_provider
+    from src.infra.secrets import get_secrets_store
+
+    provider = get_oauth_provider(provider_id)
+    if not provider:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown OAuth provider: {provider_id}",
+        )
+
+    store = get_secrets_store()
+    if client_id:
+        store.set(provider.client_id_key, client_id)
+    if client_secret:
+        store.set(provider.client_secret_key, client_secret)
+
+    has_both = bool(
+        store.get(provider.client_id_key)
+        and store.get(provider.client_secret_key)
+    )
+    return {
+        "provider_id": provider_id,
+        "configured": has_both,
+    }
+
+
 @router.post(
     "/test-credentials",
     response_model=CredentialTestResponse,

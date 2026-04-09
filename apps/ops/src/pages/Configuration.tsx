@@ -1,16 +1,17 @@
 import { useSearchParams } from "react-router-dom";
-import { Settings2, Key, Plug, Webhook, BookOpen, Cog, Github, FolderLock, Server } from "lucide-react";
+import { Settings2, Key, Plug, Webhook, BookOpen, Cog, Github, FolderLock, Server, Shield } from "lucide-react";
 import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
 import { ProvidersTab } from "../components/configuration/ProvidersTab";
 import { McpServersTab } from "../components/configuration/McpServersTab";
 import { IntegrationsTab } from "../components/configuration/IntegrationsTab";
+import { OAuthProvidersTab } from "../components/configuration/OAuthProvidersTab";
 import { KnowledgeConfigTab } from "../components/configuration/KnowledgeConfigTab";
 import { SystemTab } from "../components/configuration/SystemTab";
 import { GitHubTokensTab } from "../components/configuration/GitHubTokensTab";
 import { FilesystemSecurityTab } from "../components/configuration/FilesystemSecurityTab";
 import { InfrastructureTab } from "../components/configuration/InfrastructureTab";
 
-type TabId = "providers" | "mcp" | "integrations" | "knowledge" | "system" | "github" | "filesystem" | "infra";
+type TabId = "providers" | "mcp" | "integrations" | "oauth" | "knowledge" | "system" | "github" | "filesystem" | "infra";
 
 export function Configuration() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -43,6 +44,10 @@ export function Configuration() {
             <Webhook className="h-4 w-4" />
             Integrations
           </TabsTrigger>
+          <TabsTrigger value="oauth">
+            <Shield className="h-4 w-4" />
+            OAuth
+          </TabsTrigger>
           <TabsTrigger value="knowledge">
             <BookOpen className="h-4 w-4" />
             Knowledge
@@ -73,6 +78,9 @@ export function Configuration() {
         </TabsContent>
         <TabsContent value="integrations" className="mt-6">
           <IntegrationsTab />
+        </TabsContent>
+        <TabsContent value="oauth" className="mt-6">
+          <OAuthProvidersTab />
         </TabsContent>
         <TabsContent value="knowledge" className="mt-6">
           <KnowledgeConfigTab />
