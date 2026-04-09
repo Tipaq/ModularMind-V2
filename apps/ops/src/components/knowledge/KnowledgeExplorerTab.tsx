@@ -15,8 +15,7 @@ import {
 import type { ResourceColumn, PaginationState } from "@modularmind/ui";
 import { useKnowledgeStore } from "../../stores/knowledge";
 import type { ExplorerChunk } from "../../stores/knowledge";
-
-const PAGE_SIZE = 20;
+import { DEFAULT_DEFAULT_PAGE_SIZE } from "../../lib/constants";
 
 function buildColumns(): ResourceColumn<ExplorerChunk>[] {
   return [
@@ -235,7 +234,7 @@ export function KnowledgeExplorerTab() {
 
   const pagination: PaginationState = {
     page: explorerPage,
-    totalPages: Math.max(1, Math.ceil(explorerTotal / PAGE_SIZE)),
+    totalPages: Math.max(1, Math.ceil(explorerTotal / DEFAULT_PAGE_SIZE)),
     totalItems: explorerTotal,
   };
 

@@ -7,8 +7,7 @@ import type { UnifiedCatalogModel } from "@modularmind/api-client";
 import { useModelsStore } from "../stores/models";
 import { buildSizeCache, filterModels, sortModels } from "./models/utils";
 import { filterConfigs, buildColumns } from "./models/columns";
-
-const PAGE_SIZE = 20;
+import { DEFAULT_DEFAULT_PAGE_SIZE } from "../lib/constants";
 
 export function Models() {
   const navigate = useNavigate();
@@ -53,8 +52,8 @@ export function Models() {
 
   // Client-side pagination
   const paginated = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
+    const start = (page - 1) * DEFAULT_PAGE_SIZE;
+    return filtered.slice(start, start + DEFAULT_PAGE_SIZE);
   }, [filtered, page]);
 
   const handleFilterChange = useCallback((key: string, value: string) => {
@@ -144,7 +143,7 @@ export function Models() {
         columns={columns}
         pagination={{
           page,
-          totalPages: Math.ceil(filtered.length / PAGE_SIZE),
+          totalPages: Math.ceil(filtered.length / DEFAULT_PAGE_SIZE),
           totalItems: filtered.length,
         }}
         onPageChange={setPage}
