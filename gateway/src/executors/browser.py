@@ -10,8 +10,6 @@ from urllib.parse import urlparse
 
 import httpx
 
-from src.executors.base import BaseExecutor
-
 if TYPE_CHECKING:
     from src.sandbox.manager import SandboxManager
 
@@ -80,131 +78,115 @@ USER_AGENT = (
 )
 
 
-class BrowserExecutor(BaseExecutor):
-    """Fetch a URL and return page content as readable text.
+async def execute_browser(
+    action: str,
+    args: dict[str, Any],
+    sandbox_mgr: SandboxManager,
+    execution_id: str,
+) -> str:
+    if action == "search":
+        return await _search_duckduckgo(args)
+    if action != "browse":
+        return f"Unknown browser action: {action}"
 
-    This is a lightweight implementation using httpx + HTML text extraction.
-    For JavaScript-heavy pages, a Playwright-based upgrade can be added later.
-    """
+    url = args.get("url", "")
+    if not url:
+        return "Error: url is required"
 
-    async def execute(
-        self,
-        action: str,
-        args: dict[str, Any],
-        sandbox_mgr: SandboxManager,
-        execution_id: str,
-    ) -> str:
-        if action == "search":
-            return await self._search_duckduckgo(args)
-        if action != "browse":
-            return f"Unknown browser action: {action}"
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return f"Error: unsupported scheme '{parsed.scheme}' (only http/https allowed)"
+    if not parsed.hostname:
+        return "Error: invalid URL — no hostname"
 
-        url = args.get("url", "")
-        if not url:
-            return "Error: url is required"
+    from src.executors.network import check_ssrf
 
-        # Validate URL
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return f"Error: unsupported scheme '{parsed.scheme}' (only http/https allowed)"
-        if not parsed.hostname:
-            return "Error: invalid URL — no hostname"
+    ssrf_error = await check_ssrf(parsed.hostname)
+    if ssrf_error:
+        return ssrf_error
 
-        # SSRF protection (reuse from network executor)
-        from src.executors.network import check_ssrf
+    try:
+        client = get_http_client()
+        response = await client.get(url)
 
-        ssrf_error = await check_ssrf(parsed.hostname)
-        if ssrf_error:
-            return ssrf_error
+        content_type = response.headers.get("content-type", "")
+        http_status = response.status_code
 
-        try:
-            client = get_http_client()
-            response = await client.get(url)
+        if http_status >= 400:
+            return f"Error: HTTP {http_status} {response.reason_phrase} for {url}"
 
-            content_type = response.headers.get("content-type", "")
-            status = response.status_code
+        raw = response.content
+        if len(raw) > MAX_CONTENT_SIZE:
+            raw = raw[:MAX_CONTENT_SIZE]
 
-            if status >= 400:
-                return f"Error: HTTP {status} {response.reason_phrase} for {url}"
-
-            raw = response.content
-            if len(raw) > MAX_CONTENT_SIZE:
-                raw = raw[:MAX_CONTENT_SIZE]
-
-            # If not HTML, return raw text (truncated)
-            if "html" not in content_type.lower():
-                text = raw.decode("utf-8", errors="replace")
-                if len(text) > MAX_TEXT_OUTPUT:
-                    text = text[:MAX_TEXT_OUTPUT] + "\n... [content truncated]"
-                return f"URL: {url}\nContent-Type: {content_type}\n\n{text}"
-
-            # Extract readable text from HTML
-            html = raw.decode("utf-8", errors="replace")
-            text = _extract_text(html)
-
-            # Extract title
-            title = _extract_title(html)
-
+        if "html" not in content_type.lower():
+            text = raw.decode("utf-8", errors="replace")
             if len(text) > MAX_TEXT_OUTPUT:
                 text = text[:MAX_TEXT_OUTPUT] + "\n... [content truncated]"
+            return f"URL: {url}\nContent-Type: {content_type}\n\n{text}"
 
-            header = f"URL: {url}\nTitle: {title}\n"
-            return f"{header}\n{text}"
+        html = raw.decode("utf-8", errors="replace")
+        text = _extract_text(html)
+        title = _extract_title(html)
 
-        except httpx.TimeoutException:
-            return f"Error: page load timed out after {DEFAULT_TIMEOUT}s"
-        except httpx.TooManyRedirects:
-            return "Error: too many redirects (max 5)"
-        except httpx.RequestError as e:
-            return f"Error: request failed — {e}"
+        if len(text) > MAX_TEXT_OUTPUT:
+            text = text[:MAX_TEXT_OUTPUT] + "\n... [content truncated]"
 
-    async def _search_duckduckgo(self, args: dict[str, Any]) -> str:
-        """Search the web via DuckDuckGo and return formatted results."""
-        from ddgs import DDGS
+        header = f"URL: {url}\nTitle: {title}\n"
+        return f"{header}\n{text}"
 
-        query = args.get("query", "").strip()
-        if not query:
-            return "Error: query is required"
+    except httpx.TimeoutException:
+        return f"Error: page load timed out after {DEFAULT_TIMEOUT}s"
+    except httpx.TooManyRedirects:
+        return "Error: too many redirects (max 5)"
+    except httpx.RequestError as e:
+        return f"Error: request failed — {e}"
 
-        max_results = min(int(args.get("max_results", 10)), MAX_SEARCH_RESULTS)
-        safesearch = args.get("safesearch", "moderate")
 
-        try:
-            # ddgs is sync — run in thread to avoid blocking
-            def _do_search() -> list[dict]:
-                with DDGS() as ddgs:
-                    return list(
-                        ddgs.text(
-                            query,
-                            max_results=max_results,
-                            safesearch=safesearch,
-                        )
+async def _search_duckduckgo(args: dict[str, Any]) -> str:
+    from ddgs import DDGS
+
+    query = args.get("query", "").strip()
+    if not query:
+        return "Error: query is required"
+
+    max_results = min(int(args.get("max_results", 10)), MAX_SEARCH_RESULTS)
+    safesearch = args.get("safesearch", "moderate")
+
+    try:
+        def _do_search() -> list[dict]:
+            with DDGS() as ddgs:
+                return list(
+                    ddgs.text(
+                        query,
+                        max_results=max_results,
+                        safesearch=safesearch,
                     )
+                )
 
-            async with _get_search_semaphore():
-                results = await asyncio.to_thread(_do_search)
+        async with _get_search_semaphore():
+            results = await asyncio.to_thread(_do_search)
 
-            if not results:
-                return f"No results found for: {query}"
+        if not results:
+            return f"No results found for: {query}"
 
-            lines = [f"Search results for: {query}\n"]
-            for i, r in enumerate(results, 1):
-                lines.append(f"{i}. {r.get('title', '(no title)')}")
-                lines.append(f"   URL: {r.get('href', '')}")
-                body = r.get("body", "")
-                if body:
-                    lines.append(f"   {body}")
-                lines.append("")
+        lines = [f"Search results for: {query}\n"]
+        for i, r in enumerate(results, 1):
+            lines.append(f"{i}. {r.get('title', '(no title)')}")
+            lines.append(f"   URL: {r.get('href', '')}")
+            body = r.get("body", "")
+            if body:
+                lines.append(f"   {body}")
+            lines.append("")
 
-            return "\n".join(lines).strip()
+        return "\n".join(lines).strip()
 
-        except Exception as e:
-            logger.warning("DuckDuckGo search failed: %s", e)
-            return f"Error: search failed — {e}"
+    except Exception as e:
+        logger.warning("DuckDuckGo search failed: %s", e)
+        return f"Error: search failed — {e}"
 
 
 def _extract_title(html: str) -> str:
-    """Extract <title> text from HTML."""
     match = re.search(r"<title[^>]*>(.*?)</title>", html, re.DOTALL | re.IGNORECASE)
     if match:
         return match.group(1).strip()
@@ -212,26 +194,15 @@ def _extract_title(html: str) -> str:
 
 
 def _extract_text(html: str) -> str:
-    """Extract readable text from HTML — lightweight readability.
-
-    Strips scripts/styles, removes tags, collapses whitespace.
-    """
     text = html
-
-    # Remove script, style, and other non-content tags
     text = STRIP_TAGS.sub("", text)
 
-    # Convert common block elements to newlines
     for tag, pattern in BLOCK_TAG_PATTERNS.items():
         text = pattern.sub("\n", text)
 
-    # Convert hr to separator
     text = HR_PATTERN.sub("\n---\n", text)
-
-    # Strip remaining HTML tags
     text = HTML_TAGS.sub("", text)
 
-    # Decode common HTML entities
     text = (
         text.replace("&amp;", "&")
         .replace("&lt;", "<")
@@ -241,7 +212,6 @@ def _extract_text(html: str) -> str:
         .replace("&nbsp;", " ")
     )
 
-    # Clean up whitespace
     lines = []
     for line in text.splitlines():
         stripped = line.strip()

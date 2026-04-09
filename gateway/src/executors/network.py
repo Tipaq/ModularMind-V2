@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import httpx
-
-from src.executors.base import BaseExecutor
 
 if TYPE_CHECKING:
     from src.sandbox.manager import SandboxManager
@@ -42,87 +42,72 @@ async def close_http_client() -> None:
     _http_client = None
 
 
-class NetworkExecutor(BaseExecutor):
-    """Execute HTTP requests with domain allow/deny enforcement.
+async def execute_network(
+    action: str,
+    args: dict[str, Any],
+    sandbox_mgr: SandboxManager,
+    execution_id: str,
+) -> str:
+    if action != "request":
+        return f"Unknown network action: {action}"
 
-    Runs directly in the gateway process (no sandbox needed).
-    Domain validation is handled by the PermissionEngine before this is called.
-    """
+    url = args.get("url", "")
+    if not url:
+        return "Error: url is required"
 
-    async def execute(
-        self,
-        action: str,
-        args: dict[str, Any],
-        sandbox_mgr: SandboxManager,
-        execution_id: str,
-    ) -> str:
-        if action != "request":
-            return f"Unknown network action: {action}"
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return f"Error: unsupported scheme '{parsed.scheme}' (only http/https allowed)"
+    if not parsed.hostname:
+        return "Error: invalid URL — no hostname"
 
-        url = args.get("url", "")
-        if not url:
-            return "Error: url is required"
+    error = await check_ssrf(parsed.hostname)
+    if error:
+        return error
 
-        # Validate URL
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return f"Error: unsupported scheme '{parsed.scheme}' (only http/https allowed)"
-        if not parsed.hostname:
-            return "Error: invalid URL — no hostname"
+    method = args.get("method", "GET").upper()
+    if method not in ALLOWED_METHODS:
+        return f"Error: unsupported HTTP method '{method}'"
 
-        # Block private/internal addresses
-        error = await check_ssrf(parsed.hostname)
-        if error:
-            return error
+    body = args.get("body")
+    headers = args.get("headers") or {}
 
-        method = args.get("method", "GET").upper()
-        if method not in ALLOWED_METHODS:
-            return f"Error: unsupported HTTP method '{method}'"
+    for h in ("host", "cookie", "authorization"):
+        headers.pop(h, None)
+        headers.pop(h.title(), None)
 
-        body = args.get("body")
-        headers = args.get("headers") or {}
+    try:
+        client = get_http_client()
+        response = await client.request(
+            method=method,
+            url=url,
+            content=body.encode() if body else None,
+            headers=headers,
+        )
 
-        # Strip dangerous headers
-        for h in ("host", "cookie", "authorization"):
-            headers.pop(h, None)
-            headers.pop(h.title(), None)
+        body_bytes = response.content
+        if len(body_bytes) > MAX_RESPONSE_SIZE:
+            body_text = body_bytes[:MAX_RESPONSE_SIZE].decode("utf-8", errors="replace")
+            body_text += "\n... [response truncated at 1MB]"
+        else:
+            body_text = body_bytes.decode("utf-8", errors="replace")
 
-        try:
-            client = get_http_client()
-            response = await client.request(
-                method=method,
-                url=url,
-                content=body.encode() if body else None,
-                headers=headers,
-            )
+        resp_headers = dict(response.headers)
+        resp_headers.pop("set-cookie", None)
 
-            # Build result
-            body_bytes = response.content
-            if len(body_bytes) > MAX_RESPONSE_SIZE:
-                body_text = body_bytes[:MAX_RESPONSE_SIZE].decode("utf-8", errors="replace")
-                body_text += "\n... [response truncated at 1MB]"
-            else:
-                body_text = body_bytes.decode("utf-8", errors="replace")
+        return (
+            f"HTTP {response.status_code} {response.reason_phrase}\n"
+            f"Headers: {dict(resp_headers)}\n"
+            f"Body:\n{body_text}"
+        )
 
-            resp_headers = dict(response.headers)
-            resp_headers.pop("set-cookie", None)
+    except httpx.TimeoutException:
+        return f"Error: request timed out after {REQUEST_TIMEOUT}s"
+    except httpx.TooManyRedirects:
+        return "Error: too many redirects (max 5)"
+    except httpx.RequestError as e:
+        return f"Error: request failed — {e}"
 
-            return (
-                f"HTTP {response.status_code} {response.reason_phrase}\n"
-                f"Headers: {dict(resp_headers)}\n"
-                f"Body:\n{body_text}"
-            )
-
-        except httpx.TimeoutException:
-            return f"Error: request timed out after {REQUEST_TIMEOUT}s"
-        except httpx.TooManyRedirects:
-            return "Error: too many redirects (max 5)"
-        except httpx.RequestError as e:
-            return f"Error: request failed — {e}"
-
-
-import ipaddress
-import time
 
 MAX_DNS_CACHE_SIZE = 1024
 _dns_cache: dict[str, tuple[str | None, float]] = {}
@@ -137,7 +122,6 @@ def _get_dns_lock() -> asyncio.Lock:
 
 
 async def check_ssrf(hostname: str) -> str | None:
-    """Block requests to private/internal addresses (SSRF protection)."""
     lower = hostname.lower()
 
     async with _get_dns_lock():
@@ -155,7 +139,6 @@ async def check_ssrf(hostname: str) -> str | None:
 
 
 async def _resolve_and_check(lower: str, hostname: str) -> str | None:
-    """Resolve hostname and validate against private/internal ranges."""
     if lower in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
         return f"Error: requests to '{hostname}' are blocked (internal address)"
 

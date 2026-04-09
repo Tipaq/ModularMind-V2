@@ -27,10 +27,10 @@ from src.approval.service import GatewayApprovalService
 from src.audit.models import GatewayAuditLog
 from src.auth import AdminUser, InternalAuth
 from src.config import get_settings
-from src.executors.browser import BrowserExecutor
-from src.executors.filesystem import FilesystemExecutor
-from src.executors.network import NetworkExecutor
-from src.executors.shell import ShellExecutor
+from src.executors.browser import execute_browser
+from src.executors.filesystem import SAFE_ACTIONS, execute_filesystem
+from src.executors.network import execute_network
+from src.executors.shell import execute_shell
 from src.infra.database import DbSession
 from src.infra.metrics import (
     gateway_request_duration_seconds,
@@ -225,43 +225,34 @@ async def _execute_in_sandbox(
     if not perms:
         raise RuntimeError("No permissions found")
 
-    # Browser and network run in-process (no sandbox needed)
     if request.category == "browser":
-        executor = BrowserExecutor()
-        return await executor.execute(
+        return await execute_browser(
             action=request.action,
             args=request.args,
             sandbox_mgr=sandbox_mgr,
             execution_id=request.execution_id,
         )
-    elif request.category == "network":
-        executor = NetworkExecutor()
-        return await executor.execute(
+    if request.category == "network":
+        return await execute_network(
             action=request.action,
             args=request.args,
             sandbox_mgr=sandbox_mgr,
             execution_id=request.execution_id,
         )
 
-    # Shell uses hybrid execution (direct subprocess for safe commands)
     if request.category == "shell":
         timeout = perms.shell.max_execution_seconds if perms else 30
-        executor = ShellExecutor(
+        return await execute_shell(
+            action=request.action,
+            args=request.args,
+            sandbox_mgr=sandbox_mgr,
+            execution_id=request.execution_id,
             max_execution_seconds=timeout,
             agent_id=request.agent_id,
             permissions=perms,
         )
-        return await executor.execute(
-            action=request.action,
-            args=request.args,
-            sandbox_mgr=sandbox_mgr,
-            execution_id=request.execution_id,
-        )
 
-    # Filesystem: safe actions use hybrid (direct), critical use sandbox
     if request.category == "filesystem":
-        from src.executors.filesystem import SAFE_ACTIONS
-
         is_safe = request.action in SAFE_ACTIONS
         if not is_safe:
             try:
@@ -277,15 +268,13 @@ async def _execute_in_sandbox(
                     request.action,
                 )
 
-        executor = FilesystemExecutor(
-            agent_id=request.agent_id,
-            permissions=perms,
-        )
-        return await executor.execute(
+        return await execute_filesystem(
             action=request.action,
             args=request.args,
             sandbox_mgr=sandbox_mgr,
             execution_id=request.execution_id,
+            agent_id=request.agent_id,
+            permissions=perms,
         )
 
     return f"Executor for category '{request.category}' not yet implemented"
