@@ -65,11 +65,10 @@ export function OAuthProvidersTab() {
 
     setSaving(providerId);
     try {
-      const params = new URLSearchParams({
+      await api.put(`/connectors/oauth-config/${providerId}`, {
         client_id: form.client_id,
         client_secret: form.client_secret,
       });
-      await api.put(`/connectors/oauth-config/${providerId}?${params.toString()}`, {});
       setSaved(providerId);
       setTimeout(() => setSaved(null), 2000);
       await loadProviders();

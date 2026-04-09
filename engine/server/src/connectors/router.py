@@ -4,6 +4,7 @@ import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.sql import func
 
@@ -269,13 +270,17 @@ async def get_oauth_config() -> list[dict]:
     return list_configured_providers()
 
 
+class OAuthConfigUpdate(BaseModel):
+    client_id: str = ""
+    client_secret: str = ""
+
+
 @router.put("/oauth-config/{provider_id}", dependencies=[RequireAdmin])
 async def set_oauth_config(
     provider_id: str,
+    data: OAuthConfigUpdate,
     user: CurrentUser,
     db: DbSession,
-    client_id: str = "",
-    client_secret: str = "",
 ) -> dict:
     """Set OAuth client_id and client_secret for a provider (admin only)."""
     from src.connectors.oauth_providers import get_oauth_provider
@@ -289,10 +294,10 @@ async def set_oauth_config(
         )
 
     store = get_secrets_store()
-    if client_id:
-        store.set(provider.client_id_key, client_id)
-    if client_secret:
-        store.set(provider.client_secret_key, client_secret)
+    if data.client_id:
+        store.set(provider.client_id_key, data.client_id)
+    if data.client_secret:
+        store.set(provider.client_secret_key, data.client_secret)
 
     has_both = bool(
         store.get(provider.client_id_key)
