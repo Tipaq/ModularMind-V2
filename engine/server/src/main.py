@@ -43,7 +43,10 @@ from src.mini_apps.router import router as mini_apps_router
 from src.models.router import router as models_admin_router
 from src.models.usage_router import usage_router as models_usage_router
 from src.projects.router import router as projects_router
+from src.rag.admin_router import admin_rag_router
+from src.rag.document_router import document_router as rag_document_router
 from src.rag.router import router as rag_router
+from src.rag.search_router import search_router as rag_search_router
 from src.recall.router import router as recall_router
 from src.report.router import router as report_router
 from src.scheduled_tasks.router import router as scheduled_tasks_router
@@ -141,7 +144,7 @@ async def lifespan(app: FastAPI):
 
     try:
         await ollama_manager.recover()
-    except Exception as exc:
+    except (OSError, ConnectionError, RuntimeError, TimeoutError) as exc:
         logger.warning("Ollama recovery failed (non-fatal): %s", exc)
 
     # 7. Initialize sync service
@@ -166,7 +169,7 @@ async def lifespan(app: FastAPI):
 
         async with _session_maker() as seed_session:
             await seed_system_indexer(seed_session, model_id=settings.SUPERVISOR_MODEL_ID)
-    except Exception as exc:
+    except (OSError, ConnectionError, RuntimeError, ValueError) as exc:
         logger.warning("System Indexer seed failed (non-fatal): %s", exc)
 
     # 10. Seed API Connector Builder graph (leader-only, idempotent)
@@ -175,7 +178,7 @@ async def lifespan(app: FastAPI):
 
         async with _session_maker() as seed_session:
             await seed_connector_builder(seed_session, model_id=settings.SUPERVISOR_MODEL_ID)
-    except Exception as exc:
+    except (OSError, ConnectionError, RuntimeError, ValueError) as exc:
         logger.warning("Connector Builder seed failed (non-fatal): %s", exc)
 
     logger.info(
@@ -225,7 +228,7 @@ async def lifespan(app: FastAPI):
     try:
         await shutdown_embedding_providers()
         logger.info("Embedding providers shut down")
-    except Exception as exc:
+    except (OSError, ConnectionError, RuntimeError) as exc:
         logger.warning("Error shutting down embedding providers: %s", exc)
 
     logger.info("ModularMind Engine shut down")
@@ -276,8 +279,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Engine-Key"],
 )
 
 from starlette.middleware.gzip import GZipMiddleware
@@ -403,6 +406,9 @@ app.include_router(graphs_router, prefix=API_PREFIX)
 app.include_router(executions_router, prefix=API_PREFIX)
 app.include_router(conversations_router, prefix=API_PREFIX)
 app.include_router(rag_router, prefix=API_PREFIX)
+app.include_router(rag_document_router, prefix=API_PREFIX)
+app.include_router(rag_search_router, prefix=API_PREFIX)
+app.include_router(admin_rag_router, prefix=API_PREFIX)
 app.include_router(models_usage_router, prefix=API_PREFIX)
 app.include_router(mcp_usage_router, prefix=API_PREFIX)
 app.include_router(setup_router, prefix=API_PREFIX)

@@ -143,7 +143,8 @@ async def callback(
 
     try:
         state_data = _decrypt_state(state)
-    except Exception:
+    except (ValueError, KeyError, json.JSONDecodeError) as exc:
+        logger.warning("OAuth state decryption failed for %s: %s", provider_id, exc)
         raise HTTPException(
             status_code=400, detail="Invalid state parameter"
         ) from None

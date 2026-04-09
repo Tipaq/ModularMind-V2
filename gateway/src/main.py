@@ -189,14 +189,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — same pattern as engine
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS — restricted to configured origins (internal service, not browser-facing)
+_cors_origins = settings.cors_origins_list
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Authorization", "Content-Type", "X-Engine-Key", "X-Request-ID"],
+    )
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

@@ -95,6 +95,20 @@ class GatewaySettings(BaseSettings):
     # ---- Permission Cache ---------------------------------------------------
     PERMISSION_CACHE_TTL: float = Field(default=60.0, ge=5.0, le=600.0)
 
+    # ---- CORS ---------------------------------------------------------------
+    CORS_ORIGINS: str = Field(
+        default="",
+        description=(
+            "Comma-separated allowed origins for CORS. "
+            "Empty = deny all browser cross-origin requests (internal service default)."
+        ),
+    )
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS_ORIGINS into a list. Empty string → empty list (no CORS)."""
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
     # ---- Prometheus ---------------------------------------------------------
     PROMETHEUS_ENABLED: bool = True
 

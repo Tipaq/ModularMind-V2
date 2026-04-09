@@ -79,9 +79,9 @@ class ExecuteResponse(BaseModel):
 class ApprovalDecisionRequest(BaseModel):
     """Request to approve or reject a pending approval."""
 
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
     remember: bool = False
-    remember_pattern: str | None = None
+    remember_pattern: str | None = Field(default=None, max_length=500)
 
 
 class ApprovalResponse(BaseModel):
@@ -96,10 +96,10 @@ class RuleCreateRequest(BaseModel):
     """Request to manually create a pre-approval rule."""
 
     agent_id: str | None = None
-    category: str
-    action: str
-    pattern: str
-    description: str | None = None
+    category: str = Field(..., max_length=50)
+    action: str = Field(..., max_length=100)
+    pattern: str = Field(..., max_length=500)
+    description: str | None = Field(default=None, max_length=500)
 
 
 class RuleResponse(BaseModel):
