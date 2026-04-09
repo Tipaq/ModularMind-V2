@@ -15,8 +15,10 @@ export default function Settings() {
   ], []);
 
   return (
-    <div className="mx-auto w-full max-w-2xl p-6">
-      <SettingsPage extraTabs={extraTabs} defaultTab={defaultTab} />
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-2xl p-6">
+        <SettingsPage extraTabs={extraTabs} defaultTab={defaultTab} />
+      </div>
     </div>
   );
 }
