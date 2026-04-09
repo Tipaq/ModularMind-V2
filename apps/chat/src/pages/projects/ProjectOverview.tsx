@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import { BookOpen, MessageSquare, Plus, Settings2, Upload } from "lucide-react";
 import {
   Button, ChatInput, relativeTime, useChatConfig, toggleArrayItem, formatModelName,
+  useAuthStore,
 } from "@modularmind/ui";
 import type { AttachedFile } from "@modularmind/ui";
 import type { Conversation, EngineModel, ProjectDetail, ProjectResourceCounts } from "@modularmind/api-client";
@@ -30,7 +31,10 @@ export function ProjectOverview() {
   const [enabledGraphIds, setEnabledGraphIds] = useState<string[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
 
-  const { agents, graphs, models } = useChatConfig(chatConfigAdapter);
+  const user = useAuthStore((s) => s.user);
+  const { agents, graphs, models, reload: reloadConfig } = useChatConfig(chatConfigAdapter);
+
+  useEffect(() => { if (user) reloadConfig(); }, [user, reloadConfig]);
 
   const chatModels = useMemo(
     () => models.filter((m) => m.is_active && m.is_available && !m.is_embedding),
