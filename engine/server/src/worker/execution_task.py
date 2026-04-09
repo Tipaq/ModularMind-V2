@@ -11,9 +11,11 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis
     from sqlalchemy.ext.asyncio import AsyncSession
 
-import src.conversations.models  # noqa: F401 — register Conversation for ExecutionRun FK
-import src.groups.models  # noqa: F401 — register UserGroupMember with SQLAlchemy mapper
-from src.worker.scheduled_task_helpers import update_scheduled_task_run as _update_scheduled_task_run
+import src.conversations.models  # noqa: F401 — register Conversation FK
+import src.groups.models  # noqa: F401 — register UserGroupMember
+from src.worker.scheduled_task_helpers import (
+    update_scheduled_task_run as _update_scheduled_task_run,
+)
 
 logger = logging.getLogger(__name__)
 

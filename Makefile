@@ -92,10 +92,12 @@ lint: ## Run linters
 	pnpm lint
 	cd shared && ruff check .
 	cd engine/server && ruff check .
+	cd gateway && ruff check .
 
 lint-fix: ## Fix lint issues
-	cd shared && ruff check --fix .
-	cd engine/server && ruff check --fix .
+	cd shared && ruff check --fix . && ruff format .
+	cd engine/server && ruff check --fix . && ruff format .
+	cd gateway && ruff check --fix . && ruff format .
 
 format: ## Auto-format Python code
 	cd shared && ruff format .

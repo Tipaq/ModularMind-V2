@@ -186,7 +186,9 @@ async def reprocess_document(
 
     object_key = (document.meta or {}).get("object_key")
     if not object_key:
-        raise HTTPException(status_code=409, detail="Original file not available — cannot reprocess")
+        raise HTTPException(
+            status_code=409, detail="Original file not available — cannot reprocess"
+        )
 
     try:
         from .vector_store import QdrantRAGVectorStore

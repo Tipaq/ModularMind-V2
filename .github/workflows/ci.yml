@@ -38,6 +38,8 @@ jobs:
         run: |
           ruff check shared/
           ruff check engine/server/
+          ruff check gateway/
+          ruff format --check shared/ engine/server/ gateway/
 
       - uses: pnpm/action-setup@v4
 

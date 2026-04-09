@@ -72,7 +72,7 @@ async def get_knowledge_global_stats(db: DbSession) -> KnowledgeGlobalStatsRespo
 )
 async def explore_knowledge(
     db: DbSession,
-    pagination: PaginationParams = Depends(get_pagination),
+    pagination: PaginationParams = Depends(get_pagination),  # noqa: B008
     collection_id: str | None = Query(default=None),
     document_id: str | None = Query(default=None),
 ) -> ExplorerChunkListResponse:
