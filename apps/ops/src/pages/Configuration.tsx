@@ -1,21 +1,32 @@
 import { useSearchParams } from "react-router-dom";
-import { Settings2, Key, Plug, Webhook, BookOpen, Cog, Github, FolderLock, Server, Shield } from "lucide-react";
+import { Settings2, Key, Plug, Shield, BookOpen, Cog } from "lucide-react";
 import { PageHeader, Tabs, TabsList, TabsTrigger, TabsContent } from "@modularmind/ui";
 import { ProvidersTab } from "../components/configuration/ProvidersTab";
-import { McpServersTab } from "../components/configuration/McpServersTab";
-import { IntegrationsTab } from "../components/configuration/IntegrationsTab";
-import { OAuthProvidersTab } from "../components/configuration/OAuthProvidersTab";
+import { ToolsTab } from "../components/configuration/ToolsTab";
+import { ConnectionsTab } from "../components/configuration/ConnectionsTab";
 import { KnowledgeConfigTab } from "../components/configuration/KnowledgeConfigTab";
-import { SystemTab } from "../components/configuration/SystemTab";
-import { GitHubTokensTab } from "../components/configuration/GitHubTokensTab";
-import { FilesystemSecurityTab } from "../components/configuration/FilesystemSecurityTab";
-import { InfrastructureTab } from "../components/configuration/InfrastructureTab";
+import { SystemSettingsTab } from "../components/configuration/SystemSettingsTab";
 
-type TabId = "providers" | "mcp" | "integrations" | "oauth" | "knowledge" | "system" | "github" | "filesystem" | "infra";
+type TabId = "providers" | "tools" | "connections" | "knowledge" | "system";
+
+const TAB_ALIASES: Record<string, TabId> = {
+  mcp: "tools",
+  integrations: "tools",
+  oauth: "connections",
+  github: "connections",
+  filesystem: "system",
+  infra: "system",
+};
+
+function resolveTab(raw: string | null): TabId {
+  if (!raw) return "providers";
+  if (TAB_ALIASES[raw]) return TAB_ALIASES[raw];
+  return (raw as TabId) || "providers";
+}
 
 export function Configuration() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get("tab") as TabId) || "providers";
+  const activeTab = resolveTab(searchParams.get("tab"));
 
   const setActiveTab = (tab: TabId) => {
     setSearchParams({ tab }, { replace: true });
@@ -27,7 +38,7 @@ export function Configuration() {
         icon={Settings2}
         gradient="from-primary to-primary/70"
         title="Configuration"
-        description="Manage providers, integrations, and system settings"
+        description="Manage providers, tools, connections, and system settings"
       />
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
@@ -36,33 +47,17 @@ export function Configuration() {
             <Key className="h-4 w-4" />
             Providers
           </TabsTrigger>
-          <TabsTrigger value="mcp">
+          <TabsTrigger value="tools">
             <Plug className="h-4 w-4" />
-            MCP Servers
+            Tools
           </TabsTrigger>
-          <TabsTrigger value="integrations">
-            <Webhook className="h-4 w-4" />
-            Integrations
-          </TabsTrigger>
-          <TabsTrigger value="oauth">
+          <TabsTrigger value="connections">
             <Shield className="h-4 w-4" />
-            OAuth
+            Connections
           </TabsTrigger>
           <TabsTrigger value="knowledge">
             <BookOpen className="h-4 w-4" />
             Knowledge
-          </TabsTrigger>
-          <TabsTrigger value="github">
-            <Github className="h-4 w-4" />
-            GitHub
-          </TabsTrigger>
-          <TabsTrigger value="filesystem">
-            <FolderLock className="h-4 w-4" />
-            Filesystem
-          </TabsTrigger>
-          <TabsTrigger value="infra">
-            <Server className="h-4 w-4" />
-            Infrastructure
           </TabsTrigger>
           <TabsTrigger value="system">
             <Cog className="h-4 w-4" />
@@ -73,29 +68,17 @@ export function Configuration() {
         <TabsContent value="providers" className="mt-6">
           <ProvidersTab />
         </TabsContent>
-        <TabsContent value="mcp" className="mt-6">
-          <McpServersTab />
+        <TabsContent value="tools" className="mt-6">
+          <ToolsTab />
         </TabsContent>
-        <TabsContent value="integrations" className="mt-6">
-          <IntegrationsTab />
-        </TabsContent>
-        <TabsContent value="oauth" className="mt-6">
-          <OAuthProvidersTab />
+        <TabsContent value="connections" className="mt-6">
+          <ConnectionsTab />
         </TabsContent>
         <TabsContent value="knowledge" className="mt-6">
           <KnowledgeConfigTab />
         </TabsContent>
-        <TabsContent value="github" className="mt-6">
-          <GitHubTokensTab />
-        </TabsContent>
-        <TabsContent value="filesystem" className="mt-6">
-          <FilesystemSecurityTab />
-        </TabsContent>
-        <TabsContent value="infra" className="mt-6">
-          <InfrastructureTab />
-        </TabsContent>
         <TabsContent value="system" className="mt-6">
-          <SystemTab />
+          <SystemSettingsTab />
         </TabsContent>
       </Tabs>
     </div>
