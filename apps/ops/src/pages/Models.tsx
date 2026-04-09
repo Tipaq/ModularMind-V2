@@ -7,7 +7,7 @@ import type { UnifiedCatalogModel } from "@modularmind/api-client";
 import { useModelsStore } from "../stores/models";
 import { buildSizeCache, filterModels, sortModels } from "./models/utils";
 import { filterConfigs, buildColumns } from "./models/columns";
-import { DEFAULT_DEFAULT_PAGE_SIZE } from "../lib/constants";
+import { DEFAULT_PAGE_SIZE } from "../lib/constants";
 
 export function Models() {
   const navigate = useNavigate();

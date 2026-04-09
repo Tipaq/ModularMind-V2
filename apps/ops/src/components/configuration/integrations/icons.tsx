@@ -39,3 +39,8 @@ const ICON_MAP: Record<string, IconComponent> = {
 export function resolveIcon(iconName: string): IconComponent {
   return ICON_MAP[iconName] ?? MessageCircle;
 }
+
+export function renderIcon(iconName: string, className: string): React.ReactNode {
+  const Icon = ICON_MAP[iconName] ?? MessageCircle;
+  return <Icon className={className} />;
+}

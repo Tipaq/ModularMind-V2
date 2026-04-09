@@ -4,9 +4,8 @@ import type { MCPCatalogEntry } from "@modularmind/api-client";
 import { ICON_MAP, CATEGORY_LABELS } from "./mcp-constants";
 
 interface McpCatalogProps {
-  catalog: MCPCatalogEntry[];
   catalogByCategory: Record<string, MCPCatalogEntry[]>;
-  deployedCatalogIds: Set<string | undefined>;
+  deployedCatalogIds: Set<string>;
   selectedEntry: MCPCatalogEntry | null;
   secrets: Record<string, string>;
   deployingId: string | null;
@@ -96,7 +95,7 @@ function CatalogGrid({
   onSwitchToManual,
 }: {
   catalogByCategory: Record<string, MCPCatalogEntry[]>;
-  deployedCatalogIds: Set<string | undefined>;
+  deployedCatalogIds: Set<string>;
   onSelectEntry: (entry: MCPCatalogEntry) => void;
   onSwitchToManual: () => void;
 }) {
@@ -157,7 +156,6 @@ function CatalogGrid({
 }
 
 export function McpCatalog({
-  catalog: _catalog,
   catalogByCategory,
   deployedCatalogIds,
   selectedEntry,

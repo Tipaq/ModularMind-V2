@@ -231,7 +231,7 @@ export function McpServersTab() {
   }, [catalog]);
 
   const deployedCatalogIds = useMemo(
-    () => new Set(mcpServers.filter((s) => s.catalog_id).map((s) => s.catalog_id)),
+    () => new Set(mcpServers.map((s) => s.catalog_id).filter((id): id is string => !!id)),
     [mcpServers],
   );
 
@@ -335,7 +335,6 @@ export function McpServersTab() {
 
           {showCatalog && (
             <McpCatalog
-              catalog={catalog}
               catalogByCategory={catalogByCategory}
               deployedCatalogIds={deployedCatalogIds}
               selectedEntry={selectedCatalogEntry}

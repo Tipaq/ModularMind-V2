@@ -15,7 +15,7 @@ import {
 import type { ResourceColumn, PaginationState } from "@modularmind/ui";
 import { useKnowledgeStore } from "../../stores/knowledge";
 import type { ExplorerChunk } from "../../stores/knowledge";
-import { DEFAULT_DEFAULT_PAGE_SIZE } from "../../lib/constants";
+import { DEFAULT_PAGE_SIZE } from "../../lib/constants";
 
 function buildColumns(): ResourceColumn<ExplorerChunk>[] {
   return [

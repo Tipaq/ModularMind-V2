@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, Badge } from "@modularmind/ui";
-import { resolveIcon } from "./icons";
+import { renderIcon } from "./icons";
 import { ActiveConnectionList } from "./ActiveConnectionList";
 import { ConnectionForm } from "./ConnectionForm";
 import type { ConnectorCardProps } from "./types";
@@ -32,7 +32,6 @@ export function ConnectorCard({
   creating,
   onConnect,
 }: ConnectorCardProps) {
-  const Icon = resolveIcon(typeDef.icon);
   const hasConnectors = typeConnectors.length > 0;
 
   return (
@@ -47,7 +46,7 @@ export function ConnectorCard({
               <div
                 className={`flex h-10 w-10 items-center justify-center rounded-lg ${typeDef.color}`}
               >
-                <Icon className="h-5 w-5 text-white" />
+                {renderIcon(typeDef.icon, "h-5 w-5 text-white")}
               </div>
               <div>
                 <div className="flex items-center gap-2">
