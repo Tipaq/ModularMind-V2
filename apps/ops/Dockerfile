@@ -1,10 +1,9 @@
 FROM node:22-alpine AS base
-RUN corepack enable
+RUN corepack enable && npm install -g turbo
 
 # Prune monorepo for ops app only
 FROM base AS pruner
 WORKDIR /app
-RUN npm install -g turbo
 COPY . .
 RUN turbo prune @modularmind/ops --docker
 
