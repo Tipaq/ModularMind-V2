@@ -33,6 +33,9 @@ message.
 You speak the same language as the user."""
 
 
+FALLBACK_MODEL_ID = "ollama:qwen3:8b"
+
+
 async def seed_connector_agents(
     session: AsyncSession, model_id: str
 ) -> None:
@@ -41,13 +44,26 @@ async def seed_connector_agents(
     from src.domain_config.repository import ConfigRepository
     from src.infra.constants import DEFAULT_TOOL_CATEGORIES
 
+    effective_model = model_id or FALLBACK_MODEL_ID
     repo = ConfigRepository(session)
 
     existing = await repo.find_active_agent_by_name(EMAIL_AGENT_NAME)
     if existing:
-        logger.debug(
-            "Email Assistant agent already exists: %s", existing.id
-        )
+        existing_config = existing.config or {}
+        if not existing_config.get("model_id"):
+            existing_config["model_id"] = effective_model
+            await repo.create_agent_version(
+                existing.id,
+                existing_config,
+                created_by="system",
+                change_note="Fix empty model_id",
+            )
+            await session.commit()
+            await get_config_provider().reload_async()
+            logger.info(
+                "Fixed Email Assistant model_id: %s",
+                effective_model,
+            )
         return
 
     agent_id = str(uuid4())
@@ -60,7 +76,7 @@ async def seed_connector_agents(
             "Send emails using your connected email account. "
             "Connect your email in Settings > Connections first."
         ),
-        "model_id": model_id,
+        "model_id": effective_model,
         "system_prompt": EMAIL_AGENT_PROMPT,
         "memory_enabled": False,
         "timeout_seconds": 120,
