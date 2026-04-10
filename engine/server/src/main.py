@@ -181,6 +181,15 @@ async def lifespan(app: FastAPI):
     except (OSError, ConnectionError, RuntimeError, ValueError) as exc:
         logger.warning("Connector Builder seed failed (non-fatal): %s", exc)
 
+    # 11. Seed connector-enabled agents (Email Assistant, etc.)
+    try:
+        from src.connectors.seed_agents import seed_connector_agents
+
+        async with _session_maker() as seed_session:
+            await seed_connector_agents(seed_session, model_id=settings.SUPERVISOR_MODEL_ID)
+    except (OSError, ConnectionError, RuntimeError, ValueError) as exc:
+        logger.warning("Connector agents seed failed (non-fatal): %s", exc)
+
     logger.info(
         "ModularMind Engine started (env=%s)",
         settings.ENVIRONMENT,
