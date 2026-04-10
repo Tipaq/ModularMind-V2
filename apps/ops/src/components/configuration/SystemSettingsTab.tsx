@@ -4,7 +4,7 @@ import { FilesystemSecurityTab } from "./FilesystemSecurityTab";
 
 export function SystemSettingsTab() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <InfrastructureTab />
       <SystemTab />
       <FilesystemSecurityTab />

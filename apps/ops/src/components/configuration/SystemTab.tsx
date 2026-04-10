@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bot, Cpu, RefreshCw, Timer } from "lucide-react";
+import { RefreshCw, Settings } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -52,8 +52,8 @@ export function SystemTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-center py-8">
+        <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -61,31 +61,34 @@ export function SystemTab() {
   const configuredProviders = providers.filter((p) => p.is_configured);
 
   return (
-    <>
-      {saveError && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          {saveError}
-        </div>
-      )}
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Bot className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle className="text-base">Default Provider</CardTitle>
-              <CardDescription>Provider used when no model is explicitly set</CardDescription>
-            </div>
+    <Card>
+      <CardHeader className="pb-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <Settings className="h-5 w-5 text-primary" />
           </div>
-        </CardHeader>
-        <CardContent>
+          <div>
+            <CardTitle className="text-base">Runtime Settings</CardTitle>
+            <CardDescription>Default provider, timeouts, and model memory</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {saveError && (
+          <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {saveError}
+          </div>
+        )}
+
+        <SettingRow
+          label="Default Provider"
+          hint="Used when no model is explicitly set"
+        >
           <Select
             value={settings?.default_model || "ollama"}
             onValueChange={(v) => updateSetting({ default_model: v })}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -99,30 +102,17 @@ export function SystemTab() {
               )}
             </SelectContent>
           </Select>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Only configured providers are listed. Add API keys in the Providers tab.
-          </p>
-        </CardContent>
-      </Card>
+        </SettingRow>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Cpu className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle className="text-base">Ollama Keep Alive</CardTitle>
-              <CardDescription>How long models stay loaded in GPU memory</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+        <SettingRow
+          label="Ollama Keep Alive"
+          hint="How long models stay loaded in VRAM"
+        >
           <Select
             value={settings?.ollama_keep_alive || "24h"}
             onValueChange={(v) => updateSetting({ ollama_keep_alive: v })}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -135,30 +125,17 @@ export function SystemTab() {
               <SelectItem value="-1">Never unload</SelectItem>
             </SelectContent>
           </Select>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Longer values reduce cold-start latency but use more GPU memory.
-          </p>
-        </CardContent>
-      </Card>
+        </SettingRow>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Timer className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle className="text-base">Execution Timeout</CardTitle>
-              <CardDescription>Max runtime for agent and graph executions</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+        <SettingRow
+          label="Execution Timeout"
+          hint="Max runtime for agent and graph runs"
+        >
           <Select
             value={String(settings?.max_execution_timeout || 900)}
             onValueChange={(v) => updateSetting({ max_execution_timeout: parseInt(v) })}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -170,11 +147,28 @@ export function SystemTab() {
               <SelectItem value="1800">30 minutes</SelectItem>
             </SelectContent>
           </Select>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Increase this if you use local models that generate slowly.
-          </p>
-        </CardContent>
-      </Card>
-    </>
+        </SettingRow>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SettingRow({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <p className="text-sm font-medium">{label}</p>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
+      {children}
+    </div>
   );
 }
