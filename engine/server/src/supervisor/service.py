@@ -140,6 +140,7 @@ class SuperSupervisorService:
                 config_provider=self.config_provider,
                 llm_provider=self.llm_provider,
                 resolve_model_name_fn=self._resolve_model_name,
+                user_id=user_id,
                 **kw,
             ),
             resolve_model_name_fn=self._resolve_model_name,

@@ -32,6 +32,7 @@ async def route_with_llm(
     affinity_agent_id: str | None = None,
     memory_context: str = "",
     knowledge_context: str = "",
+    user_id: str = "",
 ) -> RoutingDecision:
     """Call supervisor LLM for routing decision."""
     conv_config = conv_config or {}
@@ -43,6 +44,7 @@ async def route_with_llm(
             conv_config,
             memory_context=memory_context,
             knowledge_context=knowledge_context,
+            user_id=user_id,
         )
         llm_messages = compose_routing_messages(conv_config, task_prompt)
 
@@ -92,6 +94,7 @@ async def build_routing_prompt(
     conv_config: dict[str, Any],
     memory_context: str = "",
     knowledge_context: str = "",
+    user_id: str = "",
 ) -> str:
     """Build the routing task prompt with agent/graph catalog and MCP tools."""
     agents = await config_provider.list_agents()
@@ -109,6 +112,14 @@ async def build_routing_prompt(
             last_agent_info = f"{agent.name} (id={agent.id})"
 
     mcp_tools = await discover_mcp_tools_for_routing(conv_config)
+
+    if user_id:
+        connector_tools = await _discover_connector_tools_for_routing(
+            user_id
+        )
+        if connector_tools:
+            mcp_tools = mcp_tools or {}
+            mcp_tools["User Connectors"] = connector_tools
 
     allowed_tool_categories = conv_config.get("supervisor_tool_categories")
 
@@ -150,6 +161,35 @@ async def discover_mcp_tools_for_routing(
         return tools_map or None
     except (ImportError, ConnectionError, TimeoutError, OSError, RuntimeError) as e:
         logger.debug("MCP tool discovery for routing failed: %s", e)
+        return None
+
+
+async def _discover_connector_tools_for_routing(
+    user_id: str,
+) -> list[Any] | None:
+    """Discover user's outbound connector tools for routing context."""
+    try:
+        from src.infra.database import async_session_maker
+        from src.tools.registry import resolve_connector_tool_definitions
+
+        defs, _ = await resolve_connector_tool_definitions(
+            user_id, [], async_session_maker
+        )
+        if not defs:
+            return None
+        return [
+            type(
+                "ConnectorTool",
+                (),
+                {
+                    "name": d["function"]["name"],
+                    "description": d["function"]["description"],
+                },
+            )()
+            for d in defs
+        ]
+    except (ImportError, ConnectionError, OSError, RuntimeError) as e:
+        logger.debug("Connector tool discovery for routing failed: %s", e)
         return None
 
 
