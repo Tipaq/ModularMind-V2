@@ -545,6 +545,9 @@ async def _send_smtp_xoauth2(
     access_token = credentials.get("token", "")
     email_address = connector_config.get("email_address", "")
 
+    if not email_address and access_token:
+        email_address = await _fetch_email_from_google(access_token)
+
     if not access_token or not email_address:
         return {
             "error": True,
@@ -707,3 +710,18 @@ async def _send_graph_email(
     except httpx.HTTPError as exc:
         logger.exception("Graph sendMail failed")
         return {"error": True, "message": str(exc)}
+
+
+async def _fetch_email_from_google(access_token: str) -> str:
+    """Fetch user email from Google userinfo API using OAuth token."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            if resp.status_code == 200:
+                return resp.json().get("email", "")
+    except (httpx.HTTPError, KeyError, ValueError):
+        logger.debug("Could not fetch Google email from userinfo")
+    return ""
