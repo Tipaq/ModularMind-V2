@@ -425,7 +425,7 @@ export const ChatMessages = memo(function ChatMessages({
             )}
           </div>
           {stickyFooter && (
-            <div className="sticky bottom-0 z-10 bg-gradient-to-t from-background from-80% to-transparent">
+            <div className="sticky bottom-0 z-10 bg-background">
               {stickyFooter}
             </div>
           )}
