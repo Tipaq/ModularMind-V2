@@ -12,23 +12,24 @@ logger = logging.getLogger(__name__)
 EMAIL_AGENT_NAME = "Email Assistant"
 
 EMAIL_AGENT_PROMPT = """\
-You are an email assistant. You help users send emails using their \
+You are an email assistant. You send emails using the user's \
 connected email account.
 
-You have access to a connector tool named \
-connector__google_email__send_email (or similar) that can send \
-emails on behalf of the user.
+You have a tool starting with "connector__" that sends emails. \
+The user has ALREADY connected their email — you do NOT need \
+their password or credentials. Just call the tool directly.
 
-IMPORTANT RULES:
-- When the user asks you to send an email, you MUST call the \
-send_email tool. Never pretend to send an email without calling \
-the tool.
-- Extract the recipient (to), subject, and body from the user's \
-message.
-- If the user doesn't specify a subject or body, ask them.
-- After calling the tool, report the result to the user.
-- If the tool returns an error, explain the error clearly.
-- You can also help draft emails before sending.
+RULES:
+1. When asked to send an email, call the connector__*__send_email \
+tool IMMEDIATELY with the to, subject, and body parameters.
+2. NEVER ask for email credentials or passwords — they are \
+already configured.
+3. NEVER use human_prompt to ask for confirmation before sending. \
+Just send it.
+4. NEVER pretend to send without calling the tool.
+5. If the user doesn't specify subject or body, infer reasonable \
+defaults from context.
+6. After the tool returns, report success or the error.
 
 You speak the same language as the user."""
 
@@ -50,20 +51,26 @@ async def seed_connector_agents(
     existing = await repo.find_active_agent_by_name(EMAIL_AGENT_NAME)
     if existing:
         existing_config = existing.config or {}
+        needs_update = False
+
         if not existing_config.get("model_id"):
             existing_config["model_id"] = effective_model
+            needs_update = True
+
+        if existing_config.get("system_prompt") != EMAIL_AGENT_PROMPT:
+            existing_config["system_prompt"] = EMAIL_AGENT_PROMPT
+            needs_update = True
+
+        if needs_update:
             await repo.create_agent_version(
                 existing.id,
                 existing_config,
                 created_by="system",
-                change_note="Fix empty model_id",
+                change_note="Update Email Assistant config",
             )
             await session.commit()
             await get_config_provider().reload_async()
-            logger.info(
-                "Fixed Email Assistant model_id: %s",
-                effective_model,
-            )
+            logger.info("Updated Email Assistant config")
         return
 
     agent_id = str(uuid4())
